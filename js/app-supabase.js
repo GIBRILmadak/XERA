@@ -5072,7 +5072,10 @@ function renderUserCard(
     }
 
     const dayBadge =
-        !isAnnouncement && latestContent && typeof latestContent.dayNumber === "number"
+        !isAnnouncement &&
+        latestContent &&
+        typeof latestContent.dayNumber === "number" &&
+        latestContent.dayNumber > 0
             ? `<span class="status-day">J-${latestContent.dayNumber}</span>`
             : "";
 
@@ -9902,7 +9905,12 @@ async function stopLiveStream() {
 
 async function getNextDayNumber(userId) {
     const contents = getUserContentLocal(userId);
-    const maxDay = contents.length > 0 ? contents[0].day_number : 0;
+    const dayNumbers = (contents || [])
+        .map((item) =>
+            Number.parseInt(item?.dayNumber ?? item?.day_number, 10),
+        )
+        .filter((day) => Number.isFinite(day) && day >= 0);
+    const maxDay = dayNumbers.length > 0 ? Math.max(...dayNumbers) : 0;
     return maxDay + 1;
 }
 
@@ -10075,18 +10083,17 @@ async function openCreateMenu(
 
     // Calculate next day ou utiliser jour existant si édition
     const contents = getUserContentLocal(userId);
-    // Safe maxDay calculation
-    let maxDay = 0;
-    if (contents && contents.length > 0) {
-        // Ensure day_number is a valid number
-        const validContent = contents.find(
-            (c) => !isNaN(parseInt(c.dayNumber)),
-        );
-        if (validContent) {
-            maxDay = parseInt(validContent.dayNumber);
-        }
-    }
-    const nextDay = existingContent ? existingContent.day_number : maxDay + 1;
+    const getNumericDay = (item) =>
+        Number.parseInt(item?.dayNumber ?? item?.day_number, 10);
+    const dayNumbers = (contents || [])
+        .map(getNumericDay)
+        .filter((day) => Number.isFinite(day) && day >= 0);
+    const maxDay = dayNumbers.length > 0 ? Math.max(...dayNumbers) : 0;
+    const existingDay = existingContent ? getNumericDay(existingContent) : Number.NaN;
+    const nextDay =
+        Number.isFinite(existingDay) && existingDay >= 0
+            ? existingDay
+            : maxDay + 1;
     const isFirstPost = !existingContent && (!contents || contents.length === 0);
     const defaultTraceType = isFirstPost ? "text" : "image";
 

@@ -362,6 +362,126 @@ async function getArcAuthUser() {
     return null;
 }
 
+function buildArcLaunchTracePayload(arcData, authUserId, arcId) {
+    const safeTitle = (arcData?.title || '').trim() || 'Nouvel ARC';
+    const goal = (arcData?.goal || '').trim();
+    const details = (arcData?.description || '').trim();
+    const descriptionParts = [];
+    if (goal) descriptionParts.push(`Objectif: ${goal}`);
+    if (details) descriptionParts.push(details);
+    const baseDescription = descriptionParts.join('\n\n').trim() || "Debut d'un nouvel ARC.";
+
+    const hasMedia = !!arcData?.media_url;
+    const mediaType = String(arcData?.media_type || '').toLowerCase();
+    const contentType = hasMedia
+        ? (mediaType === 'video' ? 'video' : 'image')
+        : 'text';
+
+    return {
+        userId: authUserId,
+        arcId: arcId,
+        dayNumber: 0,
+        type: contentType,
+        state: 'pause',
+        title: `NOUVEL ARC: ${safeTitle}`,
+        description: baseDescription,
+        mediaUrl: hasMedia ? arcData.media_url : null,
+        mediaUrls: hasMedia ? [arcData.media_url] : []
+    };
+}
+
+async function createArcLaunchTrace(arcRow, arcData, authUser) {
+    if (!arcRow?.id || !authUser?.id) return null;
+    const payload = buildArcLaunchTracePayload(arcData, authUser.id, arcRow.id);
+    try {
+        if (typeof createContent === 'function') {
+            const result = await createContent(payload);
+            if (!result?.success) {
+                throw new Error(result?.error || 'createContent failed');
+            }
+            return result?.data || null;
+        }
+
+        const insertPayload = {
+            user_id: payload.userId,
+            arc_id: payload.arcId,
+            day_number: payload.dayNumber,
+            type: payload.type,
+            state: payload.state,
+            title: payload.title,
+            description: payload.description,
+            media_url: payload.mediaUrl
+        };
+
+        const { data, error } = await supabase
+            .from('content')
+            .insert(insertPayload)
+            .select()
+            .single();
+        if (error) throw error;
+        return data || null;
+    } catch (error) {
+        console.warn('ARC launch trace creation failed:', error);
+        return null;
+    }
+}
+
+async function refreshArcConsistencyViews(userId, options = {}) {
+    if (!userId) return;
+    const { selectArcId = null } = options;
+
+    try {
+        if (
+            typeof getUserContent === 'function' &&
+            typeof convertSupabaseContent === 'function'
+        ) {
+            const contentResult = await getUserContent(userId);
+            if (contentResult?.success && Array.isArray(contentResult.data)) {
+                if (!window.userContents) window.userContents = {};
+                window.userContents[userId] = contentResult.data.map(
+                    convertSupabaseContent,
+                );
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to refresh local content cache after ARC save:', error);
+    }
+
+    const profileSection = document.getElementById('profile');
+    const isProfileActive =
+        !!profileSection && profileSection.classList.contains('active');
+    const isViewedProfile = window.currentProfileViewed === userId;
+
+    if (selectArcId && (isProfileActive || isViewedProfile)) {
+        window.selectedArcId = selectArcId;
+    }
+
+    if (
+        (isProfileActive || isViewedProfile) &&
+        typeof window.renderProfileIntoContainer === 'function'
+    ) {
+        try {
+            await window.renderProfileIntoContainer(userId);
+        } catch (error) {
+            console.warn('Failed to refresh profile timeline after ARC save:', error);
+        }
+    } else if (isProfileActive && typeof window.loadUserArcs === 'function') {
+        try {
+            await window.loadUserArcs(userId);
+        } catch (error) {
+            console.warn('Failed to refresh ARC list after ARC save:', error);
+        }
+    }
+
+    if (typeof window.renderDiscoverGrid === 'function') {
+        try {
+            await window.renderDiscoverGrid();
+        } catch (error) {
+            console.warn('Failed to refresh discover feed after ARC save:', error);
+        }
+    }
+}
+
 async function handleCreateArc(e) {
     e.preventDefault();
 
@@ -443,6 +563,10 @@ async function handleCreateArc(e) {
 
         if (error) throw error;
 
+        if (!arcId && createdArc && createdArc.id) {
+            await createArcLaunchTrace(createdArc, arcData, authUser);
+        }
+
         const pendingPayload = window.pendingCreatePostAfterArc;
         const pendingIsFresh =
             pendingPayload &&
@@ -462,6 +586,11 @@ async function handleCreateArc(e) {
             } else {
                 window.pendingCreatePostAfterArc = null;
             }
+            refreshArcConsistencyViews(authUser.id, {
+                selectArcId: createdArc.id
+            }).catch((err) =>
+                console.warn('refreshArcConsistencyViews error', err),
+            );
             closeCreateModal();
             e.target.reset();
             setTimeout(() => {
@@ -481,11 +610,10 @@ async function handleCreateArc(e) {
         alert(arcId ? "ARC mis à jour avec succès !" : "ARC créé avec succès !");
         closeCreateModal();
         e.target.reset();
-        
-        // Refresh profile if on profile page
-        if (document.getElementById('profile').classList.contains('active')) {
-            loadUserArcs(authUser.id);
-        }
+
+        await refreshArcConsistencyViews(authUser.id, {
+            selectArcId: !arcId && createdArc?.id ? createdArc.id : null
+        });
         
         // If we were viewing details of this arc, reload them
         if (arcId && document.getElementById('immersive-overlay').style.display === 'block') {
