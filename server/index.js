@@ -325,6 +325,15 @@ function normalizeNotificationLink(notification) {
   return `${base}/${raw}`;
 }
 
+function getBearerToken(req) {
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  if (!authHeader || typeof authHeader !== 'string') return '';
+  const [scheme, token] = authHeader.split(' ');
+  if (!scheme || !token) return '';
+  if (scheme.toLowerCase() !== 'bearer') return '';
+  return token.trim();
+}
+
 async function sendScheduledReturnReminders() {
   if (!supportsPush()) return;
   if (REMINDER_HOURS.length === 0) return;
@@ -391,6 +400,82 @@ function startReminderScheduler() {
     console.error('Initial reminder sweep error', error);
   });
 }
+
+app.post('/api/account/delete', async (req, res) => {
+  try {
+    const token = getBearerToken(req);
+    if (!token) {
+      return res.status(401).json({ error: 'Missing authorization token' });
+    }
+
+    const {
+      data: authData,
+      error: authError
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !authData?.user?.id) {
+      return res.status(401).json({ error: 'Invalid session token' });
+    }
+
+    const authedUserId = authData.user.id;
+    const requestedUserId = String(req.body?.userId || '').trim();
+    if (requestedUserId && requestedUserId !== authedUserId) {
+      return res.status(403).json({ error: 'Forbidden account deletion target' });
+    }
+
+    const rawReason = String(req.body?.reason || '').trim();
+    const rawDetail = String(req.body?.detail || '').trim();
+    const allowedReasons = new Set([
+      'inactive',
+      'technical',
+      'privacy',
+      'experience',
+      'other'
+    ]);
+    const safeReason = allowedReasons.has(rawReason) ? rawReason : 'other';
+    const safeDetail = rawDetail.slice(0, 1200);
+
+    // Archive lightweight feedback before deletion (best effort).
+    try {
+      const reasonLine = `account-delete:${safeReason}`;
+      const detailLine = safeDetail ? ` | detail:${safeDetail}` : '';
+      const comment = `${reasonLine}${detailLine}`.slice(0, 400);
+      await supabase.from('feedback_inbox').insert({
+        mood: null,
+        comment,
+        sender_user_id: authedUserId,
+        receiver_id: null
+      });
+    } catch (feedbackError) {
+      console.warn('Account delete feedback insert failed', feedbackError?.message || feedbackError);
+    }
+
+    // Remove app profile first; foreign keys should cascade related app data.
+    const { error: profileDeleteError } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', authedUserId);
+
+    if (profileDeleteError) {
+      throw profileDeleteError;
+    }
+
+    // Delete Supabase Auth user (service role).
+    const { error: authDeleteError } = await supabase.auth.admin.deleteUser(
+      authedUserId
+    );
+    if (authDeleteError) {
+      throw authDeleteError;
+    }
+
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('Account delete error', error);
+    return res.status(500).json({
+      error: error?.message || 'Unable to delete account'
+    });
+  }
+});
 
 app.use((_req, res) => {
   res.status(501).json({ error: 'Paiements désactivés. Stripe sera ajouté plus tard.' });

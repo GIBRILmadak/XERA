@@ -1149,6 +1149,125 @@ async function handleSignOut() {
     }
 }
 
+function getAccountDeleteReasonLabel(reason) {
+    const map = {
+        inactive: "Je n'utilise plus XERA",
+        technical: "J'ai des problèmes techniques",
+        privacy: "Confidentialité / sécurité",
+        experience: "L'expérience ne me convient pas",
+        other: "Autre",
+    };
+    return map[reason] || map.other;
+}
+
+async function requestAccountDeletion(userId) {
+    if (!currentUser || currentUser.id !== userId) {
+        alert("Vous devez être connecté pour supprimer votre compte.");
+        return;
+    }
+
+    const modal = document.getElementById("settings-modal");
+    if (!modal) return;
+
+    const selectedReason = modal.querySelector(
+        'input[name="delete-account-reason"]:checked',
+    );
+    if (!selectedReason) {
+        alert("Choisissez une raison avant de continuer.");
+        return;
+    }
+
+    const reason = selectedReason.value;
+    const otherInput = modal.querySelector("#delete-account-other");
+    const otherDetail = (otherInput?.value || "").trim();
+
+    if (reason === "other" && otherDetail.length < 3) {
+        alert("Merci de préciser la raison dans le champ texte.");
+        return;
+    }
+
+    const reasonLabel = getAccountDeleteReasonLabel(reason);
+    const confirmation = confirm(
+        `Supprimer définitivement votre compte ?\n\nRaison: ${reasonLabel}\n\nCette action est irréversible.`,
+    );
+    if (!confirmation) return;
+
+    const okOnline = await ensureOnlineOrNotify();
+    if (!okOnline) return;
+    const sessionCheck = await ensureFreshSupabaseSession();
+    if (!sessionCheck.ok) {
+        console.warn("Session refresh failed", sessionCheck.error);
+    }
+
+    const btn = modal.querySelector(".btn-delete-account");
+    const originalText = btn ? btn.textContent : "";
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Suppression...";
+    }
+
+    try {
+        const {
+            data: { session },
+            error: sessionError,
+        } = await supabase.auth.getSession();
+        if (sessionError || !session?.access_token) {
+            throw new Error("Session invalide. Reconnectez-vous.");
+        }
+
+        const response = await fetch("/api/account/delete", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+                userId,
+                reason,
+                detail: reason === "other" ? otherDetail : "",
+            }),
+        });
+
+        let payload = {};
+        try {
+            payload = await response.json();
+        } catch (e) {
+            payload = {};
+        }
+        if (!response.ok) {
+            throw new Error(
+                payload?.error || "Impossible de supprimer le compte.",
+            );
+        }
+
+        try {
+            await supabase.auth.signOut();
+        } catch (e) {
+            // ignore
+        }
+        try {
+            SessionManager.clearSession();
+        } catch (e) {
+            // ignore
+        }
+
+        ToastManager?.success(
+            "Compte supprimé",
+            "Votre compte a été supprimé définitivement.",
+        );
+        setTimeout(() => {
+            window.location.href = "login.html";
+        }, 900);
+    } catch (error) {
+        console.error("Erreur suppression compte:", error);
+        alert(error?.message || "Impossible de supprimer le compte.");
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = originalText || "Supprimer mon compte";
+        }
+    }
+}
+
 /* ========================================
    GESTION DU PROFIL UTILISATEUR
    ======================================== */
@@ -1184,12 +1303,15 @@ async function ensureUserProfile(user) {
             const username =
                 user.user_metadata?.username || user.email.split("@")[0];
             const accountType = user.user_metadata?.account_type || null;
-            const accountSubtype = user.user_metadata?.account_subtype || null;
+            const accountSubtypeRaw = user.user_metadata?.account_subtype || null;
+            const accountSubtype = normalizeDiscoveryAccountRole(
+                accountSubtypeRaw,
+            );
             const badge = user.user_metadata?.badge || null;
 
             const profileData = {
                 name: username,
-                title: accountSubtype || "Nouveau membre",
+                title: "Nouveau membre",
                 bio: "",
                 avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`,
                 banner: "https://placehold.co/1200x300/1a1a2e/00ff88?text=Ma+Trajectoire",
@@ -2113,6 +2235,12 @@ function convertSupabaseContent(supabaseContent) {
                   id: supabaseContent.arcs.id,
                   title: supabaseContent.arcs.title,
                   status: supabaseContent.arcs.status,
+                  stageLevel: supabaseContent.arcs.stage_level || "idee",
+                  opportunityIntents: Array.isArray(
+                      supabaseContent.arcs.opportunity_intents,
+                  )
+                      ? supabaseContent.arcs.opportunity_intents
+                      : [],
                   ownerId: supabaseContent.arcs.user_id || null,
                   ownerName: arcOwner?.name || null,
                   ownerAvatar: arcOwner?.avatar || null,
@@ -2154,7 +2282,11 @@ async function toggleFollow(viewerId, targetUserId) {
     }
 
     const profileBtn = document.getElementById(`follow-btn-${targetUserId}`);
-    const cardBtn = document.getElementById(`follow-card-btn-${targetUserId}`);
+    const cardBtns = Array.from(
+        document.querySelectorAll(
+            `[data-follow-card-user="${targetUserId}"]`,
+        ),
+    );
     const immersiveBtn = document.getElementById(
         `follow-immersive-btn-${targetUserId}`,
     );
@@ -2166,10 +2298,10 @@ async function toggleFollow(viewerId, targetUserId) {
     const activeBtn =
         document.activeElement &&
         (document.activeElement === profileBtn ||
-            document.activeElement === cardBtn ||
+            cardBtns.includes(document.activeElement) ||
             document.activeElement === immersiveBtn)
             ? document.activeElement
-            : profileBtn || cardBtn || immersiveBtn;
+            : profileBtn || cardBtns[0] || immersiveBtn;
 
     await LoadingManager.withLoading(activeBtn, async () => {
         const isCurrentlyFollowing = await isFollowing(viewerId, targetUserId);
@@ -2204,14 +2336,14 @@ async function toggleFollow(viewerId, targetUserId) {
         }
 
         // Update Card Button
-        if (cardBtn) {
+        cardBtns.forEach((cardBtn) => {
             cardBtn.classList.toggle("unfollow", isNowFollowing);
             cardBtn.title = isNowFollowing ? "Se désabonner" : "S'abonner";
             // Reset styles that might have been inline
             cardBtn.style.background = "transparent";
             cardBtn.style.border = "none";
             cardBtn.innerHTML = `<img src="${isNowFollowing ? "icons/subscribed.svg" : "icons/subscribe.svg"}" class="btn-icon" style="width: 24px; height: 24px;">`;
-        }
+        });
 
         // Update Immersive Button
         if (immersiveBtn) {
@@ -2233,7 +2365,7 @@ async function toggleFollow(viewerId, targetUserId) {
                 "Vous suivez maintenant cet utilisateur",
             );
             if (profileBtn) AnimationManager.bounceIn(profileBtn);
-            if (cardBtn) AnimationManager.bounceIn(cardBtn);
+            cardBtns.forEach((cardBtn) => AnimationManager.bounceIn(cardBtn));
             if (immersiveBtn) AnimationManager.bounceIn(immersiveBtn);
             // Notification au suivi pour le propriétaire du profil
             if (typeof notifyNewFollower === "function") {
@@ -2276,19 +2408,30 @@ async function toggleFollow(viewerId, targetUserId) {
         // If we are in "Following" filter mode on Discover, we might need to remove the card if we unfollowed
         if (
             window.discoverFilter === "following" &&
-            !isNowFollowing &&
-            cardBtn
+            !isNowFollowing
         ) {
-            const card = cardBtn.closest(".user-card");
-            if (card) {
-                card.style.opacity = "0";
+            const cards = Array.from(
+                document.querySelectorAll(
+                    `.discover-grid .user-card[data-user="${targetUserId}"]`,
+                ),
+            );
+            if (cards.length > 0) {
+                cards.forEach((card) => {
+                    card.style.opacity = "0";
+                    card.style.transition = "opacity 0.25s ease";
+                });
                 setTimeout(() => {
-                    card.remove();
+                    cards.forEach((card) => card.remove());
                     // Check if grid is empty
-                    if (document.querySelectorAll(".user-card").length === 0) {
+                    if (
+                        document.querySelectorAll(".discover-grid .user-card")
+                            .length === 0
+                    ) {
                         renderDiscoverGrid(); // Will show empty state
                     }
-                }, 300);
+                }, 280);
+            } else {
+                renderDiscoverGrid();
             }
         }
     });
@@ -3488,6 +3631,68 @@ function renderAmbassadorBadgeById(userId) {
     return `<img src="icons/embassadeur.svg?v=${BADGE_ASSET_VERSION}" alt="Ambassadeur" class="username-badge">`;
 }
 
+function normalizeDiscoveryAccountRole(value) {
+    const raw = String(value || "")
+        .trim()
+        .toLowerCase();
+    if (raw === "recruiter" || raw === "recruteur") return "recruiter";
+    if (raw === "investor" || raw === "investisseur") return "investor";
+    return "fan";
+}
+
+function isManagedDiscoveryAccountRole(value) {
+    const raw = String(value || "")
+        .trim()
+        .toLowerCase();
+    return (
+        !raw ||
+        raw === "fan" ||
+        raw === "recruiter" ||
+        raw === "recruteur" ||
+        raw === "investor" ||
+        raw === "investisseur"
+    );
+}
+
+function getDiscoveryAccountRoleMeta(value) {
+    const role = normalizeDiscoveryAccountRole(value);
+    if (role === "recruiter") {
+        return {
+            role,
+            label: "Recruteur",
+            icon: "icons/recruteur.svg",
+        };
+    }
+    if (role === "investor") {
+        return {
+            role,
+            label: "Investisseur",
+            icon: "icons/investisseur.svg",
+        };
+    }
+    return {
+        role: "fan",
+        label: "Fan",
+        icon: null,
+    };
+}
+
+function renderProfileRoleBadgeByUser(user) {
+    const roleMeta = getDiscoveryAccountRoleMeta(
+        user?.account_subtype ||
+            user?.accountSubtype ||
+            user?.user_metadata?.account_subtype ||
+            "fan",
+    );
+    if (!roleMeta.icon) return "";
+    return `
+        <div class="profile-role-badge profile-role-badge--${roleMeta.role}" title="Type de compte: ${roleMeta.label}">
+            <img src="${roleMeta.icon}?v=${BADGE_ASSET_VERSION}" alt="${roleMeta.label}">
+            <span>${roleMeta.label}</span>
+        </div>
+    `;
+}
+
 function renderVerificationBadgeById(userId) {
     const user = getUser(userId) || {};
 
@@ -4576,6 +4781,56 @@ function sortUsersByLatestRecency(users) {
     );
 }
 
+function getDiscoverContentTime(content) {
+    if (!content) return 0;
+    const rawDate =
+        content.createdAt || content.created_at || content.started_at || null;
+    if (!rawDate) return 0;
+    const t = new Date(rawDate).getTime();
+    return Number.isFinite(t) ? t : 0;
+}
+
+function buildDiscoverArcCardEntries(users) {
+    const entries = [];
+
+    (users || []).forEach((user) => {
+        if (!user || !user.id) return;
+        const contents = getUserContentLocal(user.id);
+        if (!contents || contents.length === 0) return;
+
+        const latestByArc = new Map();
+        contents.forEach((content) => {
+            if (!content || !content.contentId) return;
+            const arcId = content.arcId || content.arc?.id || null;
+            const arcKey = arcId ? `arc-${arcId}` : "no-arc";
+            const existing = latestByArc.get(arcKey);
+            if (
+                !existing ||
+                getDiscoverContentTime(content) >
+                    getDiscoverContentTime(existing)
+            ) {
+                latestByArc.set(arcKey, content);
+            }
+        });
+
+        latestByArc.forEach((content, arcKey) => {
+            entries.push({
+                type: "arc",
+                user,
+                content,
+                arcId: content.arcId || content.arc?.id || null,
+                arcKey,
+                verified: isVerifiedDiscoverUser(user),
+                tags: Array.isArray(content.tags) ? content.tags : [],
+            });
+        });
+    });
+
+    return entries.sort(
+        (a, b) => getDiscoverContentTime(b.content) - getDiscoverContentTime(a.content),
+    );
+}
+
 function shuffleWithChaos(input) {
     const arr = [...input];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -4670,6 +4925,21 @@ function hasMoodMatch(itemTags = [], moodSet) {
 
 function normalizeDiscoverItemForImmersiveScore(item) {
     const content = item?.content || item?.stream || {};
+    const arcStageLevel =
+        content.arcStageLevel ||
+        content.arc_stage_level ||
+        content.arc?.stageLevel ||
+        content.arc?.stage_level ||
+        content.arc?.level ||
+        null;
+    const arcOpportunityIntents =
+        content.opportunityIntents ||
+        content.opportunity_intents ||
+        content.arcOpportunityIntents ||
+        content.arc_opportunity_intents ||
+        content.arc?.opportunityIntents ||
+        content.arc?.opportunity_intents ||
+        [];
     return {
         contentId:
             content.contentId ||
@@ -4690,6 +4960,16 @@ function normalizeDiscoverItemForImmersiveScore(item) {
             content.created_at ||
             content.started_at ||
             Date.now(),
+        arcId: content.arcId || content.arc_id || content.arc?.id || null,
+        arcStageLevel: arcStageLevel,
+        arcOpportunityIntents: Array.isArray(arcOpportunityIntents)
+            ? arcOpportunityIntents
+            : typeof arcOpportunityIntents === "string"
+              ? arcOpportunityIntents
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+              : [],
         encouragementsCount: content.encouragementsCount || 0,
         views: content.views || 0,
         viewer_count: content.viewer_count || 0,
@@ -4732,10 +5012,14 @@ function handleDiscoverInterest(contentId, action) {
 }
 window.handleDiscoverInterest = handleDiscoverInterest;
 
-function buildMoodDiscoverMix(users, liveStreams = [], followedSet = new Set()) {
-    const usersWithContent = (users || [])
-        .map((u) => ({ user: u, content: getLatestContent(u.id) }))
-        .filter((entry) => entry.content);
+function buildMoodDiscoverMix(
+    discoverArcCards,
+    liveStreams = [],
+    followedSet = new Set(),
+) {
+    const arcCards = (discoverArcCards || []).filter(
+        (entry) => entry?.content && entry?.user?.id,
+    );
 
     const liveItems = (liveStreams || [])
         .map((stream) => {
@@ -4756,10 +5040,12 @@ function buildMoodDiscoverMix(users, liveStreams = [], followedSet = new Set()) 
         })
         .filter(Boolean);
 
-    const allItems = usersWithContent.map((entry) => ({
-        type: "user",
+    const allItems = arcCards.map((entry) => ({
+        type: "arc",
         user: entry.user,
         content: entry.content,
+        arcId: entry.arcId || null,
+        arcKey: entry.arcKey || null,
         verified: isVerifiedDiscoverUser(entry.user),
         tags: Array.isArray(entry.content.tags) ? entry.content.tags : [],
     }));
@@ -4771,6 +5057,7 @@ function buildMoodDiscoverMix(users, liveStreams = [], followedSet = new Set()) 
     const prefs = loadImmersivePrefs();
     const authorScoreMap = buildAuthorScoreMapFromContents();
     const now = Date.now();
+    const viewerRole = getCurrentViewerDiscoveryRole();
     const topQueries = Object.entries(prefs.queries || {})
         .sort((a, b) => b[1] - a[1])
         .slice(0, 20)
@@ -4787,6 +5074,7 @@ function buildMoodDiscoverMix(users, liveStreams = [], followedSet = new Set()) 
                 isVerifiedStaffUserId(userId),
             now,
             topQueries,
+            viewerRole,
         });
         return {
             item,
@@ -4971,7 +5259,7 @@ function renderUserCard(
             : "icons/subscribe.svg";
 
         subscribeBtn = `
-            <button class="${btnClass}" onclick="event.stopPropagation(); toggleFollow('${currentUser.id}', '${userId}')" title="${btnTitle}" id="follow-card-btn-${userId}" style="
+            <button class="${btnClass}" onclick="event.stopPropagation(); toggleFollow('${currentUser.id}', '${userId}')" title="${btnTitle}" data-follow-card-user="${userId}" data-follow-card-content="${latestContent.contentId}" style="
                 background: transparent; 
                 border: none;
                 padding: 0;
@@ -5594,6 +5882,10 @@ function renderLiveStreamCard(stream) {
 function getDiscoverItemKey(item) {
     if (!item) return null;
     if (item.type === "live" && item.stream?.id) return `live-${item.stream.id}`;
+    if (item.type === "arc" && item.user?.id) {
+        const arcSegment = item.arcId || item.arcKey || "no-arc";
+        return `arc-${item.user.id}-${arcSegment}`;
+    }
     if (item.type === "user" && item.user?.id) return `user-${item.user.id}`;
     return null;
 }
@@ -5601,7 +5893,13 @@ function getDiscoverItemKey(item) {
 function getDiscoverItemContentId(item, userContentMap) {
     if (!item) return null;
     if (item.type === "live" && item.stream?.id) return `live-${item.stream.id}`;
+    if (item.type === "arc") {
+        return item.content?.contentId || null;
+    }
     if (item.type === "user" && item.user?.id) {
+        if (!userContentMap || typeof userContentMap.get !== "function") {
+            return item.content?.contentId || null;
+        }
         const latest = userContentMap.get(item.user.id);
         return latest?.contentId || null;
     }
@@ -5786,24 +6084,18 @@ async function renderDiscoverGrid() {
     // Tri de base par récence puis mélange pondéré vérifiés/non-vérifiés
     usersToDisplay = sortUsersByLatestRecency(usersToDisplay);
 
-    const arcIdsForDiscover = usersToDisplay
-        .map((u) => getLatestContent(u.id))
-        .filter((c) => c && c.arcId)
-        .map((c) => c.arcId);
+    const discoverArcCards = buildDiscoverArcCardEntries(usersToDisplay);
+    const arcIdsForDiscover = discoverArcCards
+        .map((entry) => entry.arcId)
+        .filter(Boolean);
     if (arcIdsForDiscover.length > 0) {
         await preloadArcCollaborators(arcIdsForDiscover);
     }
 
     // Personalized encouragement/follow status
-    const userContentMap = new Map();
-    const contentIds = [];
-    usersToDisplay.forEach((u) => {
-        const c = getLatestContent(u.id);
-        if (c) {
-            userContentMap.set(u.id, c);
-            contentIds.push(c.contentId);
-        }
-    });
+    const contentIds = discoverArcCards
+        .map((entry) => entry.content?.contentId)
+        .filter(Boolean);
 
     let encouragedContentIds = new Set();
     let followedSet = new Set();
@@ -5822,24 +6114,22 @@ async function renderDiscoverGrid() {
     }
 
     // Mood-based mix (includes lives)
-    const mixedItems = buildMoodDiscoverMix(
-        usersToDisplay,
-        liveStreams,
-        followedSet,
-    );
+    const mixedItems = buildMoodDiscoverMix(discoverArcCards, liveStreams, followedSet);
     const renderItem = (item) => {
         if (item.type === "live") {
             return renderLiveStreamCard(item.stream);
         }
-        const content = userContentMap.get(item.user.id);
-        const isFollowed = followedSet.has(item.user.id);
+        const userId = item.user?.id || item.content?.userId;
+        const content = item.content || null;
+        if (!userId || !content) return "";
+        const isFollowed = followedSet.has(userId);
         const isEncouraged = content
             ? encouragedContentIds.has(content.contentId)
             : false;
         const respectFilter =
             currentFilter === "following" ? isFollowed : true;
         if (!respectFilter) return "";
-        return renderUserCard(item.user.id, isFollowed, isEncouraged, content);
+        return renderUserCard(userId, isFollowed, isEncouraged, content);
     };
 
     const renderedItems = [];
@@ -5847,7 +6137,7 @@ async function renderDiscoverGrid() {
         const html = renderItem(item);
         if (!html) return;
         const key = getDiscoverItemKey(item);
-        const contentId = getDiscoverItemContentId(item, userContentMap);
+        const contentId = getDiscoverItemContentId(item);
         if (!key) return;
         renderedItems.push({
             key,
@@ -6086,6 +6376,114 @@ async function getFollowedUserIdSet(forceRefresh = false) {
 const IMMERSIVE_EXPLORATION_RATIO = 0.12; // ~12% of feed used for off-preference probing
 const IMMERSIVE_PREF_ALIGNMENT_THRESHOLD = 0.45; // below this, content is considered non-preference
 
+function normalizeArcStageLevelForScore(value) {
+    const raw = String(value || "")
+        .trim()
+        .toLowerCase();
+    if (raw === "idea" || raw === "idée") return "idee";
+    if (raw === "prototype") return "prototype";
+    if (raw === "demo" || raw === "démo") return "demo";
+    if (raw === "beta" || raw === "bêta") return "beta";
+    if (raw === "release") return "release";
+    return "idee";
+}
+
+function normalizeArcOpportunityIntent(value) {
+    const raw = String(value || "")
+        .trim()
+        .toLowerCase();
+    if (raw === "cherche_collab" || raw === "collab")
+        return "cherche_collab";
+    if (
+        raw === "cherche_investissement" ||
+        raw === "investissement" ||
+        raw === "investor"
+    )
+        return "cherche_investissement";
+    if (
+        raw === "open_to_recruit" ||
+        raw === "recruit" ||
+        raw === "recruiter"
+    )
+        return "open_to_recruit";
+    return null;
+}
+
+function normalizeArcOpportunityIntentList(values) {
+    const asArray = Array.isArray(values)
+        ? values
+        : typeof values === "string" && values.trim()
+          ? values
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean)
+          : [];
+
+    return Array.from(
+        new Set(asArray.map(normalizeArcOpportunityIntent).filter(Boolean)),
+    );
+}
+
+function getCurrentViewerDiscoveryRole() {
+    if (!currentUser) return "fan";
+    const profile = getCurrentUserProfile();
+    const profileRole =
+        profile?.account_subtype || profile?.accountSubtype || null;
+    const metadataRole = currentUser?.user_metadata?.account_subtype || null;
+    return normalizeDiscoveryAccountRole(profileRole || metadataRole || "fan");
+}
+
+function computeOpportunityRoleBoost(content, context) {
+    const viewerRole = context?.viewerRole || "fan";
+    const intents = normalizeArcOpportunityIntentList(
+        content?.arcOpportunityIntents,
+    );
+    const stage = normalizeArcStageLevelForScore(content?.arcStageLevel);
+    const hasArc = !!content?.arcId;
+    const hasRecruitSignal = intents.includes("open_to_recruit");
+    const hasInvestSignal = intents.includes("cherche_investissement");
+    const hasCollabSignal = intents.includes("cherche_collab");
+
+    let boost = 0;
+    if (hasArc) {
+        // Un arc sans ciblage reste "public"
+        boost += intents.length === 0 ? 0.18 : 0.06;
+    }
+
+    if (viewerRole === "recruiter") {
+        if (hasRecruitSignal) boost += 2.35;
+        if (hasCollabSignal) boost += 0.7;
+        if (hasInvestSignal) boost += 0.25;
+        if (
+            stage === "prototype" ||
+            stage === "demo" ||
+            stage === "beta" ||
+            stage === "release"
+        ) {
+            boost += 0.42;
+        }
+        return boost;
+    }
+
+    if (viewerRole === "investor") {
+        if (hasInvestSignal) boost += 2.45;
+        if (hasCollabSignal) boost += 0.25;
+        if (hasRecruitSignal) boost += 0.2;
+        if (stage === "prototype") boost += 0.4;
+        if (stage === "demo" || stage === "beta" || stage === "release") {
+            boost += 0.72;
+        }
+        return boost;
+    }
+
+    // fan / default viewer
+    if (hasCollabSignal) boost += 0.22;
+    if (hasRecruitSignal) boost += 0.12;
+    if (hasInvestSignal) boost += 0.08;
+    if (stage === "demo" || stage === "release") boost += 0.2;
+    return boost;
+}
+
 function scoreImmersiveContent(content, context) {
     const now = context.now || Date.now();
     const createdAt = content.createdAt
@@ -6140,12 +6538,14 @@ function scoreImmersiveContent(content, context) {
         context.prefs.seen && context.prefs.seen[content.contentId] ? 0.8 : 0;
     const preferenceScore =
         typePref + statePref + userPref + tagPref + queryPref;
+    const roleOpportunityBoost = computeOpportunityRoleBoost(content, context);
     const base =
         recency * 2.2 +
         engagement +
         followBoost +
         verifiedBoost +
         authorBoost +
+        roleOpportunityBoost +
         preferenceScore -
         seenPenalty;
     const score = base + Math.random() * 0.08;
@@ -6179,6 +6579,7 @@ async function getPersonalizedFeed(contents) {
     const followedSet = await getFollowedUserIdSet();
     const authorScoreMap = buildAuthorScoreMapFromContents();
     const now = Date.now();
+    const viewerRole = getCurrentViewerDiscoveryRole();
     const topQueries = Object.entries(prefs.queries || {})
         .sort((a, b) => b[1] - a[1])
         .slice(0, 20)
@@ -6193,6 +6594,7 @@ async function getPersonalizedFeed(contents) {
                 isVerifiedStaffUserId(userId),
             now,
             topQueries,
+            viewerRole,
         });
         return { item: { ...item }, score, preferenceScore };
     });
@@ -8092,6 +8494,7 @@ async function renderProfileTimeline(userId) {
             : "";
 
     const hasArcs = Array.isArray(userArcs) && userArcs.length > 0;
+    const profileRoleBadgeHtml = renderProfileRoleBadgeByUser(user);
 
     const weeklyChartHtml = `
         <div class="weekly-progress-card" style="margin: 1.5rem 0; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.25rem;">
@@ -8118,6 +8521,7 @@ async function renderProfileTimeline(userId) {
                 <img src="${user.avatar && (user.avatar.startsWith("http") || user.avatar.startsWith("data:")) ? withCacheBust(user.avatar) : "https://placehold.co/150"}" class="profile-avatar-img" alt="Avatar de ${user.name}" onclick="navigateToUserProfile('${userId}')" style="cursor: pointer;">
             </div>
             <h2>${renderUsernameForProfile(user.name, user.id)}</h2>
+            ${profileRoleBadgeHtml}
             <p style="color: var(--text-secondary);"><strong>${user.title}</strong></p>
             <p class="profile-bio" style="max-width: 600px; margin: 0.5rem auto; line-height: 1.5;">${user.bio || ""}</p>
             ${userBadgesHtml}
@@ -8809,7 +9213,12 @@ async function openSettings(userId) {
 
     const followerCount = await getFollowerCount(userId);
     const accountType = user.account_type || "personal";
-    const isEnterprise = accountType === "enterprise" || accountType === "team";
+    const accountRole = normalizeDiscoveryAccountRole(
+        user.account_subtype ||
+            user.accountSubtype ||
+            user.user_metadata?.account_subtype ||
+            "fan",
+    );
     const isCreatorVerified = isVerifiedCreatorUserId(userId);
     const isStaffVerified = isVerifiedStaffUserId(userId);
     const isCreatorEligible = followerCount >= 1000;
@@ -8905,44 +9314,42 @@ async function openSettings(userId) {
     const socialLinks = user.social_links || user.socialLinks || {};
 
     container.innerHTML = `
-        <div class="settings-section">
+        <div class="settings-shell">
             <div class="settings-header" style="border:none; margin-bottom:1rem; padding-bottom:0;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap: 1rem; flex-wrap: wrap;">
                     <div style="display:flex; align-items:center; gap: 0.75rem;">
                         <h2>Réglages</h2>
                         ${isSuperAdmin() ? `<span class="admin-badge">Super admin</span>` : isVerificationAdmin() ? `<span class="admin-badge">Admin mode</span>` : ""}
                     </div>
-                    <button type="button" class="btn-theme-toggle" onclick="toggleTheme()" style="width:auto;">
-                        ${isLightMode() ? "🌙 Mode Sombre" : "☀️ Mode Clair"}
-                    </button>
                 </div>
-                <p>Personnalisez votre profil public</p>
+                <p>Gérez votre compte, votre profil et vos préférences.</p>
             </div>
-            
-            <!-- Section Crédits -->
-            <div style="margin-bottom: 2rem; padding: 1.5rem; background: rgba(59, 130, 246, 0.1); border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.2);">
-                <h3 style="margin-bottom: 0.5rem; color: var(--accent-color);">À propos</h3>
-                <p style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;">Découvrez l'histoire derrière XERA</p>
-                <button type="button" class="settings-credits-btn" onclick="window.location.href='credits.html'" style="background: var(--accent-color); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.9rem;">
-                    Voir les crédits
-                </button>
-            </div>
-            
-            <div class="settings-section">
-                <h3>Langue</h3>
-                <div class="form-group">
-                    <label for="lang-select">Choisissez votre langue</label>
-                    <select id="lang-select" class="lang-select">
-                        <option value="en">English (US)</option>
-                        <option value="fr">Français</option>
-                    </select>
-                    <div class="form-hint">La langue est aussi détectée automatiquement selon votre localisation.</div>
+
+            <form id="settings-form" novalidate class="settings-form-layout">
+                <div class="settings-section">
+                    <h3>Préférences de l'application</h3>
+                    <div class="settings-preferences-grid">
+                        <div class="form-group">
+                            <label for="lang-select">Langue</label>
+                            <select id="lang-select" class="lang-select">
+                                <option value="en">English (US)</option>
+                                <option value="fr">Français</option>
+                            </select>
+                            <div class="form-hint">La langue est aussi détectée automatiquement selon votre localisation.</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Thème</label>
+                            <button type="button" class="btn-theme-toggle settings-theme-control" onclick="toggleTheme()">
+                                ${isLightMode() ? "🌙 Mode Sombre" : "☀️ Mode Clair"}
+                            </button>
+                            <div class="form-hint">Choisissez l'affichage qui vous convient.</div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            
-            <form id="settings-form" novalidate>
-                <h3>Identité</h3>
-                
+
+                <div class="settings-section">
+                    <h3>Identité</h3>
+
             <div class="upload-section" style="display: flex; flex-direction: column; gap: 2rem; margin-bottom: 2rem;">
                 <!-- Avatar Section -->
                 <div style="display: flex; flex-direction: column; align-items: center;">
@@ -8986,22 +9393,25 @@ async function openSettings(userId) {
                     <label>Bio</label>
                     <textarea id="setting-bio" class="form-input" rows="4">${user.bio || ""}</textarea>
                 </div>
+                </div>
 
-                <details class="settings-collapsible" open>
-                    <summary>Type de compte</summary>
-                    <div class="settings-collapsible-body">
-                        <div class="account-type-toggle">
-                            <button type="button" class="account-type-btn ${!isEnterprise ? "active" : ""}" data-type="personal">Personnel</button>
-                            <button type="button" class="account-type-btn ${isEnterprise ? "active" : ""}" data-type="enterprise">Équipe / Entreprise</button>
-                        </div>
-                        <input type="hidden" id="setting-account-type" value="${isEnterprise ? "enterprise" : "personal"}">
+                <div class="settings-section">
+                    <h3>Type de compte</h3>
+                    <p class="form-hint">Par défaut votre compte reste <strong>fan</strong>. Vous pouvez passer à recruteur ou investisseur à tout moment.</p>
+                    <div class="account-type-toggle account-role-toggle">
+                        <button type="button" class="account-type-btn account-role-btn ${accountRole === "fan" ? "active" : ""}" data-role="fan">Fan</button>
+                        <button type="button" class="account-type-btn account-role-btn ${accountRole === "recruiter" ? "active" : ""}" data-role="recruiter">Recruteur</button>
+                        <button type="button" class="account-type-btn account-role-btn ${accountRole === "investor" ? "active" : ""}" data-role="investor">Investisseur</button>
                     </div>
-                </details>
+                    <input type="hidden" id="setting-account-role" value="${accountRole}">
+                </div>
 
-                <h3>Vérification</h3>
-                <div class="verification-section">
-                    ${verificationStatusHtml}
-                    ${verificationCtaHtml}
+                <div class="settings-section">
+                    <h3>Vérification</h3>
+                    <div class="verification-section">
+                        ${verificationStatusHtml}
+                        ${verificationCtaHtml}
+                    </div>
                 </div>
 
                 <details class="settings-collapsible" open>
@@ -9072,15 +9482,51 @@ async function openSettings(userId) {
                     </div>
                 </details>
 
-                <div class="actions-bar" style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem;">
-                    <button type="button" class="btn-cancel" onclick="closeSettings()">Annuler</button>
-                    <button type="submit" class="btn-save">Enregistrer</button>
-                </div>
-
-                <div style="margin-top: 3rem; border-top: 1px solid #1a1a1a; padding-top: 2rem;">
-                     <button type="button" onclick="handleSignOut()" style="width: 100%; padding: 0.8rem; background: #221a1a; color: #ef4444; border: 1px solid #3d1a1a; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s;">
+                <div class="settings-section settings-danger-zone">
+                    <h3>Session</h3>
+                    <p>Déconnectez cet appareil si besoin.</p>
+                    <button type="button" class="btn-signout-settings" onclick="handleSignOut()">
                         Se déconnecter
                     </button>
+
+                    <div class="delete-account-box">
+                        <h4>Supprimer mon compte</h4>
+                        <p>Cette action est irréversible. Toutes vos données seront supprimées.</p>
+                        <div class="delete-account-reasons">
+                            <label class="delete-account-reason-item">
+                                <input type="radio" name="delete-account-reason" value="inactive">
+                                <span>Je n'utilise plus XERA</span>
+                            </label>
+                            <label class="delete-account-reason-item">
+                                <input type="radio" name="delete-account-reason" value="technical">
+                                <span>J'ai des problèmes techniques</span>
+                            </label>
+                            <label class="delete-account-reason-item">
+                                <input type="radio" name="delete-account-reason" value="privacy">
+                                <span>Confidentialité / sécurité</span>
+                            </label>
+                            <label class="delete-account-reason-item">
+                                <input type="radio" name="delete-account-reason" value="experience">
+                                <span>L'expérience ne me convient pas</span>
+                            </label>
+                            <label class="delete-account-reason-item">
+                                <input type="radio" name="delete-account-reason" value="other">
+                                <span>Autre</span>
+                            </label>
+                        </div>
+                        <div class="delete-account-other-wrap" style="display:none;">
+                            <label for="delete-account-other">Précisez la raison</label>
+                            <textarea id="delete-account-other" class="form-input" rows="3" placeholder="Expliquez brièvement..." disabled></textarea>
+                        </div>
+                        <button type="button" class="btn-delete-account" onclick="requestAccountDeletion('${userId}')">
+                            Supprimer définitivement mon compte
+                        </button>
+                    </div>
+                </div>
+
+                <div class="actions-bar">
+                    <button type="button" class="btn-cancel" onclick="closeSettings()">Annuler</button>
+                    <button type="submit" class="btn-save">Enregistrer</button>
                 </div>
             </form>
             ${verificationAdminHtml}
@@ -9096,15 +9542,40 @@ async function openSettings(userId) {
         window.refreshLanguageControl();
     }
 
-    const accountButtons = container.querySelectorAll(".account-type-btn");
-    accountButtons.forEach((btn) => {
+    container.dataset.accountRoleTouched = "0";
+    const accountRoleButtons = container.querySelectorAll(".account-role-btn");
+    accountRoleButtons.forEach((btn) => {
         btn.addEventListener("click", () => {
-            accountButtons.forEach((b) => b.classList.remove("active"));
+            accountRoleButtons.forEach((b) => b.classList.remove("active"));
             btn.classList.add("active");
-            document.getElementById("setting-account-type").value =
-                btn.dataset.type;
+            document.getElementById("setting-account-role").value =
+                btn.dataset.role;
+            container.dataset.accountRoleTouched = "1";
         });
     });
+
+    const deleteReasonInputs = container.querySelectorAll(
+        'input[name="delete-account-reason"]',
+    );
+    const deleteOtherWrap = container.querySelector(".delete-account-other-wrap");
+    const deleteOtherInput = container.querySelector("#delete-account-other");
+    const syncDeleteReasonVisibility = () => {
+        const selected = container.querySelector(
+            'input[name="delete-account-reason"]:checked',
+        );
+        const isOther = selected?.value === "other";
+        if (deleteOtherWrap) {
+            deleteOtherWrap.style.display = isOther ? "block" : "none";
+        }
+        if (deleteOtherInput) {
+            deleteOtherInput.disabled = !isOther;
+            if (!isOther) deleteOtherInput.value = "";
+        }
+    };
+    deleteReasonInputs.forEach((input) =>
+        input.addEventListener("change", syncDeleteReasonVisibility),
+    );
+    syncDeleteReasonVisibility();
 
     let pendingProfileMediaUploads = 0;
     const updateSaveButtonUploadState = () => {
@@ -9216,6 +9687,20 @@ async function openSettings(userId) {
 
             btnSave.textContent = "Enregistrement...";
 
+            const selectedRoleValue =
+                document.getElementById("setting-account-role")?.value || "fan";
+            const existingSubtypeRaw = String(
+                user.account_subtype || user.accountSubtype || "",
+            ).trim();
+            const roleTouched = container.dataset.accountRoleTouched === "1";
+            const shouldOverwriteSubtype =
+                roleTouched ||
+                !existingSubtypeRaw ||
+                isManagedDiscoveryAccountRole(existingSubtypeRaw);
+            const subtypeToSave = shouldOverwriteSubtype
+                ? normalizeDiscoveryAccountRole(selectedRoleValue)
+                : existingSubtypeRaw;
+
             const profileData = {
                 name: document.getElementById("setting-name").value,
                 title: document.getElementById("setting-title").value,
@@ -9223,8 +9708,8 @@ async function openSettings(userId) {
                 avatar: document.getElementById("setting-avatar").value,
                 banner: document.getElementById("setting-banner").value,
                 socialLinks: newSocialLinks,
-                account_type: document.getElementById("setting-account-type")
-                    .value,
+                account_type: accountType || "personal",
+                account_subtype: subtypeToSave,
             };
 
             const okOnline = await ensureOnlineOrNotify();
@@ -9302,12 +9787,9 @@ async function openSettings(userId) {
                     await renderProfileIntoContainer(userId);
                 }
 
-                // Update User Card in Discover Grid if present
-                const userCard = document.querySelector(
-                    `.user-card[data-user="${userId}"]`,
-                );
-                if (userCard) {
-                    userCard.outerHTML = renderUserCard(userId);
+                // Refresh Discover cards (multiple cards can exist per user/arc)
+                if (document.querySelector(".discover-grid")) {
+                    await renderDiscoverGrid();
                 }
 
                 // Refresh discover React island if present
@@ -10709,12 +11191,9 @@ async function openCreateMenu(
                     await renderProfileIntoContainer(userId);
                 }
 
-                // Update User Card in Discover Grid if present
-                const userCard = document.querySelector(
-                    `.user-card[data-user="${userId}"]`,
-                );
-                if (userCard) {
-                    userCard.outerHTML = renderUserCard(userId);
+                // Refresh Discover cards (multiple cards can exist per user/arc)
+                if (document.querySelector(".discover-grid")) {
+                    await renderDiscoverGrid();
                 }
 
                 // Refresh Arc details if open
@@ -10838,12 +11317,9 @@ async function deleteContent(contentId) {
             await renderProfileIntoContainer(currentUser.id);
         }
 
-        // Update User Card in Discover Grid if present
-        const userCard = document.querySelector(
-            `.user-card[data-user="${currentUser.id}"]`,
-        );
-        if (userCard) {
-            userCard.outerHTML = renderUserCard(currentUser.id);
+        // Refresh Discover cards (multiple cards can exist per user/arc)
+        if (document.querySelector(".discover-grid")) {
+            await renderDiscoverGrid();
         }
 
         // Refresh Arc details if open
@@ -10917,6 +11393,7 @@ if (typeof openArcDetails !== "undefined") {
 }
 window.toggleTheme = toggleTheme;
 window.handleSignOut = handleSignOut;
+window.requestAccountDeletion = requestAccountDeletion;
 
 /* ========================================
    INITIALISATION AU CHARGEMENT
@@ -10988,21 +11465,9 @@ function subscribeToRealtime() {
                             await renderProfileIntoContainer(userId);
                         }
 
-                        // Update User Card in Discover Grid if present
-                        const userCard = document.querySelector(
-                            `.user-card[data-user="${userId}"]`,
-                        );
-                        if (userCard) {
-                            const isFollowed = window.currentUser
-                                ? await isFollowing(
-                                      window.currentUser.id,
-                                      userId,
-                                  )
-                                : false;
-                            userCard.outerHTML = renderUserCard(
-                                userId,
-                                isFollowed,
-                            );
+                        // Refresh Discover cards (multiple cards can exist per user/arc)
+                        if (document.querySelector(".discover-grid")) {
+                            scheduleDiscoverRefresh();
                         }
                     }
                 }

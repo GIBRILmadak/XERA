@@ -480,8 +480,8 @@ function renderMonthlyChart({ year, monthIndex, daysInMonth, series, containerId
         ...series.live,
         0
     );
-    const isProfileDashboard = containerId === 'profile-analytics';
-    const yMax = isProfileDashboard ? Math.max(10, maxValue) : Math.max(daysInMonth, maxValue);
+    // Dynamic scale: align chart height to the highest daily vector/value.
+    const yMax = maxValue > 0 ? maxValue : 1;
 
     if (window.analyticsCharts[safeId]) {
         window.analyticsCharts[safeId].destroy();

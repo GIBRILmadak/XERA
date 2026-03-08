@@ -267,6 +267,21 @@ function getContentWriteErrorMessage(error, contentData = {}) {
     return rawMessage || 'Erreur inconnue lors de l\'écriture du contenu.';
 }
 
+function isMissingArcMetadataReadError(error) {
+    const lowerMessage = String(error?.message || '').toLowerCase();
+    const mentionsMetadataColumn =
+        lowerMessage.includes('stage_level') ||
+        lowerMessage.includes('opportunity_intents');
+    const mentionsMissingColumn =
+        (lowerMessage.includes('column') || lowerMessage.includes('colonne')) &&
+        (lowerMessage.includes('does not exist') ||
+            lowerMessage.includes("n'existe pas") ||
+            lowerMessage.includes('could not find') ||
+            lowerMessage.includes('schema cache'));
+
+    return mentionsMetadataColumn && mentionsMissingColumn;
+}
+
 // Créer un nouveau contenu
 async function createContent(contentData) {
     const basePayload = {
@@ -389,9 +404,22 @@ async function updateContent(contentId, contentData) {
 
 // Récupérer le contenu d'un utilisateur
 async function getUserContent(userId) {
-    const { data, error } = await supabase
-        .from('content')
-        .select(`
+    const selectWithArcMetadata = `
+            *,
+            arcs (
+                id,
+                title,
+                status,
+                stage_level,
+                opportunity_intents,
+                user_id
+            ),
+            projects (
+                id,
+                name
+            )
+        `;
+    const selectLegacy = `
             *,
             arcs (
                 id,
@@ -403,9 +431,23 @@ async function getUserContent(userId) {
                 id,
                 name
             )
-        `)
+        `;
+
+    let { data, error } = await supabase
+        .from('content')
+        .select(selectWithArcMetadata)
         .eq('user_id', userId)
         .order('day_number', { ascending: false });
+
+    if (error && isMissingArcMetadataReadError(error)) {
+        const retry = await supabase
+            .from('content')
+            .select(selectLegacy)
+            .eq('user_id', userId)
+            .order('day_number', { ascending: false });
+        data = retry.data;
+        error = retry.error;
+    }
     
     if (error) {
         console.error('Erreur récupération contenu:', error);
@@ -434,9 +476,18 @@ async function fetchUsersByIds(ids = []) {
 
 // Récupérer le contenu public d'un utilisateur (sans jointures)
 async function getUserContentPublic(userId) {
-    const { data, error } = await supabase
-        .from('content')
-        .select(`
+    const selectWithArcMetadata = `
+            *,
+            arcs (
+                id,
+                title,
+                status,
+                stage_level,
+                opportunity_intents,
+                user_id
+            )
+        `;
+    const selectLegacy = `
             *,
             arcs (
                 id,
@@ -444,9 +495,23 @@ async function getUserContentPublic(userId) {
                 status,
                 user_id
             )
-        `)
+        `;
+
+    let { data, error } = await supabase
+        .from('content')
+        .select(selectWithArcMetadata)
         .eq('user_id', userId)
         .order('day_number', { ascending: false });
+
+    if (error && isMissingArcMetadataReadError(error)) {
+        const retry = await supabase
+            .from('content')
+            .select(selectLegacy)
+            .eq('user_id', userId)
+            .order('day_number', { ascending: false });
+        data = retry.data;
+        error = retry.error;
+    }
 
     if (error) {
         console.error('Erreur récupération contenu public:', error);

@@ -70,7 +70,99 @@ const ARC_HOOKS = [
     "Mon chaos en version documentée"
 ];
 
+const ARC_STAGE_OPTIONS = [
+    { value: "idee", label: "Idée" },
+    { value: "prototype", label: "Prototype" },
+    { value: "demo", label: "Démo" },
+    { value: "beta", label: "Bêta" },
+    { value: "release", label: "Release" },
+];
+
+const ARC_STAGE_LABELS = {
+    idee: "Idée",
+    prototype: "Prototype",
+    demo: "Démo",
+    beta: "Bêta",
+    release: "Release",
+};
+
+const ARC_OPPORTUNITY_OPTIONS = [
+    { value: "cherche_collab", label: "Cherche collab" },
+    { value: "cherche_investissement", label: "Cherche investissement" },
+    { value: "open_to_recruit", label: "Open to recruit" },
+];
+
+const ARC_OPPORTUNITY_LABELS = {
+    cherche_collab: "Cherche collab",
+    cherche_investissement: "Cherche investissement",
+    open_to_recruit: "Open to recruit",
+};
+
 let hookInterval;
+
+function normalizeArcStageLevel(value) {
+    const raw = String(value || "")
+        .trim()
+        .toLowerCase();
+    if (raw === "idea") return "idee";
+    if (ARC_STAGE_LABELS[raw]) return raw;
+    return "idee";
+}
+
+function getArcStageLabel(value) {
+    return ARC_STAGE_LABELS[normalizeArcStageLevel(value)] || "Idée";
+}
+
+function normalizeArcOpportunityIntents(value) {
+    const asArray = Array.isArray(value)
+        ? value
+        : typeof value === "string" && value.trim()
+          ? value
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean)
+          : [];
+
+    const mapped = asArray
+        .map((item) => String(item || "").trim().toLowerCase())
+        .map((item) => {
+            if (item === "cherche_collab" || item === "collab")
+                return "cherche_collab";
+            if (
+                item === "cherche_investissement" ||
+                item === "investissement" ||
+                item === "investor"
+            )
+                return "cherche_investissement";
+            if (
+                item === "open_to_recruit" ||
+                item === "recruit" ||
+                item === "recruiter"
+            )
+                return "open_to_recruit";
+            return null;
+        })
+        .filter(Boolean);
+
+    return Array.from(new Set(mapped));
+}
+
+function getArcOpportunityLabel(value) {
+    return ARC_OPPORTUNITY_LABELS[value] || value;
+}
+
+function isMissingArcMetadataColumnError(error) {
+    const msg = String(error?.message || "").toLowerCase();
+    const mentionsMetadataColumn =
+        msg.includes("stage_level") || msg.includes("opportunity_intents");
+    const mentionsMissingColumn =
+        (msg.includes("column") || msg.includes("colonne")) &&
+        (msg.includes("does not exist") ||
+            msg.includes("n'existe pas") ||
+            msg.includes("schema cache") ||
+            msg.includes("could not find"));
+    return mentionsMetadataColumn && mentionsMissingColumn;
+}
 
 // --- INITIALIZATION ---
 
@@ -82,6 +174,12 @@ function renderArcCreationForm(arcToEdit = null) {
     const isEdit = !!arcToEdit;
     const title = isEdit ? 'Modifier votre ARC' : 'Démarrez votre transformation';
     const btnText = isEdit ? 'Mettre à jour' : 'Lancer l\'ARC';
+    const defaultStageLevel = normalizeArcStageLevel(
+        isEdit ? arcToEdit.stage_level : "idee",
+    );
+    const selectedOpportunityIntents = normalizeArcOpportunityIntents(
+        isEdit ? arcToEdit.opportunity_intents : [],
+    );
     
     // Default dates
     const today = new Date().toISOString().split('T')[0];
@@ -121,6 +219,31 @@ function renderArcCreationForm(arcToEdit = null) {
             <div class="form-group">
                 <label for="arc-goal">Objectif final *</label>
                 <textarea id="arc-goal" name="goal" placeholder="Ex: Site en ligne le 1er mars" rows="2" class="form-input" required>${isEdit ? escapeHtml(arcToEdit.goal || '') : ''}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="arc-stage-level">Niveau du projet</label>
+                <select id="arc-stage-level" name="stage_level" class="form-input">
+                    ${ARC_STAGE_OPTIONS.map((item) => `<option value="${item.value}" ${defaultStageLevel === item.value ? "selected" : ""}>${item.label}</option>`).join("")}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Matching opportunité (optionnel)</label>
+                <div class="arc-intent-grid">
+                    ${ARC_OPPORTUNITY_OPTIONS.map((item) => `
+                        <label class="arc-intent-item">
+                            <input
+                                type="checkbox"
+                                name="opportunity_intents"
+                                value="${item.value}"
+                                ${selectedOpportunityIntents.includes(item.value) ? "checked" : ""}
+                            >
+                            <span>${item.label}</span>
+                        </label>
+                    `).join("")}
+                </div>
+                <p class="form-hint">Laissez vide pour un partage public sans ciblage spécifique.</p>
             </div>
 
             <div class="form-row">
@@ -523,10 +646,19 @@ async function handleCreateArc(e) {
         if (durationDays < 1) durationDays = 1;
     }
 
+    const selectedOpportunityIntents = normalizeArcOpportunityIntents(
+        formData.getAll("opportunity_intents"),
+    );
+
     const arcData = {
         title: formData.get('title'),
         goal: formData.get('goal'),
         description: formData.get('description'),
+        stage_level: normalizeArcStageLevel(formData.get("stage_level")),
+        opportunity_intents:
+            selectedOpportunityIntents.length > 0
+                ? selectedOpportunityIntents
+                : [],
         duration_days: durationDays,
         start_date: startDateVal || new Date().toISOString(),
         media_url: formData.get('media_url') || null,
@@ -542,23 +674,38 @@ async function handleCreateArc(e) {
     try {
         let error;
         let createdArc = null;
-        
-        if (arcId) {
-            // Update
-            const { error: updateError } = await supabase
-                .from('arcs')
-                .update(arcData)
-                .eq('id', arcId);
-            error = updateError;
-        } else {
-            // Create
+
+        const persistArc = async (payload) => {
+            if (arcId) {
+                const { error: updateError } = await supabase
+                    .from("arcs")
+                    .update(payload)
+                    .eq("id", arcId);
+                return { error: updateError, data: null };
+            }
             const { data: insertedArc, error: insertError } = await supabase
-                .from('arcs')
-                .insert([arcData])
-                .select('id')
+                .from("arcs")
+                .insert([payload])
+                .select("id")
                 .single();
-            createdArc = insertedArc || null;
-            error = insertError;
+            return { error: insertError, data: insertedArc || null };
+        };
+
+        let persistResult = await persistArc(arcData);
+        error = persistResult.error;
+        createdArc = persistResult.data;
+
+        if (error && isMissingArcMetadataColumnError(error)) {
+            // Compatibilité: si la DB n'a pas encore les nouvelles colonnes,
+            // on retente sans métadonnées pour ne pas bloquer la création d'ARC.
+            const fallbackArcData = {
+                ...arcData,
+            };
+            delete fallbackArcData.stage_level;
+            delete fallbackArcData.opportunity_intents;
+            persistResult = await persistArc(fallbackArcData);
+            error = persistResult.error;
+            createdArc = persistResult.data || createdArc;
         }
 
         if (error) throw error;
@@ -773,6 +920,18 @@ function createArcCard(arc, options = {}) {
         'completed': 'Terminé',
         'abandoned': 'Abandonné'
     };
+    const stageLabel = getArcStageLabel(arc.stage_level);
+    const opportunityIntents = normalizeArcOpportunityIntents(
+        arc.opportunity_intents,
+    );
+    const opportunitySummary = opportunityIntents.length
+        ? opportunityIntents
+              .slice(0, 2)
+              .map(getArcOpportunityLabel)
+              .join(" • ")
+        : "Public";
+    const opportunityOverflow =
+        opportunityIntents.length > 2 ? ` +${opportunityIntents.length - 2}` : "";
     
     // Custom style for cover
     let styleAttr = '';
@@ -820,6 +979,10 @@ function createArcCard(arc, options = {}) {
                 </div>
                 <h4 class="arc-title" style="text-shadow: 0 2px 4px rgba(0,0,0,0.5);">${escapeHtml(arc.title)}</h4>
                 <p class="arc-goal" style="text-shadow: 0 1px 2px rgba(0,0,0,0.5);">${escapeHtml(arc.goal || '')}</p>
+                <div class="arc-classification">
+                    <span class="arc-chip arc-chip-level">${stageLabel}</span>
+                    <span class="arc-chip arc-chip-opportunity">${escapeHtml(opportunitySummary)}${opportunityOverflow}</span>
+                </div>
                 ${collabBadgeHtml}
                 ${ownerLabelHtml}
                 
@@ -935,6 +1098,13 @@ function renderArcDetails(arc, followersCount, isFollowing, content) {
     const isOwner = currentUser && currentUser.id === arc.user_id;
     const progress = calculateArcProgress(arc);
     const daysSince = calculateDaysSince(arc.start_date);
+    const stageLabel = getArcStageLabel(arc.stage_level);
+    const opportunityIntents = normalizeArcOpportunityIntents(
+        arc.opportunity_intents,
+    );
+    const opportunitiesLabel = opportunityIntents.length
+        ? opportunityIntents.map(getArcOpportunityLabel).join(" • ")
+        : "Public (sans ciblage spécifique)";
 
     const coverHtml = arc.media_url 
         ? (arc.media_type === 'video' 
@@ -1005,6 +1175,10 @@ function renderArcDetails(arc, followersCount, isFollowing, content) {
             <div class="arc-description" style="margin-bottom: 3rem; background: var(--surface-color); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color);">
                 <h3 style="margin-bottom:0.5rem; font-size:1rem; text-transform:uppercase; letter-spacing:1px; color:var(--text-secondary);">À propos</h3>
                 <p style="line-height:1.6;">${escapeHtml(arc.description || "Pas de description.")}</p>
+                <div style="margin-top:0.85rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                    <span class="arc-chip arc-chip-level">${stageLabel}</span>
+                    <span class="arc-chip arc-chip-opportunity">${escapeHtml(opportunitiesLabel)}</span>
+                </div>
                 <div style="margin-top:1rem; font-size:0.9rem; opacity:0.7; border-top:1px solid var(--border-color); padding-top:1rem;">
                     Lancé le ${new Date(arc.start_date).toLocaleDateString()} par <strong>${escapeHtml(arc.users?.name || 'Inconnu')}</strong>
                 </div>
