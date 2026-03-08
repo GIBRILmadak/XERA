@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XERA | Login</title>
+    <link rel="manifest" href="/manifest.json">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Favicon pour navigateur -->
+    <link rel="icon" type="image/png" href="icons/logo-192x192.png" />
+    <link rel="shortcut icon" href="icons/logo-192x192.png" />
+
+    <!-- Apple touch icon (iPhone/iPad) -->
+    <link rel="apple-touch-icon" href="icons/logo-192x192.png" />
+    <meta name="theme-color" content="#050505">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/login.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="login-body">
+    <div class="login-container">
+        <div class="login-left">
+            <div class="login-hero">
+                <div class="login-logo">
+                    <img src="icons/logo.png" alt="XERA Logo" />
+                </div>
+                <h1>Documentez l'effort.</h1>
+                <p>Rejoignez une communauté de builders qui partagent leur progression authentique, sans filtres.</p>
+                <div class="login-features">
+                    <div class="feature-item">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        <span>Progression transparente</span>
+                    </div>
+                    <div class="feature-item">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        <span>Communauté authentique</span>
+                    </div>
+                    <div class="feature-item">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        <span>Suivi jour par jour</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="login-right">
+            <div class="login-form-container">
+                <div class="login-form-header">
+                    <h2 id="form-title">Welcome to XERA</h2>
+                    <p id="form-subtitle">Log in to continue</p>
+                </div>
+                
+                <div id="error-message" class="error-message" style="display: none;"></div>
+                <div id="success-message" class="success-message" style="display: none;"></div>
+                
+                <form id="auth-form" class="login-form">
+                    
+                    <!-- Step 1: Account Type -->
+                    <div id="signup-step-1" class="signup-step" style="display: none;">
+                        <h3 style="margin-bottom: 1.5rem; font-size: 1.1rem; color: var(--text-primary); text-align: center;">Choisissez votre profil</h3>
+                        <div class="account-type-options">
+                            <div class="account-option" data-type="Personnel">
+                                <img src="icons/solo.svg" alt="Personnel">
+                                <span>Personnel</span>
+                            </div>
+                            <div class="account-option" data-type="Communauté">
+                                <img src="icons/team.svg" alt="Communauté">
+                                <span>Communauté</span>
+                            </div>
+                            <div class="account-option" data-type="Entreprise">
+                                <img src="icons/enterprise.svg" alt="Entreprise">
+                                <span>Entreprise</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Subtype -->
+                    <div id="signup-step-2" class="signup-step" style="display: none;">
+                        <h3 id="step-2-title" style="margin-bottom: 1.5rem; font-size: 1.1rem; color: var(--text-primary); text-align: center;">Précisez votre statut</h3>
+                        <div class="subtype-options" id="subtype-options-container">
+                            <!-- Filled by JS -->
+                        </div>
+                        <div class="wizard-nav">
+                             <button type="button" class="btn-secondary" id="step-2-back">Retour</button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3 / Login: Credentials -->
+                    <div id="credentials-group">
+                        <div class="form-group" id="username-group" style="display: none;">
+                        <label for="username">Nom d'utilisateur</label>
+                        <input type="text" id="username" class="form-input" placeholder="Votre nom d'utilisateur" />
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" class="form-input" placeholder="votre@email.com" required />
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">Mot de passe</label>
+                        <div class="password-input-container">
+                            <input type="password" id="password" class="form-input" placeholder="••••••••" required />
+                            <button type="button" class="password-toggle" id="password-toggle">
+                                <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" id="confirm-password-group" style="display: none;">
+                        <label for="confirm-password">Confirmer le mot de passe</label>
+                        <div class="password-input-container">
+                            <input type="password" id="confirm-password" class="form-input" placeholder="••••••••" />
+                            <button type="button" class="password-toggle" id="confirm-password-toggle">
+                                <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="remember-me-container" id="remember-me-container" style="display: none;">
+                            <label class="remember-checkbox">
+                                <input type="checkbox" id="remember-me" />
+                                <span class="checkmark"></span>
+                                Se souvenir de moi
+                            </label>
+                        </div>
+                        <div class="forgot-password-link" id="forgot-password-link" style="display: none;">
+                            <a href="#" id="forgot-password">Mot de passe oublié ?</a>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn-submit" id="submit-btn">
+                        <span id="btn-text">Se connecter</span>
+                        <svg id="btn-loader" class="btn-loader" style="display: none;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                        </svg>
+                    </button>
+                </form>
+                
+                <div class="login-divider">
+                    <span>ou</span>
+                </div>
+                
+                <button type="button" class="btn-google" id="google-signin-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    <span>Continuer avec Google</span>
+                </button>
+                
+                <div class="login-toggle">
+                    <p id="toggle-text">Pas encore de compte ?</p>
+                    <a href="#" id="toggle-link">Créer un compte</a>
+                </div>
+                
+                <div class="login-footer">
+                    <a href="index.html">← Retour à l'accueil</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/supabase-config.js"></script>
+    <script src="js/login.js"></script>
+    <script src="js/pwa-install.js" defer></script>
+</body>
+</html>

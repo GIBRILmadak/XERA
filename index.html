@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>XERA | Tracez votre progression</title>
+        <link rel="manifest" href="/manifest.json" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+        <script>
+            // Set early lang to avoid flash while i18n loads
+            (() => {
+                try {
+                    const stored = localStorage.getItem("rize_lang");
+                    if (stored) {
+                        document.documentElement.setAttribute(
+                            "lang",
+                            stored.startsWith("fr") ? "fr" : "en",
+                        );
+                    }
+                } catch (e) {
+                    /* no-op */
+                }
+            })();
+        </script>
+        <!-- Favicon pour navigateur -->
+        <link rel="icon" type="image/png" href="icons/logo-192x192.png" />
+        <link rel="shortcut icon" href="icons/logo-192x192.png" />
+
+        <!-- Apple touch icon (iPhone/iPad) -->
+        <link rel="apple-touch-icon" href="icons/logo-192x192.png" />
+        <meta name="theme-color" content="#050505" />
+        <meta
+            name="description"
+            content="XERA - Plateforme de suivi de progression transparente sans dopamine sociale"
+        />
+        <meta name="ga-measurement-id" content="" />
+        <script>
+            // Lightweight analytics config (fill ga-measurement-id or window.GA_MEASUREMENT_ID)
+            window.XERA_ANALYTICS_CONFIG = {
+                provider: "ga",
+                measurementId:
+                    window.GA_MEASUREMENT_ID ||
+                    document
+                        .querySelector('meta[name="ga-measurement-id"]')
+                        ?.getAttribute("content") ||
+                    "",
+            };
+        </script>
+        <!-- Styles globaux -->
+        <link rel="stylesheet" href="css/style.css" />
+        <link rel="stylesheet" href="css/search-notification.css" />
+        <link rel="stylesheet" href="css/arcs.css" />
+        <link rel="stylesheet" href="css/streaming-analytics.css" />
+        <!-- Supabase JS -->
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    </head>
+    <body>
+        <!-- Container pour les notifications Toast -->
+        <div id="toast-container"></div>
+
+        <!-- Overlay Immersif -->
+        <div id="immersive-overlay">
+            <!-- Contenu injecté dynamiquement -->
+        </div>
+
+        <!-- Modale Réglages -->
+        <div id="settings-modal">
+            <div class="settings-container">
+                <!-- Contenu injecté dynamiquement -->
+            </div>
+        </div>
+
+        <!-- Modale Création -->
+        <div id="create-modal">
+            <div class="create-container">
+                <!-- Contenu injecté dynamiquement -->
+            </div>
+        </div>
+
+        <!-- Panneau de Notifications -->
+        <div id="notification-panel" class="notification-panel">
+            <div class="notification-panel-header">
+                <h3 class="notification-panel-title">Notifications</h3>
+                <span
+                    class="notification-mark-all"
+                    onclick="markAllNotificationsAsRead()"
+                    >Tout marquer comme lu</span
+                >
+            </div>
+            <div id="notification-list" class="notification-list">
+                <!-- Notifications injectées dynamiquement -->
+            </div>
+        </div>
+
+        <nav>
+            <a
+                class="logo"
+                onclick="navigateTo('discover')"
+                style="cursor: pointer"
+            >
+                <div class="logo-img">
+                    <img src="icons/logo.png" alt="XERA - Logo" />
+                </div>
+                <span>XΞRA</span>
+            </a>
+            <div class="nav-links">
+                <a id="nav-discover" data-i18n="navDiscover" onclick="navigateTo('discover')">Discover</a>
+                <a onclick="handleProfileNavigation()" id="nav-profile" data-i18n="navProfile"
+                    >My Trajectory</a
+                >
+                <!-- Bouton Notifications -->
+                <div
+                    class="notification-button"
+                    onclick="toggleNotificationPanel()"
+                    style="display: none"
+                    id="notification-btn"
+                >
+                    <svg
+                        class="notification-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <path
+                            d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+                        ></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    <span
+                        id="notification-badge"
+                        class="notification-badge"
+                    ></span>
+                </div>
+
+                <a href="login.html" id="nav-auth" data-i18n="navAuth">Login / Register</a>
+            </div>
+        </nav>
+
+        <section class="hero" id="hero" data-state="loading" aria-busy="true">
+            <div class="hero-loading" aria-hidden="true">
+                <div class="hero-skel hero-skel-eyebrow"></div>
+                <div class="hero-skel hero-skel-title"></div>
+                <div class="hero-skel hero-skel-lede"></div>
+                <div class="hero-skel hero-skel-bullets"></div>
+                <div class="hero-skel hero-skel-cta"></div>
+            </div>
+            <div class="container hero-grid">
+                <div class="hero-copy">
+                    <p class="hero-eyebrow" data-i18n="heroEyebrow">
+                        TRACK YOUR GOALS WITH ARCS
+                    </p>
+                    <h1 class="hero-title" data-i18n="heroTitle">
+                        Transform ideas into results.
+                    </h1>
+                    <p class="hero-lede" data-i18n="heroLede">
+                        Create goal ARCs, log daily traces, watch your trajectory dashboard grow.
+                    </p>
+                    <ul class="hero-bullets" id="hero-bullets">
+                        <li data-i18n="heroBullet1">Create goal ARCs (start-to-finish plans)</li>
+                        <li data-i18n="heroBullet2">Log daily traces with proof, not dopamine feeds</li>
+                        <li data-i18n="heroBullet3">See your trajectory dashboard climb in real time</li>
+                    </ul>
+                    <div class="hero-actions">
+                        <button class="btn btn-primary btn-large" id="hero-start-btn" data-i18n="heroCTA">
+                            Start your first ARC
+                        </button>
+                        <button class="btn btn-ghost hero-secondary" id="hero-watch-btn">
+                            <span data-i18n="heroWatch">Watch 60s demo</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="hero-meta" data-i18n="heroMeta">ARC creation → trace logging → dashboard.</p>
+                </div>
+                <div class="hero-media">
+                    <div class="hero-video-shell" aria-label="60 second product demo">
+                        <div class="hero-video-badge" data-i18n="heroBadge">60s demo</div>
+                        <div class="hero-video-frame">
+                            <video
+                                id="hero-demo-video"
+                                class="hero-video-player"
+                                src="medias/Create%20arc.MOV"
+                                autoplay
+                                muted
+                                loop
+                                playsinline
+                                preload="metadata"
+                            >
+                                Your browser does not support the video tag.
+                            </video>
+                            <button id="hero-unmute-btn" class="hero-unmute" type="button" aria-pressed="false">
+                                🔇 Tap for sound
+                            </button>
+                        </div>
+                    </div>
+                    <p class="hero-footnote" data-i18n="heroFootnote">
+                        Trimmed to the essentials: ARC creation → trace logging → dashboard.
+                    </p>
+                </div>
+            </div>
+            <button
+                type="button"
+                class="hero-scroll-cue"
+                id="hero-scroll-cue"
+                aria-label="Faire défiler vers le contenu"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6 9l6 6 6-6"></path>
+                </svg>
+            </button>
+        </section>
+
+        <!-- DISCOVER -->
+        <section id="discover" class="page active">
+            <div class="container">
+                <div class="discover-header">
+                    <h2 data-i18n="discoverTitle">In motion</h2>
+
+                    <!-- Filtre EUX / MOI -->
+                    <div
+                        class="discover-filter"
+                        style="
+                            display: flex;
+                            gap: 1rem;
+                            margin-top: 1rem;
+                            margin-bottom: 1rem;
+                        "
+                    >
+                        <button
+                            class="filter-btn active"
+                            data-filter="all"
+                            onclick="toggleDiscoverFilter('all')"
+                            style="
+                                background: none;
+                                border: none;
+                                color: var(--text-primary);
+                                opacity: 1;
+                                font-weight: 600;
+                                cursor: pointer;
+                                padding-bottom: 0.25rem;
+                                border-bottom: 2px solid var(--accent-color);
+                            "
+                        >
+                            ALL
+                        </button>
+                        <button
+                            class="filter-btn"
+                            data-filter="following"
+                            onclick="toggleDiscoverFilter('following')"
+                            style="
+                                background: none;
+                                border: none;
+                                color: var(--text-secondary);
+                                opacity: 0.7;
+                                font-weight: 500;
+                                cursor: pointer;
+                                padding-bottom: 0.25rem;
+                                border-bottom: 2px solid transparent;
+                            "
+                        >
+                            MOI
+                        </button>
+                    </div>
+
+                    <p style="color: var(--text-secondary)" data-i18n="discoverSub">
+                        Tap to dive into a trajectory.
+                    </p>
+
+                    <!-- Annonces officielles -->
+                    <div
+                        id="announcements-container"
+                        class="announcements"
+                    ></div>
+
+                    <!-- Barre de recherche -->
+                    <div class="search-container" style="margin-top: 2rem">
+                        <div class="search-input-wrapper">
+                            <svg
+                                class="search-icon"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.35-4.35"></path>
+                            </svg>
+                            <input
+                                type="text"
+                                id="search-input"
+                                class="search-input"
+                                data-i18n-placeholder="searchPlaceholder"
+                                placeholder="Rechercher"
+                            />
+                        </div>
+                        <div id="search-results" class="search-results">
+                            <!-- Résultats injectés dynamiquement -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="discover-grid">
+                    <!-- Contenu injecté dynamiquement -->
+                </div>
+            </div>
+        </section>
+
+        <!-- BOUTON RÉGLAGES (FIXED POSITION) -->
+        <div id="settings-button-container"></div>
+        <!-- Bouton flottant pour publier une trace -->
+        <div id="floating-create-container">
+            <button id="floating-create-btn" class="btn-add" title="Publier une trace">
+                <img src="icons/plus.svg" alt="Publier">
+                <span>Publier</span>
+            </button>
+        </div>
+
+        <!-- Configuration Supabase -->
+        <script src="js/telemetry.js" defer></script>
+        <script src="js/supabase-config.js"></script>
+        <!-- Config push (clé publique VAPID) -->
+        <script src="js/push-config.js"></script>
+        <script src="js/influence.js"></script>
+        <script src="js/i18n.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+        <script src="js/analytics.js"></script>
+        <!-- Améliorations UX -->
+        <script src="js/ux-enhancements.js"></script>
+        <script src="js/app-enhancements.js"></script>
+        <script src="js/pwa-install.js" defer></script>
+        <!-- Modules de fonctionnalités -->
+        <script src="js/search.js"></script>
+        <script src="js/notifications.js"></script>
+        <script src="js/file-upload.js"></script>
+        <script src="js/arcs.js"></script>
+        <!-- Script principal avec intégration Supabase -->
+        <script src="js/app-supabase.js"></script>
+        <!-- React runtime et micro-app (chargés en différé pour ne rien casser) -->
+        <script
+            src="https://unpkg.com/react@18/umd/react.production.min.js"
+            crossorigin
+            defer
+        ></script>
+        <script
+            src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+            crossorigin
+            defer
+        ></script>
+        <script src="js/react-app.js" defer></script>
+
+        <script>
+            // Initialiser les fonctionnalités au chargement
+            document.addEventListener("DOMContentLoaded", function () {
+                // Init i18n + language toggle
+                if (window.initI18n) {
+                    window.initI18n();
+                }
+
+                // Initialiser la recherche
+                initializeSearch();
+
+                // Initialiser les notifications si l'utilisateur est connecté
+                if (currentUser) {
+                    initializeNotifications();
+                    document.getElementById("notification-btn").style.display =
+                        "flex";
+                }
+
+                // Bouton flottant de publication
+                const floatingBtn = document.getElementById(
+                    "floating-create-btn",
+                );
+                if (floatingBtn) {
+                    floatingBtn.addEventListener("click", () => {
+                        if (!window.currentUser) {
+                            alert("Connectez-vous pour publier une trace.");
+                            return;
+                        }
+                        if (typeof window.openCreateMenu === "function") {
+                            window.openCreateMenu(window.currentUser.id);
+                        }
+                    });
+                }
+
+                // Hero primary CTA
+                const heroStart = document.getElementById("hero-start-btn");
+                if (heroStart) {
+                    heroStart.addEventListener("click", () => {
+                        if (!window.currentUser) {
+                            window.location.href = "login.html";
+                            return;
+                        }
+                        if (typeof window.openCreateModal === "function") {
+                            window.openCreateModal();
+                        } else if (typeof window.openCreateMenu === "function") {
+                            window.openCreateMenu(window.currentUser.id);
+                        }
+                    });
+                }
+
+                // Hero watch demo -> scroll to discover
+                const heroWatch = document.getElementById("hero-watch-btn");
+                const heroVideo = document.getElementById("hero-demo-video");
+                const heroUnmute = document.getElementById("hero-unmute-btn");
+                const heroScrollCue = document.getElementById("hero-scroll-cue");
+
+                const scrollToDiscover = () => {
+                    const discover = document.getElementById("discover");
+                    if (discover) {
+                        discover.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start",
+                        });
+                    }
+                };
+
+                if (heroScrollCue) {
+                    heroScrollCue.addEventListener("click", scrollToDiscover);
+                    const toggleHeroScrollCue = () => {
+                        heroScrollCue.classList.toggle(
+                            "is-hidden",
+                            window.scrollY > 120,
+                        );
+                    };
+                    toggleHeroScrollCue();
+                    window.addEventListener("scroll", toggleHeroScrollCue, {
+                        passive: true,
+                    });
+                }
+
+                const openDemoFullscreen = async () => {
+                    if (!heroVideo) {
+                        scrollToDiscover();
+                        return;
+                    }
+                    try {
+                        heroVideo.controls = true;
+                        heroVideo.muted = false;
+                        if (heroUnmute) {
+                            heroUnmute.textContent = "🔊 Mute sound";
+                            heroUnmute.setAttribute("aria-pressed", "true");
+                        }
+                        // Fullscreen first for better UX, then play with sound
+                        if (heroVideo.requestFullscreen) {
+                            await heroVideo.requestFullscreen();
+                        } else if (heroVideo.webkitRequestFullscreen) {
+                            heroVideo.webkitRequestFullscreen();
+                        }
+                        await heroVideo.play();
+                    } catch (e) {
+                        console.warn("Fullscreen request failed, scrolling instead:", e);
+                        scrollToDiscover();
+                    }
+                };
+
+                if (heroWatch) heroWatch.addEventListener("click", openDemoFullscreen);
+
+                // Hero demo video: allow unmute toggle
+                if (heroVideo && heroUnmute) {
+                    heroUnmute.addEventListener("click", async () => {
+                        const willUnmute = heroVideo.muted;
+                        heroVideo.muted = !willUnmute;
+                        heroUnmute.textContent = heroVideo.muted
+                            ? "🔇 Tap for sound"
+                            : "🔊 Mute sound";
+                        try {
+                            await heroVideo.play();
+                        } catch (e) {
+                            console.warn("Hero video play blocked:", e);
+                        }
+                        heroUnmute.setAttribute("aria-pressed", (!heroVideo.muted).toString());
+                    });
+
+                    // Fullscreen on click/tap
+                    heroVideo.addEventListener("click", async () => {
+                        try {
+                            if (document.fullscreenElement) {
+                                await document.exitFullscreen();
+                                return;
+                            }
+                            if (heroVideo.requestFullscreen) {
+                                await heroVideo.requestFullscreen();
+                            } else if (heroVideo.webkitRequestFullscreen) {
+                                heroVideo.webkitRequestFullscreen();
+                            }
+                        } catch (e) {
+                            console.warn("Fullscreen request failed:", e);
+                        }
+                    });
+                }
+            });
+        </script>
+    </body>
+</html>

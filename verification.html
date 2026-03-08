@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Obtenir une vérification | XERA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/svg+xml" href="icons/logo.png" />
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/streaming-analytics.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div id="toast-container"></div>
+
+    <nav>
+        <a class="logo" href="index.html">
+            <div class="logo-img">
+                <img src="icons/logo.png" alt="XERA - Logo" />
+            </div>
+            <span>XΞRA</span>
+        </a>
+        <div class="nav-links">
+            <a href="index.html#discover">Découvrir</a>
+            <a href="profile.html" id="nav-profile">Ma Trajectoire</a>
+        </div>
+    </nav>
+
+    <main class="verification-page">
+        <section class="verification-hero">
+            <div class="hero-text">
+                <p class="eyebrow">Badge vérifié</p>
+                <h1>Renforce ta crédibilité sur XERA</h1>
+                <p class="lead">Le badge vérifié met en avant ton profil, tes lives et rassure ta communauté.</p>
+                <div class="hero-cta">
+                    <button id="btn-verify-creator" class="verify-primary">
+                        Obtenir une vérification
+                        <img src="icons/verify-personal.svg" alt="Badge" />
+                    </button>
+                    <button id="btn-verify-staff" class="verify-secondary">
+                        Vérification équipe / entreprise
+                    </button>
+                </div>
+                <p id="eligibility-text" class="eligibility"></p>
+            </div>
+            <div class="hero-card">
+                <div class="hero-badge">
+                    <img src="icons/verify-personal.svg" alt="Badge" />
+                    <div>
+                        <strong>Badge visible partout</strong>
+                        <span>Cartes, chat, lives et profil</span>
+                    </div>
+                </div>
+                <ul class="benefits">
+                    <li>Priorité dans le feed Discover et sur les cartes live</li>
+                    <li>Badge visible partout (cartes, chat, lives, profil)</li>
+                    <li>Avatar/Bannière GIF autorisés</li>
+                    <li>Notifications automatiques aux followers quand tu lances un live</li>
+                    <li>Lives privés réservés aux followers <span class="tag-soon">(bientôt)</span></li>
+                    <li>Stats avancées et support prioritaire <span class="tag-soon">(bientôt)</span></li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="verification-steps">
+            <h2>Comment ça marche ?</h2>
+            <div class="steps-grid">
+                <div class="step">
+                    <span class="step-num">1</span>
+                    <h3>Envoie ta demande</h3>
+                    <p>Choisis le type (Créateur ou Équipe). Ta demande passe en "pending" immédiatement.</p>
+                </div>
+                <div class="step">
+                    <span class="step-num">2</span>
+                    <h3>Vérifications rapides</h3>
+                    <p>Notre équipe examine ton profil, tes followers et tes liens publics.</p>
+                </div>
+                <div class="step">
+                    <span class="step-num">3</span>
+                    <h3>Badge activé</h3>
+                    <p>Une fois validé, ton badge s'affiche partout et les avantages sont débloqués.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <style>
+        .verification-page { padding: 120px 7vw 80px; color: var(--text-primary); }
+        .verification-hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 3rem; align-items: center; }
+        .hero-text h1 { font-size: clamp(2.2rem, 3vw, 2.8rem); margin: 0.35rem 0; }
+        .lead { color: var(--text-secondary); max-width: 540px; }
+        .hero-cta { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1.2rem 0; }
+        .verify-primary, .verify-secondary { border: none; border-radius: 12px; padding: 0.9rem 1.2rem; font-weight: 700; cursor: pointer; display: inline-flex; gap: 10px; align-items: center; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+        .verify-primary { background: linear-gradient(135deg, #0ea5e9, #6366f1); color: #fff; box-shadow: 0 10px 30px rgba(99,102,241,0.35); }
+        .verify-primary img { width: 18px; height: 18px; filter: drop-shadow(0 0 4px rgba(255,255,255,0.6)); }
+        .verify-primary:hover { transform: translateY(-1px); }
+        .verify-secondary { background: rgba(255,255,255,0.08); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.12); }
+        .verify-secondary:hover { transform: translateY(-1px); }
+        .hero-card { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 16px; padding: 1.25rem; box-shadow: 0 12px 40px rgba(0,0,0,0.28); }
+        .hero-badge { display: flex; gap: 12px; align-items: center; padding: 0.85rem 1rem; border-radius: 12px; background: rgba(14,165,233,0.12); color: #0ea5e9; font-weight: 700; margin-bottom: 1rem; }
+        .hero-badge img { width: 28px; height: 28px; }
+        .hero-badge span { color: var(--text-secondary); font-weight: 500; display: block; }
+        .benefits { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.65rem; }
+        .benefits li { display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); }
+        .benefits li::before { content: "✓"; color: #10b981; font-weight: 800; }
+        .tag-soon { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; color: var(--text-secondary); }
+        .verification-steps { margin-top: 3rem; }
+        .verification-steps h2 { margin-bottom: 1rem; }
+        .steps-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+        .step { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 14px; padding: 1rem; box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
+        .step-num { width: 32px; height: 32px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: rgba(14,165,233,0.16); color: #0ea5e9; font-weight: 800; margin-bottom: 0.5rem; }
+        .eyebrow { text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.75rem; color: var(--text-secondary); margin: 0; }
+        .eligibility { margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.9rem; }
+        @media (max-width: 960px) { .verification-hero { grid-template-columns: 1fr; } .verification-page { padding-top: 100px; } }
+    </style>
+
+    <script src="js/supabase-config.js"></script>
+    <script src="js/app-supabase.js"></script>
+    <script src="js/ux-enhancements.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = await checkAuth();
+            if (!user) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            const followerCount = await getFollowerCount(user.id);
+            const eligibility = followerCount >= 1000
+                ? 'Éligible : vous avez assez de followers pour la vérification créateur.'
+                : `Pré-requis créateur : 1000 followers (actuel : ${followerCount}). Vous pouvez tout de même soumettre la demande.`;
+            document.getElementById('eligibility-text').textContent = eligibility;
+
+            const pending = await fetchUserPendingRequests(user.id);
+            const btnCreator = document.getElementById('btn-verify-creator');
+            const btnStaff = document.getElementById('btn-verify-staff');
+
+            if (pending.has('creator')) {
+                btnCreator.disabled = true;
+                btnCreator.textContent = 'Demande créateur en attente';
+            } else {
+                btnCreator.onclick = () => requestVerification('creator');
+            }
+
+            if (pending.has('staff')) {
+                btnStaff.disabled = true;
+                btnStaff.textContent = 'Demande équipe en attente';
+            } else {
+                btnStaff.onclick = () => requestVerification('staff');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard | XERA</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="icons/logo.png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/streaming-analytics.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <nav>
+        <a class="logo" href="index.html">
+            <div class="logo-img">
+                <img src="icons/logo.png" alt="XERA - Logo" />
+            </div>
+            <span>XΞRA</span>
+        </a>
+        <div class="nav-links">
+            <a href="index.html#discover">Découvrir</a>
+            <a href="profile.html" id="nav-profile">Ma Trajectoire</a>
+            <a href="login.html" id="nav-auth">Login / Register</a>
+        </div>
+    </nav>
+
+    <div id="analytics-dashboard" class="analytics-dashboard">
+        <!-- Contenu injecté dynamiquement -->
+    </div>
+
+    <script src="js/supabase-config.js"></script>
+    <script src="js/analytics.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = await checkAuth();
+            
+            const navAuth = document.getElementById('nav-auth');
+            const navProfile = document.getElementById('nav-profile');
+            if (!user) {
+                if (navAuth) navAuth.style.display = 'block';
+                if (navProfile) navProfile.style.display = 'none';
+            } else {
+                if (navAuth) navAuth.style.display = 'none';
+                if (navProfile) navProfile.style.display = 'block';
+            }
+            
+            // Récupérer l'ID utilisateur depuis l'URL ou utiliser l'utilisateur courant
+            const urlParams = new URLSearchParams(window.location.search);
+            const userId = urlParams.get('user') || (user ? user.id : null);
+            
+            // Nettoyer les ressources avant de quitter la page
+            window.addEventListener('beforeunload', () => {
+                if (window.cleanupAnalytics) {
+                    window.cleanupAnalytics();
+                }
+            });
+            
+            if (!userId) {
+                const dashboard = document.getElementById('analytics-dashboard');
+                if (dashboard) {
+                    dashboard.innerHTML = `
+                        <div style="text-align:center; padding:3rem; color: var(--text-secondary);">
+                            Sélectionnez un profil pour voir ses analytics.
+                        </div>
+                    `;
+                }
+                return;
+            }
+            
+            let dashboardUser = user;
+            if (!dashboardUser || dashboardUser.id !== userId) {
+                const profileResult = await getUserProfile(userId);
+                if (!profileResult.success) {
+                    const dashboard = document.getElementById('analytics-dashboard');
+                    if (dashboard) {
+                        dashboard.innerHTML = `
+                            <div style="text-align:center; padding:3rem; color: var(--text-secondary);">
+                                Impossible de charger ce profil.
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+                dashboardUser = profileResult.data;
+            }
+            
+            // Rendre le dashboard
+            await renderAnalyticsDashboard(dashboardUser, { containerId: 'analytics-dashboard' });
+        });
+    </script>
+</body>
+</html>

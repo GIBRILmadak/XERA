@@ -1,0 +1,305 @@
+/* --- ARC CREATION STYLES --- */
+
+.arc-creation-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.arc-creation-header h2 {
+    font-family: var(--font-heading);
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(180deg, #fff 0%, #aaa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.arc-creation-header p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+/* Scrolling Hooks */
+.hooks-container {
+    margin-bottom: 2rem;
+    text-align: center;
+    height: 60px; /* Fixed height for stability */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    position: relative;
+}
+
+.hook-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.hook-scroller {
+    position: relative;
+    height: 30px;
+    width: 100%;
+}
+
+.hook-item {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--accent-color);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.hook-item.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.hook-item.exit {
+    opacity: 0;
+    transform: translateY(-20px);
+}
+
+/* Form Styles */
+.arc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.arc-form .form-group label {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.arc-form .form-input {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 1rem;
+    border-radius: 12px;
+    width: 100%;
+    font-family: var(--font-body);
+    transition: border-color 0.3s ease;
+}
+
+.arc-form .form-input:focus {
+    border-color: var(--accent-color);
+    outline: none;
+}
+
+.arc-form .large-input {
+    font-size: 1.2rem;
+    font-weight: 600;
+    padding: 1.2rem;
+}
+
+.form-row {
+    display: flex;
+    gap: 1rem;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+.btn-large {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1rem;
+    margin-top: 1rem;
+}
+
+/* --- ARC DISPLAY ON PROFILE --- */
+.arcs-section {
+    margin-top: 3rem;
+}
+
+.section-title {
+    font-family: var(--font-heading);
+    font-size: 1.2rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.arcs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.arc-card {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s ease, border-color 0.3s ease;
+    cursor: pointer;
+    margin-bottom: 8px; /* Added spacing as requested */
+}
+
+.arc-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--text-secondary);
+}
+
+.arc-status-badge {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 0.7rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.arc-status-in_progress { color: var(--accent-color); border-color: var(--accent-color); }
+.arc-status-completed { color: var(--success); border-color: var(--success); }
+.arc-status-abandoned { color: var(--failure); border-color: var(--failure); }
+
+.arc-title {
+    font-family: var(--font-heading);
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    padding-right: 5.5rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.arc-goal {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.arc-progress-container {
+    margin-top: auto;
+}
+
+.arc-progress-bar {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.arc-progress-fill {
+    height: 100%;
+    background: var(--accent-color);
+    border-radius: 2px;
+}
+
+.btn-collaborate {
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+.arc-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* --- ARC DETAILS PAGE / MODAL --- */
+.arc-details-hero {
+    text-align: center;
+    padding: 3rem 0;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 2rem;
+}
+
+.arc-details-title {
+    font-size: 2.5rem;
+    font-family: var(--font-heading);
+    margin-bottom: 1rem;
+}
+
+.arc-details-stats {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    display: block;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+/* --- ARC DETAILS CONTENT --- */
+.arc-content-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Override timeline item styles for inside arc details */
+.arc-details-container .timeline-item {
+    margin-bottom: 0;
+    padding-left: 0; 
+}
+
+.arc-details-container .timeline-date {
+    margin-left: 0;
+}
+
+
+.arc-card-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.9) 100%);
+    z-index: 1;
+    border-radius: 16px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.arc-card-has-cover .arc-card-overlay {
+    opacity: 1;
+}
+
+.arc-card-has-cover {
+    border: none;
+}

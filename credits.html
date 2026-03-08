@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crédits | XERA</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="icons/logo.png">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* Styles spécifiques à la page crédits */
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #111111;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --text-muted: #666666;
+            --accent-color: #3b82f6;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(10, 10, 10, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+            z-index: 1000;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 1.25rem;
+        }
+
+        .logo-img {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo-img img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+
+        /* Contenu principal */
+        .credits-container {
+            min-height: 100vh;
+            padding: 8rem 2rem 4rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* Animations */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Titre principal */
+        .main-title {
+            text-align: center;
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 800;
+            margin-bottom: 4rem;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 4rem;
+            padding: 3rem 2rem;
+            background: var(--bg-secondary);
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(10px);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-icon {
+            font-size: 1.25rem;
+        }
+
+        .section-content {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            font-size: 1.1rem;
+        }
+
+        /* Listes */
+        .credits-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .credits-list li {
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 1.1rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .credits-list li:last-child {
+            border-bottom: none;
+        }
+
+        .credits-list li:hover {
+            padding-left: 1rem;
+            color: var(--accent-color);
+        }
+
+        .credits-list li::before {
+            content: "•";
+            color: var(--accent-color);
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        /* Section spéciale */
+        .special-section {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .special-section .section-title {
+            color: var(--accent-color);
+        }
+
+        /* Phrase finale */
+        .final-quote {
+            text-align: center;
+            margin-top: 6rem;
+            padding: 3rem 2rem;
+            font-size: clamp(1.25rem, 3vw, 1.5rem);
+            font-weight: 500;
+            color: var(--text-primary);
+            line-height: 1.8;
+            font-style: italic;
+            opacity: 0.9;
+        }
+
+        .final-quote strong {
+            color: var(--accent-color);
+            font-weight: 600;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            nav {
+                padding: 1rem;
+            }
+
+            .nav-links {
+                gap: 1rem;
+                font-size: 0.9rem;
+            }
+
+            .credits-container {
+                padding: 6rem 1rem 2rem;
+            }
+
+            .section {
+                padding: 2rem 1.5rem;
+                margin-bottom: 2rem;
+            }
+
+            .main-title {
+                margin-bottom: 2rem;
+            }
+
+            .final-quote {
+                margin-top: 3rem;
+                padding: 2rem 1rem;
+            }
+        }
+
+        /* Animation au scroll */
+        .stagger-1 { transition-delay: 0.1s; }
+        .stagger-2 { transition-delay: 0.2s; }
+        .stagger-3 { transition-delay: 0.3s; }
+        .stagger-4 { transition-delay: 0.4s; }
+        .stagger-5 { transition-delay: 0.5s; }
+        .stagger-6 { transition-delay: 0.6s; }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <a class="logo" href="index.html">
+            <div class="logo-img">
+                <img src="icons/logo.png" alt="XERA - Logo" />
+            </div>
+            <span>XΞRA</span>
+        </a>
+        <div class="nav-links">
+            <a href="index.html#discover">Découvrir</a>
+            <a href="profile.html">Ma Trajectoire</a>
+            <a href="analytics.html">Analytics</a>
+        </div>
+    </nav>
+
+    <!-- Contenu principal -->
+    <div class="credits-container">
+        <!-- Titre principal -->
+        <h1 class="main-title fade-in">
+            XERA existe grâce à…
+        </h1>
+
+        <!-- Section Origine -->
+        <section class="section fade-in stagger-1">
+            <h2 class="section-title">
+                <span class="section-icon">🌱</span>
+                Origine
+            </h2>
+            <div class="section-content">
+                Cette application n'est pas née d'un brainstorming en entreprise ou d'une analyse de marché. 
+                Elle est le fruit de rencontres, de conversations tardives, de doutes partagés et d'espoirs mutuels. 
+                XERA a été façonnée par des mains humaines, alimentée par des histoires réelles, 
+                et construite sur l'idée simple que chaque trajectoire mérite d'être vue, comprise et célébrée.
+            </div>
+        </section>
+
+        <!-- Section Famille -->
+        <section class="section fade-in stagger-2">
+            <h2 class="section-title">
+                <span class="section-icon">👨‍👩‍👧‍👦</span>
+                Famille
+            </h2>
+            <div class="section-content" style="margin-bottom: 2rem;">
+                <p style="font-style: italic; color: var(--text-primary); margin-bottom: 1rem;">
+                    Sans eux, il n'y aurait ni idée, ni énergie, ni XERA.<br>
+                    
+                </p>
+            </div>
+            <ul class="credits-list">
+                <li>Jean-Paul Safari — Papa</li>
+                <li>Thérèse Riziki — Maman</li>
+            </ul>
+        </section>
+
+        <!-- Section Amis -->
+        <section class="section fade-in stagger-3">
+            <h2 class="section-title">
+                <span class="section-icon">🤝</span>
+                Amis
+            </h2>
+            <div class="section-content" style="margin-bottom: 2rem;">
+                <p style="font-style: italic; color: var(--text-primary); margin-bottom: 1rem;">
+                    Ceux qui étaient là quand c'était flou, lent, bancal.<br>
+                    Ceux qui ont cru avant que ça prenne forme.
+                </p>
+            </div>
+            <ul class="credits-list">
+                <li>ERNEST HD</li>
+                <li>Jean</li>
+                <li>Julien</li>
+            </ul>
+        </section>
+
+        <!-- Section Créateur -->
+        <section class="section fade-in stagger-4">
+            <h2 class="section-title">
+                <span class="section-icon">👨‍💻</span>
+                Créateur
+            </h2>
+            <ul class="credits-list">
+                <li>créé par gibril</li>
+            </ul>
+            <div class="section-content" style="margin-bottom: 2rem;">
+                <p style="font-style: italic; color: var(--text-primary); margin-bottom: 1rem;">
+                    avec beaucoup de doutes, du café, et trés peu de nuits de sommeil
+                </p>
+            </div>
+           
+        </section>
+
+        <!-- Section Cicatrice -->
+        <section class="section special-section fade-in stagger-5">
+            <h2 class="section-title">
+                <span class="section-icon">💫</span>
+                Une cicatrice
+            </h2>
+            <div class="section-content" style="margin-bottom: 2rem;">
+                <p style="font-style: italic; color: var(--text-primary);">
+                    Parfois, une rupture ne détruit pas.<br>
+                    Elle redirige.
+                </p>
+            </div>
+            <ul class="credits-list">
+                <li>Laetitia</li>
+            </ul>
+        </section>
+
+        <!-- Phrase finale -->
+        <div class="final-quote fade-in stagger-6">
+            <strong>XERA</strong> est public. <strong>XERA</strong> est ouvert.<br>
+            Un jour, ton nom sera peut-être ici.
+        </div>
+    </div>
+
+    <script>
+        // Animation au scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        // Observer tous les éléments avec la classe fade-in
+        document.addEventListener('DOMContentLoaded', () => {
+            const fadeElements = document.querySelectorAll('.fade-in');
+            fadeElements.forEach(el => observer.observe(el));
+        });
+    </script>
+</body>
+</html>

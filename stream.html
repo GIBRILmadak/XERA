@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Live Stream | XERA</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="icon" type="image/svg+xml" href="icons/logo.png" />
+        <link rel="stylesheet" href="css/style.css" />
+        <link
+            rel="stylesheet"
+            href="css/streaming-analytics.css?v=20260301-1"
+        />
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    </head>
+    <body class="stream-page">
+        <nav>
+            <a class="logo" href="index.html">
+                <div class="logo-img">
+                    <img src="icons/logo.png" alt="XERA - Logo" />
+                </div>
+                <span>XΞRA</span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html#discover">Découvrir</a>
+                <a href="profile.html" id="nav-profile">Ma Trajectoire</a>
+            </div>
+        </nav>
+
+        <div class="stream-container">
+            <div class="stream-main">
+                <!-- Navigation breadcrumb -->
+                <div class="stream-nav-breadcrumb">
+                    <a href="index.html">Accueil</a>
+                    <span class="stream-nav-separator">></span>
+                    <a href="index.html#discover">Lives</a>
+                    <span class="stream-nav-separator">></span>
+                    <span id="stream-breadcrumb-title">Stream en cours</span>
+                </div>
+
+                <div class="stream-video-container">
+                    <video
+                        id="stream-video"
+                        class="stream-video"
+                        autoplay
+                        playsinline
+                        muted
+                    ></video>
+                    <button
+                        id="unmute-overlay"
+                        type="button"
+                        class="unmute-overlay"
+                        onclick="window.enableStreamAudio && window.enableStreamAudio()"
+                        aria-label="Activer le son"
+                    >
+                        🔊 Activer le son
+                    </button>
+                    <div class="stream-overlay">
+                        <div id="stream-status" class="stream-status live">
+                            🔴 EN DIRECT
+                        </div>
+                        <!-- Boutons de contrôle plein écran et son -->
+                        <div class="stream-fullscreen-controls">
+                            <button
+                                class="audio-control-btn"
+                                id="audio-toggle-btn"
+                                onclick="toggleAudio()"
+                                title="Activer/Désactiver le son"
+                            >
+                                <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <polygon
+                                        points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"
+                                    ></polygon>
+                                    <path
+                                        d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"
+                                    ></path>
+                                </svg>
+                            </button>
+                            <button
+                                class="fullscreen-btn"
+                                onclick="toggleFullscreen()"
+                                title="Plein écran"
+                            >
+                                <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path
+                                        d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"
+                                    />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stream-info">
+                    <button class="stream-viewers stream-viewers-info" id="viewer-list-btn" type="button" title="Voir les viewers">
+                        <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <path
+                                d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+                            ></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <span id="stream-viewer-count">0</span>
+                    </button>
+                    <h1 id="stream-title" class="stream-title">
+                        Titre du Stream
+                    </h1>
+                    <p id="stream-description" class="stream-description">
+                        Description du stream...
+                    </p>
+
+                    <div class="stream-host">
+                        <img
+                            id="stream-host-avatar"
+                            src=""
+                            class="stream-host-avatar"
+                            alt="Host"
+                        />
+                        <div class="stream-host-info">
+                            <h4 id="stream-host-name">Nom de l'hôte</h4>
+                            <p>Streamer</p>
+                        </div>
+                    </div>
+
+                    <!-- Actions du stream -->
+                    <div class="stream-actions">
+                        <div class="stream-host-controls" id="stream-host-controls">
+                            <button class="stream-action-btn btn stream-action-danger" id="end-stream-btn" type="button" title="Arrêter le live">
+                                <span class="btn-text">Arrêter</span>
+                            </button>
+                            <button class="stream-action-btn btn" id="switch-camera-btn" type="button" title="Changer de caméra">
+                                <span class="btn-text">Caméra</span>
+                            </button>
+                            <button class="stream-action-btn btn" id="mute-mic-btn" type="button" title="Couper le micro">
+                                <span class="btn-text">Muet</span>
+                            </button>
+                            <button class="stream-action-btn btn" id="share-screen-btn" type="button" title="Partager l'écran">
+                                <span class="btn-text">Écran</span>
+                            </button>
+                        </div>
+                        <button class="stream-action-btn btn" id="follow-btn">
+                            <svg
+                                class="stream-action-icon"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <path
+                                    d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                                />
+                                <circle cx="8.5" cy="7" r="4" />
+                                <line x1="20" y1="8" x2="20" y2="14" />
+                                <line x1="23" y1="11" x2="17" y2="11" />
+                            </svg>
+                            <span class="btn-text">Suivre</span>
+                        </button>
+                        <button class="stream-action-btn btn" id="share-btn">
+                            <svg
+                                class="stream-action-icon"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <circle cx="18" cy="5" r="3" />
+                                <circle cx="6" cy="12" r="3" />
+                                <circle cx="18" cy="19" r="3" />
+                                <line
+                                    x1="8.59"
+                                    y1="13.51"
+                                    x2="15.42"
+                                    y2="17.49"
+                                />
+                                <line
+                                    x1="15.41"
+                                    y1="6.51"
+                                    x2="8.59"
+                                    y2="10.49"
+                                />
+                            </svg>
+                            <span class="btn-text">Partager</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stream-chat stream-chat-enhanced">
+                <div class="stream-chat-header">
+                    <span>Chat en direct</span>
+                    <div class="chat-viewers-count">
+                        <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <path
+                                d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+                            ></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <span id="chat-viewer-count">0</span> spectateurs
+                    </div>
+                </div>
+                <div id="stream-chat-messages" class="stream-chat-messages">
+                    <!-- Messages injectés dynamiquement -->
+                </div>
+                <form id="stream-chat-form" class="stream-chat-form">
+                    <input
+                        type="text"
+                        id="stream-chat-input"
+                        class="stream-chat-input"
+                        placeholder="Envoyer un message..."
+                        maxlength="500"
+                        required
+                    />
+                    <button type="submit" class="stream-chat-send btn">
+                        <span class="btn-text">Envoyer</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="viewer-list-modal" id="viewer-list-modal" aria-hidden="true">
+            <div class="viewer-list-panel" role="dialog" aria-modal="true" aria-labelledby="viewer-list-title">
+                <div class="viewer-list-header">
+                    <h3 id="viewer-list-title">Viewers du stream</h3>
+                    <button class="viewer-list-close" id="viewer-list-close" type="button" aria-label="Fermer">
+                        ✕
+                    </button>
+                </div>
+                <div class="viewer-list-body" id="viewer-list-body">
+                    <div class="viewer-list-empty">Chargement...</div>
+                </div>
+            </div>
+        </div>
+
+        <script src="js/supabase-config.js"></script>
+        <script src="js/app-supabase.js"></script>
+        <script src="js/ux-enhancements.js"></script>
+        <script src="js/stream-enhancements.js?v=20260203-1"></script>
+        <!-- React runtime pour rendu temps réel du chat -->
+        <script
+            src="https://unpkg.com/react@18/umd/react.production.min.js"
+            crossorigin
+            defer
+        ></script>
+        <script
+            src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+            crossorigin
+            defer
+        ></script>
+        <script src="js/react-live-chat.js" defer></script>
+        <script src="js/streaming.js?v=20260302-1"></script>
+        <script src="js/stream-page.js?v=20260302-1"></script>
+    </body>
+</html>

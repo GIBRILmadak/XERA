@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Créer un Live Stream | XERA</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="icons/logo.png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/streaming-analytics.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <nav>
+        <a class="logo" href="index.html">
+            <div class="logo-img">
+                <img src="icons/logo.png" alt="XERA - Logo" />
+            </div>
+            <span>XΞRA</span>
+        </a>
+        <div class="nav-links">
+            <a href="index.html#discover">Découvrir</a>
+            <a href="profile.html" id="nav-profile">Ma Trajectoire</a>
+        </div>
+    </nav>
+
+    <div class="container" style="padding-top: 120px; max-width: 1000px;">
+        <div class="create-stream-header">
+            <h1>🔴 Créer un Live Stream</h1>
+            <p>Configurez vos sources et commencez à streamer en direct</p>
+        </div>
+
+        <div class="create-stream-container">
+            <!-- Aperçu du stream -->
+            <div class="stream-preview-section">
+                <div class="preview-container">
+                    <video id="preview-video" autoplay playsinline muted></video>
+                    <div class="preview-overlay">
+                        <div class="stream-status offline">
+                            ● Configuration
+                        </div>
+                        <div class="preview-controls">
+                            <button id="fullscreen-preview" class="preview-btn" title="Plein écran">
+                                ⛶
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Layout en cours -->
+                <div class="current-layout" id="current-layout">
+                    <h4>Layout: Simple</h4>
+                    <div class="layout-preview">
+                        <div class="source-indicator camera-indicator">📹 Caméra</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contrôles de configuration -->
+            <div class="stream-controls-section">
+                <!-- Sources vidéo -->
+                <div class="control-group">
+                    <h3>📹 Sources Vidéo</h3>
+                    <div class="source-buttons">
+                        <button class="source-btn" id="camera-btn">
+                            <span class="btn-icon"><img src="./icons/camera.svg" width="50px" height="auto" alt="icone de camera"></span>
+                            <span class="btn-text">Caméra</span>
+                            <span class="btn-status">Inactive</span>
+                        </button>
+                        <button class="source-btn" id="screen-btn">
+                            <span class="btn-icon"><img src="./icons/screen.svg" width="50px" height="auto" alt="icone d'écran"></span>
+                            <span class="btn-text">Écran</span>
+                            <span class="btn-status">Inactive</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Options caméra (mobile) -->
+                <div class="control-group" id="camera-options" style="display: none;">
+                    <h4>Sélection Caméra</h4>
+                    <div class="camera-selection">
+                        <select id="camera-select">
+                            <option value="">Sélectionnez une caméra...</option>
+                        </select>
+                        <button id="switch-camera" class="btn btn-secondary">
+                            🔄 Changer
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Layout -->
+                <div class="control-group" id="layout-group" style="display: none;">
+                    <h3>🎬 Mise en page</h3>
+                    <div class="layout-options">
+                        <button class="layout-btn active" data-layout="camera-only">
+                            <div class="layout-icon">📹</div>
+                            <span>Caméra seule</span>
+                        </button>
+                        <button class="layout-btn" data-layout="screen-only">
+                            <div class="layout-icon">🖥️</div>
+                            <span>Écran seul</span>
+                        </button>
+                        <button class="layout-btn" data-layout="picture-in-picture">
+                            <div class="layout-icon">📺</div>
+                            <span>Incrustation</span>
+                        </button>
+                        <button class="layout-btn" data-layout="side-by-side">
+                            <div class="layout-icon">⚌</div>
+                            <span>Côte à côte</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Paramètres incrustation -->
+                <div class="control-group" id="pip-controls" style="display: none;">
+                    <h4>Paramètres Incrustation</h4>
+                    <div class="pip-options">
+                        <div class="size-control">
+                            <label>Taille caméra</label>
+                            <input type="range" id="pip-size" min="15" max="40" value="25">
+                            <span id="pip-size-value">25%</span>
+                        </div>
+                        <div class="position-control">
+                            <label>Position</label>
+                            <select id="pip-position">
+                                <option value="top-right">Haut droite</option>
+                                <option value="top-left">Haut gauche</option>
+                                <option value="bottom-right">Bas droite</option>
+                                <option value="bottom-left">Bas gauche</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Informations du stream -->
+                <div class="control-group">
+                    <h3>📝 Informations</h3>
+                    <div class="stream-info-inputs">
+                        <div class="input-group">
+                            <label>Titre du live</label>
+                            <input type="text" id="stream-title-input" placeholder="Mon super live stream!" maxlength="100">
+                        </div>
+                        <div class="input-group">
+                            <label>Description</label>
+                            <textarea id="stream-description-input" placeholder="Décrivez votre live..." maxlength="500" rows="3"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="control-group">
+                    <div class="stream-actions">
+                        <button class="btn btn-secondary" onclick="window.close()">
+                            Annuler
+                        </button>
+                        <button class="btn btn-primary" id="start-stream-btn" disabled>
+                            <span class="btn-text">🔴 Démarrer le Live</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CSS spécifique -->
+    <style>
+        .create-stream-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .create-stream-header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .create-stream-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .stream-preview-section {
+            background: var(--surface-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+        }
+
+        .preview-container {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            margin-bottom: 1rem;
+        }
+
+        #preview-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .preview-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 30%, transparent 70%, rgba(0,0,0,0.7) 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 1rem;
+        }
+
+        .stream-status {
+            align-self: flex-start;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+
+        .stream-status.offline {
+            background: rgba(156, 163, 175, 0.9);
+            color: white;
+        }
+
+        .stream-status.live {
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+        }
+
+        .preview-controls {
+            align-self: flex-end;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .preview-btn {
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            border-radius: 8px;
+            padding: 0.5rem;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .preview-btn:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        .current-layout {
+            text-align: center;
+        }
+
+        .layout-preview {
+            background: var(--bg-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .source-indicator {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background: var(--accent-color);
+            color: var(--bg-color);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .stream-controls-section {
+            background: var(--surface-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            height: fit-content;
+        }
+
+        .control-group {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .control-group h3 {
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }
+
+        .control-group h4 {
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .source-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .source-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem;
+            background: var(--bg-color);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .source-btn:hover {
+            border-color: var(--accent-color);
+            transform: translateY(-2px);
+        }
+
+        .source-btn:disabled,
+        .source-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .source-btn:disabled:hover,
+        .source-btn.disabled:hover {
+            border-color: var(--border-color);
+            transform: none;
+        }
+
+        .source-btn.active {
+            border-color: var(--success);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .btn-icon {
+            font-size: 1.5rem;
+        }
+
+        .btn-status {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .source-btn.active .btn-status {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .camera-selection {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .camera-selection select {
+            flex: 1;
+            padding: 0.75rem;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+        }
+
+        .layout-options {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        .layout-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem;
+            background: var(--bg-color);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .layout-btn:hover {
+            border-color: var(--accent-color);
+            transform: translateY(-2px);
+        }
+
+        .layout-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .layout-btn:disabled:hover {
+            border-color: var(--border-color);
+            transform: none;
+        }
+
+        .layout-btn.active {
+            border-color: var(--accent-color);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .layout-icon {
+            font-size: 1.5rem;
+        }
+
+        .pip-options {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .size-control, .position-control {
+            flex: 1;
+        }
+
+        .size-control label, .position-control label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .size-control input {
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+
+        .size-control select, .position-control select {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+        }
+
+        .input-group {
+            margin-bottom: 1rem;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .input-group input, .input-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
+        }
+
+        .stream-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        @media (max-width: 768px) {
+            .create-stream-container {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .layout-options {
+                grid-template-columns: 1fr;
+            }
+
+            .pip-options {
+                flex-direction: column;
+            }
+
+            .stream-actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+
+    <script src="js/supabase-config.js"></script>
+    <script src="js/app-supabase.js"></script>
+    <script src="js/ux-enhancements.js"></script>
+    <script src="js/streaming.js?v=20260302-1"></script>
+    <script src="js/create-stream.js"></script>
+</body>
+</html>
