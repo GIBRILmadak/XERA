@@ -781,6 +781,9 @@ async function initializeApp() {
 
         handleLoginPromptContext();
         await maybeStartFirstPostFlow();
+        if (typeof initializeMessaging === "function" && window.currentUserId) {
+            await initializeMessaging();
+        }
         clearTimeout(safetyTimeout);
     } catch (error) {
         console.error("Initialization error:", error);
@@ -796,6 +799,7 @@ async function initializeApp() {
 function updateNavigation(isLoggedIn) {
     const navAuth = document.getElementById("nav-auth");
     const navProfile = document.getElementById("nav-profile");
+    const navMessages = document.getElementById("messages-nav-btn");
 
         if (navAuth) {
             if (isLoggedIn) {
@@ -813,6 +817,14 @@ function updateNavigation(isLoggedIn) {
         } else {
             navProfile.style.display = "block";
         }
+    }
+
+    if (navMessages) {
+        navMessages.style.display = isLoggedIn ? "flex" : "none";
+    }
+
+    if (!isLoggedIn && typeof window.cleanupMessaging === "function") {
+        window.cleanupMessaging();
     }
 
     // Retirer le bouton réglages de la nav s'il existait
@@ -8040,6 +8052,21 @@ async function renderProfileTimeline(userId) {
         }
     }
 
+    const messageButtonHtml =
+        !isOwnProfile && currentUserId
+            ? `
+                <button
+                    class="btn-secondary profile-message-btn"
+                    onclick="window.openMessagesWithUser && window.openMessagesWithUser('${userId}')"
+                    title="Envoyer un message"
+                    style="padding: 0.5rem 1rem; border-radius: 12px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.45rem;"
+                >
+                    <img src="icons/message.svg" alt="Message" style="width:16px;height:16px;">
+                    Message
+                </button>
+            `
+            : "";
+
     const followerCount = await getFollowerCount(userId);
     const followingCount = await getFollowingCount(userId);
     const engagementTotals = await getUserEngagementTotals(userId);
@@ -8543,6 +8570,7 @@ async function renderProfileTimeline(userId) {
                 ${engagementStatsHtml}
                 <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center; justify-content:center;">
                     ${followButtonHtml}
+                    ${messageButtonHtml}
                     ${shareButtonHtml}
                 </div>
                 ${adminInlineHtml}
@@ -8890,6 +8918,20 @@ function navigateTo(pageId) {
         const discoverPage = document.getElementById("discover");
         if (!discoverPage) {
             window.location.href = "index.html";
+            return;
+        }
+    }
+
+    if (pageId === "messages") {
+        if (!currentUser) {
+            window.location.href = "login.html";
+            return;
+        }
+        const messagesPage = document.getElementById("messages");
+        if (!messagesPage) {
+            const url = new URL("index.html", window.location.href);
+            url.searchParams.set("messages", "1");
+            window.location.href = url.toString();
             return;
         }
     }

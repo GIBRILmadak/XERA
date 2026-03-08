@@ -113,6 +113,23 @@
                 <a onclick="handleProfileNavigation()" id="nav-profile" data-i18n="navProfile"
                     >My Trajectory</a
                 >
+                <div
+                    class="notification-button messages-nav-button"
+                    onclick="openMessagesPage()"
+                    style="display: none"
+                    id="messages-nav-btn"
+                    title="Messages"
+                >
+                    <img
+                        src="icons/message.svg"
+                        alt="Messages"
+                        class="notification-icon"
+                    />
+                    <span
+                        id="messages-nav-badge"
+                        class="notification-badge"
+                    ></span>
+                </div>
                 <!-- Bouton Notifications -->
                 <div
                     class="notification-button"
@@ -312,6 +329,15 @@
             </div>
         </section>
 
+        <!-- MESSAGES -->
+        <section id="messages" class="page">
+            <div class="container">
+                <div class="messages-mount">
+                    <!-- Messagerie injectée dynamiquement -->
+                </div>
+            </div>
+        </section>
+
         <!-- BOUTON RÉGLAGES (FIXED POSITION) -->
         <div id="settings-button-container"></div>
         <!-- Bouton flottant pour publier une trace -->
@@ -338,6 +364,7 @@
         <!-- Modules de fonctionnalités -->
         <script src="js/search.js"></script>
         <script src="js/notifications.js"></script>
+        <script src="js/messages.js"></script>
         <script src="js/file-upload.js"></script>
         <script src="js/arcs.js"></script>
         <!-- Script principal avec intégration Supabase -->

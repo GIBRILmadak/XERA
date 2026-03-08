@@ -233,12 +233,15 @@ app.post('/api/push/subscribe', async (req, res) => {
   }
 });
 
-// Relais temps-réel : envoie une notification push pour chaque nouvelle ligne dans public.notifications
+// Relais temps-réel : notifications + messages directs
 async function startPushRelay() {
   if (!supportsPush()) return;
+  startNotificationPushRelay();
+  startDirectMessagePushRelay();
+}
 
-  const channel = supabase.channel('server-push-relay');
-
+function startNotificationPushRelay() {
+  const channel = supabase.channel('server-push-relay-notifications');
   channel
     .on('postgres_changes', {
       event: 'INSERT',
@@ -249,11 +252,35 @@ async function startPushRelay() {
       try {
         await sendPushForNotification(notif);
       } catch (err) {
-        console.error('push relay error', err);
+        console.error('notification push relay error', err);
       }
     })
     .subscribe((status) => {
-      console.log('Push relay status:', status);
+      console.log('Notification push relay status:', status);
+    });
+}
+
+function startDirectMessagePushRelay() {
+  const channel = supabase.channel('server-push-relay-dm');
+  channel
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'dm_messages'
+    }, async (payload) => {
+      const message = payload.new;
+      try {
+        await sendPushForDirectMessage(message);
+      } catch (err) {
+        console.error('dm push relay error', err);
+      }
+    })
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR') {
+        console.warn('DM push relay unavailable. Run sql/discovery-phase2-messaging.sql to enable messaging push.');
+      } else {
+        console.log('DM push relay status:', status);
+      }
     });
 }
 
@@ -269,6 +296,44 @@ async function sendPushForNotification(notification) {
   if (!subs || subs.length === 0) return;
 
   const payload = buildPushPayload(notification);
+  for (const sub of subs) {
+    await sendPushToSubscription(sub, payload);
+  }
+}
+
+async function sendPushForDirectMessage(messageRow) {
+  if (!messageRow?.conversation_id || !messageRow?.sender_id) return;
+
+  const [{ data: recipients, error: recipientsError }, { data: senderUser, error: senderError }] = await Promise.all([
+    supabase
+      .from('dm_participants')
+      .select('user_id')
+      .eq('conversation_id', messageRow.conversation_id)
+      .neq('user_id', messageRow.sender_id),
+    supabase
+      .from('users')
+      .select('id, name')
+      .eq('id', messageRow.sender_id)
+      .maybeSingle()
+  ]);
+
+  if (recipientsError) throw recipientsError;
+  if (senderError) {
+    console.warn('Sender lookup failed for DM push', senderError.message || senderError);
+  }
+
+  const recipientIds = Array.from(new Set((recipients || []).map((r) => r.user_id).filter(Boolean)));
+  if (recipientIds.length === 0) return;
+
+  const { data: subs, error: subsError } = await supabase
+    .from('push_subscriptions')
+    .select('user_id, endpoint, keys')
+    .in('user_id', recipientIds);
+
+  if (subsError) throw subsError;
+  if (!subs || subs.length === 0) return;
+
+  const payload = buildDirectMessagePushPayload(messageRow, senderUser?.name || '');
   for (const sub of subs) {
     await sendPushToSubscription(sub, payload);
   }
@@ -300,6 +365,27 @@ function buildPushPayload(notification) {
     link,
     tag: notification.id,
     renotify: false,
+    silent: false
+  };
+}
+
+function buildDirectMessagePushPayload(messageRow, senderName) {
+  const senderLabel = senderName && String(senderName).trim() ? String(senderName).trim() : 'Nouveau message';
+  const bodyRaw = String(messageRow?.body || '').replace(/\s+/g, ' ').trim();
+  const body =
+    bodyRaw.length > 160
+      ? `${bodyRaw.slice(0, 159)}…`
+      : bodyRaw || 'Vous avez reçu un nouveau message.';
+  const icon = `${PRIMARY_ORIGIN.replace(/\/$/, '')}/icons/logo.png`;
+  const link = `${PRIMARY_ORIGIN.replace(/\/$/, '')}/index.html?messages=1&dm=${encodeURIComponent(messageRow.sender_id)}`;
+
+  return {
+    title: `Message de ${senderLabel}`,
+    body,
+    icon,
+    link,
+    tag: `dm-${messageRow.id}`,
+    renotify: true,
     silent: false
   };
 }
