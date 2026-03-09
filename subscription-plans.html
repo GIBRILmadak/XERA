@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plans d'abonnement - XERA</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/monetization.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Navigation -->
+        <nav class="main-nav">
+            <div class="nav-brand">
+                <a href="index.html">
+                    <img src="icons/logo.png" alt="XERA" class="logo">
+                </a>
+            </div>
+            <div class="nav-links">
+                <a href="index.html"><i class="fas fa-home"></i> Accueil</a>
+                <a href="creator-dashboard.html"><i class="fas fa-chart-line"></i> Dashboard</a>
+                <a href="subscription-plans.html" class="active"><i class="fas fa-crown"></i> Abonnements</a>
+            </div>
+            <div class="nav-actions">
+                <div class="user-menu">
+                    <img id="navAvatar" src="icons/default-avatar.png" alt="Profile" class="avatar-small">
+                </div>
+            </div>
+        </nav>
+
+        <!-- Hero Section -->
+        <section class="plans-hero">
+            <h1>Choisissez votre plan</h1>
+            <p>Débloquez la monétisation et accédez à des fonctionnalités exclusives</p>
+        </section>
+
+        <!-- Plans Container -->
+        <div class="plans-container">
+            <div class="plans-grid">
+                <!-- Plan Standard -->
+                <div class="plan-detail-card standard">
+                    <div class="plan-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h3>Standard</h3>
+                    <div class="price">$2.50<span>/mois</span></div>
+                    <p class="description">Parfait pour démarrer et obtenir la vérification</p>
+                    
+                    <ul class="plan-features-list">
+                        <li>
+                            <i class="fas fa-check"></i>
+                            Badge bleu vérifié sur votre profil
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i>
+                            Statut "vérifié" sur tous vos posts
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i>
+                            Support prioritaire
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i>
+                            Accès aux analytics de base
+                        </li>
+                        <li class="disabled">
+                            <i class="fas fa-times"></i>
+                            Recevoir des soutiens financiers
+                        </li>
+                        <li class="disabled">
+                            <i class="fas fa-times"></i>
+                            Monétisation vidéo
+                        </li>
+                    </ul>
+                    
+                    <button class="btn-subscribe" data-plan="standard" onclick="selectSubscription('standard')">
+                        Choisir Standard
+                    </button>
+                </div>
+
+                <!-- Plan Medium -->
+                <div class="plan-detail-card medium">
+                    <div class="plan-icon">
+                        <i class="fas fa-heart"></i>
+                    </div>
+                    <h3>Medium</h3>
+                    <div class="price">$6.00<span>/mois</span></div>
+                    <p class="description">Commencez à gagner avec les soutiens de votre communauté</p>
+                    
+                    <ul class="plan-features-list">
+                        <li>
+                            <i class="fas fa-check"></i>
+                            Badge bleu vérifié sur votre profil
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i>
+                            Statut "vérifié" sur tous vos posts
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i>
+                            <strong>Recevoir des soutiens financiers</strong>
+                            <br><small>Sur votre profil, lives et contenus</small>
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i>
+                            Transferts d'argent via Payapay
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i>
+                            Dashboard revenus de base
+                        </li>
+                        <li class="disabled">
+                            <i class="fas fa-times"></i>
+                            Monétisation vidéo
+                        </li>
+                    </ul>
+                    
+                    <button class="btn-subscribe" data-plan="medium" onclick="selectSubscription('medium')">
+                        Choisir Medium
+                    </button>
+                </div>
+
+                <!-- Plan Pro -->
+                <div class="plan-detail-card pro recommended">
+                    <div class="recommended-badge">Populaire</div>
+                    <div class="plan-icon">
+                        <i class="fas fa-crown"></i>
+                    </div>
+                    <h3>Pro</h3>
+                    <div class="price">$10.00<span>/mois</span></div>
+                    <p class="description">Maximisez vos revenus avec la monétisation complète</p>
+                    
+                    <ul class="plan-features-list">
+                        <li>
+                            <i class="fas fa-check"></i>
+                            Badge bleu vérifié sur votre profil
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i>
+                            Statut "vérifié" sur tous vos posts
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i>
+                            <strong>Recevoir des soutiens financiers</strong>
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i>
+                            <strong>Monétisation vidéo</strong>
+                            <br><small>$0.40 par 1000 vues (vidéos >60s)</small>
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i>
+                            Dashboard revenus avancé
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i>
+                            Statistiques détaillées par période
+                        </li>
+                    </ul>
+                    
+                    <button class="btn-subscribe" data-plan="pro" onclick="selectSubscription('pro')">
+                        Choisir Pro
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- FAQ Section -->
+        <section class="faq-section">
+            <h2>Questions fréquentes</h2>
+            
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    Comment fonctionne la monétisation ?
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="faq-answer">
+                    <p>Pour activer la monétisation, vous devez avoir un abonnement Medium ou Pro actif ET au moins 1000 abonnés. Une fois activée, vous pouvez recevoir des soutiens financiers de votre communauté sur votre profil, vos lives et vos contenus.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    Quelle commission prend XERA ?
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="faq-answer">
+                    <p>XERA prélève une commission de 20% sur chaque transaction. Cela signifie que vous recevez 80% du montant des soutiens. Par exemple, pour un soutien de $10, vous recevez $8 net.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    Comment fonctionne la monétisation vidéo ?
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="faq-answer">
+                    <p>Avec le plan Pro, vous gagnez $0.40 pour chaque 1000 vues sur vos vidéos de plus de 60 secondes. Les revenus sont calculés mensuellement et versés sur votre compte Payapay, moins la commission de 20% de XERA.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    Puis-je changer de plan à tout moment ?
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="faq-answer">
+                    <p>Oui, vous pouvez upgrader ou downgrader votre plan à tout moment. Si vous passez à un plan supérieur, vous serez facturé au prorata. Si vous downgradez, le changement prendra effet à la fin de votre période de facturation actuelle.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    Comment sont payés les revenus ?
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="faq-answer">
+                    <p>Les revenus sont versés via Payapay. Vous devez avoir un compte Payapay vérifié (KYC) pour recevoir les paiements. Les revenus des soutiens sont disponibles immédiatement, tandis que les revenus vidéo sont calculés et payés mensuellement.</p>
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <button class="faq-question" onclick="toggleFaq(this)">
+                    Que se passe-t-il si je descends en dessous de 1000 abonnés ?
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="faq-answer">
+                    <p>Si vous descendez en dessous de 1000 abonnés, votre statut de monétisation sera temporairement désactivé. Vous ne pourrez plus recevoir de nouveaux soutiens tant que vous n'aurez pas retrouvé 1000 abonnés. Vos revenus précédents restent à vous.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Modal de confirmation -->
+        <div class="modal" id="confirmModal">
+            <div class="modal-content support-modal-content">
+                <div class="modal-header">
+                    <h2>Confirmer l'abonnement</h2>
+                    <button class="close-btn" onclick="closeConfirmModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="confirm-plan" id="confirmPlanDetails">
+                        <!-- Dynamique -->
+                    </div>
+                    <p class="confirm-note">
+                        <i class="fas fa-info-circle"></i>
+                        Vous serez redirigé vers Payapay pour finaliser le paiement sécurisé.
+                    </p>
+                    <button class="btn-primary btn-full" onclick="processSubscription()">
+                        <i class="fas fa-lock"></i> Procéder au paiement
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/supabase-config.js"></script>
+    <script src="js/monetization.js"></script>
+    <script src="js/subscription-plans.js"></script>
+</body>
+</html>
