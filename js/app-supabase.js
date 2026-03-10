@@ -6781,6 +6781,11 @@ async function renderImmersiveFeed(contents) {
             const replyCount = isAnnouncement
                 ? getReplyCount(content.contentId)
                 : 0;
+            // Defensive: some cached/local items may still carry the tag payload inside
+            // `description` (e.g. "\n\n#hashtags: ..."). Keep immersive copy clean.
+            const immersiveDescription = extractTagsFromDescription(
+                content.rawDescription || content.description || "",
+            ).cleanDescription;
 
             const contentBadges = getContentBadges(content);
             // Include user badges as well (consistent with Discover cards)
@@ -6886,9 +6891,7 @@ async function renderImmersiveFeed(contents) {
                 }
             } else {
                 const textBody =
-                    content.description ||
-                    content.title ||
-                    "Nouveau post texte";
+                    immersiveDescription || content.title || "Nouveau post texte";
                 mediaHtml = `<div class="immersive-text-card">${collabCornerHtml}<p>${textBody}</p></div>`;
             }
 
@@ -6953,7 +6956,7 @@ async function renderImmersiveFeed(contents) {
                             </div>
                         </div>
                         
-                        <p>${content.description}</p>
+                        <p>${immersiveDescription}</p>
                         ${moodActionsHtml}
                         <div class="immersive-post-user">
                             <button class="profile-link immersive-profile-link" onclick="event.stopPropagation(); handleProfileClick('${content.userId}', this, true)">
@@ -10849,19 +10852,23 @@ async function openCreateMenu(
                     <label>Média</label>
                     
                     <!-- Upload Zone for Image/Video -->
-                    <div id="media-upload-container">
-                        <div class="upload-zone" id="create-media-dropzone" style="border: 2px dashed var(--border-color); padding: 2rem; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.3s ease; background: rgba(255,255,255,0.02);">
-                            <div id="create-media-preview-container" style="display: none; margin-bottom: 1rem;">
-                                <!-- Preview will be inserted here -->
-                            </div>
-                            <div id="create-media-loader" style="display: none; margin-bottom: 1rem;">
-                                <div style="display: inline-block; width: 24px; height: 24px; border: 2px solid var(--accent-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                                <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Upload en cours...</p>
-                            </div>
-                            <div id="create-media-placeholder">
-                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-secondary); margin-bottom: 0.5rem;">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="17 8 12 3 7 8"></polyline>
+	                    <div id="media-upload-container">
+	                        <div class="upload-zone" id="create-media-dropzone" style="border: 2px dashed var(--border-color); padding: 2rem; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.3s ease; background: rgba(255,255,255,0.02);">
+	                            <div id="create-media-preview-container" style="display: none; margin-bottom: 1rem;">
+	                                <!-- Preview will be inserted here -->
+	                            </div>
+	                            <div id="create-media-loader" style="display: none; margin-bottom: 1rem;">
+	                                <div style="display: inline-block; width: 24px; height: 24px; border: 2px solid var(--accent-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+	                                <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Upload en cours...</p>
+	                                <div class="xera-upload-progress">
+	                                    <div id="create-media-progress-bar" class="xera-upload-progress-bar is-indeterminate"></div>
+	                                </div>
+	                                <div id="create-media-progress-label" class="xera-upload-progress-label"></div>
+	                            </div>
+	                            <div id="create-media-placeholder">
+	                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-secondary); margin-bottom: 0.5rem;">
+	                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+	                                    <polyline points="17 8 12 3 7 8"></polyline>
                                     <line x1="12" y1="3" x2="12" y2="15"></line>
                                 </svg>
                                 <p style="color: var(--text-secondary); font-size: 0.9rem;">Cliquez ou glissez un fichier ici</p>
@@ -10905,12 +10912,13 @@ async function openCreateMenu(
     const liveInput = document.getElementById("create-live-url");
     const fileInput = document.getElementById("create-media-file");
     const mediaUrlsInput = document.getElementById("create-media-urls");
-    const dayGroup = container.querySelector(".form-group-day");
-    const stateGroup = container.querySelector(".form-group-state");
-    const arcGroup = container.querySelector(".form-group-arc");
-    const descGroup = container.querySelector(".form-group-desc");
-    const tagsGroup = container.querySelector(".form-group-tags");
-    let isMediaUploadInProgress = false;
+	    const dayGroup = container.querySelector(".form-group-day");
+	    const stateGroup = container.querySelector(".form-group-state");
+	    const arcGroup = container.querySelector(".form-group-arc");
+	    const descGroup = container.querySelector(".form-group-desc");
+	    const tagsGroup = container.querySelector(".form-group-tags");
+	    let isMediaUploadInProgress = false;
+	    let mediaUploadUiArmed = false;
 
     // Initialize file upload
     if (typeof initializeFileInput === "function") {
@@ -10918,8 +10926,31 @@ async function openCreateMenu(
         const mediaUrlInput = document.getElementById("create-media-url");
         const mediaTypeInput = document.getElementById("create-media-type");
 
-        const dropZone = document.getElementById("create-media-dropzone");
-        const loader = document.getElementById("create-media-loader");
+	        const dropZone = document.getElementById("create-media-dropzone");
+	        const loader = document.getElementById("create-media-loader");
+	        const progressBar = document.getElementById("create-media-progress-bar");
+	        const progressLabel = document.getElementById(
+	            "create-media-progress-label",
+	        );
+
+	        const setUploadProgressIndeterminate = () => {
+	            if (progressBar) {
+	                progressBar.classList.add("is-indeterminate");
+	                progressBar.style.width = "";
+	            }
+	            if (progressLabel) progressLabel.textContent = "";
+	        };
+
+	        const setUploadProgress = (percent) => {
+	            if (!progressBar) return;
+	            const safePercent =
+	                typeof percent === "number" && Number.isFinite(percent)
+	                    ? Math.max(0, Math.min(100, Math.round(percent)))
+	                    : 0;
+	            progressBar.classList.remove("is-indeterminate");
+	            progressBar.style.width = `${safePercent}%`;
+	            if (progressLabel) progressLabel.textContent = `${safePercent}%`;
+	        };
 
         const typeButtons = Array.from(
             container.querySelectorAll(".type-quick button"),
@@ -11075,17 +11106,19 @@ async function openCreateMenu(
             document.head.appendChild(style);
         }
 
-        // Custom handler to show loader
-        fileInput.addEventListener("change", () => {
-            if (fileInput.files.length > 0) {
-                isMediaUploadInProgress = true;
-                placeholder.style.display = "none";
-                previewContainer.style.display = "none";
-                loader.style.display = "block";
-            }
-        });
+	        // Custom handler to show loader
+	        fileInput.addEventListener("change", () => {
+	            if (fileInput.files.length > 0) {
+	                isMediaUploadInProgress = true;
+	                mediaUploadUiArmed = true;
+	                placeholder.style.display = "none";
+	                previewContainer.style.display = "none";
+	                loader.style.display = "block";
+	                setUploadProgressIndeterminate();
+	            }
+	        });
 
-        const updateMultiPreview = (urls = []) => {
+	        const updateMultiPreview = (urls = []) => {
             const clean = (urls || []).filter(Boolean);
             if (clean.length === 0) {
                 previewContainer.style.display = "none";
@@ -11114,25 +11147,35 @@ async function openCreateMenu(
             `;
         };
 
-        initializeFileInput("create-media-file", {
-            dropZone: dropZone,
-            compress: true,
-            multiple: () => !!fileInput.multiple,
-            onBeforeUpload: () => {
-                isMediaUploadInProgress = true;
-            },
-            onUpload: (result) => {
-                if (!result?.success) {
-                    alert("Erreur upload: " + (result?.error || "inconnue"));
-                }
-            },
-            onUploadBatch: (results) => {
-                isMediaUploadInProgress = false;
-                loader.style.display = "none";
-                const successful = (results || []).filter(
-                    (r) => r && r.success && r.url,
-                );
-                const successUrls = successful.map((r) => r.url);
+	        initializeFileInput("create-media-file", {
+	            dropZone: dropZone,
+	            compress: true,
+	            multiple: () => !!fileInput.multiple,
+	            onBeforeUpload: () => {
+	                isMediaUploadInProgress = true;
+	                if (!mediaUploadUiArmed) {
+	                    mediaUploadUiArmed = true;
+	                    placeholder.style.display = "none";
+	                    previewContainer.style.display = "none";
+	                    loader.style.display = "block";
+	                    setUploadProgressIndeterminate();
+	                }
+	            },
+	            onProgress: (percent) => setUploadProgress(percent),
+	            onUpload: (result) => {
+	                if (!result?.success) {
+	                    alert("Erreur upload: " + (result?.error || "inconnue"));
+	                }
+	            },
+	            onUploadBatch: (results) => {
+	                isMediaUploadInProgress = false;
+	                mediaUploadUiArmed = false;
+	                loader.style.display = "none";
+	                setUploadProgressIndeterminate();
+	                const successful = (results || []).filter(
+	                    (r) => r && r.success && r.url,
+	                );
+	                const successUrls = successful.map((r) => r.url);
 
                 if (successUrls.length === 0) {
                     placeholder.style.display = "block";

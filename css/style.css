@@ -219,6 +219,40 @@ body {
     100% { transform: rotate(360deg); }
 }
 
+.xera-upload-progress {
+    width: min(260px, 100%);
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+    margin: 0.75rem auto 0;
+}
+
+.xera-upload-progress-bar {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: var(--accent-color);
+    transform: translateX(0);
+    transition: width 120ms linear;
+}
+
+.xera-upload-progress-bar.is-indeterminate {
+    width: 40%;
+    animation: xeraUploadIndeterminate 1.1s ease-in-out infinite;
+}
+
+@keyframes xeraUploadIndeterminate {
+    0% { transform: translateX(-140%); }
+    100% { transform: translateX(260%); }
+}
+
+.xera-upload-progress-label {
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
 .click-loading {
     animation: clickPulse 0.9s ease-in-out infinite;
     filter: brightness(1);

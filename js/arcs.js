@@ -269,10 +269,14 @@ function renderArcCreationForm(arcToEdit = null) {
                         <div id="arc-cover-preview-container" style="${isEdit && arcToEdit.media_url ? 'display: block;' : 'display: none;'} margin-bottom: 1rem;">
                             ${isEdit && arcToEdit.media_url ? (arcToEdit.media_type === 'video' ? `<video src="${arcToEdit.media_url}" controls style="max-width: 100%; max-height: 200px; border-radius: 8px;"></video>` : `<img src="${arcToEdit.media_url}" style="max-width: 100%; max-height: 200px; border-radius: 8px;">`) : ''}
                         </div>
-                        <div id="arc-cover-loader" style="display: none; margin-bottom: 1rem;">
-                            <div class="loading-spinner" style="display:inline-block;"></div>
-                            <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Upload en cours...</p>
-                        </div>
+	                        <div id="arc-cover-loader" style="display: none; margin-bottom: 1rem;">
+	                            <div class="loading-spinner" style="display:inline-block;"></div>
+	                            <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Upload en cours...</p>
+	                            <div class="xera-upload-progress">
+	                                <div id="arc-cover-progress-bar" class="xera-upload-progress-bar is-indeterminate"></div>
+	                            </div>
+	                            <div id="arc-cover-progress-label" class="xera-upload-progress-label"></div>
+	                        </div>
                         <div id="arc-cover-placeholder" style="${isEdit && arcToEdit.media_url ? 'display: none;' : ''}">
                             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-secondary); margin-bottom: 0.5rem;">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -303,36 +307,66 @@ function renderArcCreationForm(arcToEdit = null) {
     if (typeof initializeFileInput === 'function') {
         const dropZone = document.getElementById('arc-cover-dropzone');
         const fileInput = document.getElementById('arc-cover-file');
-        const previewContainer = document.getElementById('arc-cover-preview-container');
-        const placeholder = document.getElementById('arc-cover-placeholder');
-        const loader = document.getElementById('arc-cover-loader');
-        
-        if (dropZone && fileInput) {
-            // Handle click
-            dropZone.addEventListener('click', (e) => {
-                if (e.target.tagName !== 'IMG' && e.target.tagName !== 'VIDEO') {
+	        const previewContainer = document.getElementById('arc-cover-preview-container');
+	        const placeholder = document.getElementById('arc-cover-placeholder');
+	        const loader = document.getElementById('arc-cover-loader');
+	        const progressBar = document.getElementById('arc-cover-progress-bar');
+	        const progressLabel = document.getElementById('arc-cover-progress-label');
+
+	        const setUploadProgressIndeterminate = () => {
+	            if (progressBar) {
+	                progressBar.classList.add('is-indeterminate');
+	                progressBar.style.width = '';
+	            }
+	            if (progressLabel) progressLabel.textContent = '';
+	        };
+
+	        const setUploadProgress = (percent) => {
+	            if (!progressBar) return;
+	            const safePercent =
+	                typeof percent === 'number' && Number.isFinite(percent)
+	                    ? Math.max(0, Math.min(100, Math.round(percent)))
+	                    : 0;
+	            progressBar.classList.remove('is-indeterminate');
+	            progressBar.style.width = `${safePercent}%`;
+	            if (progressLabel) progressLabel.textContent = `${safePercent}%`;
+	        };
+	        
+	        if (dropZone && fileInput) {
+	            // Handle click
+	            dropZone.addEventListener('click', (e) => {
+	                if (e.target.tagName !== 'IMG' && e.target.tagName !== 'VIDEO') {
                     fileInput.click();
                 }
             });
 
-            // Loader handler
-            fileInput.addEventListener('change', () => {
-                 if (fileInput.files.length > 0) {
-                     placeholder.style.display = 'none';
-                     previewContainer.style.display = 'none';
-                     loader.style.display = 'block';
-                 }
-            });
+	            // Loader handler
+	            fileInput.addEventListener('change', () => {
+	                 if (fileInput.files.length > 0) {
+	                     placeholder.style.display = 'none';
+	                     previewContainer.style.display = 'none';
+	                     loader.style.display = 'block';
+	                     setUploadProgressIndeterminate();
+	                 }
+	            });
 
-            initializeFileInput('arc-cover-file', {
-                dropZone: dropZone,
-                compress: true,
-                onUpload: (result) => {
-                    loader.style.display = 'none';
-                    
-                    if (result.success) {
-                        document.getElementById('arc-media-url').value = result.url;
-                        document.getElementById('arc-media-type').value = result.type;
+	            initializeFileInput('arc-cover-file', {
+	                dropZone: dropZone,
+	                compress: true,
+	                onBeforeUpload: () => {
+	                    placeholder.style.display = 'none';
+	                    previewContainer.style.display = 'none';
+	                    loader.style.display = 'block';
+	                    setUploadProgressIndeterminate();
+	                },
+	                onProgress: (percent) => setUploadProgress(percent),
+	                onUpload: (result) => {
+	                    loader.style.display = 'none';
+	                    setUploadProgressIndeterminate();
+	                    
+	                    if (result.success) {
+	                        document.getElementById('arc-media-url').value = result.url;
+	                        document.getElementById('arc-media-type').value = result.type;
                         
                         // Preview
                         previewContainer.style.display = 'block';
