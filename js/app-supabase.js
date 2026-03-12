@@ -485,11 +485,22 @@ function buildArcCollaboratorAvatars(content, options = {}) {
     const size = options.size || 22;
     const className = options.className || "";
     const label = options.label || "Collaboration";
+    const fromImmersive = !!options.fromImmersive;
+
+    const renderAvatarButton = (user, roleLabel) => {
+        if (!user?.id) return "";
+        const safeName = escapeHtml(user.name || roleLabel || "Collaborateur");
+        return `
+            <button type="button" onclick="event.stopPropagation(); handleProfileClick('${user.id}', this, ${fromImmersive})" aria-label="Voir le profil de ${safeName}">
+                <img src="${user.avatar || "https://placehold.co/32"}" alt="Avatar ${safeName}" style="width:${size}px; height:${size}px;">
+            </button>
+        `;
+    };
 
     return `
         <div class="arc-collab-avatars ${className}" title="${label}">
-            <img src="${ownerUser.avatar || "https://placehold.co/32"}" alt="Avatar créateur" style="width:${size}px; height:${size}px;">
-            <img src="${collaborator.avatar || "https://placehold.co/32"}" alt="Avatar collaborateur" style="width:${size}px; height:${size}px;">
+            ${renderAvatarButton(ownerUser, "Créateur")}
+            ${renderAvatarButton(collaborator, "Collaborateur")}
         </div>
     `;
 }
@@ -526,11 +537,18 @@ function buildArcCollaboratorCornerAvatars(content, options = {}) {
     const visible = others.slice(0, max);
     const hiddenCount = Math.max(0, others.length - visible.length);
     const label = options.label || "Autres collaborateurs";
+    const fromImmersive = !!options.fromImmersive;
 
     const avatarsHtml = visible
         .map(
-            (user) =>
-                `<img src="${user.avatar || "https://placehold.co/32"}" alt="Collaborateur" style="width:${size}px; height:${size}px;">`,
+            (user) => {
+                const safeName = escapeHtml(user?.name || "Collaborateur");
+                return `
+                    <button type="button" onclick="event.stopPropagation(); handleProfileClick('${user.id}', this, ${fromImmersive})" aria-label="Voir le profil de ${safeName}">
+                        <img src="${user.avatar || "https://placehold.co/32"}" alt="Collaborateur ${safeName}" style="width:${size}px; height:${size}px;">
+                    </button>
+                `;
+            },
         )
         .join("");
 
@@ -5016,6 +5034,7 @@ function handleDiscoverInterest(contentId, action) {
     const tags = Array.isArray(content.tags) ? content.tags : [];
     const delta = action === "dislike" ? -1.5 : 2.2;
     adjustMoodScores(tags, delta);
+    updateImmersivePrefs(content, action === "dislike" ? "dislike" : "like");
     if (action === "dislike") {
         ToastManager?.info("Flux ajusté", "Nous vous montrerons moins ce sujet.");
     } else {
@@ -5129,6 +5148,7 @@ function renderUserCard(
         size: 18,
         max: 3,
         className: "arc-collab-avatars--card-corner",
+        fromImmersive: false,
     });
     const mediaList = Array.isArray(latestContent.mediaUrls)
         ? latestContent.mediaUrls.filter(Boolean)
@@ -5298,6 +5318,7 @@ function renderUserCard(
     const collabAvatarsHtml = buildArcCollaboratorAvatars(latestContent, {
         size: 20,
         className: "arc-collab-avatars--card",
+        fromImmersive: false,
     });
 
     // User Info (Name, Avatar, Subscribe) - Moved to bottom
@@ -6209,35 +6230,103 @@ function getAllFeedContent() {
     );
 }
 
+function getDefaultImmersivePrefs() {
+    return {
+        types: {},
+        states: {},
+        users: {},
+        tags: {},
+        queries: {},
+        seen: {},
+        updatedAt: Date.now(),
+    };
+}
+
 function loadImmersivePrefs() {
+    const legacyKey = "immersive_prefs_v1";
+    const storageKey = getImmersivePrefsStorageKey();
+    const migrationFlagKey = "immersive_prefs_v1:migrated";
+
     try {
-        const raw = localStorage.getItem("immersive_prefs_v1");
-        if (!raw)
-            return {
-                types: {},
-                states: {},
-                users: {},
-                tags: {},
-                queries: {},
-                seen: {},
-            };
+        let raw = localStorage.getItem(storageKey);
+
+        // One-time migration from legacy global key to the active scoped key.
+        if (!raw && !localStorage.getItem(migrationFlagKey)) {
+            const legacyRaw = localStorage.getItem(legacyKey);
+            if (legacyRaw) {
+                raw = legacyRaw;
+                localStorage.setItem(storageKey, legacyRaw);
+            }
+            localStorage.setItem(migrationFlagKey, "1");
+        }
+
+        if (!raw) return getDefaultImmersivePrefs();
+
         const parsed = JSON.parse(raw);
-        return {
-            types: parsed.types || {},
-            states: parsed.states || {},
-            users: parsed.users || {},
-            tags: parsed.tags || {},
-            queries: parsed.queries || {},
-            seen: parsed.seen || {},
+        const prefs = {
+            types: parsed?.types || {},
+            states: parsed?.states || {},
+            users: parsed?.users || {},
+            tags: parsed?.tags || {},
+            queries: parsed?.queries || {},
+            seen: parsed?.seen || {},
+            updatedAt: Number(parsed?.updatedAt) || Date.now(),
         };
+
+        const { prefs: decayedPrefs, changed } = applyTemporalDecayToPrefs(prefs);
+        if (changed) saveImmersivePrefs(decayedPrefs);
+        return decayedPrefs;
     } catch (e) {
-        return { types: {}, states: {}, users: {}, tags: {}, queries: {}, seen: {} };
+        return getDefaultImmersivePrefs();
     }
+}
+
+function getImmersivePrefsStorageKey() {
+    const userId = currentUser?.id;
+    return userId ? `immersive_prefs_v1:${userId}` : "immersive_prefs_v1:guest";
+}
+
+function applyDecayToMap(map, factor, floor = 0.02) {
+    const source = map || {};
+    const output = {};
+    Object.entries(source).forEach(([key, value]) => {
+        const next = (Number(value) || 0) * factor;
+        if (Math.abs(next) >= floor) output[key] = next;
+    });
+    return output;
+}
+
+function applyTemporalDecayToPrefs(prefs) {
+    const now = Date.now();
+    const updatedAt = Number(prefs?.updatedAt) || now;
+    const elapsedMs = Math.max(0, now - updatedAt);
+    const minDecayIntervalMs = 1000 * 60 * 60 * 6;
+
+    if (elapsedMs < minDecayIntervalMs) {
+        return { prefs, changed: false };
+    }
+
+    const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24);
+    const halfLifeDays = 30;
+    const factor = Math.pow(0.5, elapsedDays / halfLifeDays);
+    const decayed = {
+        ...prefs,
+        types: applyDecayToMap(prefs.types, factor),
+        states: applyDecayToMap(prefs.states, factor),
+        users: applyDecayToMap(prefs.users, factor),
+        tags: applyDecayToMap(prefs.tags, factor),
+        queries: applyDecayToMap(prefs.queries, factor),
+        updatedAt: now,
+    };
+    return { prefs: decayed, changed: true };
 }
 
 function saveImmersivePrefs(prefs) {
     try {
-        localStorage.setItem("immersive_prefs_v1", JSON.stringify(prefs));
+        localStorage.setItem(
+            getImmersivePrefsStorageKey(),
+            JSON.stringify({ ...prefs, updatedAt: Date.now() }),
+        );
     } catch (e) {
         // Ignore storage errors
     }
@@ -6305,12 +6394,22 @@ function pruneSeen(seenMap, maxEntries = 600) {
 function updateImmersivePrefs(content, action) {
     if (!content) return;
     const prefs = loadImmersivePrefs();
-    const weight = action === "like" ? 2.4 : action === "view" ? 0.35 : 0.6;
+    const weight =
+        action === "like"
+            ? 2.4
+            : action === "dislike"
+              ? -1.8
+              : action === "view"
+                ? 0.35
+                : 0.6;
     bumpPref(prefs.types, content.type, weight);
     bumpPref(prefs.states, content.state, weight * 0.6);
     bumpPref(prefs.users, content.userId, weight * 0.9);
     if (Array.isArray(content.tags)) {
-        content.tags.forEach((tag) => bumpPref(prefs.tags, tag, weight * 0.75));
+        content.tags
+            .map((tag) => String(tag || "").trim().toLowerCase())
+            .filter(Boolean)
+            .forEach((tag) => bumpPref(prefs.tags, tag, weight * 0.75));
     }
     prefs.seen[content.contentId] = Date.now();
     prefs.types = prunePrefsObject(prefs.types, 80);
@@ -6337,8 +6436,9 @@ function recordSearchPreference(query) {
     if (tokens.length === 0) return;
     const prefs = loadImmersivePrefs();
     tokens.forEach((token) => {
-        bumpPref(prefs.tags, token, 0.9);
-        bumpPref(prefs.queries, token, 1.1);
+        const normalized = token.toLowerCase();
+        bumpPref(prefs.tags, normalized, 0.9);
+        bumpPref(prefs.queries, normalized, 1.1);
     });
     prefs.tags = prunePrefsObject(prefs.tags, 120);
     prefs.queries = prunePrefsObject(prefs.queries, 120);
@@ -6503,9 +6603,10 @@ function scoreImmersiveContent(content, context) {
         : now;
     const ageHours = Math.max(0, (now - createdAt) / (1000 * 60 * 60));
     const recency = Math.exp(-ageHours / 72); // 3 days half-ish
-    const engagement =
-        Math.log1p(content.encouragementsCount || 0) * 1.2 +
-        Math.log1p(content.views || 0) * 0.5;
+    const engagementRaw =
+        Math.log1p(content.encouragementsCount || 0) * 1.15 +
+        Math.log1p(content.views || 0) * 0.42;
+    const engagement = Math.min(4.2, engagementRaw) * (0.6 + recency * 0.4);
     const followBoost =
         context.followedSet && context.followedSet.has(content.userId)
             ? 2.0
@@ -6525,7 +6626,10 @@ function scoreImmersiveContent(content, context) {
     const userPref = (context.prefs.users[content.userId] || 0) * 0.7;
     const tagPref = Array.isArray(content.tags)
         ? content.tags.reduce(
-              (sum, tag) => sum + (context.prefs.tags[tag] || 0) * 0.55,
+              (sum, tag) =>
+                  sum +
+                  (context.prefs.tags[String(tag || "").toLowerCase()] || 0) *
+                      0.55,
               0,
           )
         : 0;
@@ -6621,7 +6725,16 @@ async function getPersonalizedFeed(contents) {
 function markExplorationInterest(scoredItems) {
     if (!Array.isArray(scoredItems) || scoredItems.length === 0) return;
 
-    const targetRaw = Math.round(scoredItems.length * IMMERSIVE_EXPLORATION_RATIO);
+    const viewer = currentUser?.id;
+    const prefs = viewer ? loadImmersivePrefs() : null;
+    const hasHistory =
+        prefs &&
+        ((Object.keys(prefs.tags || {}).length >= 8 &&
+            Object.keys(prefs.users || {}).length >= 5) ||
+            Object.keys(prefs.queries || {}).length >= 10);
+    const explorationRatio = hasHistory ? IMMERSIVE_EXPLORATION_RATIO : 0.2;
+
+    const targetRaw = Math.round(scoredItems.length * explorationRatio);
     const targetCount = Math.max(1, targetRaw);
 
     const candidates = scoredItems.filter(
@@ -6781,6 +6894,11 @@ async function renderImmersiveFeed(contents) {
             const replyCount = isAnnouncement
                 ? getReplyCount(content.contentId)
                 : 0;
+            // Defensive: some cached/local items may still carry the tag payload inside
+            // `description` (e.g. "\n\n#hashtags: ..."). Keep immersive copy clean.
+            const immersiveDescription = extractTagsFromDescription(
+                content.rawDescription || content.description || "",
+            ).cleanDescription;
 
             const contentBadges = getContentBadges(content);
             // Include user badges as well (consistent with Discover cards)
@@ -6810,11 +6928,13 @@ async function renderImmersiveFeed(contents) {
             const collabAvatarsHtml = buildArcCollaboratorAvatars(content, {
                 size: 22,
                 className: "arc-collab-avatars--immersive",
+                fromImmersive: true,
             });
             const collabCornerHtml = buildArcCollaboratorCornerAvatars(content, {
                 size: 20,
                 max: 4,
                 className: "arc-collab-avatars--immersive-corner",
+                fromImmersive: true,
             });
 
             let mediaHtml = "";
@@ -6886,9 +7006,7 @@ async function renderImmersiveFeed(contents) {
                 }
             } else {
                 const textBody =
-                    content.description ||
-                    content.title ||
-                    "Nouveau post texte";
+                    immersiveDescription || content.title || "Nouveau post texte";
                 mediaHtml = `<div class="immersive-text-card">${collabCornerHtml}<p>${textBody}</p></div>`;
             }
 
@@ -6953,7 +7071,7 @@ async function renderImmersiveFeed(contents) {
                             </div>
                         </div>
                         
-                        <p>${content.description}</p>
+                        <p>${immersiveDescription}</p>
                         ${moodActionsHtml}
                         <div class="immersive-post-user">
                             <button class="profile-link immersive-profile-link" onclick="event.stopPropagation(); handleProfileClick('${content.userId}', this, true)">
@@ -7983,6 +8101,45 @@ async function renderProfileTimeline(userId) {
         }
     }
 
+    // If project relation is missing (common on collaboration histories), hydrate by project_id.
+    if (displayContents.length > 0) {
+        const missingProjectIds = new Set();
+        displayContents.forEach((content) => {
+            if (content?.projectId && !content.project) {
+                missingProjectIds.add(content.projectId);
+            }
+        });
+        if (missingProjectIds.size > 0) {
+            try {
+                const { data: projectsData, error: projectsError } =
+                    await supabase
+                        .from("projects")
+                        .select("id, name")
+                        .in("id", Array.from(missingProjectIds));
+                if (!projectsError && Array.isArray(projectsData)) {
+                    const projectMap = new Map(
+                        projectsData.map((p) => [p.id, p]),
+                    );
+                    displayContents = displayContents.map((content) => {
+                        if (
+                            content?.projectId &&
+                            !content.project &&
+                            projectMap.has(content.projectId)
+                        ) {
+                            return {
+                                ...content,
+                                project: projectMap.get(content.projectId),
+                            };
+                        }
+                        return content;
+                    });
+                }
+            } catch (e) {
+                /* ignore */
+            }
+        }
+    }
+
     const viewerCollabStatusMap = await fetchArcCollabStatusMap(
         allArcs.map((a) => a.id),
         currentUserId,
@@ -8182,6 +8339,32 @@ async function renderProfileTimeline(userId) {
     const followingCount = await getFollowingCount(userId);
     const engagementTotals = await getUserEngagementTotals(userId);
     const userTraces = getUserContentLocal(userId) || [];
+    const successCount = userTraces.filter((t) => t?.state === "success").length;
+    const failureCount = userTraces.filter((t) => t?.state === "failure").length;
+    const successRatio =
+        userTraces.length > 0
+            ? Math.round((successCount / userTraces.length) * 100)
+            : 0;
+    const latestTrace = userTraces.length > 0 ? userTraces[0] : null;
+    const latestTraceLabel = latestTrace
+        ? `Jour ${latestTrace.dayNumber || latestTrace.day_number || "-"}`
+        : "Aucune";
+    const progressSnapshotHtml = `
+        <div class="profile-progress-snapshot">
+            <div class="snapshot-item">
+                <div class="snapshot-label">Dernière trace</div>
+                <div class="snapshot-value">${latestTraceLabel}</div>
+            </div>
+            <div class="snapshot-item">
+                <div class="snapshot-label">Taux réussite</div>
+                <div class="snapshot-value">${successRatio}%</div>
+            </div>
+            <div class="snapshot-item">
+                <div class="snapshot-label">Blocages</div>
+                <div class="snapshot-value">${failureCount}</div>
+            </div>
+        </div>
+    `;
     const showVerificationCta = isOwnProfile && !isCurrentUserVerified();
     const verificationCtaHtml = showVerificationCta
         ? `
@@ -8261,20 +8444,50 @@ async function renderProfileTimeline(userId) {
             });
         });
     } else {
-        // Logique normale: timeline complète par jour avec trous
-        const maxDay = displayContents.reduce(
-            (max, c) => Math.max(max, getDayNumberValue(c)),
-            0,
-        );
-        for (let day = maxDay; day >= 1; day--) {
-            const dayContent = displayContents.find(
-                (c) => getDayNumberValue(c) === day,
+        const dayNumbers = (displayContents || []).map(getDayNumberValue);
+        const positiveDays = dayNumbers.filter((d) => d > 0);
+        const hasNonPositiveDay = dayNumbers.some((d) => !d || d <= 0);
+        const hasDuplicatePositiveDays =
+            positiveDays.length !== new Set(positiveDays).size;
+        const arcIds = (displayContents || [])
+            .map((c) => c?.arcId || c?.arc?.id || null)
+            .filter(Boolean);
+        const hasMultipleArcs = new Set(arcIds).size > 1;
+
+        // On the global profile timeline, day numbers can clash across ARCs or be missing (0).
+        // In these cases, prefer a chronological timeline so nothing "disappears".
+        const useChronological =
+            hasMultipleArcs || hasDuplicatePositiveDays || hasNonPositiveDay;
+
+        if (useChronological) {
+            const getContentTime = (c) => {
+                const raw = c?.createdAt || c?.created_at || c?.started_at || 0;
+                const t = new Date(raw).getTime();
+                return Number.isFinite(t) ? t : 0;
+            };
+            const sorted = [...(displayContents || [])].sort(
+                (a, b) => getContentTime(b) - getContentTime(a),
             );
-            timeline.push({
-                dayNumber: day,
-                content: dayContent || null,
-                state: dayContent ? dayContent.state : "empty",
+            sorted.forEach((content) => {
+                timeline.push({
+                    dayNumber: getDayNumberValue(content),
+                    content,
+                    state: content.state,
+                });
             });
+        } else {
+            // Single ARC with clean day numbers: timeline complète par jour avec trous
+            const maxDay = positiveDays.reduce((max, d) => Math.max(max, d), 0);
+            for (let day = maxDay; day >= 1; day--) {
+                const dayContent = displayContents.find(
+                    (c) => getDayNumberValue(c) === day,
+                );
+                timeline.push({
+                    dayNumber: day,
+                    content: dayContent || null,
+                    state: dayContent ? dayContent.state : "empty",
+                });
+            }
         }
     }
 
@@ -8679,6 +8892,7 @@ async function renderProfileTimeline(userId) {
                     </div>
                 </div>
                 ${engagementStatsHtml}
+                ${progressSnapshotHtml}
                 <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center; justify-content:center;">
                     ${followButtonHtml}
                     ${messageButtonHtml}
@@ -8698,6 +8912,7 @@ async function renderProfileTimeline(userId) {
                     </div>
                 </div>
                 ${engagementStatsHtml}
+                ${progressSnapshotHtml}
                 ${verificationCtaHtml}
                 <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center;"> 
                     <button class="btn-add" onclick="openCreateMenu('${userId}')" title="Ajouter une trace">
@@ -8748,7 +8963,6 @@ async function renderProfileTimeline(userId) {
             </div>
         </section>
         <div class="profile-analytics-section ${!isOwnProfile ? "compact" : ""}" style="margin: 2.5rem 0;">
-            <h3 class="section-title">Analytics mensuelles</h3>
             <div id="profile-analytics" class="analytics-dashboard ${!isOwnProfile ? "analytics-dashboard-compact" : ""}" style="padding: 0; margin: 0; max-width: 100%;"></div>
         </div>
         <div class="timeline">
@@ -9008,6 +9222,12 @@ window.renderWeeklyProgressChart = async function (userId) {
    NAVIGATION
    ======================================== */
 
+function syncFloatingCreateVisibility(pageId) {
+    const container = document.getElementById("floating-create-container");
+    if (!container) return;
+    container.style.display = pageId === "messages" ? "none" : "";
+}
+
 function navigateTo(pageId) {
     // Vérifier si l'utilisateur essaie d'accéder à son profil sans être connecté
     if (pageId === "profile" && !currentUser && !window.currentProfileViewed) {
@@ -9053,10 +9273,13 @@ function navigateTo(pageId) {
     if (targetPage) {
         targetPage.classList.add("active");
     }
+    syncFloatingCreateVisibility(pageId);
     window.scrollTo(0, 0);
     document.body.classList.toggle("profile-open", pageId === "profile");
     handleLoginPromptContext();
 }
+
+window.syncFloatingCreateVisibility = syncFloatingCreateVisibility;
 
 // Make sure handleProfileNavigation is defined as an async function
 async function handleProfileNavigation() {
@@ -9316,24 +9539,63 @@ function initDiscoverMoodTracking() {
 
 function initTheme() {
     const savedTheme = localStorage.getItem("rize-theme");
-    if (savedTheme === "light") {
-        document.documentElement.classList.add("light-mode");
+    const initialTheme = savedTheme === "light" || savedTheme === "dark"
+        ? savedTheme
+        : "dark";
+
+    applyTheme(initialTheme, false);
+
+    if (!window.__themeSystemListenerAttached && window.matchMedia) {
+        const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
+        mediaQuery.addEventListener("change", (event) => {
+            const hasManualPreference =
+                localStorage.getItem("rize-theme") === "light" ||
+                localStorage.getItem("rize-theme") === "dark";
+            if (!hasManualPreference) {
+                applyTheme(event.matches ? "light" : "dark", false);
+            }
+        });
+        window.__themeSystemListenerAttached = true;
     }
 }
 
 function toggleTheme() {
-    const htmlElement = document.documentElement;
-    htmlElement.classList.toggle("light-mode");
-
-    if (htmlElement.classList.contains("light-mode")) {
-        localStorage.setItem("rize-theme", "light");
-    } else {
-        localStorage.setItem("rize-theme", "dark");
-    }
+    applyTheme(isLightMode() ? "dark" : "light", true);
 }
 
 function isLightMode() {
     return document.documentElement.classList.contains("light-mode");
+}
+
+function applyTheme(theme, persist = true) {
+    const isLight = theme === "light";
+    document.documentElement.classList.toggle("light-mode", isLight);
+
+    if (persist) {
+        localStorage.setItem("rize-theme", isLight ? "light" : "dark");
+    }
+
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) {
+        themeMeta.setAttribute("content", isLight ? "#f6f8fc" : "#050505");
+    }
+
+    updateThemeButtons(isLight);
+}
+
+function updateThemeButtons(isLight) {
+    const controls = document.querySelectorAll(".btn-theme-toggle, .settings-theme-control");
+    controls.forEach((control) => {
+        const isLegacySettingsButton = control.id === "theme-toggle-btn";
+        control.textContent = isLegacySettingsButton
+            ? isLight
+              ? "🌙 Passer en mode sombre"
+              : "☀️ Passer en mode clair"
+            : isLight
+              ? "🌙 Mode Sombre"
+              : "☀️ Mode Clair";
+        control.setAttribute("aria-pressed", isLight ? "true" : "false");
+    });
 }
 
 /* ========================================
@@ -10849,23 +11111,27 @@ async function openCreateMenu(
                     <label>Média</label>
                     
                     <!-- Upload Zone for Image/Video -->
-                    <div id="media-upload-container">
-                        <div class="upload-zone" id="create-media-dropzone" style="border: 2px dashed var(--border-color); padding: 2rem; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.3s ease; background: rgba(255,255,255,0.02);">
-                            <div id="create-media-preview-container" style="display: none; margin-bottom: 1rem;">
-                                <!-- Preview will be inserted here -->
-                            </div>
-                            <div id="create-media-loader" style="display: none; margin-bottom: 1rem;">
-                                <div style="display: inline-block; width: 24px; height: 24px; border: 2px solid var(--accent-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                                <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Upload en cours...</p>
-                            </div>
-                            <div id="create-media-placeholder">
-                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-secondary); margin-bottom: 0.5rem;">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="17 8 12 3 7 8"></polyline>
+	                    <div id="media-upload-container">
+	                        <div class="upload-zone" id="create-media-dropzone" style="border: 2px dashed var(--border-color); padding: 2rem; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.3s ease; background: rgba(255,255,255,0.02);">
+	                            <div id="create-media-preview-container" style="display: none; margin-bottom: 1rem;">
+	                                <!-- Preview will be inserted here -->
+	                            </div>
+	                            <div id="create-media-loader" style="display: none; margin-bottom: 1rem;">
+	                                <div style="display: inline-block; width: 24px; height: 24px; border: 2px solid var(--accent-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+	                                <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Upload en cours...</p>
+	                                <div class="xera-upload-progress">
+	                                    <div id="create-media-progress-bar" class="xera-upload-progress-bar is-indeterminate"></div>
+	                                </div>
+	                                <div id="create-media-progress-label" class="xera-upload-progress-label"></div>
+	                            </div>
+	                            <div id="create-media-placeholder">
+	                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-secondary); margin-bottom: 0.5rem;">
+	                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+	                                    <polyline points="17 8 12 3 7 8"></polyline>
                                     <line x1="12" y1="3" x2="12" y2="15"></line>
                                 </svg>
                                 <p style="color: var(--text-secondary); font-size: 0.9rem;">Cliquez ou glissez un fichier ici</p>
-                                <p style="color: var(--text-secondary); font-size: 0.75rem; opacity: 0.7;">JPG, PNG, GIF, MP4</p>
+                                <p style="color: var(--text-secondary); font-size: 0.75rem; opacity: 0.7;">Images + vidéos (max 60 min)</p>
                             </div>
                         </div>
                         <input type="file" id="create-media-file" accept="image/*,video/*" style="display: none;">
@@ -10905,12 +11171,13 @@ async function openCreateMenu(
     const liveInput = document.getElementById("create-live-url");
     const fileInput = document.getElementById("create-media-file");
     const mediaUrlsInput = document.getElementById("create-media-urls");
-    const dayGroup = container.querySelector(".form-group-day");
-    const stateGroup = container.querySelector(".form-group-state");
-    const arcGroup = container.querySelector(".form-group-arc");
-    const descGroup = container.querySelector(".form-group-desc");
-    const tagsGroup = container.querySelector(".form-group-tags");
-    let isMediaUploadInProgress = false;
+	    const dayGroup = container.querySelector(".form-group-day");
+	    const stateGroup = container.querySelector(".form-group-state");
+	    const arcGroup = container.querySelector(".form-group-arc");
+	    const descGroup = container.querySelector(".form-group-desc");
+	    const tagsGroup = container.querySelector(".form-group-tags");
+	    let isMediaUploadInProgress = false;
+	    let mediaUploadUiArmed = false;
 
     // Initialize file upload
     if (typeof initializeFileInput === "function") {
@@ -10920,6 +11187,56 @@ async function openCreateMenu(
 
         const dropZone = document.getElementById("create-media-dropzone");
         const loader = document.getElementById("create-media-loader");
+        const progressBar = document.getElementById("create-media-progress-bar");
+        const progressLabel = document.getElementById(
+            "create-media-progress-label",
+        );
+
+        const setUploadProgressIndeterminate = () => {
+            if (progressBar) {
+                progressBar.classList.add("is-indeterminate");
+                progressBar.style.width = "";
+            }
+            if (progressLabel) progressLabel.textContent = "";
+        };
+
+        const setUploadProgress = (percent) => {
+            if (!progressBar) return;
+            const safePercent =
+                typeof percent === "number" && Number.isFinite(percent)
+                    ? Math.max(0, Math.min(100, Math.round(percent)))
+                    : 0;
+            progressBar.classList.remove("is-indeterminate");
+            progressBar.style.width = `${safePercent}%`;
+            if (progressLabel) progressLabel.textContent = `${safePercent}%`;
+        };
+
+        const buildMediaPreviewShell = (innerHtml) => `
+            <div class="media-preview-shell">
+                <button type="button" class="media-remove-btn" title="Retirer le media">X</button>
+                ${innerHtml}
+            </div>
+        `;
+
+        const clearMediaSelection = () => {
+            mediaUrlInput.value = "";
+            mediaUrlsInput.value = "";
+            if (fileInput) fileInput.value = "";
+            previewContainer.innerHTML = "";
+            previewContainer.style.display = "none";
+            placeholder.style.display = "block";
+        };
+
+        if (previewContainer && !previewContainer.dataset.clearHandler) {
+            previewContainer.addEventListener("click", (e) => {
+                const btn = e.target.closest(".media-remove-btn");
+                if (!btn) return;
+                e.preventDefault();
+                e.stopPropagation();
+                clearMediaSelection();
+            });
+            previewContainer.dataset.clearHandler = "true";
+        }
 
         const typeButtons = Array.from(
             container.querySelectorAll(".type-quick button"),
@@ -11052,6 +11369,39 @@ async function openCreateMenu(
             typeSelect.dispatchEvent(new Event("change"));
         }
 
+        if (fileInput && fileInput.dataset.durationHintBound !== "1") {
+            fileInput.dataset.durationHintBound = "1";
+            fileInput.addEventListener("change", async () => {
+                if (!videoDurationHint) return;
+                videoDurationHint.textContent = "";
+                const file = fileInput.files && fileInput.files[0];
+                if (!file) return;
+                const isVideoSelection =
+                    (typeof isLikelyVideoFile === "function" && isLikelyVideoFile(file)) ||
+                    String(file.type || "").startsWith("video/");
+                if (!isVideoSelection) return;
+                if (typeof readVideoDurationSeconds !== "function") return;
+
+                try {
+                    const seconds = await readVideoDurationSeconds(file);
+                    const mins = Math.floor(seconds / 60);
+                    const secs = Math.round(seconds % 60)
+                        .toString()
+                        .padStart(2, "0");
+                    if (seconds > 60 * 60) {
+                        videoDurationHint.style.color = "#ef4444";
+                        videoDurationHint.textContent = `Durée détectée: ${mins}:${secs} (max 60:00)`;
+                    } else {
+                        videoDurationHint.style.color = "#10b981";
+                        videoDurationHint.textContent = `Durée détectée: ${mins}:${secs}`;
+                    }
+                } catch (e) {
+                    videoDurationHint.style.color = "var(--text-secondary)";
+                    videoDurationHint.textContent = "Impossible de lire la durée de cette vidéo.";
+                }
+            });
+        }
+
         // Live URL handler
         liveInput.addEventListener("input", () => {
             if (typeSelect.value === "live") {
@@ -11075,13 +11425,15 @@ async function openCreateMenu(
             document.head.appendChild(style);
         }
 
-        // Custom handler to show loader
-        fileInput.addEventListener("change", () => {
-            if (fileInput.files.length > 0) {
+	        // Custom handler to show loader
+	        fileInput.addEventListener("change", () => {
+	            if (fileInput.files.length > 0) {
                 isMediaUploadInProgress = true;
+                mediaUploadUiArmed = true;
                 placeholder.style.display = "none";
                 previewContainer.style.display = "none";
                 loader.style.display = "block";
+                setUploadProgress(0);
             }
         });
 
@@ -11106,33 +11458,46 @@ async function openCreateMenu(
                           )
                           .join("")}</div>`
                     : "";
-            previewContainer.innerHTML = `
+            previewContainer.innerHTML = buildMediaPreviewShell(`
                 <div class="xera-carousel" data-carousel>
                     <div class="xera-carousel-track">${slides}</div>
                     ${dots}
                 </div>
-            `;
+            `);
         };
 
-        initializeFileInput("create-media-file", {
-            dropZone: dropZone,
-            compress: true,
-            multiple: () => !!fileInput.multiple,
+	        initializeFileInput("create-media-file", {
+	            dropZone: dropZone,
+	            compress: true,
+	            multiple: () => !!fileInput.multiple,
             onBeforeUpload: () => {
                 isMediaUploadInProgress = true;
-            },
-            onUpload: (result) => {
-                if (!result?.success) {
-                    alert("Erreur upload: " + (result?.error || "inconnue"));
+                if (!mediaUploadUiArmed) {
+                    mediaUploadUiArmed = true;
+                    placeholder.style.display = "none";
+                    previewContainer.style.display = "none";
+                    loader.style.display = "block";
+                    setUploadProgress(0);
                 }
             },
+	            onProgress: (percent) => setUploadProgress(percent),
+	            onUpload: (result) => {
+	                if (!result?.success) {
+	                    alert("Erreur upload: " + (result?.error || "inconnue"));
+	                }
+	            },
             onUploadBatch: (results) => {
                 isMediaUploadInProgress = false;
-                loader.style.display = "none";
+                mediaUploadUiArmed = false;
                 const successful = (results || []).filter(
                     (r) => r && r.success && r.url,
                 );
                 const successUrls = successful.map((r) => r.url);
+                if (successUrls.length > 0) {
+                    setUploadProgress(100);
+                }
+                loader.style.display = "none";
+                setUploadProgressIndeterminate();
 
                 if (successUrls.length === 0) {
                     placeholder.style.display = "block";
@@ -11150,9 +11515,11 @@ async function openCreateMenu(
                 placeholder.style.display = "none";
 
                 if (successful[0]?.type === "video") {
-                    previewContainer.innerHTML = `<video src="${successUrls[0]}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`;
-                    return;
-                }
+                previewContainer.innerHTML = buildMediaPreviewShell(
+                    `<video src="${successUrls[0]}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`,
+                );
+                return;
+            }
 
                 if (successUrls.length > 1) {
                     updateMultiPreview(successUrls);
@@ -11164,9 +11531,11 @@ async function openCreateMenu(
                     return;
                 }
 
-                previewContainer.innerHTML = `<img src="${successUrls[0]}" style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">`;
-            },
-        });
+            previewContainer.innerHTML = buildMediaPreviewShell(
+                `<img src="${successUrls[0]}" style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">`,
+            );
+        },
+    });
     }
 
     // Préremplir les champs existants si édition
@@ -11192,7 +11561,9 @@ async function openCreateMenu(
                         /* ignore */
                     }
                 } else {
-                    previewContainer.innerHTML = `<img src="${mediaUrl}" style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">`;
+                    previewContainer.innerHTML = buildMediaPreviewShell(
+                        `<img src="${mediaUrl}" style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">`,
+                    );
                 }
             }
         } else if (existingContent.type === "image") {
@@ -11212,7 +11583,9 @@ async function openCreateMenu(
                         /* ignore */
                     }
                 } else {
-                    previewContainer.innerHTML = `<img src="${mediaUrl}" style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">`;
+                    previewContainer.innerHTML = buildMediaPreviewShell(
+                        `<img src="${mediaUrl}" style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">`,
+                    );
                 }
             }
         } else if (existingContent.type === "video") {
@@ -11223,7 +11596,9 @@ async function openCreateMenu(
             if (mediaUrl) {
                 placeholder.style.display = "none";
                 previewContainer.style.display = "block";
-                previewContainer.innerHTML = `<video src="${mediaUrl}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`;
+                previewContainer.innerHTML = buildMediaPreviewShell(
+                    `<video src="${mediaUrl}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`,
+                );
             }
         } else if (existingContent.type === "live") {
             uploadContainer.style.display = "none";

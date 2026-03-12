@@ -10,13 +10,86 @@ const ALLOWED_IMAGE_TYPES = [
     "image/heic",
     "image/heif",
 ];
-const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
+const MAX_VIDEO_DURATION_SECONDS = 60 * 60; // 60 minutes
 const MAX_FILE_SIZE = Number.POSITIVE_INFINITY; // no client-side limit
 // Passer en upload résumable pour les gros fichiers (ex: vidéos iPhone)
 const RESUMABLE_THRESHOLD_BYTES = 45 * 1024 * 1024; // 45 Mo ~ limite CDN courante
 const RESUMABLE_CHUNK_SIZE_BYTES = 8 * 1024 * 1024; // 8 Mo par chunk
 
 // Uploader un fichier vers Supabase Storage
+
+function getFileExtension(file) {
+    const name = (file?.name || "").toLowerCase();
+    const parts = name.split(".");
+    return parts.length > 1 ? parts.pop() : "";
+}
+
+function isLikelyVideoFile(file) {
+    if (!file) return false;
+    const mime = (file.type || "").toLowerCase();
+    if (mime.startsWith("video/")) return true;
+
+    // Fallback by extension for browsers that leave MIME empty.
+    const ext = getFileExtension(file);
+    const knownVideoExts = new Set([
+        "mp4",
+        "mov",
+        "m4v",
+        "webm",
+        "mkv",
+        "avi",
+        "wmv",
+        "flv",
+        "mpeg",
+        "mpg",
+        "m2ts",
+        "mts",
+        "3gp",
+        "3g2",
+        "ogv",
+        "ts",
+        "mxf",
+        "f4v",
+        "vob",
+    ]);
+    return knownVideoExts.has(ext);
+}
+
+async function readVideoDurationSeconds(file) {
+    return await new Promise((resolve, reject) => {
+        const video = document.createElement("video");
+        const objectUrl = URL.createObjectURL(file);
+
+        const cleanup = () => {
+            try {
+                video.removeAttribute("src");
+                video.load();
+            } catch (e) {
+                // ignore
+            }
+            URL.revokeObjectURL(objectUrl);
+        };
+
+        const fail = () => {
+            cleanup();
+            reject(new Error("Impossible de lire la durée de cette vidéo."));
+        };
+
+        video.preload = "metadata";
+        video.onloadedmetadata = () => {
+            const duration = Number(video.duration);
+            cleanup();
+            if (!Number.isFinite(duration) || duration <= 0) {
+                reject(new Error("Durée vidéo invalide."));
+                return;
+            }
+            resolve(duration);
+        };
+        video.onerror = fail;
+        video.onabort = fail;
+        video.src = objectUrl;
+    });
+}
 function isGifFile(file) {
     if (!file) return false;
     if (file.type === "image/gif") return true;
@@ -46,12 +119,19 @@ async function uploadFile(file, folder = "content", onProgress) {
         // Validation du type de fichier
         const isGif = isGifFile(file);
         const isImage = isAllowedImageFile(file) || isGif;
-        const isVideo = ALLOWED_VIDEO_TYPES.includes(file.type);
+        const isVideo = isLikelyVideoFile(file);
 
         if (!isImage && !isVideo) {
                 throw new Error(
-                    "Type de fichier non supporté. Utilisez JPG, PNG, GIF, WebP, HEIC, HEIF, MP4 ou WebM.",
+                    "Type de fichier non supporté. Utilisez une image ou une vidéo.",
                 );
+        }
+
+        if (isVideo) {
+            const durationSeconds = await readVideoDurationSeconds(file);
+            if (durationSeconds > MAX_VIDEO_DURATION_SECONDS) {
+                throw new Error("Vidéo trop longue. Durée maximale autorisée : 60 minutes.");
+            }
         }
 
         // Validation de la taille
@@ -165,6 +245,14 @@ async function uploadFile(file, folder = "content", onProgress) {
         const {
             data: { publicUrl },
         } = supabase.storage.from("media").getPublicUrl(fileName);
+
+        if (typeof onProgress === "function") {
+            try {
+                onProgress(100);
+            } catch (e) {
+                // ignore progress errors
+            }
+        }
 
         return {
             success: true,
@@ -294,6 +382,8 @@ function initializeFileInput(inputId, options = {}) {
     const onUploadBatch = options.onUploadBatch;
     const onBeforeUpload = options.onBeforeUpload;
     const onAfterUpload = options.onAfterUpload;
+    const onProgress = options.onProgress;
+    const folder = options.folder;
     const resolveMultiple = () =>
         typeof options.multiple === "function"
             ? !!options.multiple()
@@ -312,6 +402,8 @@ function initializeFileInput(inputId, options = {}) {
             validate,
             onBeforeUpload,
             onAfterUpload,
+            onProgress,
+            folder,
         });
         input.value = "";
 
@@ -348,6 +440,8 @@ function initializeFileInput(inputId, options = {}) {
                 validate,
                 onBeforeUpload,
                 onAfterUpload,
+                onProgress,
+                folder,
             });
 
             if (typeof onUploadBatch === "function") {
@@ -373,8 +467,34 @@ async function handleFileSelection(
     const validate = options.validate;
     const onBeforeUpload = options.onBeforeUpload;
     const onAfterUpload = options.onAfterUpload;
+    const onProgress = options.onProgress;
+    const folder = options.folder || "content";
+    const totalFiles = Array.isArray(files) ? files.length : 0;
+    let fileIndex = 0;
 
     for (const file of files) {
+        const currentIndex = fileIndex;
+        fileIndex += 1;
+        const reportProgress = (filePercent) => {
+            if (typeof onProgress !== "function") return;
+            const safePercent =
+                typeof filePercent === "number" && Number.isFinite(filePercent)
+                    ? Math.max(0, Math.min(100, filePercent))
+                    : 0;
+            const overallPercent =
+                totalFiles > 0
+                    ? Math.round(
+                          ((currentIndex + safePercent / 100) / totalFiles) * 100,
+                      )
+                    : safePercent;
+            onProgress(overallPercent, {
+                filePercent: safePercent,
+                fileIndex: currentIndex,
+                totalFiles,
+                file,
+            });
+        };
+
         if (typeof validate === "function") {
             const validation = validate(file);
             if (validation === false) {
@@ -429,7 +549,7 @@ async function handleFileSelection(
         }
         let result;
         try {
-            result = await uploadFile(fileToUpload);
+            result = await uploadFile(fileToUpload, folder, reportProgress);
         } finally {
             if (typeof onAfterUpload === "function") {
                 try {
@@ -484,7 +604,7 @@ function validateFile(file) {
 
     // Vérifier le type
     const isImage = isAllowedImageFile(file);
-    const isVideo = ALLOWED_VIDEO_TYPES.includes(file.type);
+    const isVideo = isLikelyVideoFile(file);
 
     if (!isImage && !isVideo) {
         errors.push("Type de fichier non supporté");

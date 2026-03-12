@@ -1214,6 +1214,12 @@
             document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
             const target = getDmSection();
             if (target) target.classList.add("active");
+            if (typeof window.syncFloatingCreateVisibility === "function") {
+                window.syncFloatingCreateVisibility(DM_PAGE_ID);
+            } else {
+                const floatingCreate = document.getElementById("floating-create-container");
+                if (floatingCreate) floatingCreate.style.display = "none";
+            }
         }
 
         ensureMessagesShell();

@@ -78,6 +78,15 @@
         return token;
     }
 
+    function hasStoredCredential(provider) {
+        const refresh = localStorage.getItem(STORAGE[provider].refresh);
+        if (refresh) return true;
+        const token = localStorage.getItem(STORAGE[provider].token);
+        const exp = parseInt(localStorage.getItem(STORAGE[provider].exp) || "0");
+        if (!token) return false;
+        return Date.now() <= exp;
+    }
+
     function clearToken(provider) {
         localStorage.removeItem(STORAGE[provider].token);
         localStorage.removeItem(STORAGE[provider].exp);
@@ -299,9 +308,21 @@
     }
 
     async function renderInfluenceReach(userId) {
+        const section = document.querySelector(".influence-section");
         const ytCard = document.getElementById("yt-card");
         const spCard = document.getElementById("sp-card");
-        if (!ytCard || !spCard) return;
+        if (!section || !ytCard || !spCard) return;
+
+        const ytConnected = hasStoredCredential("yt");
+        const spConnected = hasStoredCredential("spotify");
+        if (!ytConnected && !spConnected) {
+            section.style.display = "none";
+            return;
+        }
+
+        section.style.display = "";
+        ytCard.style.display = ytConnected ? "" : "none";
+        spCard.style.display = spConnected ? "" : "none";
 
         // Wire connect buttons
         ytCard.querySelectorAll("[data-connect='yt']").forEach((btn) =>
@@ -312,29 +333,37 @@
         );
 
         // YouTube stats
-        const ytStats = await fetchYouTubeStats();
-        if (ytStats) {
-            ytCard.querySelector(".stat-value.subs").textContent = ytStats.subscribers.toLocaleString();
-            ytCard.querySelector(".stat-label.subs").textContent = "Subscribers";
-            ytCard.querySelector(".stat-value.views").textContent = ytStats.views.toLocaleString();
-            ytCard.querySelector(".stat-label.views").textContent = "Views";
-            ytCard.classList.add("connected");
+        if (ytConnected) {
+            const ytStats = await fetchYouTubeStats();
+            if (ytStats) {
+                ytCard.querySelector(".stat-value.subs").textContent = ytStats.subscribers.toLocaleString();
+                ytCard.querySelector(".stat-label.subs").textContent = "Subscribers";
+                ytCard.querySelector(".stat-value.views").textContent = ytStats.views.toLocaleString();
+                ytCard.querySelector(".stat-label.views").textContent = "Views";
+                ytCard.classList.add("connected");
+            } else {
+                ytCard.classList.remove("connected");
+            }
         } else {
             ytCard.classList.remove("connected");
         }
 
         // Spotify stats
-        const spStats = await fetchSpotifyStats();
-        if (spStats) {
-            spCard.querySelector(".stat-value.followers").textContent =
-                spStats.followers.toLocaleString();
-            spCard.querySelector(".stat-label.followers").textContent = "Followers";
-            const avatar = spCard.querySelector(".sp-avatar");
-            if (avatar && spStats.image) {
-                avatar.src = spStats.image;
-                avatar.style.display = "block";
+        if (spConnected) {
+            const spStats = await fetchSpotifyStats();
+            if (spStats) {
+                spCard.querySelector(".stat-value.followers").textContent =
+                    spStats.followers.toLocaleString();
+                spCard.querySelector(".stat-label.followers").textContent = "Followers";
+                const avatar = spCard.querySelector(".sp-avatar");
+                if (avatar && spStats.image) {
+                    avatar.src = spStats.image;
+                    avatar.style.display = "block";
+                }
+                spCard.classList.add("connected");
+            } else {
+                spCard.classList.remove("connected");
             }
-            spCard.classList.add("connected");
         } else {
             spCard.classList.remove("connected");
         }

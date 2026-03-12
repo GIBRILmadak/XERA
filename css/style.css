@@ -219,6 +219,68 @@ body {
     100% { transform: rotate(360deg); }
 }
 
+.xera-upload-progress {
+    width: min(260px, 100%);
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+    margin: 0.75rem auto 0;
+}
+
+.xera-upload-progress-bar {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: var(--accent-color);
+    transform: translateX(0);
+    transition: width 120ms linear;
+}
+
+.xera-upload-progress-bar.is-indeterminate {
+    width: 40%;
+    animation: xeraUploadIndeterminate 1.1s ease-in-out infinite;
+}
+
+@keyframes xeraUploadIndeterminate {
+    0% { transform: translateX(-140%); }
+    100% { transform: translateX(260%); }
+}
+
+.xera-upload-progress-label {
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.media-preview-shell {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+}
+
+.media-remove-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 24px;
+    text-align: center;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.media-remove-btn:hover {
+    background: rgba(0, 0, 0, 0.75);
+}
+
 .click-loading {
     animation: clickPulse 0.9s ease-in-out infinite;
     filter: brightness(1);
@@ -455,6 +517,10 @@ nav {
     width: 18px;
     height: 18px;
     filter: drop-shadow(0 0 4px rgba(14,165,233,0.5));
+}
+
+.mobile-bottom-nav {
+    display: none;
 }
 
 .lang-select {
@@ -1133,6 +1199,14 @@ nav {
     gap: 0;
 }
 
+.arc-collab-avatars button {
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    line-height: 0;
+}
+
 .arc-collab-avatars img {
     border-radius: 999px;
     border: 2px solid var(--bg-secondary);
@@ -1140,7 +1214,7 @@ nav {
     background: #222;
 }
 
-.arc-collab-avatars img + img {
+.arc-collab-avatars button + button {
     margin-left: -8px;
 }
 
@@ -1164,7 +1238,7 @@ nav {
     backdrop-filter: blur(4px);
 }
 
-.arc-collab-avatars--corner img + img {
+.arc-collab-avatars--corner button + button {
     margin-left: -6px;
 }
 
@@ -4163,10 +4237,10 @@ html.light-mode .btn-theme-toggle:hover {
         justify-content: center;
     }
 
-    /* Masquer le logo XERA sur la page discover pour les téléphones */
     nav .logo {
         display: none !important;
     }
+
 }
 
 /* --- INTERFACE CRÉATION (MODALE) --- */
@@ -5043,24 +5117,24 @@ html.light-mode .btn-theme-toggle:hover {
 
 /* Influence & Reach */
 .influence-section {
-    margin: 2rem 0;
+    margin: 1.6rem 0;
 }
 
 .influence-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.8rem;
 }
 
 .influence-card {
     background: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 14px;
-    padding: 1rem 1.1rem;
+    padding: 0.85rem 0.95rem;
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    min-height: 160px;
+    min-height: 140px;
 }
 
 .influence-card h4 {
@@ -5068,6 +5142,7 @@ html.light-mode .btn-theme-toggle:hover {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    font-size: 0.95rem;
 }
 
 .influence-card .stat-block {
@@ -5077,23 +5152,24 @@ html.light-mode .btn-theme-toggle:hover {
 }
 
 .influence-card .stat-value {
-    font-size: 1.35rem;
+    font-size: 1.15rem;
     font-weight: 700;
 }
 
 .influence-card .stat-label {
     color: var(--text-secondary);
-    font-size: 0.9rem;
+    font-size: 0.8rem;
 }
 
 .influence-card .connect-btn {
     margin-top: auto;
-    padding: 0.55rem 0.9rem;
-    border-radius: 10px;
+    padding: 0.45rem 0.75rem;
+    border-radius: 9px;
     border: 1px dashed var(--border-color);
     background: rgba(255,255,255,0.03);
     color: var(--text-primary);
     cursor: pointer;
+    font-size: 0.8rem;
 }
 
 .influence-card.connected {
@@ -5108,6 +5184,52 @@ html.light-mode .btn-theme-toggle:hover {
     object-fit: cover;
     border: 1px solid rgba(255,255,255,0.15);
     display: none;
+}
+
+@media (max-width: 600px) {
+    .influence-grid {
+        grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+        gap: 0.4rem;
+    }
+
+    .influence-card {
+        padding: 0.5rem;
+        border-radius: 10px;
+        min-height: 110px;
+        gap: 0.35rem;
+    }
+
+    .influence-card h4 {
+        font-size: 0.75rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .influence-card .stat-block {
+        grid-template-columns: 1fr;
+        gap: 0.3rem;
+    }
+
+    .influence-card .stat-value {
+        font-size: 0.95rem;
+    }
+
+    .influence-card .stat-label {
+        font-size: 0.65rem;
+        letter-spacing: 0.01em;
+    }
+
+    .influence-card .connect-btn {
+        padding: 0.35rem 0.4rem;
+        border-radius: 8px;
+        font-size: 0.65rem;
+    }
+
+    .influence-card .sp-avatar {
+        width: 30px;
+        height: 30px;
+    }
 }
 
 /* Skeletons pour le feed immersif */
@@ -5153,4 +5275,83 @@ html.light-mode .btn-theme-toggle:hover {
 @keyframes shimmer {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+}
+
+/* --- UX polish: mobile bottom nav + profile snapshot + richer desktop cards --- */
+.hero-mobile-demo-card {
+    display: none;
+}
+
+.profile-progress-snapshot {
+    margin: 0.9rem auto 0;
+    padding: 0.7rem;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    max-width: 720px;
+    background: rgba(255, 255, 255, 0.02);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+}
+
+.profile-progress-snapshot .snapshot-item {
+    padding: 0.55rem;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.profile-progress-snapshot .snapshot-label {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+}
+
+.profile-progress-snapshot .snapshot-value {
+    font-weight: 700;
+    font-size: 0.98rem;
+}
+
+@media (min-width: 1200px) {
+    .discover-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.75rem;
+    }
+
+    .user-card {
+        padding: 1.15rem;
+        gap: 0.95rem;
+    }
+
+    .card-media,
+    .card-media-wrap .xera-carousel-slide img.card-media {
+        height: 180px;
+    }
+}
+
+.mood-btn {
+    border-radius: 999px;
+    padding: 0.42rem 0.82rem;
+    font-weight: 600;
+}
+
+@media (max-width: 900px) {
+    .hero-mobile-demo-card {
+        display: block;
+        margin-top: 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 0.8rem;
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    .hero-mobile-demo-card p {
+        color: var(--text-secondary);
+        font-size: 0.86rem;
+        margin: 0.3rem 0 0.65rem;
+    }
+
+    .profile-progress-snapshot {
+        grid-template-columns: 1fr;
+        max-width: 100%;
+    }
 }
