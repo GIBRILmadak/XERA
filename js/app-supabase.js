@@ -9539,24 +9539,66 @@ function initDiscoverMoodTracking() {
 
 function initTheme() {
     const savedTheme = localStorage.getItem("rize-theme");
-    if (savedTheme === "light") {
-        document.documentElement.classList.add("light-mode");
+    const systemPrefersLight = window.matchMedia?.("(prefers-color-scheme: light)")?.matches;
+    const initialTheme = savedTheme === "light" || savedTheme === "dark"
+        ? savedTheme
+        : systemPrefersLight
+          ? "light"
+          : "dark";
+
+    applyTheme(initialTheme, false);
+
+    if (!window.__themeSystemListenerAttached && window.matchMedia) {
+        const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
+        mediaQuery.addEventListener("change", (event) => {
+            const hasManualPreference =
+                localStorage.getItem("rize-theme") === "light" ||
+                localStorage.getItem("rize-theme") === "dark";
+            if (!hasManualPreference) {
+                applyTheme(event.matches ? "light" : "dark", false);
+            }
+        });
+        window.__themeSystemListenerAttached = true;
     }
 }
 
 function toggleTheme() {
-    const htmlElement = document.documentElement;
-    htmlElement.classList.toggle("light-mode");
-
-    if (htmlElement.classList.contains("light-mode")) {
-        localStorage.setItem("rize-theme", "light");
-    } else {
-        localStorage.setItem("rize-theme", "dark");
-    }
+    applyTheme(isLightMode() ? "dark" : "light", true);
 }
 
 function isLightMode() {
     return document.documentElement.classList.contains("light-mode");
+}
+
+function applyTheme(theme, persist = true) {
+    const isLight = theme === "light";
+    document.documentElement.classList.toggle("light-mode", isLight);
+
+    if (persist) {
+        localStorage.setItem("rize-theme", isLight ? "light" : "dark");
+    }
+
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) {
+        themeMeta.setAttribute("content", isLight ? "#f6f8fc" : "#050505");
+    }
+
+    updateThemeButtons(isLight);
+}
+
+function updateThemeButtons(isLight) {
+    const controls = document.querySelectorAll(".btn-theme-toggle, .settings-theme-control");
+    controls.forEach((control) => {
+        const isLegacySettingsButton = control.id === "theme-toggle-btn";
+        control.textContent = isLegacySettingsButton
+            ? isLight
+              ? "🌙 Passer en mode sombre"
+              : "☀️ Passer en mode clair"
+            : isLight
+              ? "🌙 Mode Sombre"
+              : "☀️ Mode Clair";
+        control.setAttribute("aria-pressed", isLight ? "true" : "false");
+    });
 }
 
 /* ========================================
