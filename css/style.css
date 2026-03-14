@@ -557,7 +557,7 @@ nav {
         padding-bottom: 96px;
     }
 
-    body.has-mobile-nav .mobile-bottom-nav {
+    body.has-mobile-nav {
         display: flex;
     }
 

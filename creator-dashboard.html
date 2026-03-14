@@ -8,30 +8,68 @@
     <link rel="stylesheet" href="css/monetization.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body>
-    <div class="app-container">
-        <!-- Navigation -->
-        <nav class="main-nav">
-            <div class="nav-brand">
-                <a href="index.html">
-                    <img src="icons/logo.png" alt="XERA" class="logo">
-                </a>
+<body class="has-mobile-nav">
+    <nav>
+        <a
+            class="logo"
+            onclick="navigateTo('discover')"
+            style="cursor: pointer"
+        >
+            <div class="logo-img">
+                <img src="icons/logo.png" alt="XERA - Logo" />
             </div>
-            <div class="nav-links">
-                <a href="index.html"><i class="fas fa-home"></i> Accueil</a>
-                <a href="analytics.html"><i class="fas fa-chart-line"></i> Analytics</a>
-                <a href="creator-dashboard.html" class="active"><i class="fas fa-dollar-sign"></i> Revenus</a>
-                <a href="profile.html"><i class="fas fa-user"></i> Profil</a>
+            <span>XΞRA</span>
+        </a>
+        <div class="nav-links">
+            <a id="nav-discover" data-i18n="navDiscover" onclick="navigateTo('discover')">Discover</a>
+            <a onclick="handleProfileNavigation()" id="nav-profile" data-i18n="navProfile"
+                >My Trajectory</a
+            >
+            <div
+                class="notification-button messages-nav-button"
+                onclick="openMessagesPage()"
+                style="display: none"
+                id="messages-nav-btn"
+                title="Messages"
+            >
+                <img
+                    src="icons/message.svg"
+                    alt="Messages"
+                    class="notification-icon"
+                />
+                <span
+                    id="messages-nav-badge"
+                    class="notification-badge"
+                ></span>
             </div>
-            <div class="nav-actions">
-                <button id="upgradePlanBtn" class="btn-upgrade" style="display: none;">
-                    <i class="fas fa-crown"></i> Passer Pro
-                </button>
-                <div class="user-menu">
-                    <img id="navAvatar" src="icons/default-avatar.png" alt="Profile" class="avatar-small">
-                </div>
+            <!-- Bouton Notifications -->
+            <div
+                class="notification-button"
+                onclick="toggleNotificationPanel()"
+                style="display: none"
+                id="notification-btn"
+            >
+                <svg
+                    class="notification-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                >
+                    <path
+                        d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+                    ></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                <span
+                    id="notification-badge"
+                    class="notification-badge"
+                ></span>
             </div>
-        </nav>
+
+            <a href="login.html" id="nav-auth" data-i18n="navAuth">Login / Register</a>
+        </div>
+    </nav>
 
         <!-- Main Content -->
         <main class="dashboard-main">

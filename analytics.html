@@ -11,18 +11,66 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
-<body>
+<body class="has-mobile-nav">
     <nav>
-        <a class="logo" href="index.html">
+        <a
+            class="logo"
+            onclick="navigateTo('discover')"
+            style="cursor: pointer"
+        >
             <div class="logo-img">
                 <img src="icons/logo.png" alt="XERA - Logo" />
             </div>
             <span>XΞRA</span>
         </a>
         <div class="nav-links">
-            <a href="index.html#discover">Découvrir</a>
-            <a href="profile.html" id="nav-profile">Ma Trajectoire</a>
-            <a href="login.html" id="nav-auth">Login / Register</a>
+            <a id="nav-discover" data-i18n="navDiscover" onclick="navigateTo('discover')">Discover</a>
+            <a onclick="handleProfileNavigation()" id="nav-profile" data-i18n="navProfile"
+                >My Trajectory</a
+            >
+            <div
+                class="notification-button messages-nav-button"
+                onclick="openMessagesPage()"
+                style="display: none"
+                id="messages-nav-btn"
+                title="Messages"
+            >
+                <img
+                    src="icons/message.svg"
+                    alt="Messages"
+                    class="notification-icon"
+                />
+                <span
+                    id="messages-nav-badge"
+                    class="notification-badge"
+                ></span>
+            </div>
+            <!-- Bouton Notifications -->
+            <div
+                class="notification-button"
+                onclick="toggleNotificationPanel()"
+                style="display: none"
+                id="notification-btn"
+            >
+                <svg
+                    class="notification-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                >
+                    <path
+                        d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+                    ></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                <span
+                    id="notification-badge"
+                    class="notification-badge"
+                ></span>
+            </div>
+
+            <a href="login.html" id="nav-auth" data-i18n="navAuth">Login / Register</a>
         </div>
     </nav>
 

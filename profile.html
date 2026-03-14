@@ -79,9 +79,9 @@
                 <span>XΞRA</span>
             </a>
             <div class="nav-links">
-                <a onclick="navigateTo('discover')"> discover</a>
-                <a onclick="handleProfileNavigation()" id="nav-profile"
-                    >Ma Trajectoire</a
+                <a id="nav-discover" data-i18n="navDiscover" onclick="navigateTo('discover')">Discover</a>
+                <a onclick="handleProfileNavigation()" id="nav-profile" data-i18n="navProfile"
+                    >My Trajectory</a
                 >
                 <div
                     class="notification-button messages-nav-button"
@@ -100,7 +100,6 @@
                         class="notification-badge"
                     ></span>
                 </div>
-
                 <!-- Bouton Notifications -->
                 <div
                     class="notification-button"
@@ -126,7 +125,7 @@
                     ></span>
                 </div>
 
-                <a href="#" id="nav-auth">Login / Register</a>
+                <a href="login.html" id="nav-auth" data-i18n="navAuth">Login / Register</a>
             </div>
         </nav>
 
