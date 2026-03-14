@@ -570,6 +570,7 @@ nav {
 
     body.has-mobile-nav {
         display: flex;
+        flex-direction: column;
     }
 
     body.has-mobile-nav nav {

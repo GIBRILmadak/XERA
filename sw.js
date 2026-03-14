@@ -1,9 +1,22 @@
 /*
  * XERA Service Worker for Web Push notifications
  */
+const CACHE_NAME = 'xera-shell-v4';
+const PRECACHE_URLS = [
+  '/manifest.json',
+  '/icons/logo-192x192.png',
+  '/icons/logo-512x512.png',
+];
+
 self.addEventListener('install', (event) => {
-  // Activate immediately
-  event.waitUntil(self.skipWaiting());
+  // Precache critical assets so the install prompt shows icon immediately
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      await Promise.allSettled(PRECACHE_URLS.map((url) => cache.add(url)));
+      await self.skipWaiting();
+    })()
+  );
 });
 
 self.addEventListener('activate', (event) => {
@@ -21,8 +34,6 @@ self.addEventListener('activate', (event) => {
     })()
   );
 });
-
-const CACHE_NAME = 'xera-shell-v4';
 
 function isSameOrigin(request) {
   try {
