@@ -884,8 +884,7 @@ nav {
         order: 1;
     }
     .hero-media {
-        display: block;
-        order: 2;
+        display: none;
     }
     #hero-watch-btn {
         display: none;
@@ -1193,7 +1192,7 @@ nav {
     .user-card { padding: 0.7rem; border-radius: 12px; }
 
     /* Mobile: compact vertical "status-like" cards for content */
-    .discover-grid { gap: 0.6rem; grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+    .discover-grid { gap: 0.6rem; grid-template-columns: 1fr; }
     .user-card.has-media {
         padding: 0.5rem;
         border-radius: 10px;
