@@ -237,7 +237,7 @@ async function joinStream(streamId) {
         // Récupérer les infos du stream
         const { data: stream, error: streamError } = await supabase
             .from('streaming_sessions')
-            .select('*, users(name, avatar)')
+            .select('*, users(id, name, avatar, plan, plan_status, plan_ends_at)')
             .eq('id', streamId)
             .single();
         
@@ -1038,7 +1038,7 @@ async function getLiveStreams() {
     try {
         const { data, error } = await supabase
             .from('streaming_sessions')
-            .select('*, users(name, avatar)')
+            .select('*, users(id, name, avatar, plan, plan_status, plan_ends_at)')
             .eq('status', 'live')
             .order('started_at', { ascending: false });
         
@@ -2029,6 +2029,7 @@ function hydrateStreamInfo(stream) {
             if (signature !== previousSignature) {
                 previousSignature = signature;
                 renderHostName();
+                updateStreamSupportButton(currentStream || stream);
             }
         }, 1200);
     }
@@ -2048,6 +2049,60 @@ function hydrateStreamInfo(stream) {
     if (breadcrumb) {
         breadcrumb.textContent = stream.title || 'Stream en cours';
     }
+
+    updateStreamSupportButton(stream);
+}
+
+function updateStreamSupportButton(stream) {
+    const button = document.getElementById('stream-support-btn');
+    if (!button) return;
+
+    const hostId = stream?.users?.id || stream?.user_id || null;
+    if (!hostId) {
+        button.style.display = 'none';
+        return;
+    }
+
+    const hostName = stream?.users?.name || stream?.host_name || 'Créateur';
+    const cachedUser =
+        typeof window.getUser === 'function' ? window.getUser(hostId) : null;
+    const hostUser = stream?.users || cachedUser || {};
+    const plan = String(hostUser.plan || '').toLowerCase();
+    const planStatus = String(hostUser.plan_status || '').toLowerCase();
+    const planEnd = hostUser.plan_ends_at || hostUser.planEndsAt || null;
+    const planEndMs = planEnd ? Date.parse(planEnd) : null;
+    const activeByDate =
+        !planEnd || (Number.isFinite(planEndMs) ? planEndMs > Date.now() : true);
+    const isEligible =
+        planStatus === 'active' &&
+        activeByDate &&
+        (plan === 'medium' || plan === 'pro');
+    const isSelf = window.currentUser && window.currentUser.id === hostId;
+
+    if (!isEligible || isSelf) {
+        button.style.display = 'none';
+        return;
+    }
+
+    button.style.display = 'inline-flex';
+    button.dataset.creatorId = hostId;
+    button.dataset.creatorName = hostName;
+    button.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof window.openSupportModal === 'function') {
+            window.openSupportModal(hostId, hostName);
+            return;
+        }
+        if (window.ToastManager) {
+            window.ToastManager.error(
+                'Soutien',
+                'Le module de soutien n’est pas disponible sur cette page.',
+            );
+            return;
+        }
+        alert("Le module de soutien n’est pas disponible sur cette page.");
+    };
 }
 
 function applyStreamRoleUI(isHost) {

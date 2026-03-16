@@ -21,6 +21,10 @@ function initMonetizationUI() {
 // Générer le HTML pour le badge de plan
 function generatePlanBadgeHTML(user) {
     if (!user || !user.plan || user.plan === 'free') return '';
+    if (String(user.plan_status || '').toLowerCase() !== 'active') return '';
+    if (typeof isPlanActiveForUser === 'function' && !isPlanActiveForUser(user)) {
+        return '';
+    }
     
     const planColors = {
         standard: '#3498db',
@@ -70,12 +74,12 @@ function generateSupportButtonHTML(user, context = 'profile') {
     }
     
     return `
-        <button class="support-btn support-btn-active ${size}" 
+        <button class="support-btn support-btn-active support-icon ${size}" 
                 onclick="openSupportModal('${user.id}', '${user.name || 'Créateur'}')"
                 data-creator-id="${user.id}"
-                title="Soutenir ce créateur">
-            <i class="fas fa-heart"></i>
-            ${context === 'profile' ? 'Soutenir' : ''}
+                title="Soutenir ce créateur"
+                aria-label="Soutenir ce créateur">
+            <img src="icons/soutien.svg" alt="" class="support-icon-img">
         </button>
     `;
 }

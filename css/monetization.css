@@ -79,6 +79,46 @@
     border: none;
 }
 
+.support-btn.support-icon {
+    padding: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    justify-content: center;
+    gap: 0;
+}
+
+.support-btn.support-icon.small {
+    width: 30px;
+    height: 30px;
+}
+
+.support-btn.support-icon.medium {
+    width: 36px;
+    height: 36px;
+}
+
+.support-btn.support-icon.large {
+    width: 44px;
+    height: 44px;
+}
+
+.support-btn .support-icon-img {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
+.support-btn.support-icon.small .support-icon-img {
+    width: 14px;
+    height: 14px;
+}
+
+.support-btn.support-icon.large .support-icon-img {
+    width: 22px;
+    height: 22px;
+}
+
 .support-btn.small {
     padding: 6px 12px;
     font-size: 12px;

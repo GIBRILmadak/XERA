@@ -12,8 +12,8 @@ const {
   PORT = 5050,
   SUPABASE_URL = 'https://ssbuagqwjptyhavinkxg.supabase.co',
   SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzYnVhZ3F3anB0eWhhdmlua3hnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTk1MjUzMywiZXhwIjoyMDg1NTI4NTMzfQ._aEaTXFxqpfx64bts6Z7FoP3L4oHMGcqoi08yREU33s',
-  VAPID_PUBLIC_KEY,
-  VAPID_PRIVATE_KEY,
+  VAPID_PUBLIC_KEY = 'BDyU4kv_cnxruA5n_i3kw0-ipEXZTINrLmwVAhyyFhXsIVC6eImDqhkLVLs77Fl-TJdyOJVZsnp-k6z_7bu0bTM',
+  VAPID_PRIVATE_KEY = '6dmRHoFpyGEFgL487qqwBc9BQ184TC8N9Yd3siS94Skpka',
   PUSH_CONTACT_EMAIL = 'mailto:notifications@xera.app',
   RETURN_REMINDER_HOURS = '10,18',
   RETURN_REMINDER_WINDOW_MINUTES = '15',
@@ -22,7 +22,7 @@ const {
   MAISHAPAY_SECRET_KEY = 'MP-SBPK-ie739o.T$j46RP1/XR$9$jKyudK82Y57d4zgh$fKqqS.A8nHTBK7h$YQzq1tfNw1aejya42cxsKzRq3Z68sP1lmTBk$QPvHR54zGjNyl0rcDDvS0czSiHsp2',
   MAISHAPAY_GATEWAY_MODE = '0',
   MAISHAPAY_CHECKOUT_URL = 'https://marchand.maishapay.online/payment/vers1.0/merchant/checkout',
-  MAISHAPAY_CALLBACK_SECRET
+  MAISHAPAY_CALLBACK_SECRET = ''
 } = process.env;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -53,6 +53,13 @@ const REMINDER_HOURS = RETURN_REMINDER_HOURS
 const REMINDER_WINDOW_MIN = Math.max(1, parseInt(RETURN_REMINDER_WINDOW_MINUTES, 10) || 15);
 const REMINDER_SWEEP_MS = Math.max(30000, parseInt(RETURN_REMINDER_SWEEP_MS, 10) || 60000);
 let reminderSweepInFlight = false;
+const SUBSCRIPTION_SWEEP_MS = Math.max(
+  60000,
+  parseInt(process.env.SUBSCRIPTION_SWEEP_MS, 10) || 10 * 60 * 1000
+);
+let subscriptionSweepInFlight = false;
+
+const EXPIRES_BADGES = new Set(['verified', 'verified_gold', 'gold', 'pro']);
 
 const MAISHAPAY_PLANS = {
   standard: 2.99,
@@ -118,6 +125,72 @@ async function resolveUserId(accessToken, fallbackId) {
   return fallbackId;
 }
 
+function shouldClearBadge(value) {
+  if (!value) return false;
+  const normalized = String(value).toLowerCase();
+  return EXPIRES_BADGES.has(normalized);
+}
+
+async function sweepExpiredSubscriptions() {
+  if (subscriptionSweepInFlight) return;
+  subscriptionSweepInFlight = true;
+  const nowIso = new Date().toISOString();
+
+  try {
+    const { data: expiredSubs, error: subsError } = await supabase
+      .from('subscriptions')
+      .select('id')
+      .eq('status', 'active')
+      .lte('current_period_end', nowIso);
+
+    if (subsError) throw subsError;
+
+    const subscriptionIds = (expiredSubs || []).map((row) => row.id).filter(Boolean);
+    if (subscriptionIds.length > 0) {
+      await supabase
+        .from('subscriptions')
+        .update({ status: 'canceled', canceled_at: nowIso, cancel_at_period_end: true })
+        .in('id', subscriptionIds);
+    }
+
+    const { data: expiredUsers, error: usersError } = await supabase
+      .from('users')
+      .select('id, badge')
+      .eq('plan_status', 'active')
+      .lte('plan_ends_at', nowIso);
+
+    if (usersError) throw usersError;
+
+    const userIds = (expiredUsers || []).map((row) => row.id).filter(Boolean);
+    if (userIds.length > 0) {
+      await supabase
+        .from('users')
+        .update({
+          plan: 'free',
+          plan_status: 'inactive',
+          is_monetized: false,
+          updated_at: nowIso
+        })
+        .in('id', userIds);
+
+      const badgeIds = (expiredUsers || [])
+        .filter((row) => shouldClearBadge(row.badge))
+        .map((row) => row.id)
+        .filter(Boolean);
+      if (badgeIds.length > 0) {
+        await supabase
+          .from('users')
+          .update({ badge: null, updated_at: nowIso })
+          .in('id', badgeIds);
+      }
+    }
+  } catch (error) {
+    console.error('Subscription expiry sweep error:', error);
+  } finally {
+    subscriptionSweepInFlight = false;
+  }
+}
+
 async function activateSubscription({
   userId,
   plan,
@@ -131,6 +204,8 @@ async function activateSubscription({
   walletId
 }) {
   const paymentId = transactionRefId ? `maishapay_${transactionRefId}` : null;
+  const normalizedPlan = String(plan || '').toLowerCase();
+  const badgeForPlan = normalizedPlan === 'pro' ? 'verified_gold' : 'verified';
 
   if (paymentId) {
     const { data: existing } = await supabase
@@ -145,6 +220,22 @@ async function activateSubscription({
 
   const now = new Date();
   const periodEnd = billingCycle === 'annual' ? addMonths(now, 12) : addMonths(now, 1);
+
+  let badgeToApply = badgeForPlan;
+  try {
+    const { data: profile } = await supabase
+      .from('users')
+      .select('badge')
+      .eq('id', userId)
+      .maybeSingle();
+    const existingBadge = String(profile?.badge || '').toLowerCase();
+    const protectedBadges = new Set(['staff', 'team', 'community', 'company', 'enterprise', 'ambassador']);
+    if (protectedBadges.has(existingBadge)) {
+      badgeToApply = profile?.badge || badgeForPlan;
+    }
+  } catch (e) {
+    // Ignore profile read errors; continue with default badge
+  }
 
   await supabase
     .from('subscriptions')
@@ -162,7 +253,8 @@ async function activateSubscription({
     .update({
       plan,
       plan_status: 'active',
-      plan_ends_at: periodEnd.toISOString()
+      plan_ends_at: periodEnd.toISOString(),
+      badge: badgeToApply
     })
     .eq('id', userId);
 
@@ -482,6 +574,11 @@ app.get('/health', (req, res) => {
 });
 
 // ... (le reste du code existant pour les rappels, etc.)
+
+if (SUBSCRIPTION_SWEEP_MS > 0) {
+  sweepExpiredSubscriptions();
+  setInterval(sweepExpiredSubscriptions, SUBSCRIPTION_SWEEP_MS);
+}
 
 // Démarrer le serveur
 app.listen(PORT, () => {

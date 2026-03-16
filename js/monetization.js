@@ -66,16 +66,25 @@ const PAYMENT_RULES = {
    FONCTIONS UTILITAIRES
    ======================================== */
 
+function isPlanActiveForUser(user) {
+    if (!user) return false;
+    const status = String(user.plan_status || '').toLowerCase();
+    if (status !== 'active') return false;
+    const planEnd = user.plan_ends_at || user.planEndsAt || null;
+    if (!planEnd) return true;
+    const endMs = Date.parse(planEnd);
+    if (!Number.isFinite(endMs)) return true;
+    return endMs > Date.now();
+}
+
 // Vérifier si un créateur peut recevoir des soutiens
 function canReceiveSupport(user) {
     if (!user) return false;
-    
+
     const hasValidPlan = user.plan === 'medium' || user.plan === 'pro';
-    const hasActiveSubscription = user.plan_status === 'active';
-    const hasEnoughFollowers = (user.followers_count || 0) >= 1000;
-    const isMonetized = user.is_monetized === true;
-    
-    return hasValidPlan && hasActiveSubscription && hasEnoughFollowers && isMonetized;
+    const hasActiveSubscription = isPlanActiveForUser(user);
+
+    return hasValidPlan && hasActiveSubscription;
 }
 
 // Vérifier si un créateur peut monétiser ses vidéos
@@ -83,7 +92,7 @@ function canMonetizeVideos(user) {
     if (!user) return false;
     
     return user.plan === 'pro' && 
-           user.plan_status === 'active' && 
+           isPlanActiveForUser(user) && 
            (user.followers_count || 0) >= 1000 &&
            user.is_monetized === true;
 }
@@ -212,9 +221,9 @@ async function createSupportTransaction(fromUserId, toUserId, amount, descriptio
         // Vérifier que le créateur peut recevoir des soutiens
         const { data: creator } = await getUserProfile(toUserId);
         if (!canReceiveSupport(creator.data)) {
-            return { 
-                success: false, 
-                error: 'Ce créateur ne peut pas recevoir de soutiens. Il doit avoir un plan Medium ou Pro actif et au moins 1000 abonnés.' 
+            return {
+                success: false,
+                error: 'Ce créateur ne peut pas recevoir de soutiens. Il doit avoir un plan Medium ou Pro actif.'
             };
         }
         
@@ -556,6 +565,10 @@ function renderPlanBadge(plan, isMonetized) {
     const planConfig = PLANS[plan?.toUpperCase()] || PLANS.FREE;
     const badgeClass = plan === 'pro' ? 'badge-pro' : plan === 'medium' ? 'badge-medium' : 'badge-standard';
     
+    if (!plan || plan === 'free') {
+        return '';
+    }
+
     return `
         <span class="plan-badge ${badgeClass}">
             ${planConfig.name}

@@ -131,6 +131,15 @@ export function initBadgeAdminPage({
                         <option value="creator">Créateur</option>
                         <option value="staff">Équipe / Entreprise</option>
                     </select>
+                    ${window.isSuperAdmin && window.isSuperAdmin()
+                        ? `
+                    <select id="badge-admin-plan" class="form-input">
+                        <option value="standard">Plan Standard</option>
+                        <option value="medium">Plan Medium</option>
+                        <option value="pro">Plan Pro</option>
+                    </select>
+                    `
+                        : ""}
                     <button type="button" class="btn-verify" id="badge-admin-apply">Attribuer</button>
                     <button type="button" class="btn-cancel" id="badge-admin-remove">Retirer</button>
                 </div>
@@ -146,6 +155,15 @@ export function initBadgeAdminPage({
                 <h4>Demandes de vérification</h4>
                 <div id="badge-admin-requests" class="verification-requests"></div>
                 <div class="verification-actions" style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                    ${window.isSuperAdmin && window.isSuperAdmin()
+                        ? `
+                    <select id="badge-bulk-plan" class="form-input">
+                        <option value="standard">Plan Standard</option>
+                        <option value="medium">Plan Medium</option>
+                        <option value="pro">Plan Pro</option>
+                    </select>
+                    `
+                        : ""}
                     <button type="button" class="btn-verify" id="badge-approve">Valider sélection</button>
                     <button type="button" class="btn-cancel" id="badge-reject">Refuser sélection</button>
                 </div>
@@ -189,6 +207,8 @@ export function initBadgeAdminPage({
         const target = document.getElementById("badge-admin-search")?.value || "";
         const type =
             document.getElementById("badge-admin-type")?.value || "creator";
+        const plan =
+            document.getElementById("badge-admin-plan")?.value || null;
         if (!target) {
             ToastManager?.error("Champ vide", "Saisir un ID ou un nom.");
             return;
@@ -198,7 +218,7 @@ export function initBadgeAdminPage({
             if (isRemove) {
                 await removeVerifiedUserId(type, target);
             } else {
-                await addVerifiedUserId(type, target);
+                await addVerifiedUserId(type, target, plan);
             }
             await fetchVerifiedBadges();
             renderList();
@@ -225,11 +245,12 @@ export function initBadgeAdminPage({
             document.querySelectorAll(".badge-request-check:checked"),
         );
         if (!checks.length) return;
+        const plan = document.getElementById("badge-bulk-plan")?.value || null;
         try {
             if (action === "approve") {
                 await Promise.all(
                     checks.map((c) =>
-                        addVerifiedUserId(c.dataset.type, c.dataset.userId),
+                        addVerifiedUserId(c.dataset.type, c.dataset.userId, plan),
                     ),
                 );
             }

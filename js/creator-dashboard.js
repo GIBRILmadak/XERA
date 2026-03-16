@@ -150,6 +150,10 @@ function updateRequirements(profile) {
     const reqFollowers = document.getElementById('reqFollowers');
     const reqKyc = document.getElementById('reqKyc');
     const followersStatus = document.getElementById('followersStatus');
+    const planEnd = profile.plan_ends_at || profile.planEndsAt || null;
+    const planEndMs = planEnd ? Date.parse(planEnd) : null;
+    const activeByDate =
+        !planEnd || (Number.isFinite(planEndMs) ? planEndMs > Date.now() : true);
     
     if (followersStatus) {
         const count = profile.followers_count || 0;
@@ -158,7 +162,10 @@ function updateRequirements(profile) {
     
     // Mettre à jour les icônes selon l'état
     if (reqPlan) {
-        const hasPlan = profile.plan === 'medium' || profile.plan === 'pro';
+        const hasPlan =
+            (profile.plan === 'medium' || profile.plan === 'pro') &&
+            profile.plan_status === 'active' &&
+            activeByDate;
         reqPlan.querySelector('i').className = hasPlan ? 'fas fa-check-circle' : 'fas fa-circle';
         reqPlan.classList.toggle('completed', hasPlan);
         reqPlan.querySelector('.req-status').textContent = hasPlan ? 'Atteint' : 'Non atteint';
@@ -171,7 +178,9 @@ function updateRequirements(profile) {
     }
     
     if (reqKyc) {
-        const hasKyc = profile.is_monetized === true || profile.plan_status === 'active';
+        const hasKyc =
+            profile.is_monetized === true ||
+            (profile.plan_status === 'active' && activeByDate);
         reqKyc.querySelector('i').className = hasKyc ? 'fas fa-check-circle' : 'fas fa-circle';
         reqKyc.classList.toggle('completed', hasKyc);
         reqKyc.querySelector('.req-status').textContent = hasKyc ? 'Vérifié' : 'Non vérifié';

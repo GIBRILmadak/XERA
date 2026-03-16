@@ -814,13 +814,21 @@ async function initializeApp() {
 }
 
 // Mettre à jour la navigation selon l'état de connexion
-function setNavProfileAvatar(rawAvatar) {
+function setNavProfileAvatar(rawAvatar, userId = null) {
     if (!rawAvatar) return;
     const navProfile = document.getElementById("nav-profile");
     if (!navProfile) return;
     const navAvatar = navProfile.querySelector(".profile-nav-avatar");
     if (!navAvatar) return;
-    const avatarValue = String(rawAvatar);
+    const resolvedUserId =
+        userId || window.currentUser?.id || window.currentUserId || null;
+    const user = resolvedUserId ? getUser(resolvedUserId) : null;
+    const avatarSource = user && user.avatar ? user.avatar : rawAvatar;
+    const avatarValue = String(avatarSource);
+    if (user && isGifUrl(avatarValue) && !hasActivePaidPlan(user)) {
+        navAvatar.src = "https://placehold.co/36?text=👤";
+        return;
+    }
     navAvatar.src = avatarValue.startsWith("http")
         ? withCacheBust(avatarValue)
         : avatarValue;
@@ -853,11 +861,11 @@ function updateNavigation(isLoggedIn) {
                 window.currentUser?.user_metadata?.avatar_url ||
                 window.currentUser?.user_metadata?.avatar;
             if (directAvatar) {
-                setNavProfileAvatar(directAvatar);
+                setNavProfileAvatar(directAvatar, window.currentUser?.id);
             } else if (window.currentUser?.id && typeof getUserProfile === "function") {
                 getUserProfile(window.currentUser.id).then((res) => {
                     if (res?.success && res.data?.avatar) {
-                        setNavProfileAvatar(res.data.avatar);
+                        setNavProfileAvatar(res.data.avatar, res.data.id || window.currentUser?.id);
                     }
                 });
             }
@@ -1685,8 +1693,12 @@ async function loadAllData() {
         // S'assurer que l'utilisateur connecté a un profil
         if (window.currentUser) {
             const ensuredProfile = await ensureUserProfile(window.currentUser);
-            if (ensuredProfile?.avatar) {
-                setNavProfileAvatar(ensuredProfile.avatar);
+            const safeProfile = sanitizeUserMedia(ensuredProfile);
+            if (safeProfile?.avatar) {
+                setNavProfileAvatar(
+                    safeProfile.avatar,
+                    safeProfile.id || window.currentUser.id,
+                );
             }
         }
 
@@ -1700,7 +1712,7 @@ async function loadAllData() {
             return;
         }
 
-        allUsers = usersResult.data || [];
+        allUsers = (usersResult.data || []).map((u) => sanitizeUserMedia(u));
 
         // S'assurer que l'utilisateur connecté est dans la liste
         if (
@@ -1709,7 +1721,7 @@ async function loadAllData() {
         ) {
             const userProfileResult = await getUserProfile(window.currentUser.id);
             if (userProfileResult.success) {
-                allUsers.push(userProfileResult.data);
+                allUsers.push(sanitizeUserMedia(userProfileResult.data));
             }
         }
 
@@ -1747,7 +1759,7 @@ async function loadPublicData() {
             return;
         }
 
-        allUsers = usersResult.data || [];
+        allUsers = (usersResult.data || []).map((u) => sanitizeUserMedia(u));
         computeAmbassadors();
 
         // Même ordre côté public pour assurer l'affichage correct des badges dans les annonces
@@ -3682,8 +3694,103 @@ function isCurrentUserVerified() {
     return isVerifiedCreatorUserId(userId) || isVerifiedStaffUserId(userId);
 }
 
+function isPlanActiveByDate(user) {
+    if (!user) return false;
+    const status = String(user.plan_status || "").toLowerCase();
+    if (status !== "active") return false;
+    const planEnd = user.plan_ends_at || user.planEndsAt || null;
+    if (!planEnd) return true;
+    const endMs = Date.parse(planEnd);
+    if (!Number.isFinite(endMs)) return true;
+    return endMs > Date.now();
+}
+
+function hasActivePaidPlan(user) {
+    if (!user) return false;
+    const plan = String(user.plan || "").toLowerCase();
+    if (!plan || plan === "free") return false;
+    return isPlanActiveByDate(user);
+}
+
+function isGifUrl(value) {
+    if (!value || typeof value !== "string") return false;
+    const lower = value.toLowerCase();
+    return lower.includes(".gif");
+}
+
+function canUseGifProfile() {
+    const userId = window.currentUser && window.currentUser.id;
+    const profile = userId ? getUser(userId) : null;
+    return hasActivePaidPlan(profile) || isCurrentUserVerified();
+}
+
+function sanitizeUserMedia(user) {
+    if (!user) return user;
+    if (hasActivePaidPlan(user)) return user;
+    const sanitized = { ...user };
+    if (isGifUrl(sanitized.avatar)) sanitized.avatar = null;
+    if (isGifUrl(sanitized.banner)) sanitized.banner = null;
+    return sanitized;
+}
+
 function isAmbassadorUserId(userId) {
     return ambassadorUserIds.has(userId);
+}
+
+function normalizeGiftPlan(value) {
+    const normalized = String(value || "").toLowerCase();
+    if (["standard", "medium", "pro"].includes(normalized)) {
+        return normalized;
+    }
+    return null;
+}
+
+async function applyGiftPlanToUser(userId, planValue) {
+    const plan = normalizeGiftPlan(planValue);
+    if (!userId || !plan) return null;
+
+    const badgeValue = plan === "pro" ? "verified_gold" : "verified";
+    const updates = {
+        plan,
+        plan_status: "active",
+        plan_ends_at: null,
+        badge: badgeValue,
+        updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+        .from("users")
+        .update(updates)
+        .eq("id", userId)
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    if (data) {
+        const sanitized = sanitizeUserMedia(data);
+        const idx = allUsers.findIndex((u) => u.id === userId);
+        if (idx !== -1) {
+            allUsers[idx] = { ...allUsers[idx], ...sanitized };
+        } else {
+            allUsers.push(sanitized);
+        }
+        if (window.currentUser && window.currentUser.id === userId) {
+            window.currentUser = { ...window.currentUser, ...sanitized };
+        }
+        try {
+            if (Array.isArray(allUsers) && allUsers.length > 0) {
+                localStorage.setItem(
+                    XERA_CACHE_USERS_KEY,
+                    JSON.stringify(allUsers),
+                );
+            }
+        } catch (e) {
+            /* ignore */
+        }
+    }
+
+    return data || null;
 }
 
 function renderAmbassadorBadgeById(userId) {
@@ -3757,6 +3864,18 @@ function renderVerificationBadgeById(userId) {
     const user = getUser(userId) || {};
 
     const badgeValue = user.badge ? String(user.badge).toLowerCase() : "";
+    const planActive = isPlanActiveByDate(user);
+    const planBadgeRequested =
+        planActive &&
+        (badgeValue === "verified" ||
+            badgeValue === "verified_gold" ||
+            badgeValue === "gold" ||
+            badgeValue === "pro");
+    const hasGoldBadge =
+        planActive &&
+        (badgeValue === "verified_gold" ||
+            badgeValue === "gold" ||
+            badgeValue === "pro");
     const accountTypeValue = String(
         user.account_type || user.user_metadata?.account_type || "personal",
     ).toLowerCase();
@@ -3779,9 +3898,9 @@ function renderVerificationBadgeById(userId) {
         badgeValue === "enterprise";
 
     const personalRequested =
+        planBadgeRequested ||
         badgeValue === "creator" ||
         badgeValue === "personal" ||
-        badgeValue === "verified" ||
         accountTypeValue === "creator" ||
         accountTypeValue === "verified";
 
@@ -3790,6 +3909,9 @@ function renderVerificationBadgeById(userId) {
 
     // Priorité : type de compte personal bloque les badges d'équipe même si listé staff
     if (isPersonalAccount) {
+        if (hasGoldBadge) {
+            return `<img src="icons/verify-personal-gold.svg?v=${BADGE_ASSET_VERSION}" alt="Créateur vérifié Gold" class="verification-badge">`;
+        }
         if (isCreatorListed || personalRequested) {
             return `<img src="icons/verify-personal.svg?v=${BADGE_ASSET_VERSION}" alt="Créateur vérifié" class="verification-badge">`;
         }
@@ -3800,6 +3922,9 @@ function renderVerificationBadgeById(userId) {
     // Comptes non personnels
     if (isStaffListed || orgRequested || isOrgAccount) {
         return `<img src="icons/verify-com.svg?v=${BADGE_ASSET_VERSION}" alt="Équipe vérifiée" class="verification-badge">`;
+    }
+    if (hasGoldBadge) {
+        return `<img src="icons/verify-personal-gold.svg?v=${BADGE_ASSET_VERSION}" alt="Créateur vérifié Gold" class="verification-badge">`;
     }
     if (isCreatorListed || personalRequested) {
         return `<img src="icons/verify-personal.svg?v=${BADGE_ASSET_VERSION}" alt="Créateur vérifié" class="verification-badge">`;
@@ -3936,7 +4061,7 @@ async function requestVerification(type) {
     // Rien à faire ici : le lock reste en mémoire jusqu'au refresh.
 }
 
-async function addVerifiedUserId(type, userId) {
+async function addVerifiedUserId(type, userId, planValue = null) {
     if (!userId) return;
     const cleanId = await resolveUserIdFlexible(userId);
     if (!cleanId) return;
@@ -3958,6 +4083,11 @@ async function addVerifiedUserId(type, userId) {
             .eq("user_id", cleanId)
             .eq("type", type)
             .eq("status", "pending");
+
+        const shouldApplyPlan = isSuperAdmin() && normalizeGiftPlan(planValue);
+        if (shouldApplyPlan) {
+            await applyGiftPlanToUser(cleanId, planValue);
+        }
 
         await fetchVerifiedBadges();
         if (window.currentProfileViewed === cleanId && typeof renderProfileIntoContainer === "function") {
@@ -4036,6 +4166,8 @@ async function handleVerificationSelection(action) {
         userId: input.dataset.userId,
         type: input.dataset.type,
     }));
+    const bulkPlanInput = modal.querySelector("#verify-bulk-plan");
+    const bulkPlanValue = bulkPlanInput ? bulkPlanInput.value : null;
 
     try {
         if (action === "approve") {
@@ -4049,6 +4181,14 @@ async function handleVerificationSelection(action) {
                         );
                 }),
             );
+
+            if (isSuperAdmin() && normalizeGiftPlan(bulkPlanValue)) {
+                await Promise.all(
+                    toProcess.map((item) =>
+                        applyGiftPlanToUser(item.userId, bulkPlanValue),
+                    ),
+                );
+            }
         }
 
         await Promise.all(
@@ -9758,7 +9898,18 @@ async function openSettings(userId) {
                 <div class="verification-requests">
                     ${adminRequestsHtml}
                 </div>
-                <div class="verification-actions">
+                <div class="verification-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+                    ${
+                        isSuperAdmin()
+                            ? `
+                        <select id="verify-bulk-plan" class="form-input" style="min-width:170px;">
+                            <option value="standard">Plan Standard</option>
+                            <option value="medium">Plan Medium</option>
+                            <option value="pro">Plan Pro</option>
+                        </select>
+                    `
+                            : ""
+                    }
                     <button type="button" class="btn-verify" onclick="handleVerificationSelection('approve')">Valider la sélection</button>
                     <button type="button" class="btn-cancel" onclick="handleVerificationSelection('reject')">Refuser la sélection</button>
                 </div>
@@ -9768,7 +9919,18 @@ async function openSettings(userId) {
                 <h4>Ajouter un créateur vérifié</h4>
                 <div class="verification-input-row">
                     <input type="text" id="verify-creator-id" class="form-input" placeholder="ID utilisateur">
-                    <button type="button" class="btn-verify" onclick="addVerifiedUserId('creator', document.getElementById('verify-creator-id').value)">Ajouter</button>
+                    ${
+                        isSuperAdmin()
+                            ? `
+                        <select id="verify-creator-plan" class="form-input" style="min-width:170px;">
+                            <option value="standard">Plan Standard</option>
+                            <option value="medium">Plan Medium</option>
+                            <option value="pro">Plan Pro</option>
+                        </select>
+                    `
+                            : ""
+                    }
+                    <button type="button" class="btn-verify" onclick="addVerifiedUserId('creator', document.getElementById('verify-creator-id').value, document.getElementById('verify-creator-plan') ? document.getElementById('verify-creator-plan').value : null)">Ajouter</button>
                 </div>
             </div>
 
@@ -9776,7 +9938,18 @@ async function openSettings(userId) {
                 <h4>Ajouter une équipe vérifiée</h4>
                 <div class="verification-input-row">
                     <input type="text" id="verify-staff-id" class="form-input" placeholder="ID utilisateur">
-                    <button type="button" class="btn-verify" onclick="addVerifiedUserId('staff', document.getElementById('verify-staff-id').value)">Ajouter</button>
+                    ${
+                        isSuperAdmin()
+                            ? `
+                        <select id="verify-staff-plan" class="form-input" style="min-width:170px;">
+                            <option value="standard">Plan Standard</option>
+                            <option value="medium">Plan Medium</option>
+                            <option value="pro">Plan Pro</option>
+                        </select>
+                    `
+                            : ""
+                    }
+                    <button type="button" class="btn-verify" onclick="addVerifiedUserId('staff', document.getElementById('verify-staff-id').value, document.getElementById('verify-staff-plan') ? document.getElementById('verify-staff-plan').value : null)">Ajouter</button>
                 </div>
             </div>
         </div>
@@ -10111,9 +10284,9 @@ async function openSettings(userId) {
                 if (!file) return;
 
                 const isGif = isGifCandidate(file);
-                if (isGif && !isCurrentUserVerified()) {
+                if (isGif && !canUseGifProfile()) {
                     throw new Error(
-                        "Vous devez être vérifié pour utiliser un GIF en profil.",
+                        "Vous devez avoir un plan actif ou être vérifié pour utiliser un GIF en profil.",
                     );
                 }
 
@@ -10311,10 +10484,11 @@ async function openSettings(userId) {
                               .toLowerCase()
                               .endsWith(".gif");
                 if (!isGif) return { valid: true };
-                if (isCurrentUserVerified()) return { valid: true };
+                if (canUseGifProfile()) return { valid: true };
                 return {
                     valid: false,
-                    error: "Vous devez être vérifié pour utiliser un GIF en profil.",
+                    error:
+                        "Vous devez avoir un plan actif ou être vérifié pour utiliser un GIF en profil.",
                 };
             },
             onUpload: (result) => {
@@ -10351,10 +10525,11 @@ async function openSettings(userId) {
                               .toLowerCase()
                               .endsWith(".gif");
                 if (!isGif) return { valid: true };
-                if (isCurrentUserVerified()) return { valid: true };
+                if (canUseGifProfile()) return { valid: true };
                 return {
                     valid: false,
-                    error: "Vous devez être vérifié pour utiliser un GIF en profil.",
+                    error:
+                        "Vous devez avoir un plan actif ou être vérifié pour utiliser un GIF en profil.",
                 };
             },
             onUpload: (result) => {

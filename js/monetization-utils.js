@@ -11,7 +11,7 @@ async function refreshMonetizationStatus(userId) {
         // Récupérer les données actuelles de l'utilisateur
         const { data: user, error } = await supabase
             .from('users')
-            .select('plan, plan_status, followers_count')
+            .select('plan, plan_status, plan_ends_at, followers_count')
             .eq('id', userId)
             .single();
         
@@ -21,9 +21,15 @@ async function refreshMonetizationStatus(userId) {
         }
         
         // Calculer le nouveau statut
+        const planEnd = user.plan_ends_at || null;
+        const planEndMs = planEnd ? Date.parse(planEnd) : null;
+        const activeByDate =
+            !planEnd || (Number.isFinite(planEndMs) ? planEndMs > Date.now() : true);
+
         const canBeMonetized = 
             ['medium', 'pro'].includes(user.plan) &&
             user.plan_status === 'active' &&
+            activeByDate &&
             (user.followers_count || 0) >= 1000;
         
         // Mettre à jour si nécessaire
@@ -260,11 +266,16 @@ function formatDuration(seconds) {
  */
 function generateMonetizationProgress(user) {
     if (!user) return null;
+
+    const planEnd = user.plan_ends_at || user.planEndsAt || null;
+    const planEndMs = planEnd ? Date.parse(planEnd) : null;
+    const activeByDate =
+        !planEnd || (Number.isFinite(planEndMs) ? planEndMs > Date.now() : true);
     
     const requirements = [
         {
             name: 'Abonnement actif',
-            met: ['medium', 'pro'].includes(user.plan) && user.plan_status === 'active',
+            met: ['medium', 'pro'].includes(user.plan) && user.plan_status === 'active' && activeByDate,
             icon: 'fa-crown',
             description: 'Plan Medium ou Pro requis'
         },
@@ -277,7 +288,7 @@ function generateMonetizationProgress(user) {
         },
         {
             name: 'Compte MaishaPay',
-            met: user.is_monetized === true || user.plan_status === 'active',
+            met: user.is_monetized === true || (user.plan_status === 'active' && activeByDate),
             icon: 'fa-credit-card',
             description: 'Compte de paiement vérifié'
         }
