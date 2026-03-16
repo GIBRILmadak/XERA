@@ -1484,6 +1484,20 @@ async function ensureFreshSupabaseSession() {
     }
 }
 
+function resolveApiBaseUrl() {
+    const bodyBase = document.body?.dataset?.apiBase?.trim();
+    if (bodyBase) return bodyBase;
+    try {
+        const { protocol, hostname } = window.location;
+        if (hostname === "localhost" || hostname === "127.0.0.1") {
+            return `${protocol}//${hostname}:5050`;
+        }
+        return window.location.origin;
+    } catch (e) {
+        return "";
+    }
+}
+
 function setupPwaSwUpdateReload() {
     try {
         if (!("serviceWorker" in navigator)) return;
@@ -3737,6 +3751,28 @@ function isAmbassadorUserId(userId) {
     return ambassadorUserIds.has(userId);
 }
 
+function applyUserUpdateToCache(user) {
+    if (!user) return null;
+    const sanitized = sanitizeUserMedia(user);
+    const idx = allUsers.findIndex((u) => u.id === user.id);
+    if (idx !== -1) {
+        allUsers[idx] = { ...allUsers[idx], ...sanitized };
+    } else {
+        allUsers.push(sanitized);
+    }
+    if (window.currentUser && window.currentUser.id === user.id) {
+        window.currentUser = { ...window.currentUser, ...sanitized };
+    }
+    try {
+        if (Array.isArray(allUsers) && allUsers.length > 0) {
+            localStorage.setItem(XERA_CACHE_USERS_KEY, JSON.stringify(allUsers));
+        }
+    } catch (e) {
+        /* ignore */
+    }
+    return sanitized;
+}
+
 function normalizeGiftPlan(value) {
     const normalized = String(value || "").toLowerCase();
     if (["standard", "medium", "pro"].includes(normalized)) {
@@ -3745,16 +3781,113 @@ function normalizeGiftPlan(value) {
     return null;
 }
 
+async function requestAdminGiftPlan(userId, planValue) {
+    if (!userId || !planValue) return null;
+    if (!isSuperAdmin()) return null;
+
+    const okOnline = await ensureOnlineOrNotify();
+    if (!okOnline) throw new Error("Hors connexion.");
+
+    const sessionCheck = await ensureFreshSupabaseSession();
+    if (!sessionCheck.ok) {
+        throw sessionCheck.error || new Error("Session invalide.");
+    }
+
+    const {
+        data: { session },
+        error: sessionError,
+    } = await supabase.auth.getSession();
+    if (sessionError || !session?.access_token) {
+        throw new Error("Session invalide. Reconnectez-vous.");
+    }
+
+    const apiBase = resolveApiBaseUrl();
+    if (!apiBase) {
+        throw new Error("Adresse API introuvable.");
+    }
+
+    const response = await fetch(`${apiBase}/api/admin/gift-plan`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+            target_user_id: userId,
+            plan: planValue,
+        }),
+    });
+
+    let payload = {};
+    try {
+        payload = await response.json();
+    } catch (e) {
+        payload = {};
+    }
+    if (!response.ok) {
+        throw new Error(
+            payload?.error || "Impossible d'offrir le plan via l'API.",
+        );
+    }
+
+    return payload?.user || null;
+}
+
 async function applyGiftPlanToUser(userId, planValue) {
     const plan = normalizeGiftPlan(planValue);
     if (!userId || !plan) return null;
 
     const badgeValue = plan === "pro" ? "verified_gold" : "verified";
+    const protectedBadges = new Set([
+        "staff",
+        "team",
+        "community",
+        "company",
+        "enterprise",
+        "ambassador",
+    ]);
+
+    let badgeToApply = badgeValue;
+    let followersCount = 0;
+    try {
+        const { data: profile } = await supabase
+            .from("users")
+            .select("badge, followers_count")
+            .eq("id", userId)
+            .maybeSingle();
+        const existingBadge = String(profile?.badge || "").toLowerCase();
+        if (protectedBadges.has(existingBadge)) {
+            badgeToApply = profile?.badge || badgeValue;
+        }
+        followersCount = Number(profile?.followers_count || 0);
+    } catch (e) {
+        // Si la lecture échoue, garder le badge plan par défaut
+        followersCount = 0;
+    }
+
+    const isMonetized =
+        (plan === "medium" || plan === "pro") && followersCount >= 1000;
+    if (isSuperAdmin()) {
+        try {
+            const serverUser = await requestAdminGiftPlan(userId, plan);
+            if (serverUser) {
+                applyUserUpdateToCache(serverUser);
+                return serverUser;
+            }
+        } catch (error) {
+            console.warn(
+                "Admin gift plan API failed, fallback client update.",
+                error,
+            );
+        }
+    }
+
     const updates = {
         plan,
         plan_status: "active",
         plan_ends_at: null,
-        badge: badgeValue,
+        badge: badgeToApply,
+        is_monetized: isMonetized,
         updated_at: new Date().toISOString(),
     };
 
@@ -3768,26 +3901,7 @@ async function applyGiftPlanToUser(userId, planValue) {
     if (error) throw error;
 
     if (data) {
-        const sanitized = sanitizeUserMedia(data);
-        const idx = allUsers.findIndex((u) => u.id === userId);
-        if (idx !== -1) {
-            allUsers[idx] = { ...allUsers[idx], ...sanitized };
-        } else {
-            allUsers.push(sanitized);
-        }
-        if (window.currentUser && window.currentUser.id === userId) {
-            window.currentUser = { ...window.currentUser, ...sanitized };
-        }
-        try {
-            if (Array.isArray(allUsers) && allUsers.length > 0) {
-                localStorage.setItem(
-                    XERA_CACHE_USERS_KEY,
-                    JSON.stringify(allUsers),
-                );
-            }
-        } catch (e) {
-            /* ignore */
-        }
+        applyUserUpdateToCache(data);
     }
 
     return data || null;

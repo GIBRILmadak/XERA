@@ -22,7 +22,8 @@ const {
   MAISHAPAY_SECRET_KEY = 'MP-SBPK-ie739o.T$j46RP1/XR$9$jKyudK82Y57d4zgh$fKqqS.A8nHTBK7h$YQzq1tfNw1aejya42cxsKzRq3Z68sP1lmTBk$QPvHR54zGjNyl0rcDDvS0czSiHsp2',
   MAISHAPAY_GATEWAY_MODE = '0',
   MAISHAPAY_CHECKOUT_URL = 'https://marchand.maishapay.online/payment/vers1.0/merchant/checkout',
-  MAISHAPAY_CALLBACK_SECRET = ''
+  MAISHAPAY_CALLBACK_SECRET = '',
+  SUPER_ADMIN_ID = 'b0f9f893-1706-4721-899c-d26ad79afc86'
 } = process.env;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -60,6 +61,14 @@ const SUBSCRIPTION_SWEEP_MS = Math.max(
 let subscriptionSweepInFlight = false;
 
 const EXPIRES_BADGES = new Set(['verified', 'verified_gold', 'gold', 'pro']);
+const PROTECTED_BADGES = new Set([
+  'staff',
+  'team',
+  'community',
+  'company',
+  'enterprise',
+  'ambassador'
+]);
 
 const MAISHAPAY_PLANS = {
   standard: 2.99,
@@ -483,6 +492,81 @@ app.all('/api/maishapay/callback', async (req, res) => {
   } catch (error) {
     console.error('MaishaPay callback error:', error);
     res.status(500).send('Erreur callback');
+  }
+});
+
+// ==================== ADMIN: OFFER PLAN ====================
+
+app.post('/api/admin/gift-plan', async (req, res) => {
+  try {
+    const auth = String(req.headers.authorization || '');
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    if (!token) {
+      return res.status(401).json({ error: 'Token manquant.' });
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !authData?.user?.id) {
+      return res.status(401).json({ error: 'Utilisateur non authentifié.' });
+    }
+    if (authData.user.id !== SUPER_ADMIN_ID) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+
+    const { target_user_id: targetUserId, plan } = req.body || {};
+    const normalizedPlan = String(plan || '').toLowerCase();
+    if (!targetUserId) {
+      return res.status(400).json({ error: 'Utilisateur cible manquant.' });
+    }
+    if (!['standard', 'medium', 'pro'].includes(normalizedPlan)) {
+      return res.status(400).json({ error: 'Plan invalide.' });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('users')
+      .select('badge, followers_count')
+      .eq('id', targetUserId)
+      .maybeSingle();
+
+    if (profileError) {
+      return res.status(500).json({ error: profileError.message || 'Impossible de charger le profil.' });
+    }
+    if (!profile) {
+      return res.status(404).json({ error: 'Utilisateur introuvable.' });
+    }
+
+    const badgeForPlan = normalizedPlan === 'pro' ? 'verified_gold' : 'verified';
+    const existingBadge = String(profile.badge || '').toLowerCase();
+    const badgeToApply = PROTECTED_BADGES.has(existingBadge)
+      ? profile.badge
+      : badgeForPlan;
+    const followersCount = Number(profile.followers_count || 0);
+    const isMonetized =
+      (normalizedPlan === 'medium' || normalizedPlan === 'pro') &&
+      followersCount >= 1000;
+
+    const { data: updated, error: updateError } = await supabase
+      .from('users')
+      .update({
+        plan: normalizedPlan,
+        plan_status: 'active',
+        plan_ends_at: null,
+        badge: badgeToApply,
+        is_monetized: isMonetized,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', targetUserId)
+      .select()
+      .single();
+
+    if (updateError) {
+      return res.status(500).json({ error: updateError.message || 'Mise à jour impossible.' });
+    }
+
+    return res.json({ success: true, user: updated });
+  } catch (error) {
+    console.error('Admin gift plan error:', error);
+    return res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
