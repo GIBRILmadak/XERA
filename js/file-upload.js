@@ -187,7 +187,7 @@ async function uploadFile(file, folder = "content", onProgress) {
                 progressEvent.total ||
                 file.size;
 
-            if (!totalBytes || !uploadedBytes) return;
+            if (!totalBytes) return;
             const percent = Math.min(
                 100,
                 Math.round((uploadedBytes / totalBytes) * 100),
@@ -201,6 +201,26 @@ async function uploadFile(file, folder = "content", onProgress) {
         };
 
         let uploadResponse;
+        let fakeProgressTimer = null;
+        const startFakeProgress = () => {
+            if (typeof onProgress !== "function") return;
+            let current = 0;
+            onProgress(0);
+            fakeProgressTimer = setInterval(() => {
+                current = Math.min(95, current + Math.random() * 8 + 4);
+                onProgress(current);
+            }, 350);
+        };
+        const stopFakeProgress = () => {
+            if (fakeProgressTimer) {
+                clearInterval(fakeProgressTimer);
+                fakeProgressTimer = null;
+            }
+        };
+
+        if (typeof onProgress === "function") {
+            onProgress(0);
+        }
 
         if (useResumable) {
             uploadResponse = await supabase.storage
@@ -215,9 +235,14 @@ async function uploadFile(file, folder = "content", onProgress) {
                     },
                 );
         } else {
-            uploadResponse = await supabase.storage
-                .from("media")
-                .upload(fileName, file, baseFileOptions);
+            startFakeProgress();
+            try {
+                uploadResponse = await supabase.storage
+                    .from("media")
+                    .upload(fileName, file, baseFileOptions);
+            } finally {
+                stopFakeProgress();
+            }
         }
 
         const { data, error } = uploadResponse || {};
