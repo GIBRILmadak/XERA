@@ -9,7 +9,13 @@ let usdToCdfRate = 2300;
 document.addEventListener('DOMContentLoaded', async () => {
     const user = await checkAuth();
     if (!user) {
-        window.location.href = 'login.html?redirect=subscription-payment.html';
+        if (window.XeraRouter?.navigate) {
+            window.XeraRouter.navigate('login', {
+                query: { redirect: 'subscription-payment' },
+            });
+        } else {
+            window.location.href = 'login.html?redirect=subscription-payment.html';
+        }
         return;
     }
 

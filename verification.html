@@ -2,10 +2,10 @@
 <html lang="fr">
     <head>
         <meta charset="UTF-8">
-        <meta http-equiv="refresh" content="0; url=subscription-plans.html">
+        <meta http-equiv="refresh" content="0; url=/subscription-plans">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Redirection</title>
-        <link rel="canonical" href="subscription-plans.html">
+        <link rel="canonical" href="/subscription-plans">
         <style>
             body {
                 font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -30,10 +30,15 @@
     <body>
         <main>
             <p>Redirection vers les abonnements...</p>
-            <p>Si rien ne se passe, <a href="subscription-plans.html">cliquez ici</a>.</p>
+            <p>Si rien ne se passe, <a href="/subscription-plans">cliquez ici</a>.</p>
         </main>
+        <script src="js/router.js"></script>
         <script>
-            window.location.replace("subscription-plans.html");
+            if (window.XeraRouter?.navigate) {
+                window.XeraRouter.navigate("subscriptionPlans", { replace: true });
+            } else {
+                window.location.replace("subscription-plans.html");
+            }
         </script>
     </body>
 </html>

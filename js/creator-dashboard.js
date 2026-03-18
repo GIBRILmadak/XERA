@@ -12,7 +12,13 @@ async function initDashboard() {
         // Vérifier l'authentification
         const user = await checkAuth();
         if (!user) {
-            window.location.href = 'login.html?redirect=creator-dashboard.html';
+            if (window.XeraRouter?.navigate) {
+                window.XeraRouter.navigate('login', {
+                    query: { redirect: 'creator-dashboard' },
+                });
+            } else {
+                window.location.href = 'login.html?redirect=creator-dashboard.html';
+            }
             return;
         }
         
@@ -461,10 +467,16 @@ function closeUpgradeModal() {
 // Sélection d'un plan
 async function selectPlan(planId) {
     try {
-        const url = new URL('subscription-payment.html', window.location.href);
-        url.searchParams.set('plan', planId);
-        url.searchParams.set('billing', 'monthly');
-        window.location.href = url.toString();
+        if (window.XeraRouter?.navigate) {
+            window.XeraRouter.navigate('subscriptionPayment', {
+                query: { plan: planId, billing: 'monthly' },
+            });
+        } else {
+            const url = new URL('subscription-payment.html', window.location.href);
+            url.searchParams.set('plan', planId);
+            url.searchParams.set('billing', 'monthly');
+            window.location.href = url.toString();
+        }
     } catch (error) {
         console.error('Exception sélection plan:', error);
         showError('Une erreur est survenue');

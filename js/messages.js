@@ -155,6 +155,11 @@
     }
 
     function buildProfileHref(userId) {
+        if (window.XeraRouter?.buildUrl) {
+            return window.XeraRouter.buildUrl("profile", {
+                query: userId ? { user: userId } : {},
+            });
+        }
         if (!userId) return "profile.html";
         return `profile.html?user=${encodeURIComponent(userId)}`;
     }

@@ -20,7 +20,13 @@ async function initPlansPage() {
         // Vérifier l'authentification
         const user = await checkAuth();
         if (!user) {
-            window.location.href = 'login.html?redirect=subscription-plans.html';
+            if (window.XeraRouter?.navigate) {
+                window.XeraRouter.navigate('login', {
+                    query: { redirect: 'subscription-plans' },
+                });
+            } else {
+                window.location.href = 'login.html?redirect=subscription-plans.html';
+            }
             return;
         }
         
@@ -130,10 +136,16 @@ async function selectSubscription(planId) {
         return;
     }
     
-    const url = new URL('subscription-payment.html', window.location.href);
-    url.searchParams.set('plan', planId);
-    url.searchParams.set('billing', billingCycle);
-    window.location.href = url.toString();
+    if (window.XeraRouter?.navigate) {
+        window.XeraRouter.navigate('subscriptionPayment', {
+            query: { plan: planId, billing: billingCycle },
+        });
+    } else {
+        const url = new URL('subscription-payment.html', window.location.href);
+        url.searchParams.set('plan', planId);
+        url.searchParams.set('billing', billingCycle);
+        window.location.href = url.toString();
+    }
 }
 
 // Traiter l'abonnement
@@ -141,10 +153,16 @@ async function processSubscription() {
     if (!selectedPlan || !currentUser) return;
     
     try {
-        const url = new URL('subscription-payment.html', window.location.href);
-        url.searchParams.set('plan', selectedPlan);
-        url.searchParams.set('billing', billingCycle);
-        window.location.href = url.toString();
+        if (window.XeraRouter?.navigate) {
+            window.XeraRouter.navigate('subscriptionPayment', {
+                query: { plan: selectedPlan, billing: billingCycle },
+            });
+        } else {
+            const url = new URL('subscription-payment.html', window.location.href);
+            url.searchParams.set('plan', selectedPlan);
+            url.searchParams.set('billing', billingCycle);
+            window.location.href = url.toString();
+        }
     } catch (error) {
         console.error('Exception traitement abonnement:', error);
         showNotification('Une erreur est survenue lors du traitement', 'error');
@@ -223,7 +241,11 @@ async function handlePaymentReturn() {
         
         // Rediriger vers le dashboard après 2 secondes
         setTimeout(() => {
-            window.location.href = 'creator-dashboard.html';
+            if (window.XeraRouter?.navigate) {
+                window.XeraRouter.navigate('creatorDashboard');
+            } else {
+                window.location.href = 'creator-dashboard.html';
+            }
         }, 2000);
     } else if (status === 'canceled') {
         showNotification('Le paiement a été annulé. Vous pouvez réessayer quand vous voulez.', 'info');

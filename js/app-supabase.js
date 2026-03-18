@@ -62,6 +62,11 @@ function isProfileOnlyPage() {
 }
 
 function buildProfileUrl(userId) {
+    if (window.XeraRouter?.buildUrl) {
+        return window.XeraRouter.buildUrl("profile", {
+            query: userId ? { user: userId } : {},
+        });
+    }
     const base = "profile.html";
     if (!userId) return base;
     return `${base}?user=${encodeURIComponent(userId)}`;
@@ -9875,7 +9880,11 @@ function syncFloatingCreateVisibility(pageId) {
 function navigateTo(pageId) {
     // Vérifier si l'utilisateur essaie d'accéder à son profil sans être connecté
     if (pageId === "profile" && !currentUser && !window.currentProfileViewed) {
-        window.location.href = "login.html";
+        if (window.XeraRouter?.navigate) {
+            window.XeraRouter.navigate("login");
+        } else {
+            window.location.href = "login.html";
+        }
         return;
     }
 
@@ -9892,21 +9901,35 @@ function navigateTo(pageId) {
     if (pageId === "discover") {
         const discoverPage = document.getElementById("discover");
         if (!discoverPage) {
-            window.location.href = "index.html";
+            if (window.XeraRouter?.navigate) {
+                window.XeraRouter.navigate("discover");
+            } else {
+                window.location.href = "index.html";
+            }
             return;
         }
     }
 
     if (pageId === "messages") {
         if (!currentUser) {
-            window.location.href = "login.html";
+            if (window.XeraRouter?.navigate) {
+                window.XeraRouter.navigate("login");
+            } else {
+                window.location.href = "login.html";
+            }
             return;
         }
         const messagesPage = document.getElementById("messages");
         if (!messagesPage) {
-            const url = new URL("index.html", window.location.href);
-            url.searchParams.set("messages", "1");
-            window.location.href = url.toString();
+            if (window.XeraRouter?.navigate) {
+                window.XeraRouter.navigate("discover", {
+                    query: { messages: "1" },
+                });
+            } else {
+                const url = new URL("index.html", window.location.href);
+                url.searchParams.set("messages", "1");
+                window.location.href = url.toString();
+            }
             return;
         }
     }
@@ -9929,7 +9952,11 @@ window.syncFloatingCreateVisibility = syncFloatingCreateVisibility;
 async function handleProfileNavigation() {
     if (!window.currentUser) {
         // Rediriger vers la page de connexion
-        window.location.href = "login.html";
+        if (window.XeraRouter?.navigate) {
+            window.XeraRouter.navigate("login");
+        } else {
+            window.location.href = "login.html";
+        }
         return;
     }
 

@@ -6,22 +6,34 @@ let isSignUpMode = false;
 const redirectTarget = new URLSearchParams(window.location.search).get('redirect');
 
 function resolveRedirectTarget() {
-    if (!redirectTarget) return 'index.html';
+    if (!redirectTarget) {
+        return window.XeraRouter?.buildUrl
+            ? window.XeraRouter.buildUrl('discover')
+            : 'index.html';
+    }
     if (redirectTarget.startsWith('http://') || redirectTarget.startsWith('https://')) {
         try {
             const targetUrl = new URL(redirectTarget);
             if (targetUrl.origin === window.location.origin) {
-                return targetUrl.toString();
+                return window.XeraRouter?.toCleanUrl
+                    ? window.XeraRouter.toCleanUrl(targetUrl.toString())
+                    : targetUrl.toString();
             }
         } catch (_) {
-            return 'index.html';
+            return window.XeraRouter?.buildUrl
+                ? window.XeraRouter.buildUrl('discover')
+                : 'index.html';
         }
-        return 'index.html';
+        return window.XeraRouter?.buildUrl
+            ? window.XeraRouter.buildUrl('discover')
+            : 'index.html';
     }
     if (redirectTarget.startsWith('/')) {
         return redirectTarget;
     }
-    return redirectTarget;
+    return window.XeraRouter?.toCleanUrl
+        ? window.XeraRouter.toCleanUrl(redirectTarget)
+        : redirectTarget;
 }
 
 // Éléments DOM
