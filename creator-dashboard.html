@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Créateur - XERA</title>
+    <title>Monétisation Créateur - XERA</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/search-notification.css">
-    <link rel="stylesheet" href="css/monetization.css">
+    <link rel="stylesheet" href="css/monetization.css?v=20260318-2">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="has-mobile-nav">
+<body class="has-mobile-nav monetization-dashboard-page">
     <nav>
         <a
             class="logo"
@@ -47,6 +47,7 @@
                 class="notification-button profile-nav-button"
                 onclick="handleProfileNavigation()"
                 id="nav-profile"
+                style="display: none"
                 title="My Trajectory"
                 aria-label="My Trajectory"
                 role="button"
@@ -100,7 +101,7 @@
                 ></span>
             </div>
 
-            <a href="login.html" id="nav-auth" data-i18n="navAuth">Login / Register</a>
+            <a href="login.html" id="nav-auth" data-i18n="navAuth" style="display: none">Login / Register</a>
         </div>
     </nav>
 
@@ -109,13 +110,18 @@
             <!-- Header -->
             <header class="dashboard-header">
                 <div class="header-content">
-                    <h1><i class="fas fa-chart-pie"></i> Dashboard Créateur</h1>
-                    <p>Suivez vos revenus et votre progression</p>
+                    <h1><i class="fas fa-wallet"></i> Monétisation Créateur</h1>
+                    <p>Suivez vos revenus, votre portefeuille XERA et vos retraits Mobile Money</p>
+                    <div class="dashboard-identity" id="dashboardIdentity"></div>
                 </div>
                 <div class="header-stats">
                     <div class="stat-card stat-total">
-                        <span class="stat-label">Revenus totaux</span>
+                        <span class="stat-label">Net crédité</span>
                         <span class="stat-value" id="totalRevenue">$0.00</span>
+                    </div>
+                    <div class="stat-card stat-total">
+                        <span class="stat-label">Solde disponible</span>
+                        <span class="stat-value" id="availableBalanceHeader">$0.00</span>
                     </div>
                 </div>
             </header>
@@ -133,6 +139,142 @@
                     <div class="status-actions" id="statusActions">
                         <!-- Dynamique -->
                     </div>
+                </div>
+            </section>
+
+            <section class="wallet-section" id="walletSection">
+                <div class="section-header">
+                    <div>
+                        <h2><i class="fas fa-piggy-bank"></i> Portefeuille et retraits</h2>
+                        <p class="section-subtitle">
+                            Seuls les revenus deja credites restent disponibles au retrait sur XERA jusqu'a votre demande.
+                        </p>
+                    </div>
+                    <button type="button" class="btn-secondary" id="walletRefreshBtn" onclick="refreshWalletData()">
+                        <i class="fas fa-rotate"></i> Rafraîchir
+                    </button>
+                </div>
+
+                <div class="wallet-alert" id="walletNotice">
+                    Chargement du portefeuille...
+                </div>
+
+                <div class="wallet-cards">
+                    <div class="wallet-card wallet-card-primary">
+                        <span class="wallet-label">Disponible au retrait</span>
+                        <strong class="wallet-value" id="walletAvailableBalance">$0.00</strong>
+                        <span class="wallet-meta" id="walletMinimumMeta">Retrait minimum: $5.00</span>
+                    </div>
+                    <div class="wallet-card">
+                        <span class="wallet-label">Gains en attente</span>
+                        <strong class="wallet-value" id="walletPendingIncoming">$0.00</strong>
+                        <span class="wallet-meta">Revenus pas encore libérés</span>
+                    </div>
+                    <div class="wallet-card">
+                        <span class="wallet-label">Retraits en cours</span>
+                        <strong class="wallet-value" id="walletPendingWithdrawals">$0.00</strong>
+                        <span class="wallet-meta">Demandes en attente ou en traitement</span>
+                    </div>
+                    <div class="wallet-card">
+                        <span class="wallet-label">Déjà retiré</span>
+                        <strong class="wallet-value" id="walletPaidWithdrawals">$0.00</strong>
+                        <span class="wallet-meta">Total envoyé vers Mobile Money</span>
+                    </div>
+                </div>
+
+                <div class="wallet-panels">
+                    <article class="wallet-panel">
+                        <div class="wallet-panel-header">
+                            <div class="wallet-panel-heading-row">
+                                <div>
+                                    <h3><i class="fas fa-mobile-screen-button"></i> Compte Mobile Money</h3>
+                                    <p>Enregistrez le numéro sur lequel XERA devra envoyer vos retraits.</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="btn-secondary wallet-toggle-btn"
+                                    id="payoutSettingsToggleBtn"
+                                    onclick="togglePayoutSettingsPanel()"
+                                    style="display: none;"
+                                >
+                                    <i class="fas fa-pen"></i> Modifier
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="wallet-saved-summary" id="payoutSettingsSummary" style="display: none;"></div>
+
+                        <div class="wallet-collapsible is-open" id="payoutSettingsPanel">
+                            <form id="payoutSettingsForm" class="wallet-form">
+                                <div class="wallet-form-grid">
+                                    <label class="wallet-field">
+                                        <span>Fournisseur</span>
+                                        <select id="payoutProvider" required>
+                                            <option value="airtel_money">Airtel Money</option>
+                                            <option value="orange_money">Orange Money</option>
+                                            <option value="mpesa">M-Pesa</option>
+                                            <option value="afrimoney">Afrimoney</option>
+                                            <option value="other">Autre</option>
+                                        </select>
+                                    </label>
+                                    <label class="wallet-field">
+                                        <span>Titulaire</span>
+                                        <input id="payoutAccountName" type="text" maxlength="80" placeholder="Nom complet lié au compte" required>
+                                    </label>
+                                    <label class="wallet-field">
+                                        <span>Numéro Mobile Money</span>
+                                        <input id="payoutWalletNumber" type="tel" maxlength="32" placeholder="+243810000000" required>
+                                    </label>
+                                    <label class="wallet-field">
+                                        <span>Pays</span>
+                                        <input id="payoutCountryCode" type="text" maxlength="8" value="CD" placeholder="CD">
+                                    </label>
+                                </div>
+                                <label class="wallet-field">
+                                    <span>Note interne</span>
+                                    <textarea id="payoutNotes" rows="3" maxlength="280" placeholder="Ex: payer uniquement sur ce numéro, compte pro, etc."></textarea>
+                                </label>
+                                <div class="wallet-form-actions">
+                                    <button type="submit" class="btn-primary" id="payoutSettingsSubmitBtn">
+                                        <i class="fas fa-floppy-disk"></i> Enregistrer le compte
+                                    </button>
+                                    <span class="wallet-inline-status" id="payoutSettingsStatus">Aucun compte configuré.</span>
+                                </div>
+                            </form>
+                        </div>
+                    </article>
+
+                    <article class="wallet-panel">
+                        <div class="wallet-panel-header">
+                            <h3><i class="fas fa-money-bill-transfer"></i> Demander un retrait</h3>
+                            <p>Seul le solde disponible deja credite peut etre retire, puis valide avant l'envoi vers votre Mobile Money.</p>
+                        </div>
+
+                        <form id="withdrawalRequestForm" class="wallet-form">
+                            <div class="wallet-form-grid">
+                                <label class="wallet-field">
+                                    <span>Montant (USD)</span>
+                                    <input id="withdrawalAmount" type="number" min="5" step="0.01" placeholder="25.00" required>
+                                </label>
+                                <label class="wallet-field">
+                                    <span>Solde utilisable</span>
+                                    <input id="withdrawalAvailable" type="text" value="$0.00" disabled>
+                                </label>
+                            </div>
+                            <label class="wallet-field">
+                                <span>Note pour l'équipe</span>
+                                <textarea id="withdrawalNote" rows="3" maxlength="280" placeholder="Optionnel: heure préférée, précision sur le compte, etc."></textarea>
+                            </label>
+                            <div class="wallet-form-actions">
+                                <button type="submit" class="btn-primary" id="withdrawalSubmitBtn">
+                                    <i class="fas fa-paper-plane"></i> Envoyer la demande
+                                </button>
+                                <button type="button" class="btn-secondary" onclick="fillMaxWithdrawal()">
+                                    <i class="fas fa-arrow-up-right-dots"></i> Utiliser le max
+                                </button>
+                            </div>
+                        </form>
+                    </article>
                 </div>
             </section>
 
@@ -171,25 +313,14 @@
                         </div>
                     </div>
 
-                    <div class="revenue-card">
-                        <div class="card-icon commission">
-                            <i class="fas fa-percentage"></i>
-                        </div>
-                        <div class="card-content">
-                            <span class="card-label">Commission XERA (20%)</span>
-                            <span class="card-value" id="commissionAmount">$0.00</span>
-                            <span class="card-count">Frais de plateforme</span>
-                        </div>
-                    </div>
-
                     <div class="revenue-card highlight">
                         <div class="card-icon total">
                             <i class="fas fa-piggy-bank"></i>
                         </div>
                         <div class="card-content">
-                            <span class="card-label">Net reçu (80%)</span>
+                            <span class="card-label">Total reçu</span>
                             <span class="card-value" id="netRevenue">$0.00</span>
-                            <span class="card-count">Montant final</span>
+                            <span class="card-count">Montant credite</span>
                         </div>
                     </div>
                 </div>
@@ -226,7 +357,7 @@
                 </div>
 
                 <div class="video-cta">
-                    <p>Créez des vidéos de plus de 60 secondes pour maximiser vos revenus !</p>
+                    <p>Seules les vidéos de plus de 60 secondes génèrent des revenus.</p>
                     <a href="create-stream.html?type=video" class="btn-primary">
                         <i class="fas fa-plus"></i> Créer une vidéo
                     </a>
@@ -298,27 +429,35 @@
                 </div>
             </section>
 
-            <!-- Requirements Info -->
-            <section class="requirements-section" id="requirementsSection">
-                <h3><i class="fas fa-info-circle"></i> Conditions pour la monétisation</h3>
-                <div class="requirements-list">
-                    <div class="requirement-item" id="reqPlan">
-                        <i class="fas fa-circle"></i>
-                        <span>Abonnement Medium ou Pro actif</span>
-                        <span class="req-status">Non atteint</span>
-                    </div>
-                    <div class="requirement-item" id="reqFollowers">
-                        <i class="fas fa-circle"></i>
-                        <span>Minimum 1000 abonnés</span>
-                        <span class="req-status" id="followersStatus">0 / 1000</span>
-                    </div>
-                    <div class="requirement-item" id="reqKyc">
-                        <i class="fas fa-circle"></i>
-                        <span>Compte MaishaPay vérifié (KYC)</span>
-                        <span class="req-status">Non vérifié</span>
+            <section class="withdrawals-section" id="withdrawalsSection">
+                <div class="section-header">
+                    <div>
+                        <h2><i class="fas fa-file-invoice-dollar"></i> Historique des retraits</h2>
+                        <p class="section-subtitle">Suivi des demandes de retrait envoyées vers Mobile Money.</p>
                     </div>
                 </div>
+
+                <div class="withdrawals-table-wrapper">
+                    <table class="withdrawals-table" id="withdrawalsTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Montant</th>
+                                <th>Canal</th>
+                                <th>Compte</th>
+                                <th>Statut</th>
+                                <th>Référence</th>
+                            </tr>
+                        </thead>
+                        <tbody id="withdrawalsBody">
+                            <tr class="empty-row">
+                                <td colspan="6">Aucune demande de retrait pour le moment</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </section>
+
         </main>
 
         <!-- Upgrade Modal -->
@@ -414,9 +553,11 @@
     </div>
 
     <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/i18n.js"></script>
     <script src="js/router.js"></script>
     <script src="js/supabase-config.js"></script>
-    <script src="js/monetization.js"></script>
-    <script src="js/creator-dashboard.js"></script>
+    <script src="js/monetization.js?v=20260318-3"></script>
+    <script src="js/creator-dashboard.js?v=20260318-6"></script>
 </body>
 </html>

@@ -11,6 +11,8 @@ window.allUsers = [];
 window.userContents = {};
 window.userProjects = {};
 window.adminAnnouncements = [];
+window.adminSubscriptionPayments = [];
+window.adminWithdrawalRequests = [];
 window.hasLoadedUsers = false;
 window.userLoadError = null;
 window.arcCollaboratorsCache = new Map();
@@ -62,6 +64,11 @@ function isProfileOnlyPage() {
 }
 
 function buildProfileUrl(userId) {
+    if (window.XeraRouter?.buildHtmlUrl) {
+        return window.XeraRouter.buildHtmlUrl("profile", {
+            query: userId ? { user: userId } : {},
+        });
+    }
     if (window.XeraRouter?.buildUrl) {
         return window.XeraRouter.buildUrl("profile", {
             query: userId ? { user: userId } : {},
@@ -73,7 +80,11 @@ function buildProfileUrl(userId) {
 }
 
 function buildProfileShareUrl(userId) {
-    const relative = buildProfileUrl(userId);
+    const relative = window.XeraRouter?.buildUrl
+        ? window.XeraRouter.buildUrl("profile", {
+              query: userId ? { user: userId } : {},
+          })
+        : buildProfileUrl(userId);
     try {
         return new URL(relative, window.location.href).toString();
     } catch (error) {
@@ -138,6 +149,89 @@ function injectVerificationNavButton() {
     } catch (error) {
         console.warn("Nav verification CTA not injected:", error);
     }
+}
+
+function buildMonetizationDashboardUrl() {
+    if (window.XeraRouter?.buildHtmlUrl) {
+        return window.XeraRouter.buildHtmlUrl("creatorDashboard");
+    }
+    if (window.XeraRouter?.buildUrl) {
+        return window.XeraRouter.buildUrl("creatorDashboard");
+    }
+    return "creator-dashboard.html";
+}
+
+function hasMonetizationDashboardAccess(user) {
+    if (!user) return false;
+    const plan = String(user.plan || "").toLowerCase();
+    if (!["medium", "pro"].includes(plan)) return false;
+    return isPlanActiveByDate(user);
+}
+
+function ensureMonetizationNavButton() {
+    const navLinks = document.querySelector("nav .nav-links");
+    if (!navLinks) return null;
+
+    let button = document.getElementById("nav-monetization-btn");
+    if (button) {
+        button.href = buildMonetizationDashboardUrl();
+        return button;
+    }
+
+    button = document.createElement("a");
+    button.id = "nav-monetization-btn";
+    button.className = "nav-monetization-btn";
+    button.href = buildMonetizationDashboardUrl();
+    button.title = "Monétisation";
+    button.setAttribute("aria-label", "Monétisation");
+    button.innerHTML = `
+        <i class="fas fa-wallet" aria-hidden="true"></i>
+        <span class="nav-monetization-label">Monétisation</span>
+    `;
+
+    const navAuth = document.getElementById("nav-auth");
+    if (navAuth?.parentNode === navLinks) {
+        navLinks.insertBefore(button, navAuth);
+    } else {
+        navLinks.appendChild(button);
+    }
+
+    return button;
+}
+
+async function updateMonetizationNavButton(isLoggedIn) {
+    const button = ensureMonetizationNavButton();
+    if (!button) return;
+
+    button.href = buildMonetizationDashboardUrl();
+
+    if (!isLoggedIn || !window.currentUser?.id) {
+        button.style.display = "none";
+        return;
+    }
+
+    let profile = getUser(window.currentUser.id) || null;
+    if (!profile && window.currentUser?.plan) {
+        profile = window.currentUser;
+    }
+
+    if (!hasMonetizationDashboardAccess(profile)) {
+        try {
+            const result = await getUserProfile(window.currentUser.id);
+            if (result?.success && result.data) {
+                profile =
+                    typeof applyUserUpdateToCache === "function"
+                        ? applyUserUpdateToCache(result.data)
+                        : result.data;
+            }
+        } catch (error) {
+            console.warn("Unable to refresh monetization nav state:", error);
+        }
+    }
+
+    button.style.display = hasMonetizationDashboardAccess(profile)
+        ? "inline-flex"
+        : "none";
 }
 
 /* ========================================
@@ -884,6 +978,8 @@ function updateNavigation(isLoggedIn) {
     if (navMessages) {
         navMessages.style.display = isLoggedIn ? "flex" : "none";
     }
+
+    updateMonetizationNavButton(isLoggedIn);
 
     if (!isLoggedIn && typeof window.cleanupMessaging === "function") {
         window.cleanupMessaging();
@@ -3344,6 +3440,36 @@ function getSuperAdminPanelHtml() {
 
             <div class="verification-admin-block" style="margin-top: 1.5rem;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                    <div>
+                        <h4 style="margin:0;">Paiements abonnements MaishaPay</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin:0.35rem 0 0;">
+                            Confirme ici un paiement recu sur MaishaPay pour activer exactement le palier achete.
+                        </p>
+                    </div>
+                    <button class="btn-verify" type="button" onclick="fetchAdminSubscriptionPayments()">
+                        Rafraîchir
+                    </button>
+                </div>
+                <div id="admin-subscription-payments-list" style="margin-top:0.9rem; display:flex; flex-direction:column; gap:0.75rem;"></div>
+            </div>
+
+            <div class="verification-admin-block" style="margin-top: 1.5rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                    <div>
+                        <h4 style="margin:0;">Retraits Mobile Money</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin:0.35rem 0 0;">
+                            Traite ici les demandes de retrait envoyées depuis la page de monétisation.
+                        </p>
+                    </div>
+                    <button class="btn-verify" type="button" onclick="fetchAdminWithdrawalRequests()">
+                        Rafraîchir
+                    </button>
+                </div>
+                <div id="admin-withdrawal-requests-list" style="margin-top:0.9rem; display:flex; flex-direction:column; gap:0.75rem;"></div>
+            </div>
+
+            <div class="verification-admin-block" style="margin-top: 1.5rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                     <h4 style="margin:0;">Pulse temps réel</h4>
                     <button class="btn-verify" type="button" id="admin-stats-refresh" onclick="refreshAppPulse()">Mettre à jour</button>
                 </div>
@@ -3546,6 +3672,437 @@ function renderSuperAdminPage() {
     `;
     // Précharge les stats temps réel si visible
     setTimeout(() => refreshAppPulse(), 150);
+    setTimeout(() => fetchAdminSubscriptionPayments(), 150);
+    setTimeout(() => fetchAdminWithdrawalRequests(), 150);
+}
+
+async function fetchSuperAdminJson(path, options = {}) {
+    if (!isSuperAdmin()) {
+        throw new Error("Accès refusé.");
+    }
+
+    const okOnline = await ensureOnlineOrNotify();
+    if (!okOnline) {
+        throw new Error("Hors connexion.");
+    }
+
+    const sessionCheck = await ensureFreshSupabaseSession();
+    if (!sessionCheck.ok) {
+        throw sessionCheck.error || new Error("Session invalide.");
+    }
+
+    const {
+        data: { session },
+        error: sessionError,
+    } = await supabase.auth.getSession();
+    if (sessionError || !session?.access_token) {
+        throw new Error("Session invalide. Reconnectez-vous.");
+    }
+
+    const apiBase = resolveApiBaseUrl();
+    if (!apiBase) {
+        throw new Error("Adresse API introuvable.");
+    }
+
+    const response = await fetch(`${apiBase}${path}`, {
+        method: options.method || "GET",
+        headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            ...(options.body ? { "Content-Type": "application/json" } : {}),
+            ...(options.headers || {}),
+        },
+        body: options.body,
+    });
+
+    let payload = {};
+    try {
+        payload = await response.json();
+    } catch (error) {
+        payload = {};
+    }
+
+    if (!response.ok) {
+        throw new Error(payload?.error || "Erreur API super-admin.");
+    }
+
+    return payload;
+}
+
+function formatAdminPaymentDate(value) {
+    if (!value) return "—";
+    try {
+        return new Date(value).toLocaleString("fr-FR");
+    } catch (error) {
+        return value;
+    }
+}
+
+function renderAdminSubscriptionPaymentsList(items) {
+    const container = document.getElementById("admin-subscription-payments-list");
+    if (!container) return;
+
+    if (!Array.isArray(items) || items.length === 0) {
+        container.innerHTML = `
+            <div class="verification-empty">
+                Aucun paiement d'abonnement en attente.
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = items
+        .map((payment) => {
+            const safeId = escapeHtml(payment.id || "");
+            const user = payment.user || {};
+            const userName = escapeHtml(user.name || "Utilisateur");
+            const userId = escapeHtml(payment.userId || "");
+            const checkoutRef = escapeHtml(payment.checkoutRefId || "—");
+            const transactionRef = escapeHtml(payment.transactionRefId || "");
+            const plan = escapeHtml(String(payment.plan || "").toUpperCase() || "—");
+            const billing = payment.billingCycle === "annual" ? "Annuel" : "Mensuel";
+            const method = escapeHtml(payment.method || "card");
+            const provider = escapeHtml(payment.provider || "—");
+            const amountLabel = Number(payment.amount || 0).toLocaleString("fr-FR", {
+                style: "currency",
+                currency: payment.currency || "USD",
+            });
+            const currentPlan = escapeHtml(
+                String(user.plan || "free").toUpperCase(),
+            );
+            const currentStatus = escapeHtml(user.plan_status || "inactive");
+            const monetized = user.is_monetized ? "Oui" : "Non";
+
+            return `
+                <div class="admin-card" style="border:1px solid var(--border-color); border-radius:12px; padding:0.95rem; background: var(--surface-color); display:flex; flex-direction:column; gap:0.75rem;">
+                    <div style="display:flex; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; align-items:flex-start;">
+                        <div style="display:flex; flex-direction:column; gap:0.2rem; min-width:0;">
+                            <strong style="font-size:1rem;">${userName}</strong>
+                            <span style="color:var(--text-secondary); font-size:0.85rem; word-break:break-all;">${userId}</span>
+                        </div>
+                        <span class="admin-badge" style="align-self:flex-start;">${plan} • ${billing}</span>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:0.6rem;">
+                        <div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Montant attendu</div>
+                            <div style="font-weight:600;">${amountLabel}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Paiement</div>
+                            <div style="font-weight:600;">${method}${provider !== "—" ? ` • ${provider}` : ""}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Demande créée</div>
+                            <div style="font-weight:600;">${formatAdminPaymentDate(payment.createdAt)}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Réf interne</div>
+                            <div style="font-weight:600; word-break:break-all;">${checkoutRef}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Plan actuel</div>
+                            <div style="font-weight:600;">${currentPlan} • ${currentStatus}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Monétisation active</div>
+                            <div style="font-weight:600;">${monetized}</div>
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:0.6rem;">
+                        <input type="text" id="admin-sub-payment-ref-${safeId}" class="form-input" placeholder="Référence MaishaPay (recommandée)" value="${transactionRef}">
+                        <input type="text" id="admin-sub-payment-operator-${safeId}" class="form-input" placeholder="Référence opérateur (optionnelle)">
+                        <input type="text" id="admin-sub-payment-note-${safeId}" class="form-input" placeholder="Note admin (optionnelle)">
+                    </div>
+
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                        <button type="button" class="btn-verify" onclick="confirmAdminSubscriptionPayment('${safeId}')">
+                            Confirmer l'encaissement et activer le palier
+                        </button>
+                        <button type="button" class="btn-cancel" onclick="markAdminSubscriptionPaymentFailed('${safeId}')">
+                            Marquer comme non reçu / refusé
+                        </button>
+                    </div>
+                </div>
+            `;
+        })
+        .join("");
+}
+
+async function refreshAdminSubscriptionRelatedViews(user) {
+    if (!user?.id) return;
+    applyUserUpdateToCache(user);
+
+    try {
+        if (
+            window.currentProfileViewed &&
+            window.currentProfileViewed === user.id &&
+            typeof renderProfileIntoContainer === "function"
+        ) {
+            await renderProfileIntoContainer(user.id);
+        }
+    } catch (error) {
+        console.warn("Refresh profile after payment confirm failed:", error);
+    }
+
+    try {
+        if (
+            typeof renderDiscoverGrid === "function" &&
+            document.querySelector(".discover-grid")
+        ) {
+            await renderDiscoverGrid();
+        }
+    } catch (error) {
+        console.warn("Refresh discover after payment confirm failed:", error);
+    }
+}
+
+async function fetchAdminSubscriptionPayments() {
+    const container = document.getElementById("admin-subscription-payments-list");
+    if (!container) return;
+
+    container.innerHTML = `<div class="loading-spinner"></div>`;
+    try {
+        const payload = await fetchSuperAdminJson(
+            "/api/admin/subscription-payments?status=pending&limit=50",
+        );
+        window.adminSubscriptionPayments = payload?.payments || [];
+        renderAdminSubscriptionPaymentsList(window.adminSubscriptionPayments);
+    } catch (error) {
+        console.error("Erreur chargement paiements abonnements:", error);
+        container.innerHTML = `
+            <div class="verification-empty">
+                ${escapeHtml(error?.message || "Impossible de charger les paiements.")}
+            </div>
+        `;
+    }
+}
+
+async function confirmAdminSubscriptionPayment(paymentId) {
+    if (!paymentId) return;
+
+    const refValue =
+        document.getElementById(`admin-sub-payment-ref-${paymentId}`)?.value || "";
+    const operatorValue =
+        document.getElementById(`admin-sub-payment-operator-${paymentId}`)?.value ||
+        "";
+    const noteValue =
+        document.getElementById(`admin-sub-payment-note-${paymentId}`)?.value || "";
+
+    try {
+        const payload = await fetchSuperAdminJson(
+            "/api/admin/subscription-payments/confirm",
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    payment_id: paymentId,
+                    transaction_ref_id: refValue.trim() || null,
+                    operator_ref_id: operatorValue.trim() || null,
+                    note: noteValue.trim() || null,
+                }),
+            },
+        );
+
+        if (payload?.user) {
+            await refreshAdminSubscriptionRelatedViews(payload.user);
+        }
+
+        ToastManager?.success(
+            "Paiement confirmé",
+            "Le palier a été activé pour cet utilisateur.",
+        );
+        await fetchAdminSubscriptionPayments();
+    } catch (error) {
+        console.error("Confirmation paiement abonnement échouée:", error);
+        ToastManager?.error(
+            "Erreur",
+            error?.message || "Impossible de confirmer ce paiement.",
+        );
+    }
+}
+
+async function markAdminSubscriptionPaymentFailed(paymentId) {
+    if (!paymentId) return;
+
+    const noteValue =
+        document.getElementById(`admin-sub-payment-note-${paymentId}`)?.value || "";
+
+    try {
+        await fetchSuperAdminJson("/api/admin/subscription-payments/fail", {
+            method: "POST",
+            body: JSON.stringify({
+                payment_id: paymentId,
+                reason: noteValue.trim() || null,
+            }),
+        });
+        ToastManager?.success(
+            "Paiement classé",
+            "Le paiement a été marqué comme non confirmé.",
+        );
+        await fetchAdminSubscriptionPayments();
+    } catch (error) {
+        console.error("Classement paiement abonnement échoué:", error);
+        ToastManager?.error(
+            "Erreur",
+            error?.message || "Impossible de mettre ce paiement à jour.",
+        );
+    }
+}
+
+function renderAdminWithdrawalRequestsList(items) {
+    const container = document.getElementById("admin-withdrawal-requests-list");
+    if (!container) return;
+
+    if (!Array.isArray(items) || items.length === 0) {
+        container.innerHTML = `
+            <div class="verification-empty">
+                Aucune demande de retrait en attente.
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = items
+        .map((request) => {
+            const safeId = escapeHtml(request.id || "");
+            const user = request.user || {};
+            const userName = escapeHtml(user.name || "Utilisateur");
+            const userId = escapeHtml(request.creatorId || "");
+            const provider = escapeHtml(
+                request.providerLabel || request.provider || "Mobile Money",
+            );
+            const walletNumber = escapeHtml(request.walletNumber || "—");
+            const accountName = escapeHtml(request.accountName || "—");
+            const amountLabel = Number(request.amountUsd || 0).toLocaleString(
+                "fr-FR",
+                {
+                    style: "currency",
+                    currency: "USD",
+                },
+            );
+            const currentPlan = escapeHtml(
+                String(user.plan || "free").toUpperCase(),
+            );
+            const currentStatus = escapeHtml(user.plan_status || "inactive");
+            const requestStatus = escapeHtml(request.status || "pending");
+            const note = escapeHtml(request.note || "");
+            const operatorRef = escapeHtml(request.operatorRefId || "");
+
+            return `
+                <div class="admin-card" style="border:1px solid var(--border-color); border-radius:12px; padding:0.95rem; background: var(--surface-color); display:flex; flex-direction:column; gap:0.75rem;">
+                    <div style="display:flex; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; align-items:flex-start;">
+                        <div style="display:flex; flex-direction:column; gap:0.2rem; min-width:0;">
+                            <strong style="font-size:1rem;">${userName}</strong>
+                            <span style="color:var(--text-secondary); font-size:0.85rem; word-break:break-all;">${userId}</span>
+                        </div>
+                        <span class="admin-badge" style="align-self:flex-start;">${requestStatus}</span>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:0.6rem;">
+                        <div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Montant</div>
+                            <div style="font-weight:600;">${amountLabel}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Canal</div>
+                            <div style="font-weight:600;">${provider}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Compte</div>
+                            <div style="font-weight:600;">${accountName}</div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">${walletNumber}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Demandé le</div>
+                            <div style="font-weight:600;">${formatAdminPaymentDate(request.requestedAt || request.createdAt)}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Plan utilisateur</div>
+                            <div style="font-weight:600;">${currentPlan} • ${currentStatus}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Note créateur</div>
+                            <div style="font-weight:600;">${note || "—"}</div>
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:0.6rem;">
+                        <input type="text" id="admin-withdrawal-ref-${safeId}" class="form-input" placeholder="Référence opérateur / transaction" value="${operatorRef}">
+                        <input type="text" id="admin-withdrawal-note-${safeId}" class="form-input" placeholder="Note admin (optionnelle)" value="${escapeHtml(request.adminNote || "")}">
+                    </div>
+
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                        <button type="button" class="btn-verify" onclick="updateAdminWithdrawalRequestStatus('${safeId}', 'processing')">
+                            Marquer en traitement
+                        </button>
+                        <button type="button" class="btn-verify" onclick="updateAdminWithdrawalRequestStatus('${safeId}', 'paid')">
+                            Marquer payé
+                        </button>
+                        <button type="button" class="btn-cancel" onclick="updateAdminWithdrawalRequestStatus('${safeId}', 'rejected')">
+                            Refuser
+                        </button>
+                    </div>
+                </div>
+            `;
+        })
+        .join("");
+}
+
+async function fetchAdminWithdrawalRequests() {
+    const container = document.getElementById("admin-withdrawal-requests-list");
+    if (!container) return;
+
+    container.innerHTML = `<div class="loading-spinner"></div>`;
+    try {
+        const payload = await fetchSuperAdminJson(
+            "/api/admin/withdrawal-requests?status=pending,processing&limit=50",
+        );
+        window.adminWithdrawalRequests = payload?.requests || [];
+        renderAdminWithdrawalRequestsList(window.adminWithdrawalRequests);
+    } catch (error) {
+        console.error("Erreur chargement retraits admin:", error);
+        container.innerHTML = `
+            <div class="verification-empty">
+                ${escapeHtml(error?.message || "Impossible de charger les retraits.")}
+            </div>
+        `;
+    }
+}
+
+async function updateAdminWithdrawalRequestStatus(requestId, status) {
+    if (!requestId || !status) return;
+
+    const operatorRef =
+        document.getElementById(`admin-withdrawal-ref-${requestId}`)?.value || "";
+    const note =
+        document.getElementById(`admin-withdrawal-note-${requestId}`)?.value || "";
+
+    try {
+        await fetchSuperAdminJson("/api/admin/withdrawal-requests/status", {
+            method: "POST",
+            body: JSON.stringify({
+                request_id: requestId,
+                status,
+                operator_ref_id: operatorRef.trim() || null,
+                note: note.trim() || null,
+            }),
+        });
+
+        const successLabel =
+            status === "paid"
+                ? "Retrait marqué payé."
+                : status === "processing"
+                    ? "Retrait marqué en traitement."
+                    : "Retrait refusé.";
+        ToastManager?.success("Retrait mis à jour", successLabel);
+        await fetchAdminWithdrawalRequests();
+    } catch (error) {
+        console.error("Mise à jour retrait admin échouée:", error);
+        ToastManager?.error(
+            "Erreur",
+            error?.message || "Impossible de mettre à jour ce retrait.",
+        );
+    }
 }
 
 async function fetchFeedbackInbox() {
@@ -3893,6 +4450,7 @@ function applyUserUpdateToCache(user) {
     }
     if (window.currentUser && window.currentUser.id === user.id) {
         window.currentUser = { ...window.currentUser, ...sanitized };
+        updateMonetizationNavButton(true);
     }
     try {
         if (Array.isArray(allUsers) && allUsers.length > 0) {
@@ -8444,154 +9002,6 @@ function formatUsdAmount(value) {
     }).format(amount);
 }
 
-function shouldShowProfileMonetization(user, isOwnProfile) {
-    if (!user || !isOwnProfile) return false;
-    const plan = String(user.plan || "").toLowerCase();
-    if (!["medium", "pro"].includes(plan)) return false;
-    if (typeof isPlanActiveByDate === "function") {
-        return isPlanActiveByDate(user);
-    }
-    if (typeof isPlanActiveForUser === "function") {
-        return isPlanActiveForUser(user);
-    }
-    return true;
-}
-
-function buildProfileMonetizationSection(user, isOwnProfile) {
-    if (!shouldShowProfileMonetization(user, isOwnProfile)) return "";
-    const canVideo =
-        typeof canMonetizeVideos === "function" ? canMonetizeVideos(user) : false;
-    const rpmRate =
-        typeof PLANS !== "undefined" && PLANS?.PRO?.rpmRate
-            ? PLANS.PRO.rpmRate
-            : 0.4;
-    const rpmLabel = `${rpmRate.toFixed(2).replace(".", ",")} USD / 1000 vues`;
-    const statusLabel = canVideo
-        ? "Monétisation vidéo active"
-        : "Monétisation vidéo non activée";
-    const statusDetail = canVideo
-        ? "Vos vues éligibles sont comptabilisées automatiquement."
-        : "Passez au plan Pro et atteignez 1000 abonnés pour activer les revenus vidéo.";
-
-    return `
-        <section class="profile-monetization" id="profile-monetization" data-video-enabled="${canVideo ? "true" : "false"}">
-            <div class="section-header">
-                <h3><i class="fas fa-coins"></i> Monétisation</h3>
-                <span class="rpm-badge">${rpmLabel}</span>
-            </div>
-            <p class="profile-monetization-note">
-                Seules les vidéos de plus de 60 secondes sont éligibles à la monétisation. Les soutiens incluent les dons des autres utilisateurs.
-            </p>
-            <div class="revenue-cards">
-                <div class="revenue-card">
-                    <div class="card-icon video">
-                        <i class="fas fa-video"></i>
-                    </div>
-                    <div class="card-content">
-                        <span class="card-label">Revenus vidéos</span>
-                        <span class="card-value" id="profile-video-revenue">--</span>
-                        <span class="card-count" id="profile-video-views">-- vues éligibles</span>
-                    </div>
-                </div>
-
-                <div class="revenue-card">
-                    <div class="card-icon support">
-                        <i class="fas fa-heart"></i>
-                    </div>
-                    <div class="card-content">
-                        <span class="card-label">Soutiens reçus</span>
-                        <span class="card-value" id="profile-support-revenue">--</span>
-                        <span class="card-count" id="profile-support-count">-- soutien</span>
-                    </div>
-                </div>
-
-                <div class="revenue-card highlight">
-                    <div class="card-icon total">
-                        <i class="fas fa-piggy-bank"></i>
-                    </div>
-                    <div class="card-content">
-                        <span class="card-label">Total reçu</span>
-                        <span class="card-value" id="profile-total-revenue">--</span>
-                        <span class="card-count">Soutiens + vues éligibles</span>
-                    </div>
-                </div>
-            </div>
-            <div class="profile-monetization-status">
-                <span class="status-badge ${canVideo ? "active" : "inactive"}">
-                    <i class="fas fa-${canVideo ? "check-circle" : "lock"}"></i> ${statusLabel}
-                </span>
-                <span class="status-detail">${statusDetail}</span>
-            </div>
-        </section>
-    `;
-}
-
-async function loadProfileMonetizationData(userId) {
-    const section = document.getElementById("profile-monetization");
-    if (!section || !userId) return;
-
-    const user =
-        getUser(userId) ||
-        (window.currentUserId === userId ? window.currentUser : null);
-    const canVideo =
-        typeof canMonetizeVideos === "function" ? canMonetizeVideos(user) : false;
-    const rpmRate =
-        typeof PLANS !== "undefined" && PLANS?.PRO?.rpmRate
-            ? PLANS.PRO.rpmRate
-            : 0.4;
-
-    try {
-        const [videoStatsResult, supportTxResult] = await Promise.all([
-            typeof getCreatorVideoStats === "function"
-                ? getCreatorVideoStats(userId, "all")
-                : { data: null },
-            typeof getCreatorTransactions === "function"
-                ? getCreatorTransactions(userId, { type: "support" })
-                : { data: [] },
-        ]);
-
-        const stats = videoStatsResult?.data || {};
-        let eligibleViews = Number(
-            stats.totalEligibleViews || stats.totalViews || 0,
-        );
-        if (!Number.isFinite(eligibleViews)) eligibleViews = 0;
-
-        const supportTransactions = Array.isArray(supportTxResult?.data)
-            ? supportTxResult.data
-            : [];
-        const supportTotal = supportTransactions.reduce((sum, tx) => {
-            const net = Number.parseFloat(tx?.amount_net_creator);
-            if (Number.isFinite(net)) return sum + net;
-            const gross = Number.parseFloat(tx?.amount_gross);
-            if (Number.isFinite(gross)) return sum + gross * 0.8;
-            return sum;
-        }, 0);
-
-        const supportCount = supportTransactions.length;
-        const videoRevenue = canVideo ? (eligibleViews / 1000) * rpmRate : 0;
-        const totalRevenue = supportTotal + videoRevenue;
-
-        const setText = (id, value) => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = value;
-        };
-
-        setText("profile-video-revenue", formatUsdAmount(videoRevenue));
-        setText(
-            "profile-video-views",
-            `${eligibleViews.toLocaleString("fr-FR")} vues éligibles${canVideo ? "" : " • Pro requis"}`,
-        );
-        setText("profile-support-revenue", formatUsdAmount(supportTotal));
-        setText(
-            "profile-support-count",
-            `${supportCount} soutien${supportCount !== 1 ? "s" : ""}`,
-        );
-        setText("profile-total-revenue", formatUsdAmount(totalRevenue));
-    } catch (error) {
-        console.error("Erreur chargement monétisation profil:", error);
-    }
-}
-
 async function renderProfileTimeline(userId) {
     console.log("renderProfileTimeline appelé pour userId:", userId);
     console.log("allUsers contient:", allUsers.length, "utilisateurs");
@@ -9502,11 +9912,6 @@ async function renderProfileTimeline(userId) {
     `
         : "";
 
-    const monetizationSectionHtml = buildProfileMonetizationSection(
-        user,
-        isOwnProfile,
-    );
-
     const profileHtml = `
         ${bannerHtml}
         <div class="profile-hero">
@@ -9606,7 +10011,6 @@ async function renderProfileTimeline(userId) {
             </div>
         </section>
         ${analyticsSectionHtml}
-        ${monetizationSectionHtml}
         <div class="timeline">
             ${window.selectedArcId && selectedArc ? `<div style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 1rem; text-align: center;">Affichage des traces pour l'ARC : <strong>${selectedArc.title}</strong></div>` : ""}
             ${timelinesHtml}
@@ -9670,7 +10074,6 @@ async function renderProfileIntoContainer(userId) {
         if (window.renderWeeklyProgressChart)
             window.renderWeeklyProgressChart(userId);
         if (window.renderInfluenceReach) window.renderInfluenceReach(userId);
-        loadProfileMonetizationData(userId);
         maybeShowAmbassadorWelcome(userId);
     };
 

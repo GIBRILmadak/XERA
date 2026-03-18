@@ -280,7 +280,10 @@
 }
 
 .header-stats {
-    text-align: right;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .stat-card {
@@ -411,6 +414,12 @@
     margin-right: 10px;
 }
 
+.section-subtitle {
+    margin-top: 6px;
+    color: #7f8c8d;
+    font-size: 14px;
+}
+
 .period-filter {
     display: flex;
     gap: 8px;
@@ -437,6 +446,222 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 20px;
+}
+
+.wallet-section {
+    margin-bottom: 30px;
+    padding: 25px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.wallet-alert {
+    margin-bottom: 18px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #f5f7fb;
+    border: 1px solid #e3e8f3;
+    color: #52606d;
+    font-size: 14px;
+}
+
+.wallet-alert.success {
+    background: rgba(39, 174, 96, 0.08);
+    border-color: rgba(39, 174, 96, 0.2);
+    color: #1f7a45;
+}
+
+.wallet-alert.warning {
+    background: rgba(243, 156, 18, 0.1);
+    border-color: rgba(243, 156, 18, 0.25);
+    color: #9a670d;
+}
+
+.wallet-alert.error {
+    background: rgba(231, 76, 60, 0.08);
+    border-color: rgba(231, 76, 60, 0.18);
+    color: #b03a2e;
+}
+
+.wallet-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+    margin-bottom: 22px;
+}
+
+.wallet-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 20px;
+    border-radius: 16px;
+    background: #f8f9fb;
+    border: 1px solid #edf1f6;
+}
+
+.wallet-card-primary {
+    background: linear-gradient(135deg, #0f172a 0%, #1f3a5f 100%);
+    border-color: transparent;
+    color: white;
+}
+
+.wallet-label {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.8;
+}
+
+.wallet-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.wallet-card-primary .wallet-value,
+.wallet-card-primary .wallet-meta {
+    color: white;
+}
+
+.wallet-meta {
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.wallet-panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 18px;
+}
+
+.wallet-panel {
+    padding: 22px;
+    border-radius: 16px;
+    background: #fbfcfe;
+    border: 1px solid #edf1f6;
+}
+
+.wallet-panel-heading-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.wallet-panel-header h3 {
+    color: #1f2937;
+    font-size: 18px;
+    margin-bottom: 6px;
+}
+
+.wallet-panel-header p {
+    color: #6b7280;
+    font-size: 14px;
+    margin-bottom: 18px;
+}
+
+.wallet-toggle-btn {
+    flex-shrink: 0;
+}
+
+.wallet-saved-summary {
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(16, 185, 129, 0.22);
+    background: rgba(16, 185, 129, 0.08);
+    color: #065f46;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.wallet-saved-summary strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.wallet-collapsible {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.22s ease, opacity 0.22s ease;
+}
+
+.wallet-collapsible > * {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.wallet-collapsible.is-collapsed {
+    grid-template-rows: 0fr;
+    opacity: 0;
+}
+
+.wallet-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.wallet-form.is-submitting {
+    pointer-events: none;
+    opacity: 0.72;
+}
+
+.wallet-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.wallet-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.wallet-field span {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.wallet-field input,
+.wallet-field select,
+.wallet-field textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #d8dee9;
+    border-radius: 12px;
+    background: white;
+    color: #1f2937;
+    font-size: 14px;
+}
+
+.wallet-field textarea {
+    resize: vertical;
+    min-height: 96px;
+}
+
+.wallet-field input:focus,
+.wallet-field select:focus,
+.wallet-field textarea:focus {
+    outline: none;
+    border-color: var(--plan-medium);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
+}
+
+.wallet-form-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.wallet-inline-status {
+    color: #6b7280;
+    font-size: 13px;
 }
 
 .revenue-card {
@@ -591,7 +816,8 @@
 
 /* Tables */
 .transactions-section,
-.payouts-section {
+.payouts-section,
+.withdrawals-section {
     margin-bottom: 30px;
     padding: 25px;
     background: white;
@@ -608,27 +834,32 @@
 }
 
 .transactions-table-wrapper,
-.payouts-table-wrapper {
+.payouts-table-wrapper,
+.withdrawals-table-wrapper {
     overflow-x: auto;
 }
 
 .transactions-table,
-.payouts-table {
+.payouts-table,
+.withdrawals-table {
     width: 100%;
     border-collapse: collapse;
 }
 
 .transactions-table th,
 .payouts-table th,
+.withdrawals-table th,
 .transactions-table td,
-.payouts-table td {
+.payouts-table td,
+.withdrawals-table td {
     padding: 15px;
     text-align: left;
     border-bottom: 1px solid #ecf0f1;
 }
 
 .transactions-table th,
-.payouts-table th {
+.payouts-table th,
+.withdrawals-table th {
     font-weight: 600;
     color: #7f8c8d;
     font-size: 12px;
@@ -637,7 +868,8 @@
 }
 
 .transactions-table td,
-.payouts-table td {
+.payouts-table td,
+.withdrawals-table td {
     font-size: 14px;
     color: #2c3e50;
 }
@@ -716,6 +948,216 @@
 
 .requirement-item.completed .req-status {
     color: var(--success);
+}
+
+/* ========================================
+   THÈME SOMBRE PAGE MONÉTISATION
+   ======================================== */
+
+body.monetization-dashboard-page {
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at top left, rgba(99, 102, 241, 0.18), transparent 32%),
+        radial-gradient(circle at top right, rgba(168, 85, 247, 0.16), transparent 28%),
+        linear-gradient(180deg, #05070d 0%, #090d17 38%, #0a1120 100%);
+    color: #eef2ff;
+}
+
+body.monetization-dashboard-page .dashboard-main {
+    max-width: 1240px;
+    padding: 108px 20px 42px;
+}
+
+body.monetization-dashboard-page .dashboard-header {
+    position: relative;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.14), transparent 24%),
+        linear-gradient(135deg, rgba(67, 56, 202, 0.92) 0%, rgba(109, 40, 217, 0.9) 52%, rgba(21, 94, 117, 0.88) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 24px 60px rgba(3, 8, 20, 0.45);
+}
+
+body.monetization-dashboard-page .dashboard-identity {
+    margin-top: 18px;
+}
+
+body.monetization-dashboard-page .dashboard-identity-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: rgba(9, 13, 23, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(10px);
+}
+
+body.monetization-dashboard-page .dashboard-identity-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+body.monetization-dashboard-page .dashboard-identity-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+body.monetization-dashboard-page .dashboard-identity-meta strong {
+    font-size: 0.95rem;
+    color: #ffffff;
+}
+
+body.monetization-dashboard-page .dashboard-identity-meta span {
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.82);
+}
+
+body.monetization-dashboard-page .stat-card {
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.monetization-dashboard-page .status-card,
+body.monetization-dashboard-page .wallet-section,
+body.monetization-dashboard-page .revenue-card,
+body.monetization-dashboard-page .video-stats-section,
+body.monetization-dashboard-page .transactions-section,
+body.monetization-dashboard-page .payouts-section,
+body.monetization-dashboard-page .withdrawals-section,
+body.monetization-dashboard-page .wallet-panel {
+    background: rgba(11, 17, 30, 0.9);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    box-shadow: 0 18px 45px rgba(2, 8, 23, 0.34);
+}
+
+body.monetization-dashboard-page .status-card.active {
+    border-left-color: #22c55e;
+}
+
+body.monetization-dashboard-page .status-card.inactive {
+    border-left-color: #f59e0b;
+}
+
+body.monetization-dashboard-page .status-info h3,
+body.monetization-dashboard-page .section-header h2,
+body.monetization-dashboard-page .wallet-panel-header h3,
+body.monetization-dashboard-page .card-value,
+body.monetization-dashboard-page .stat-number,
+body.monetization-dashboard-page .transactions-table td,
+body.monetization-dashboard-page .payouts-table td,
+body.monetization-dashboard-page .withdrawals-table td,
+body.monetization-dashboard-page .wallet-field span {
+    color: #f8fafc;
+}
+
+body.monetization-dashboard-page .status-detail,
+body.monetization-dashboard-page .section-subtitle,
+body.monetization-dashboard-page .wallet-panel-header p,
+body.monetization-dashboard-page .wallet-meta,
+body.monetization-dashboard-page .wallet-inline-status,
+body.monetization-dashboard-page .card-count,
+body.monetization-dashboard-page .card-label,
+body.monetization-dashboard-page .stat-desc,
+body.monetization-dashboard-page .empty-row td {
+    color: #94a3b8;
+}
+
+body.monetization-dashboard-page .wallet-saved-summary {
+    color: #d1fae5;
+    border-color: rgba(16, 185, 129, 0.26);
+    background: rgba(16, 185, 129, 0.12);
+}
+
+body.monetization-dashboard-page .wallet-toggle-btn {
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+body.monetization-dashboard-page .wallet-alert {
+    background: rgba(15, 23, 42, 0.72);
+    border-color: rgba(71, 85, 105, 0.45);
+    color: #cbd5e1;
+}
+
+body.monetization-dashboard-page .wallet-alert.success {
+    background: rgba(21, 128, 61, 0.16);
+    border-color: rgba(34, 197, 94, 0.28);
+    color: #bbf7d0;
+}
+
+body.monetization-dashboard-page .wallet-alert.warning {
+    background: rgba(161, 98, 7, 0.18);
+    border-color: rgba(245, 158, 11, 0.3);
+    color: #fde68a;
+}
+
+body.monetization-dashboard-page .wallet-alert.error {
+    background: rgba(153, 27, 27, 0.18);
+    border-color: rgba(248, 113, 113, 0.28);
+    color: #fecaca;
+}
+
+body.monetization-dashboard-page .wallet-card {
+    background: rgba(15, 23, 42, 0.82);
+    border-color: rgba(71, 85, 105, 0.3);
+}
+
+body.monetization-dashboard-page .wallet-card-primary {
+    background: linear-gradient(135deg, #172554 0%, #0f766e 100%);
+}
+
+body.monetization-dashboard-page .wallet-value,
+body.monetization-dashboard-page .revenue-card:not(.highlight) .card-value,
+body.monetization-dashboard-page .stat-number {
+    color: #f8fafc;
+}
+
+body.monetization-dashboard-page .filter-btn,
+body.monetization-dashboard-page .filter-actions select,
+body.monetization-dashboard-page .wallet-field input,
+body.monetization-dashboard-page .wallet-field select,
+body.monetization-dashboard-page .wallet-field textarea {
+    background: rgba(15, 23, 42, 0.82);
+    color: #f8fafc;
+    border-color: rgba(100, 116, 139, 0.4);
+}
+
+body.monetization-dashboard-page .filter-btn:hover,
+body.monetization-dashboard-page .filter-btn.active {
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    border-color: transparent;
+}
+
+body.monetization-dashboard-page .wallet-field input::placeholder,
+body.monetization-dashboard-page .wallet-field textarea::placeholder {
+    color: #64748b;
+}
+
+body.monetization-dashboard-page .transactions-table th,
+body.monetization-dashboard-page .payouts-table th,
+body.monetization-dashboard-page .withdrawals-table th {
+    color: #94a3b8;
+    border-bottom-color: rgba(71, 85, 105, 0.45);
+}
+
+body.monetization-dashboard-page .transactions-table td,
+body.monetization-dashboard-page .payouts-table td,
+body.monetization-dashboard-page .withdrawals-table td {
+    border-bottom-color: rgba(30, 41, 59, 0.92);
+}
+
+body.monetization-dashboard-page .stat-box,
+body.monetization-dashboard-page .video-cta {
+    background: rgba(15, 23, 42, 0.78);
+    border: 1px solid rgba(71, 85, 105, 0.24);
+}
+
+body.monetization-dashboard-page .video-cta p {
+    color: #cbd5e1;
 }
 
 /* ========================================
@@ -1225,6 +1667,10 @@
     .dashboard-main {
         padding: 15px;
     }
+
+    body.monetization-dashboard-page .dashboard-main {
+        padding: 92px 15px 32px;
+    }
     
     .dashboard-header {
         flex-direction: column;
@@ -1233,11 +1679,25 @@
     }
     
     .header-stats {
-        text-align: center;
+        justify-content: center;
     }
     
     .revenue-cards {
         grid-template-columns: 1fr;
+    }
+
+    .wallet-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .wallet-panel-heading-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .wallet-toggle-btn {
+        width: 100%;
+        justify-content: center;
     }
     
     .status-card {
@@ -1271,6 +1731,11 @@
         flex-direction: column;
         gap: 15px;
         text-align: center;
+    }
+
+    body.monetization-dashboard-page .dashboard-identity-card {
+        width: 100%;
+        justify-content: center;
     }
 }
 

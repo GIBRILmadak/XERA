@@ -155,7 +155,7 @@ async function getProjectedRevenue(creatorId) {
         
         const { data: videoViews, error: viewError } = await supabase
             .from('video_views')
-            .select('view_count, eligible')
+            .select('view_count, eligible, video_duration')
             .eq('creator_id', creatorId)
             .eq('period_month', startOfMonth.toISOString().slice(0, 7) + '-01')
             .eq('eligible', true);
@@ -184,7 +184,11 @@ async function getProjectedRevenue(creatorId) {
         // Calculer les revenus vidéo en cours
         let videoViewsCount = 0;
         if (videoViews) {
-            videoViewsCount = videoViews.reduce((sum, v) => sum + (v.view_count || 0), 0);
+            videoViewsCount = videoViews.reduce((sum, v) => {
+                const duration = Number.parseFloat(v.video_duration || 0);
+                if (!Number.isFinite(duration) || duration <= 60) return sum;
+                return sum + (v.view_count || 0);
+            }, 0);
         }
         const pendingVideoRevenue = (videoViewsCount / 1000) * 0.40 * 0.8; // 80% net
         
@@ -227,7 +231,8 @@ async function getProjectedRevenue(creatorId) {
 function isContentMonetizable(content) {
     // Vidéo de plus de 60 secondes
     if (content.type !== 'video') return false;
-    if (!content.duration || content.duration < 60) return false;
+    const duration = Number.parseFloat(content.duration || 0);
+    if (!Number.isFinite(duration) || duration <= 60) return false;
     
     // Le créateur doit être monétisé
     if (!content.user_id) return false;

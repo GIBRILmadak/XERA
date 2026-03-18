@@ -341,6 +341,7 @@ async function sendPushForDirectMessage(messageRow) {
 
 function buildPushPayload(notification) {
   const typeTitleMap = {
+    support: 'Nouveau soutien',
     follow: 'Nouvel abonné',
     encouragement: 'Nouvel encouragement',
     new_trace: 'Nouvelle trace',

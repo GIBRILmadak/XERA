@@ -227,6 +227,7 @@ function showNotificationToast(notification) {
 // Obtenir l'icône selon le type de notification
 function getNotificationIcon(type) {
     const icons = {
+        support: '💖',
         follow: '👤',
         new_trace: '📝',
         new_arc: '📈',
@@ -245,6 +246,7 @@ function getNotificationIcon(type) {
 // Obtenir le titre de la notification
 function getNotificationTitle(notification) {
     const titles = {
+        support: 'Nouveau soutien',
         follow: 'Nouvel abonné',
         new_trace: 'Nouvelle trace',
         new_arc: 'Nouvel ARC',

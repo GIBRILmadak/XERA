@@ -50,7 +50,8 @@ BEGIN
     FROM video_views
     WHERE creator_id = p_creator_id
         AND period_month = p_period_month
-        AND eligible = true;
+        AND eligible = true
+        AND COALESCE(video_duration, 0) > 60;
     
     -- Calculer le montant brut
     v_amount_gross := (v_total_views / 1000.0) * 0.40;

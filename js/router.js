@@ -14,6 +14,12 @@
         "subscription-payment.html": "/subscription-payment",
         "verification.html": "/verification",
     };
+    const CLEAN_TO_HTML_PATH = Object.fromEntries(
+        Object.entries(HTML_TO_CLEAN_PATH).map(([htmlPath, cleanPath]) => [
+            cleanPath,
+            `/${htmlPath}`,
+        ]),
+    );
 
     const ROUTE_NAMES = {
         discover: "/",
@@ -35,6 +41,12 @@
         return url.origin === window.location.origin;
     }
 
+    function shouldNormalizeToCleanPath() {
+        const { protocol, hostname } = window.location;
+        if (protocol === "file:") return false;
+        return hostname !== "localhost" && hostname !== "127.0.0.1";
+    }
+
     function normalizePathname(pathname) {
         return pathname === "/index.html" ? "/" : pathname;
     }
@@ -45,6 +57,14 @@
             return HTML_TO_CLEAN_PATH[normalized];
         }
         return normalizePathname(pathname);
+    }
+
+    function mapCleanPathToHtml(pathname) {
+        const normalized = normalizePathname(pathname);
+        if (CLEAN_TO_HTML_PATH[normalized]) {
+            return CLEAN_TO_HTML_PATH[normalized];
+        }
+        return pathname;
     }
 
     function toCleanUrl(target, options = {}) {
@@ -63,6 +83,27 @@
                 (url.hash || "");
 
             return relative || "/";
+        } catch (error) {
+            return target;
+        }
+    }
+
+    function toHtmlUrl(target, options = {}) {
+        const base = options.base || window.location.href;
+
+        try {
+            const url = new URL(target, base);
+            if (!isSameOrigin(url)) {
+                return url.toString();
+            }
+
+            url.pathname = mapCleanPathToHtml(url.pathname);
+            const relative =
+                url.pathname +
+                (url.search || "") +
+                (url.hash || "");
+
+            return relative || "/index.html";
         } catch (error) {
             return target;
         }
@@ -87,12 +128,16 @@
         return `${url.pathname}${url.search}${url.hash}`;
     }
 
+    function buildHtmlUrl(routeName, options = {}) {
+        return toHtmlUrl(buildUrl(routeName, options));
+    }
+
     function navigate(target, options = {}) {
         const { replace = false, query, hash } = options;
         const destination =
             query || hash || ROUTE_NAMES[target]
-                ? buildUrl(target, { query, hash })
-                : toCleanUrl(target);
+                ? buildHtmlUrl(target, { query, hash })
+                : toHtmlUrl(target);
 
         if (replace) {
             window.location.replace(destination);
@@ -103,6 +148,7 @@
     }
 
     function normalizeCurrentLocation() {
+        if (!shouldNormalizeToCleanPath()) return;
         const cleanPath = mapHtmlPathToClean(window.location.pathname);
         const currentPath = normalizePathname(window.location.pathname);
         if (cleanPath === currentPath) return;
@@ -115,7 +161,7 @@
         root.querySelectorAll("a[href]").forEach((anchor) => {
             const href = anchor.getAttribute("href");
             if (!href || href.startsWith("#")) return;
-            anchor.setAttribute("href", toCleanUrl(href));
+            anchor.setAttribute("href", toHtmlUrl(href));
         });
     }
 
@@ -126,8 +172,10 @@
 
     window.XeraRouter = {
         buildUrl,
+        buildHtmlUrl,
         navigate,
         normalizeCurrentLocation,
+        toHtmlUrl,
         toCleanUrl,
         updateLinks,
     };

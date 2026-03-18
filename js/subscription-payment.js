@@ -5,6 +5,10 @@
 const DEFAULT_BILLING = 'monthly';
 const ANNUAL_DISCOUNT = 0.20;
 let usdToCdfRate = 2300;
+let maishaPayConfig = {
+    callbackEnabled: true,
+    gatewayMode: '1',
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
     const user = await checkAuth();
@@ -24,12 +28,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     const params = new URLSearchParams(window.location.search);
     const plan = normalizePlan(params.get('plan'));
     const billing = normalizeBilling(params.get('billing'));
+    let accessToken = '';
+    try {
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+        accessToken = session?.access_token || '';
+    } catch (error) {
+        // keep empty token fallback
+    }
 
     const currencyInput = document.getElementById('inputCurrency');
     const currency = currencyInput?.value || 'USD';
     await loadExchangeRate();
     hydrateSummary(plan, billing, currency);
-    setupPaymentForm(user, plan, billing);
+    setupPaymentHint();
+    setupPaymentForm(user, plan, billing, accessToken);
 });
 
 async function hydrateNavAvatar(user) {
@@ -101,7 +115,7 @@ function hydrateSummary(planId, billingCycle, currency = 'USD') {
     }
 }
 
-function setupPaymentForm(user, planId, billingCycle) {
+function setupPaymentForm(user, planId, billingCycle, accessToken = '') {
     const form = document.getElementById('maishapay-form');
     if (!form) return;
 
@@ -121,6 +135,7 @@ function setupPaymentForm(user, planId, billingCycle) {
     inputPlan.value = planId;
     inputCycle.value = billingCycle;
     inputUserId.value = user.id;
+    if (inputAccessToken) inputAccessToken.value = accessToken;
 
     const apiBase = resolveApiBase();
     form.action = `${apiBase}/api/maishapay/checkout`;
@@ -173,6 +188,24 @@ function setupPaymentForm(user, planId, billingCycle) {
     });
 }
 
+function setupPaymentHint() {
+    const hint = document.querySelector('.payment-hint');
+    if (!hint) return;
+
+    if (maishaPayConfig.callbackEnabled === false) {
+        hint.innerHTML = `
+            <i class="fas fa-circle-info"></i>
+            Paiement MaishaPay en direct. La validation automatique de l'abonnement est desactivee temporairement.
+        `;
+        return;
+    }
+
+    hint.innerHTML = `
+        <i class="fas fa-lock"></i>
+        Paiement securise via MaishaPay
+    `;
+}
+
 function resolveApiBase() {
     const bodyBase = document.body?.dataset?.apiBase?.trim();
     if (bodyBase) return bodyBase;
@@ -193,6 +226,12 @@ async function loadExchangeRate() {
         const rate = Number.parseFloat(data?.usdToCdfRate);
         if (Number.isFinite(rate) && rate > 0) {
             usdToCdfRate = rate;
+        }
+        if (data?.maishaPay && typeof data.maishaPay === 'object') {
+            maishaPayConfig = {
+                ...maishaPayConfig,
+                ...data.maishaPay,
+            };
         }
     } catch (error) {
         // keep default rate

@@ -254,23 +254,35 @@ async function processGlobalSupport() {
             window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
             return;
         }
-        
-        // Créer la session de paiement
+
+        const submitBtn = document.getElementById('global-support-submit');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi...';
+        }
+
         const result = await createSupportPaymentSession(
             currentUser.id,
             creatorId,
             amount,
             'Soutien depuis le profil'
         );
-        
-        if (result.success && result.data.paymentUrl) {
-            window.location.href = result.data.paymentUrl;
+
+        if (result.success) {
+            closeGlobalSupportModal();
+            showGlobalNotification('Soutien envoyé avec succès', 'success');
         } else {
             showGlobalNotification(result.error || 'Erreur lors du traitement', 'error');
         }
     } catch (error) {
         console.error('Exception traitement soutien:', error);
         showGlobalNotification('Une erreur est survenue', 'error');
+    } finally {
+        const submitBtn = document.getElementById('global-support-submit');
+        if (submitBtn) {
+            submitBtn.disabled = !(amount >= 1 && amount <= 1000);
+            submitBtn.innerHTML = '<i class="fas fa-heart"></i> Envoyer le soutien';
+        }
     }
 }
 

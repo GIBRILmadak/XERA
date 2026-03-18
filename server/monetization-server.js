@@ -20,6 +20,7 @@ const {
     RETURN_REMINDER_SWEEP_MS = "600000",
     USD_TO_CDF_RATE = "2300",
     CALLBACK_BASE_URL = "https://xxxxx.loca.lt",
+    MAISHAPAY_USE_CALLBACK = "0",
 
     MAISHAPAY_PUBLIC_KEY = "MP-LIVEPK-Gl4b.T27YY9$ydZA$1uQq0jVo1D8lRhPJ7Vw0Z5vssuO1NU3n$$0OPOdzPf52qU01u3s0dS9VK2FB7z8IbqkbYO1r6PZblygvafZFQFyMOG$JBDq$zTfy/3C",
 
@@ -60,10 +61,45 @@ const allowedOrigins = APP_BASE_URL.split(",")
     .filter(Boolean);
 app.use(cors({ origin: allowedOrigins, methods: ["GET", "POST"] }));
 
+function parseBooleanEnv(value, fallback = false) {
+    if (value === undefined || value === null || value === "") {
+        return fallback;
+    }
+    const normalized = String(value).trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(normalized)) return true;
+    if (["0", "false", "no", "off"].includes(normalized)) return false;
+    return fallback;
+}
+
+function hasPublicCallbackBaseUrl(value) {
+    const raw = String(value || "").trim();
+    if (!raw || raw.includes("xxxxx.loca.lt")) return false;
+    try {
+        const url = new URL(raw);
+        const hostname = String(url.hostname || "").toLowerCase();
+        if (url.protocol !== "https:") return false;
+        if (hostname === "localhost" || hostname === "127.0.0.1") return false;
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
+function escapeHtmlAttr(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
 const PRIMARY_ORIGIN =
     allowedOrigins[0] || APP_BASE_URL.split(",")[0] || "http://localhost:3000";
 const CALLBACK_ORIGIN =
     String(CALLBACK_BASE_URL || "").trim() || PRIMARY_ORIGIN;
+const MAISHAPAY_CALLBACK_ENABLED =
+    parseBooleanEnv(MAISHAPAY_USE_CALLBACK, false) &&
+    hasPublicCallbackBaseUrl(CALLBACK_ORIGIN);
 const REMINDER_HOURS = RETURN_REMINDER_HOURS.split(",")
     .map((value) => parseInt(value.trim(), 10))
     .filter((hour) => Number.isFinite(hour) && hour >= 0 && hour <= 23)
@@ -104,6 +140,29 @@ const USD_TO_CDF_RATE_VALUE = Math.max(
     1,
     Number.parseFloat(USD_TO_CDF_RATE) || 2300,
 );
+const WITHDRAWAL_MIN_USD = 5;
+const SUPPORT_MIN_USD = 1;
+const SUPPORT_MAX_USD = 1000;
+const SUPPORTED_MOBILE_MONEY_PROVIDERS = new Set([
+    "airtel_money",
+    "orange_money",
+    "mpesa",
+    "afrimoney",
+    "other",
+]);
+const MOBILE_MONEY_PROVIDER_LABELS = {
+    airtel_money: "Airtel Money",
+    orange_money: "Orange Money",
+    mpesa: "M-Pesa",
+    afrimoney: "Afrimoney",
+    other: "Autre",
+};
+
+function isValidPlanId(value) {
+    return ["standard", "medium", "pro"].includes(
+        String(value || "").toLowerCase(),
+    );
+}
 
 function computeMaishaPayAmount(plan, billingCycle, currency) {
     const monthlyUsd = MAISHAPAY_PLANS[plan];
@@ -183,6 +242,355 @@ async function resolveUserId(accessToken, fallbackId) {
         // ignore
     }
     return fallbackId;
+}
+
+async function createPendingSubscriptionPayment({
+    userId,
+    plan,
+    billingCycle,
+    currency,
+    amount,
+    method,
+    provider,
+    walletId,
+}) {
+    const checkoutRefId = crypto.randomUUID();
+    const nowIso = new Date().toISOString();
+    const metadata = {
+        payment_provider: "maishapay",
+        checkout_ref_id: checkoutRefId,
+        plan: String(plan || "").toLowerCase(),
+        billing_cycle: String(billingCycle || "monthly").toLowerCase(),
+        method: String(method || "card").toLowerCase(),
+        provider: provider || null,
+        wallet_id: walletId || null,
+        callback_enabled: MAISHAPAY_CALLBACK_ENABLED,
+        callback_origin: MAISHAPAY_CALLBACK_ENABLED ? CALLBACK_ORIGIN : null,
+        checkout_started_at: nowIso,
+    };
+
+    const { data, error } = await supabase
+        .from("transactions")
+        .insert({
+            from_user_id: userId,
+            to_user_id: userId,
+            type: "subscription",
+            amount_gross: amount,
+            amount_net_creator: 0,
+            amount_commission_xera: 0,
+            currency,
+            status: "pending",
+            description: `Paiement abonnement ${plan} (${billingCycle}) en attente`,
+            metadata,
+        })
+        .select("id, metadata, created_at")
+        .single();
+
+    if (error) {
+        throw error;
+    }
+
+    return {
+        id: data.id,
+        checkoutRefId,
+        createdAt: data.created_at,
+    };
+}
+
+async function authenticateRequest(req) {
+    const auth = String(req.headers.authorization || "");
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    if (!token) {
+        return { error: { status: 401, message: "Token manquant." } };
+    }
+
+    const { data: authData, error: authError } =
+        await supabase.auth.getUser(token);
+    if (authError || !authData?.user?.id) {
+        return {
+            error: { status: 401, message: "Utilisateur non authentifié." },
+        };
+    }
+    return { user: authData.user, token };
+}
+
+async function authenticateSuperAdmin(req) {
+    const authResult = await authenticateRequest(req);
+    if (authResult.error) {
+        return authResult;
+    }
+    if (authResult.user.id !== SUPER_ADMIN_ID) {
+        return { error: { status: 403, message: "Accès refusé." } };
+    }
+    return authResult;
+}
+
+function extractSubscriptionPaymentDetails(row) {
+    const metadata =
+        row?.metadata && typeof row.metadata === "object" ? row.metadata : {};
+    return {
+        id: row?.id || null,
+        userId: row?.to_user_id || row?.from_user_id || null,
+        amount:
+            Number.isFinite(Number(row?.amount_gross)) &&
+            Number(row.amount_gross) > 0
+                ? Number(row.amount_gross)
+                : Number(metadata.amount || 0),
+        currency: String(row?.currency || metadata.currency || "USD").toUpperCase(),
+        status: String(row?.status || "").toLowerCase(),
+        plan: String(metadata.plan || "").toLowerCase(),
+        billingCycle: String(metadata.billing_cycle || "monthly").toLowerCase(),
+        method: String(metadata.method || "card").toLowerCase(),
+        provider: metadata.provider || null,
+        walletId: metadata.wallet_id || null,
+        checkoutRefId: metadata.checkout_ref_id || null,
+        transactionRefId: metadata.transaction_ref_id || null,
+        operatorRefId: metadata.operator_ref_id || null,
+        description: row?.description || "",
+        createdAt: row?.created_at || null,
+        updatedAt: row?.updated_at || null,
+        metadata,
+    };
+}
+
+function roundMoney(value) {
+    const amount = Number(value || 0);
+    if (!Number.isFinite(amount)) return 0;
+    return Math.round(amount * 100) / 100;
+}
+
+function normalizeMobileMoneyProvider(value) {
+    const normalized = String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, "_");
+    return SUPPORTED_MOBILE_MONEY_PROVIDERS.has(normalized)
+        ? normalized
+        : null;
+}
+
+function sanitizeWalletNumber(value) {
+    return String(value || "")
+        .trim()
+        .replace(/[^\d+]/g, "")
+        .slice(0, 32);
+}
+
+function sanitizePayoutText(value, maxLength = 160) {
+    return String(value || "").trim().slice(0, maxLength);
+}
+
+function isMissingRelationError(error) {
+    const message = String(error?.message || "").toLowerCase();
+    return (
+        (message.includes("relation") && message.includes("does not exist")) ||
+        (message.includes("could not find") && message.includes("table")) ||
+        message.includes("schema cache")
+    );
+}
+
+function getWalletSchemaErrorMessage() {
+    return "Schema portefeuille manquant. Executez sql/monetization-supabase-one-shot.sql ou sql/monetization-wallet.sql dans Supabase SQL Editor.";
+}
+
+function extractPayoutSettings(row) {
+    if (!row) return null;
+    const provider = normalizeMobileMoneyProvider(row.provider) || "other";
+    return {
+        id: row.id || null,
+        userId: row.user_id || null,
+        channel: row.channel || "mobile_money",
+        provider,
+        providerLabel:
+            MOBILE_MONEY_PROVIDER_LABELS[provider] || MOBILE_MONEY_PROVIDER_LABELS.other,
+        accountName: row.account_name || "",
+        walletNumber: row.wallet_number || "",
+        countryCode: row.country_code || "CD",
+        status: row.status === "inactive" ? "inactive" : "active",
+        notes: row.notes || "",
+        createdAt: row.created_at || null,
+        updatedAt: row.updated_at || null,
+    };
+}
+
+function extractWithdrawalRequest(row) {
+    if (!row) return null;
+    const provider = normalizeMobileMoneyProvider(row.provider) || "other";
+    return {
+        id: row.id || null,
+        creatorId: row.creator_id || null,
+        payoutSettingId: row.payout_setting_id || null,
+        amountUsd: roundMoney(row.amount_usd),
+        requestedAmount: roundMoney(row.requested_amount),
+        requestedCurrency: String(row.requested_currency || "USD").toUpperCase(),
+        channel: row.channel || "mobile_money",
+        provider,
+        providerLabel:
+            MOBILE_MONEY_PROVIDER_LABELS[provider] || MOBILE_MONEY_PROVIDER_LABELS.other,
+        walletNumber: row.wallet_number || "",
+        accountName: row.account_name || "",
+        note: row.note || "",
+        status: row.status || "pending",
+        operatorRefId: row.operator_ref_id || null,
+        adminNote: row.admin_note || "",
+        requestedAt: row.requested_at || row.created_at || null,
+        processedAt: row.processed_at || null,
+        paidAt: row.paid_at || null,
+        createdAt: row.created_at || null,
+        updatedAt: row.updated_at || null,
+    };
+}
+
+async function fetchCreatorPayoutSettings(userId) {
+    const { data, error } = await supabase
+        .from("creator_payout_settings")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+    if (error) throw error;
+    return extractPayoutSettings(data);
+}
+
+async function fetchCreatorWithdrawalRequests(userId, options = {}) {
+    let query = supabase
+        .from("withdrawal_requests")
+        .select("*")
+        .eq("creator_id", userId)
+        .order("created_at", { ascending: false });
+
+    if (options.statuses?.length) {
+        query = query.in("status", options.statuses);
+    }
+    if (options.limit) {
+        query = query.limit(options.limit);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []).map(extractWithdrawalRequest);
+}
+
+async function buildCreatorWalletOverview(userId) {
+    const [
+        profileResult,
+        transactionsResult,
+        videoPayoutsResult,
+        payoutSettingsResult,
+        withdrawalsResult,
+    ] = await Promise.all([
+        supabase
+            .from("users")
+            .select(
+                "id, name, avatar, badge, followers_count, plan, plan_status, plan_ends_at, is_monetized",
+            )
+            .eq("id", userId)
+            .maybeSingle(),
+        supabase
+            .from("transactions")
+            .select(
+                "id, type, amount_gross, amount_net_creator, amount_commission_xera, currency, status, description, metadata, created_at",
+            )
+            .eq("to_user_id", userId)
+            .in("type", ["support", "video_rpm"])
+            .in("status", ["pending", "succeeded"])
+            .order("created_at", { ascending: false }),
+        supabase
+            .from("video_payouts")
+            .select(
+                "id, period_month, views, rpm_rate, amount_gross, amount_net_creator, amount_commission_xera, status, paid_at, created_at",
+            )
+            .eq("creator_id", userId)
+            .in("status", ["pending", "processing", "paid"])
+            .order("period_month", { ascending: false }),
+        fetchCreatorPayoutSettings(userId),
+        fetchCreatorWithdrawalRequests(userId, { limit: 20 }),
+    ]);
+
+    if (profileResult.error) throw profileResult.error;
+    if (transactionsResult.error) throw transactionsResult.error;
+    if (videoPayoutsResult.error) throw videoPayoutsResult.error;
+
+    const profile = profileResult.data || null;
+    const revenueTransactions = transactionsResult.data || [];
+    const videoPayouts = videoPayoutsResult.data || [];
+    const payoutSettings = payoutSettingsResult || null;
+    const withdrawals = withdrawalsResult || [];
+
+    let supportAvailable = 0;
+    let supportPending = 0;
+    let videoAvailable = 0;
+    let videoPending = 0;
+
+    revenueTransactions.forEach((tx) => {
+        const net = roundMoney(tx.amount_net_creator);
+        if (tx.type === "support") {
+            if (tx.status === "succeeded") supportAvailable += net;
+            if (tx.status === "pending") supportPending += net;
+        }
+        if (tx.type === "video_rpm") {
+            if (tx.status === "succeeded") videoAvailable += net;
+            if (tx.status === "pending") videoPending += net;
+        }
+    });
+
+    const hasVideoRevenueTransactions = revenueTransactions.some(
+        (tx) => tx.type === "video_rpm",
+    );
+    if (!hasVideoRevenueTransactions) {
+        videoAvailable = 0;
+        videoPending = 0;
+        videoPayouts.forEach((payout) => {
+            const net = roundMoney(payout.amount_net_creator);
+            if (payout.status === "paid") videoAvailable += net;
+            if (["pending", "processing"].includes(payout.status)) {
+                videoPending += net;
+            }
+        });
+    }
+
+    let pendingWithdrawals = 0;
+    let paidWithdrawals = 0;
+    withdrawals.forEach((withdrawal) => {
+        if (["pending", "processing"].includes(withdrawal.status)) {
+            pendingWithdrawals += roundMoney(withdrawal.amountUsd);
+        }
+        if (withdrawal.status === "paid") {
+            paidWithdrawals += roundMoney(withdrawal.amountUsd);
+        }
+    });
+
+    const creditedBalance = roundMoney(supportAvailable + videoAvailable);
+    const pendingIncoming = roundMoney(supportPending + videoPending);
+    const availableBalance = roundMoney(
+        Math.max(0, creditedBalance - pendingWithdrawals - paidWithdrawals),
+    );
+
+    return {
+        profile,
+        payoutSettings,
+        withdrawals,
+        wallet: {
+            currency: "USD",
+            availableBalance,
+            pendingIncoming,
+            pendingWithdrawals: roundMoney(pendingWithdrawals),
+            paidWithdrawals: roundMoney(paidWithdrawals),
+            lifetimeNetRevenue: roundMoney(creditedBalance + paidWithdrawals),
+            supportAvailable: roundMoney(supportAvailable),
+            supportPending: roundMoney(supportPending),
+            videoAvailable: roundMoney(videoAvailable),
+            videoPending: roundMoney(videoPending),
+            minimumWithdrawalUsd: WITHDRAWAL_MIN_USD,
+            canRequestWithdrawal:
+                availableBalance >= WITHDRAWAL_MIN_USD &&
+                Boolean(
+                    payoutSettings?.status === "active" &&
+                    payoutSettings?.walletNumber &&
+                        payoutSettings?.provider &&
+                        payoutSettings?.accountName,
+                ),
+        },
+    };
 }
 
 function shouldClearBadge(value) {
@@ -287,35 +695,84 @@ async function activateSubscription({
     method,
     provider,
     walletId,
+    pendingTransactionId,
+    confirmationSource = "maishapay_callback",
+    confirmedBy,
+    note,
 }) {
     const paymentId = transactionRefId ? `maishapay_${transactionRefId}` : null;
     const normalizedPlan = String(plan || "").toLowerCase();
     const badgeForPlan =
         normalizedPlan === "pro" ? "verified_gold" : "verified";
 
+    let pendingPayment = null;
+    if (pendingTransactionId) {
+        const { data, error } = await supabase
+            .from("transactions")
+            .select(
+                "id, from_user_id, to_user_id, amount_gross, currency, status, metadata",
+            )
+            .eq("id", pendingTransactionId)
+            .maybeSingle();
+        if (error) throw error;
+        if (!data) {
+            throw new Error("Paiement en attente introuvable.");
+        }
+        if (String(data.status || "").toLowerCase() === "succeeded") {
+            const { data: existingUser } = await supabase
+                .from("users")
+                .select("*")
+                .eq("id", userId)
+                .maybeSingle();
+            return {
+                alreadyActivated: true,
+                user: existingUser || null,
+                transactionId: data.id,
+            };
+        }
+        if (String(data.status || "").toLowerCase() !== "pending") {
+            throw new Error("Ce paiement ne peut plus être confirmé.");
+        }
+        pendingPayment = data;
+    }
+
     if (transactionRefId) {
         const { data: existing } = await supabase
             .from("transactions")
             .select("id")
             .eq("metadata->>transaction_ref_id", String(transactionRefId))
+            .eq("status", "succeeded")
             .maybeSingle();
-        if (existing?.id) {
-            return;
+        if (existing?.id && existing.id !== pendingTransactionId) {
+            const { data: existingUser } = await supabase
+                .from("users")
+                .select("*")
+                .eq("id", userId)
+                .maybeSingle();
+            return {
+                alreadyActivated: true,
+                user: existingUser || null,
+                transactionId: existing.id,
+            };
         }
     }
 
     const now = new Date();
+    const nowIso = now.toISOString();
     const periodEnd =
         billingCycle === "annual" ? addMonths(now, 12) : addMonths(now, 1);
+    const periodEndIso = periodEnd.toISOString();
 
     let badgeToApply = badgeForPlan;
+    let followersCount = 0;
     try {
         const { data: profile } = await supabase
             .from("users")
-            .select("badge")
+            .select("badge, followers_count")
             .eq("id", userId)
             .maybeSingle();
         const existingBadge = String(profile?.badge || "").toLowerCase();
+        followersCount = Number(profile?.followers_count || 0);
         const protectedBadges = new Set([
             "staff",
             "team",
@@ -330,49 +787,272 @@ async function activateSubscription({
     } catch (e) {
         // Ignore profile read errors; continue with default badge
     }
+    const isMonetized =
+        ["medium", "pro"].includes(normalizedPlan) && followersCount >= 1000;
 
-    await supabase.from("subscriptions").insert({
+    const { error: cancelSubsError } = await supabase
+        .from("subscriptions")
+        .update({
+            status: "canceled",
+            canceled_at: nowIso,
+            cancel_at_period_end: false,
+        })
+        .eq("user_id", userId)
+        .eq("status", "active");
+    if (cancelSubsError) throw cancelSubsError;
+
+    const { data: insertedSubscription, error: insertSubError } = await supabase
+        .from("subscriptions")
+        .insert({
         user_id: userId,
         plan,
         status: "active",
-        current_period_start: now.toISOString(),
-        current_period_end: periodEnd.toISOString(),
-    });
+        current_period_start: nowIso,
+        current_period_end: periodEndIso,
+    })
+        .select("id")
+        .single();
+    if (insertSubError) throw insertSubError;
 
-    await supabase
+    const { data: updatedUser, error: updateUserError } = await supabase
         .from("users")
         .update({
             plan,
             plan_status: "active",
-            plan_ends_at: periodEnd.toISOString(),
+            plan_ends_at: periodEndIso,
             badge: badgeToApply,
+            is_monetized: isMonetized,
         })
-        .eq("id", userId);
+        .eq("id", userId)
+        .select("*")
+        .single();
+    if (updateUserError) throw updateUserError;
 
-    await supabase.from("transactions").insert({
-        from_user_id: userId,
-        to_user_id: userId,
-        type: "subscription",
-        amount_gross: amount,
-        amount_net_creator: 0,
-        amount_commission_xera: 0,
-        currency,
-        status: "succeeded",
-        description: `Abonnement ${plan} (${billingCycle})`,
-        metadata: {
-            payment_provider: "maishapay",
-            payment_ref: paymentId,
-            transaction_ref_id: transactionRefId || null,
-            method,
-            provider,
-            wallet_id: walletId,
-            operator_ref_id: operatorRefId,
-        },
-    });
+    const mergedMetadata = {
+        ...(pendingPayment?.metadata && typeof pendingPayment.metadata === "object"
+            ? pendingPayment.metadata
+            : {}),
+        payment_provider: "maishapay",
+        payment_ref: paymentId,
+        transaction_ref_id: transactionRefId || null,
+        method,
+        provider,
+        wallet_id: walletId,
+        operator_ref_id: operatorRefId || null,
+        activated_at: nowIso,
+        activation_source: confirmationSource,
+        subscription_id: insertedSubscription?.id || null,
+    };
+    if (confirmedBy) mergedMetadata.confirmed_by = confirmedBy;
+    if (note) mergedMetadata.admin_note = note;
+
+    let transactionId = pendingTransactionId || null;
+    if (pendingTransactionId) {
+        const { error: updateTxError } = await supabase
+            .from("transactions")
+            .update({
+                amount_gross: amount,
+                amount_net_creator: 0,
+                amount_commission_xera: 0,
+                currency,
+                status: "succeeded",
+                description: `Abonnement ${plan} (${billingCycle})`,
+                metadata: mergedMetadata,
+            })
+            .eq("id", pendingTransactionId);
+        if (updateTxError) throw updateTxError;
+    } else {
+        const { data: insertedTransaction, error: insertTxError } =
+            await supabase
+                .from("transactions")
+                .insert({
+                    from_user_id: userId,
+                    to_user_id: userId,
+                    type: "subscription",
+                    amount_gross: amount,
+                    amount_net_creator: 0,
+                    amount_commission_xera: 0,
+                    currency,
+                    status: "succeeded",
+                    description: `Abonnement ${plan} (${billingCycle})`,
+                    metadata: mergedMetadata,
+                })
+                .select("id")
+                .single();
+        if (insertTxError) throw insertTxError;
+        transactionId = insertedTransaction?.id || null;
+    }
+
+    return {
+        alreadyActivated: false,
+        user: updatedUser,
+        subscriptionId: insertedSubscription?.id || null,
+        transactionId,
+    };
 }
 
 function supportsPush() {
     return Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+}
+
+function isPlanActiveForUser(user) {
+    if (!user) return false;
+    const status = String(user.plan_status || "").toLowerCase();
+    if (status !== "active") return false;
+    const planEnd = user.plan_ends_at || null;
+    if (!planEnd) return true;
+    const endMs = Date.parse(planEnd);
+    if (!Number.isFinite(endMs)) return true;
+    return endMs > Date.now();
+}
+
+function isGiftedProUser(user) {
+    if (!user) return false;
+    return (
+        String(user.plan || "").toLowerCase() === "pro" &&
+        String(user.plan_status || "").toLowerCase() === "active" &&
+        !user.plan_ends_at
+    );
+}
+
+function canUserReceiveSupport(user) {
+    if (!user) return false;
+    const plan = String(user.plan || "").toLowerCase();
+    if (!["medium", "pro"].includes(plan)) return false;
+    if (!isPlanActiveForUser(user)) return false;
+    if (isGiftedProUser(user)) return true;
+    return (
+        user.is_monetized === true ||
+        Number(user.followers_count || 0) >= 1000
+    );
+}
+
+function formatMoneyUsd(value) {
+    const amount = roundMoney(value);
+    return `$${amount.toFixed(2)}`;
+}
+
+async function createNotificationRecord({
+    userId,
+    type,
+    message,
+    link,
+    actorId,
+    metadata,
+}) {
+    if (!userId || !type || !message) return null;
+
+    const payload = {
+        user_id: userId,
+        type,
+        message,
+        link: link || null,
+        read: false,
+    };
+
+    if (actorId) payload.actor_id = actorId;
+    if (metadata && typeof metadata === "object") payload.metadata = metadata;
+
+    try {
+        let query = supabase.from("notifications").insert(payload).select("*").single();
+        let { data, error } = await query;
+
+        if (error && isMissingColumnError(error)) {
+            const fallbackPayload = {
+                user_id: userId,
+                type,
+                message,
+                link: link || null,
+                read: false,
+            };
+            ({ data, error } = await supabase
+                .from("notifications")
+                .insert(fallbackPayload)
+                .select("*")
+                .single());
+        }
+
+        if (error) throw error;
+        return data || null;
+    } catch (error) {
+        console.warn("Support notification insert error:", error?.message || error);
+        return null;
+    }
+}
+
+async function purgeStalePushSubscription(endpoint) {
+    if (!endpoint) return;
+    try {
+        await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+    } catch (error) {
+        console.warn("Failed to purge stale push subscription:", error?.message || error);
+    }
+}
+
+function buildNotificationPushPayload(notification) {
+    const typeTitleMap = {
+        support: "Nouveau soutien",
+        follow: "Nouvel abonné",
+        like: "Nouveau like",
+        comment: "Nouveau commentaire",
+        mention: "Mention",
+        achievement: "Succès débloqué",
+        stream: "Live en cours",
+    };
+
+    const title = typeTitleMap[notification?.type] || "Notification XERA";
+    const icon = `${PRIMARY_ORIGIN.replace(/\/$/, "")}/icons/logo.png`;
+    const rawLink = String(notification?.link || "").trim();
+    const link = rawLink
+        ? rawLink.startsWith("http")
+            ? rawLink
+            : `${PRIMARY_ORIGIN.replace(/\/$/, "")}/${rawLink.replace(/^\//, "")}`
+        : `${PRIMARY_ORIGIN.replace(/\/$/, "")}/profile.html?user=${notification?.user_id || ""}`;
+
+    return {
+        title,
+        body: notification?.message || "",
+        icon,
+        link,
+        tag: notification?.id || `support-${notification?.user_id || "xera"}`,
+        renotify: false,
+        silent: false,
+    };
+}
+
+async function sendPushToUser(userId, payload) {
+    if (!supportsPush() || !userId || !payload) return;
+
+    try {
+        const { data: subs, error } = await supabase
+            .from("push_subscriptions")
+            .select("endpoint, keys")
+            .eq("user_id", userId);
+        if (error) throw error;
+        if (!subs || subs.length === 0) return;
+
+        const payloadString = JSON.stringify(payload);
+        for (const sub of subs) {
+            if (!sub?.endpoint || !sub?.keys) continue;
+            try {
+                await webpush.sendNotification(
+                    {
+                        endpoint: sub.endpoint,
+                        keys: sub.keys,
+                    },
+                    payloadString,
+                );
+            } catch (error) {
+                if (error?.statusCode === 404 || error?.statusCode === 410) {
+                    await purgeStalePushSubscription(sub.endpoint);
+                    continue;
+                }
+                console.warn("Support push error:", error?.message || error);
+            }
+        }
+    } catch (error) {
+        console.warn("Support push lookup error:", error?.message || error);
+    }
 }
 
 function sanitizeTimeZone(value) {
@@ -388,7 +1068,11 @@ function sanitizeTimeZone(value) {
 
 function isMissingColumnError(error) {
     const message = String(error?.message || "").toLowerCase();
-    return message.includes("column") && message.includes("does not exist");
+    return (
+        (message.includes("column") && message.includes("does not exist")) ||
+        ((message.includes("column") || message.includes("could not find")) &&
+            message.includes("schema cache"))
+    );
 }
 
 function getTimePartsInZone(date, timeZone) {
@@ -470,24 +1154,43 @@ app.post("/api/maishapay/checkout", async (req, res) => {
             return res.status(400).send("Montant invalide");
         }
 
-        const statePayload = {
-            user_id: userId,
+        const pendingPayment = await createPendingSubscriptionPayment({
+            userId,
             plan: planId,
-            billing_cycle: billingCycle,
+            billingCycle,
             currency,
             amount,
-            method: String(method || "card").toLowerCase(),
-            provider: provider || null,
-            wallet_id: walletId || null,
-            issued_at: Date.now(),
-            expires_at: Date.now() + 2 * 60 * 60 * 1000,
-        };
-        const state = createSignedState(statePayload);
-        if (!state) {
-            return res.status(500).send("Callback secret manquant");
+            method,
+            provider,
+            walletId,
+        });
+
+        let callbackUrl = null;
+        if (MAISHAPAY_CALLBACK_ENABLED) {
+            const statePayload = {
+                user_id: userId,
+                pending_transaction_id: pendingPayment.id,
+                checkout_ref_id: pendingPayment.checkoutRefId,
+                plan: planId,
+                billing_cycle: billingCycle,
+                currency,
+                amount,
+                method: String(method || "card").toLowerCase(),
+                provider: provider || null,
+                wallet_id: walletId || null,
+                issued_at: Date.now(),
+                expires_at: Date.now() + 2 * 60 * 60 * 1000,
+            };
+            const state = createSignedState(statePayload);
+            if (!state) {
+                return res.status(500).send("Callback secret manquant");
+            }
+            callbackUrl = `${CALLBACK_ORIGIN}/api/maishapay/callback/${encodeURIComponent(state)}`;
         }
 
-        const callbackUrl = `${CALLBACK_ORIGIN}/api/maishapay/callback/${encodeURIComponent(state)}`;
+        const callbackInput = callbackUrl
+            ? `\n          <input type="hidden" name="callbackUrl" value="${escapeHtmlAttr(callbackUrl)}">`
+            : "";
 
         console.info("[MaishaPay checkout]", {
             gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
@@ -495,10 +1198,14 @@ app.post("/api/maishapay/checkout", async (req, res) => {
             secretKey: maskKey(MAISHAPAY_SECRET_KEY),
             publicKeyMode: inferMaishaPayKeyMode(MAISHAPAY_PUBLIC_KEY),
             secretKeyMode: inferMaishaPayKeyMode(MAISHAPAY_SECRET_KEY),
+            callbackEnabled: MAISHAPAY_CALLBACK_ENABLED,
             callbackOrigin: CALLBACK_ORIGIN,
+            pendingTransactionId: pendingPayment.id,
+            checkoutRefId: pendingPayment.checkoutRefId,
             plan: planId,
             billingCycle,
             currency,
+            method: String(method || "card").toLowerCase(),
         });
 
         res.set("Content-Type", "text/html");
@@ -512,12 +1219,11 @@ app.post("/api/maishapay/checkout", async (req, res) => {
       <body>
         <p>Redirection vers MaishaPay...</p>
         <form id="mpForm" action="${MAISHAPAY_CHECKOUT_URL}" method="POST">
-          <input type="hidden" name="gatewayMode" value="${MAISHAPAY_GATEWAY_MODE}">
-          <input type="hidden" name="publicApiKey" value="${MAISHAPAY_PUBLIC_KEY}">
-          <input type="hidden" name="secretApiKey" value="${MAISHAPAY_SECRET_KEY}">
-          <input type="hidden" name="montant" value="${amount}">
-          <input type="hidden" name="devise" value="${currency}">
-          <input type="hidden" name="callbackUrl" value="${callbackUrl}">
+          <input type="hidden" name="gatewayMode" value="${escapeHtmlAttr(MAISHAPAY_GATEWAY_MODE)}">
+          <input type="hidden" name="publicApiKey" value="${escapeHtmlAttr(MAISHAPAY_PUBLIC_KEY)}">
+          <input type="hidden" name="secretApiKey" value="${escapeHtmlAttr(MAISHAPAY_SECRET_KEY)}">
+          <input type="hidden" name="montant" value="${escapeHtmlAttr(amount)}">
+          <input type="hidden" name="devise" value="${escapeHtmlAttr(currency)}">${callbackInput}
         </form>
         <script>
           document.getElementById('mpForm').submit();
@@ -562,6 +1268,8 @@ app.all("/api/maishapay/callback/:state?", async (req, res) => {
                 method: payload.method,
                 provider: payload.provider,
                 walletId: payload.wallet_id,
+                pendingTransactionId: payload.pending_transaction_id,
+                confirmationSource: "maishapay_callback",
             });
         }
 
@@ -600,21 +1308,11 @@ app.all("/api/maishapay/callback/:state?", async (req, res) => {
 
 app.post("/api/admin/gift-plan", async (req, res) => {
     try {
-        const auth = String(req.headers.authorization || "");
-        const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-        if (!token) {
-            return res.status(401).json({ error: "Token manquant." });
-        }
-
-        const { data: authData, error: authError } =
-            await supabase.auth.getUser(token);
-        if (authError || !authData?.user?.id) {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error) {
             return res
-                .status(401)
-                .json({ error: "Utilisateur non authentifié." });
-        }
-        if (authData.user.id !== SUPER_ADMIN_ID) {
-            return res.status(403).json({ error: "Accès refusé." });
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
         }
 
         const { target_user_id: targetUserId, plan } = req.body || {};
@@ -680,6 +1378,245 @@ app.post("/api/admin/gift-plan", async (req, res) => {
     } catch (error) {
         console.error("Admin gift plan error:", error);
         return res.status(500).json({ error: "Erreur serveur." });
+    }
+});
+
+app.get("/api/admin/subscription-payments", async (req, res) => {
+    try {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error) {
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        }
+
+        const requestedStatuses = String(req.query.status || "pending")
+            .split(",")
+            .map((value) => String(value || "").trim().toLowerCase())
+            .filter(Boolean);
+        const allowedStatuses = new Set([
+            "pending",
+            "succeeded",
+            "failed",
+            "canceled",
+            "refunded",
+        ]);
+        const statuses = requestedStatuses.filter((value) =>
+            allowedStatuses.has(value),
+        );
+        const limit = Math.min(
+            100,
+            Math.max(1, parseInt(req.query.limit, 10) || 30),
+        );
+
+        let query = supabase
+            .from("transactions")
+            .select(
+                "id, from_user_id, to_user_id, amount_gross, currency, status, description, metadata, created_at, updated_at",
+            )
+            .eq("type", "subscription")
+            .eq("metadata->>payment_provider", "maishapay")
+            .order("created_at", { ascending: false })
+            .limit(limit);
+
+        if (statuses.length === 1) {
+            query = query.eq("status", statuses[0]);
+        } else if (statuses.length > 1) {
+            query = query.in("status", statuses);
+        }
+
+        const { data: rows, error } = await query;
+        if (error) throw error;
+
+        const payments = rows || [];
+        const userIds = Array.from(
+            new Set(
+                payments
+                    .map((row) => row.to_user_id || row.from_user_id)
+                    .filter(Boolean),
+            ),
+        );
+
+        let usersById = new Map();
+        if (userIds.length > 0) {
+            const { data: userRows, error: userError } = await supabase
+                .from("users")
+                .select(
+                    "id, name, avatar, badge, followers_count, plan, plan_status, plan_ends_at, is_monetized",
+                )
+                .in("id", userIds);
+            if (userError) throw userError;
+            usersById = new Map((userRows || []).map((row) => [row.id, row]));
+        }
+
+        return res.json({
+            success: true,
+            payments: payments.map((row) => {
+                const details = extractSubscriptionPaymentDetails(row);
+                return {
+                    ...details,
+                    user: usersById.get(details.userId) || null,
+                };
+            }),
+        });
+    } catch (error) {
+        console.error("Admin subscription payments list error:", error);
+        return res.status(500).json({ error: "Erreur serveur." });
+    }
+});
+
+app.post("/api/admin/subscription-payments/confirm", async (req, res) => {
+    try {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error) {
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        }
+
+        const {
+            payment_id: paymentId,
+            transaction_ref_id: transactionRefId,
+            operator_ref_id: operatorRefId,
+            note,
+        } = req.body || {};
+        if (!paymentId) {
+            return res.status(400).json({ error: "Paiement manquant." });
+        }
+
+        const { data: paymentRow, error: paymentError } = await supabase
+            .from("transactions")
+            .select(
+                "id, from_user_id, to_user_id, amount_gross, currency, status, metadata, created_at, updated_at",
+            )
+            .eq("id", paymentId)
+            .eq("type", "subscription")
+            .eq("metadata->>payment_provider", "maishapay")
+            .maybeSingle();
+        if (paymentError) throw paymentError;
+        if (!paymentRow) {
+            return res.status(404).json({ error: "Paiement introuvable." });
+        }
+
+        const payment = extractSubscriptionPaymentDetails(paymentRow);
+        if (payment.status !== "pending") {
+            return res.status(409).json({
+                error: "Ce paiement n'est plus en attente de confirmation.",
+            });
+        }
+        if (!payment.userId || !isValidPlanId(payment.plan)) {
+            return res.status(400).json({
+                error: "Les donnees du paiement en attente sont invalides.",
+            });
+        }
+        if (!payment.amount || !payment.currency) {
+            return res.status(400).json({
+                error: "Montant ou devise introuvable pour ce paiement.",
+            });
+        }
+
+        const activationResult = await activateSubscription({
+            userId: payment.userId,
+            plan: payment.plan,
+            billingCycle: payment.billingCycle,
+            currency: payment.currency,
+            amount: payment.amount,
+            transactionRefId: transactionRefId || payment.transactionRefId,
+            operatorRefId: operatorRefId || payment.operatorRefId,
+            method: payment.method,
+            provider: payment.provider,
+            walletId: payment.walletId,
+            pendingTransactionId: payment.id,
+            confirmationSource: "admin_manual",
+            confirmedBy: authResult.user.id,
+            note,
+        });
+
+        const { data: refreshedPayment, error: refreshedPaymentError } =
+            await supabase
+                .from("transactions")
+                .select(
+                    "id, from_user_id, to_user_id, amount_gross, currency, status, description, metadata, created_at, updated_at",
+                )
+                .eq("id", payment.id)
+                .maybeSingle();
+        if (refreshedPaymentError) throw refreshedPaymentError;
+
+        return res.json({
+            success: true,
+            alreadyActivated: activationResult?.alreadyActivated === true,
+            user: activationResult?.user || null,
+            payment: refreshedPayment
+                ? extractSubscriptionPaymentDetails(refreshedPayment)
+                : null,
+        });
+    } catch (error) {
+        console.error("Admin subscription payment confirm error:", error);
+        return res.status(500).json({
+            error:
+                error?.message ||
+                "Impossible de confirmer ce paiement d'abonnement.",
+        });
+    }
+});
+
+app.post("/api/admin/subscription-payments/fail", async (req, res) => {
+    try {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error) {
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        }
+
+        const { payment_id: paymentId, reason } = req.body || {};
+        if (!paymentId) {
+            return res.status(400).json({ error: "Paiement manquant." });
+        }
+
+        const { data: paymentRow, error: paymentError } = await supabase
+            .from("transactions")
+            .select("id, status, metadata")
+            .eq("id", paymentId)
+            .eq("type", "subscription")
+            .eq("metadata->>payment_provider", "maishapay")
+            .maybeSingle();
+        if (paymentError) throw paymentError;
+        if (!paymentRow) {
+            return res.status(404).json({ error: "Paiement introuvable." });
+        }
+        if (String(paymentRow.status || "").toLowerCase() !== "pending") {
+            return res.status(409).json({
+                error: "Seuls les paiements en attente peuvent etre refuses.",
+            });
+        }
+
+        const updatedMetadata = {
+            ...(paymentRow.metadata && typeof paymentRow.metadata === "object"
+                ? paymentRow.metadata
+                : {}),
+            failed_at: new Date().toISOString(),
+            failed_by: authResult.user.id,
+        };
+        if (reason) updatedMetadata.admin_note = String(reason);
+
+        const { error: updateError } = await supabase
+            .from("transactions")
+            .update({
+                status: "failed",
+                metadata: updatedMetadata,
+            })
+            .eq("id", paymentId);
+        if (updateError) throw updateError;
+
+        return res.json({ success: true });
+    } catch (error) {
+        console.error("Admin subscription payment fail error:", error);
+        return res.status(500).json({
+            error:
+                error?.message ||
+                "Impossible de marquer ce paiement comme echoue.",
+        });
     }
 });
 
@@ -766,6 +1703,494 @@ app.get("/api/creator-revenue/:userId", async (req, res) => {
     }
 });
 
+app.get("/api/monetization/overview", async (req, res) => {
+    try {
+        const authResult = await authenticateRequest(req);
+        if (authResult.error) {
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        }
+
+        const overview = await buildCreatorWalletOverview(authResult.user.id);
+        return res.json({
+            success: true,
+            profile: overview.profile,
+            wallet: overview.wallet,
+            payoutSettings: overview.payoutSettings,
+            withdrawals: overview.withdrawals,
+            supportedProviders: Object.entries(MOBILE_MONEY_PROVIDER_LABELS).map(
+                ([value, label]) => ({ value, label }),
+            ),
+        });
+    } catch (error) {
+        console.error("Monetization overview error:", error);
+        if (isMissingRelationError(error)) {
+            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+        }
+        return res
+            .status(500)
+            .json({ error: "Impossible de charger le portefeuille." });
+    }
+});
+
+app.post("/api/monetization/support", async (req, res) => {
+    try {
+        const authResult = await authenticateRequest(req);
+        if (authResult.error) {
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        }
+
+        const fromUserId = authResult.user.id;
+        const {
+            to_user_id: toUserId,
+            amount: rawAmount,
+            description: rawDescription,
+        } = req.body || {};
+
+        if (!toUserId) {
+            return res.status(400).json({ error: "Destinataire manquant." });
+        }
+
+        if (fromUserId === toUserId) {
+            return res
+                .status(400)
+                .json({ error: "Vous ne pouvez pas vous envoyer un soutien." });
+        }
+
+        const amount = Number.parseFloat(rawAmount);
+        if (!Number.isFinite(amount)) {
+            return res.status(400).json({ error: "Montant invalide." });
+        }
+        if (amount < SUPPORT_MIN_USD || amount > SUPPORT_MAX_USD) {
+            return res.status(400).json({
+                error: `Le montant doit etre entre ${SUPPORT_MIN_USD} et ${SUPPORT_MAX_USD} USD.`,
+            });
+        }
+
+        const [senderProfileResult, recipientProfileResult] = await Promise.all([
+            supabase
+                .from("users")
+                .select("id, name, avatar")
+                .eq("id", fromUserId)
+                .maybeSingle(),
+            supabase
+                .from("users")
+                .select(
+                    "id, name, avatar, followers_count, plan, plan_status, plan_ends_at, is_monetized",
+                )
+                .eq("id", toUserId)
+                .maybeSingle(),
+        ]);
+
+        if (senderProfileResult.error) throw senderProfileResult.error;
+        if (recipientProfileResult.error) throw recipientProfileResult.error;
+
+        const senderProfile = senderProfileResult.data || null;
+        const recipientProfile = recipientProfileResult.data || null;
+
+        if (!recipientProfile) {
+            return res.status(404).json({ error: "Createur introuvable." });
+        }
+
+        if (!canUserReceiveSupport(recipientProfile)) {
+            return res.status(400).json({
+                error: "Ce createur n'est pas eligible aux soutiens.",
+            });
+        }
+
+        const description = String(rawDescription || "").trim().slice(0, 160);
+        const metadata = {
+            payment_provider: "internal_support",
+            support_kind: "direct",
+            sender_name: senderProfile?.name || authResult.user.email || "Utilisateur",
+            created_via: "support_api",
+        };
+
+        const { data: transaction, error: txError } = await supabase
+            .from("transactions")
+            .insert({
+                from_user_id: fromUserId,
+                to_user_id: toUserId,
+                type: "support",
+                amount_gross: roundMoney(amount),
+                currency: "USD",
+                status: "succeeded",
+                description: description || "Soutien XERA",
+                metadata,
+            })
+            .select(
+                "id, from_user_id, to_user_id, type, amount_gross, amount_net_creator, amount_commission_xera, currency, status, description, created_at",
+            )
+            .single();
+
+        if (txError) throw txError;
+
+        const senderName =
+            senderProfile?.name || authResult.user.user_metadata?.username || "Un utilisateur";
+        const notification = await createNotificationRecord({
+            userId: toUserId,
+            type: "support",
+            message: `${senderName} vous a envoye ${formatMoneyUsd(amount)} de soutien.`,
+            link: `/creator-dashboard`,
+            actorId: fromUserId,
+            metadata: {
+                transaction_id: transaction?.id || null,
+                amount_gross: roundMoney(amount),
+                currency: "USD",
+                sender_id: fromUserId,
+            },
+        });
+
+        if (notification) {
+            await sendPushToUser(
+                toUserId,
+                buildNotificationPushPayload(notification),
+            );
+        }
+
+        return res.json({
+            success: true,
+            transaction,
+            notification,
+            recipient: {
+                id: recipientProfile.id,
+                name: recipientProfile.name || "Createur",
+            },
+        });
+    } catch (error) {
+        console.error("Monetization support error:", error);
+        if (isMissingRelationError(error) || isMissingColumnError(error)) {
+            return res.status(503).json({
+                error: "Schema monétisation ou notifications incomplet. Exécutez sql/monetization-supabase-one-shot.sql puis sql/notifications-rls-fix.sql si nécessaire.",
+            });
+        }
+        return res
+            .status(500)
+            .json({ error: "Impossible d'envoyer le soutien." });
+    }
+});
+
+app.get("/api/monetization/withdrawals", async (req, res) => {
+    try {
+        const authResult = await authenticateRequest(req);
+        if (authResult.error) {
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        }
+
+        const withdrawals = await fetchCreatorWithdrawalRequests(authResult.user.id, {
+            limit: Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 30)),
+        });
+        return res.json({ success: true, withdrawals });
+    } catch (error) {
+        console.error("Monetization withdrawals list error:", error);
+        if (isMissingRelationError(error)) {
+            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+        }
+        return res
+            .status(500)
+            .json({ error: "Impossible de charger les retraits." });
+    }
+});
+
+app.post("/api/monetization/payout-settings", async (req, res) => {
+    try {
+        const authResult = await authenticateRequest(req);
+        if (authResult.error) {
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        }
+
+        const provider = normalizeMobileMoneyProvider(req.body?.provider);
+        const walletNumber = sanitizeWalletNumber(req.body?.wallet_number);
+        const accountName = sanitizePayoutText(req.body?.account_name, 80);
+        const notes = sanitizePayoutText(req.body?.notes, 280);
+        const countryCode = sanitizePayoutText(req.body?.country_code || "CD", 8)
+            .toUpperCase();
+
+        if (!provider) {
+            return res.status(400).json({
+                error: "Choisissez un fournisseur Mobile Money valide.",
+            });
+        }
+        if (!walletNumber || walletNumber.length < 8) {
+            return res.status(400).json({
+                error: "Numero Mobile Money invalide.",
+            });
+        }
+        if (!accountName) {
+            return res.status(400).json({
+                error: "Nom du titulaire requis.",
+            });
+        }
+
+        const payload = {
+            user_id: authResult.user.id,
+            channel: "mobile_money",
+            provider,
+            account_name: accountName,
+            wallet_number: walletNumber,
+            country_code: countryCode || "CD",
+            status: "active",
+            notes,
+            updated_at: new Date().toISOString(),
+        };
+
+        const { data, error } = await supabase
+            .from("creator_payout_settings")
+            .upsert(payload, { onConflict: "user_id" })
+            .select("*")
+            .single();
+        if (error) throw error;
+
+        return res.json({
+            success: true,
+            payoutSettings: extractPayoutSettings(data),
+        });
+    } catch (error) {
+        console.error("Monetization payout settings error:", error);
+        if (isMissingRelationError(error) || isMissingColumnError(error)) {
+            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+        }
+        return res.status(500).json({
+            error: "Impossible d'enregistrer la methode de retrait.",
+        });
+    }
+});
+
+app.post("/api/monetization/withdrawals", async (req, res) => {
+    try {
+        const authResult = await authenticateRequest(req);
+        if (authResult.error) {
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        }
+
+        const requestedAmount = roundMoney(req.body?.amount);
+        const note = sanitizePayoutText(req.body?.note, 280);
+
+        if (!requestedAmount || requestedAmount < WITHDRAWAL_MIN_USD) {
+            return res.status(400).json({
+                error: `Le retrait minimum est de ${WITHDRAWAL_MIN_USD} USD.`,
+            });
+        }
+
+        const overview = await buildCreatorWalletOverview(authResult.user.id);
+        const payoutSettings = overview.payoutSettings;
+        if (
+            !payoutSettings?.provider ||
+            !payoutSettings?.walletNumber ||
+            !payoutSettings?.accountName
+        ) {
+            return res.status(400).json({
+                error: "Enregistrez d'abord votre compte Mobile Money.",
+            });
+        }
+        if (payoutSettings.status !== "active") {
+            return res.status(400).json({
+                error: "Votre compte Mobile Money est inactif. Reenregistrez-le avant le retrait.",
+            });
+        }
+        if (requestedAmount > overview.wallet.availableBalance) {
+            return res.status(400).json({
+                error: "Solde disponible insuffisant pour ce retrait.",
+            });
+        }
+
+        const { data, error } = await supabase
+            .from("withdrawal_requests")
+            .insert({
+                creator_id: authResult.user.id,
+                payout_setting_id: payoutSettings.id,
+                amount_usd: requestedAmount,
+                requested_amount: requestedAmount,
+                requested_currency: "USD",
+                channel: "mobile_money",
+                provider: payoutSettings.provider,
+                wallet_number: payoutSettings.walletNumber,
+                account_name: payoutSettings.accountName,
+                note,
+                status: "pending",
+                requested_at: new Date().toISOString(),
+            })
+            .select("*")
+            .single();
+        if (error) throw error;
+
+        return res.json({
+            success: true,
+            withdrawal: extractWithdrawalRequest(data),
+        });
+    } catch (error) {
+        console.error("Monetization withdrawal request error:", error);
+        if (isMissingRelationError(error) || isMissingColumnError(error)) {
+            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+        }
+        return res
+            .status(500)
+            .json({ error: "Impossible de creer la demande de retrait." });
+    }
+});
+
+app.get("/api/admin/withdrawal-requests", async (req, res) => {
+    try {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error) {
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        }
+
+        const requestedStatuses = String(req.query.status || "pending,processing")
+            .split(",")
+            .map((value) => String(value || "").trim().toLowerCase())
+            .filter(Boolean);
+        const allowedStatuses = new Set([
+            "pending",
+            "processing",
+            "paid",
+            "rejected",
+            "canceled",
+        ]);
+        const statuses = requestedStatuses.filter((value) =>
+            allowedStatuses.has(value),
+        );
+        const limit = Math.min(
+            100,
+            Math.max(1, parseInt(req.query.limit, 10) || 30),
+        );
+
+        let query = supabase
+            .from("withdrawal_requests")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(limit);
+        if (statuses.length === 1) {
+            query = query.eq("status", statuses[0]);
+        } else if (statuses.length > 1) {
+            query = query.in("status", statuses);
+        }
+
+        const { data: rows, error } = await query;
+        if (error) throw error;
+
+        const requests = (rows || []).map(extractWithdrawalRequest);
+        const userIds = Array.from(
+            new Set(requests.map((item) => item.creatorId).filter(Boolean)),
+        );
+
+        let usersById = new Map();
+        if (userIds.length > 0) {
+            const { data: userRows, error: userError } = await supabase
+                .from("users")
+                .select(
+                    "id, name, avatar, badge, followers_count, plan, plan_status, plan_ends_at, is_monetized",
+                )
+                .in("id", userIds);
+            if (userError) throw userError;
+            usersById = new Map((userRows || []).map((row) => [row.id, row]));
+        }
+
+        return res.json({
+            success: true,
+            requests: requests.map((request) => ({
+                ...request,
+                user: usersById.get(request.creatorId) || null,
+            })),
+        });
+    } catch (error) {
+        console.error("Admin withdrawal requests list error:", error);
+        if (isMissingRelationError(error)) {
+            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+        }
+        return res
+            .status(500)
+            .json({ error: "Impossible de charger les demandes de retrait." });
+    }
+});
+
+app.post("/api/admin/withdrawal-requests/status", async (req, res) => {
+    try {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error) {
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        }
+
+        const requestId = String(req.body?.request_id || "").trim();
+        const status = String(req.body?.status || "").trim().toLowerCase();
+        const operatorRefId = sanitizePayoutText(req.body?.operator_ref_id, 120);
+        const adminNote = sanitizePayoutText(req.body?.note, 280);
+        const allowedStatuses = new Set(["processing", "paid", "rejected"]);
+
+        if (!requestId) {
+            return res.status(400).json({ error: "Demande de retrait manquante." });
+        }
+        if (!allowedStatuses.has(status)) {
+            return res.status(400).json({ error: "Statut de retrait invalide." });
+        }
+
+        const { data: existing, error: existingError } = await supabase
+            .from("withdrawal_requests")
+            .select("*")
+            .eq("id", requestId)
+            .maybeSingle();
+        if (existingError) throw existingError;
+        if (!existing) {
+            return res
+                .status(404)
+                .json({ error: "Demande de retrait introuvable." });
+        }
+
+        const currentStatus = String(existing.status || "").toLowerCase();
+        if (currentStatus === "paid" || currentStatus === "rejected") {
+            return res.status(409).json({
+                error: "Cette demande a deja ete traitee definitivement.",
+            });
+        }
+
+        const nowIso = new Date().toISOString();
+        const updatePayload = {
+            status,
+            operator_ref_id: operatorRefId || existing.operator_ref_id || null,
+            admin_note: adminNote || existing.admin_note || null,
+            processed_at: nowIso,
+            updated_at: nowIso,
+        };
+        if (status === "paid") {
+            updatePayload.paid_at = nowIso;
+        }
+
+        const { data: updated, error: updateError } = await supabase
+            .from("withdrawal_requests")
+            .update(updatePayload)
+            .eq("id", requestId)
+            .select("*")
+            .single();
+        if (updateError) throw updateError;
+
+        return res.json({
+            success: true,
+            request: extractWithdrawalRequest(updated),
+        });
+    } catch (error) {
+        console.error("Admin withdrawal request update error:", error);
+        if (isMissingRelationError(error) || isMissingColumnError(error)) {
+            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+        }
+        return res.status(500).json({
+            error: "Impossible de mettre a jour cette demande de retrait.",
+        });
+    }
+});
+
 // ==================== API EXISTANTES ====================
 
 // Health check
@@ -774,7 +2199,13 @@ app.get("/health", (req, res) => {
 });
 
 app.get("/api/config", (req, res) => {
-    res.json({ usdToCdfRate: USD_TO_CDF_RATE_VALUE });
+    res.json({
+        usdToCdfRate: USD_TO_CDF_RATE_VALUE,
+        maishaPay: {
+            callbackEnabled: MAISHAPAY_CALLBACK_ENABLED,
+            gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
+        },
+    });
 });
 
 // ... (le reste du code existant pour les rappels, etc.)
@@ -798,6 +2229,8 @@ if (isDirectRun) {
         secretKey: maskKey(MAISHAPAY_SECRET_KEY),
         publicKeyMode: inferMaishaPayKeyMode(MAISHAPAY_PUBLIC_KEY),
         secretKeyMode: inferMaishaPayKeyMode(MAISHAPAY_SECRET_KEY),
+        callbackEnabled: MAISHAPAY_CALLBACK_ENABLED,
+        callbackOrigin: CALLBACK_ORIGIN,
     });
 
     app.listen(PORT, () => {

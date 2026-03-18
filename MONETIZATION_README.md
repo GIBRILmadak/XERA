@@ -68,6 +68,9 @@
 - `POST /api/maishapay/checkout` - Démarrer un paiement d’abonnement
 - `GET|POST /api/maishapay/callback` - Callback MaishaPay
 - `GET /api/creator-revenue/:userId` - Revenus créateur
+- `GET /api/admin/subscription-payments` - Liste des paiements d'abonnement en attente
+- `POST /api/admin/subscription-payments/confirm` - Confirmer un encaissement MaishaPay et activer le palier
+- `POST /api/admin/subscription-payments/fail` - Marquer une tentative comme non confirmée
 
 ## Intégration Frontend
 
@@ -96,9 +99,25 @@ Variables d'environnement à ajouter:
 MAISHAPAY_PUBLIC_KEY=your_public_key
 MAISHAPAY_SECRET_KEY=your_secret_key
 MAISHAPAY_CALLBACK_SECRET=your_callback_secret
+MAISHAPAY_USE_CALLBACK=0
 # Optionnel en local: 0 pour désactiver le sweep d'expiration des abonnements
 SUBSCRIPTION_SWEEP_MS=0
 ```
+
+Notes:
+- `MAISHAPAY_USE_CALLBACK=0` desactive l'envoi du `callbackUrl` a MaishaPay.
+- Passe a `1` uniquement quand tu as une URL HTTPS publique et stable pour `/api/maishapay/callback`.
+- Avec `MAISHAPAY_USE_CALLBACK=0`, les tentatives de paiement sont enregistrees en attente puis confirmees depuis `admin.html` apres verification de l'encaissement sur le compte MaishaPay.
+- Pour activer le portefeuille createur et les retraits Mobile Money, execute aussi `sql/monetization-wallet.sql` dans Supabase SQL Editor.
+- Pour forcer la regle `video > 60 sec` dans les vues monetisees et recalculer les payouts video ouverts, execute aussi `sql/monetization-video-eligibility-fix.sql`.
+
+## Nouvelles APIs portefeuille
+
+- `GET /api/monetization/overview` : resume du portefeuille createur, methode de retrait et historique recent.
+- `POST /api/monetization/payout-settings` : enregistre le compte Mobile Money de retrait.
+- `POST /api/monetization/withdrawals` : cree une demande de retrait manuelle.
+- `GET /api/admin/withdrawal-requests` : liste admin des demandes de retrait.
+- `POST /api/admin/withdrawal-requests/status` : passe une demande en `processing`, `paid` ou `rejected`.
 
 ## Notes d'implémentation
 
@@ -107,3 +126,5 @@ SUBSCRIPTION_SWEEP_MS=0
 - RLS activé sur toutes les tables sensibles
 - Notifications push pour nouveaux soutiens
 - Vérification des 1000 abonnés requise pour activation
+- Les revenus video ne comptent que pour les contenus de plus de 60 secondes
+- Le solde retirable correspond uniquement aux revenus deja credites et non deja retires

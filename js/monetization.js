@@ -62,6 +62,21 @@ const PAYMENT_RULES = {
     maxTipAmount: 1000.00
 };
 
+const VIDEO_MONETIZATION_MIN_DURATION_SECONDS = 60;
+
+function normalizeVideoDurationSeconds(value) {
+    const duration = Number.parseFloat(value);
+    if (!Number.isFinite(duration) || duration <= 0) return 0;
+    return duration;
+}
+
+function isEligibleVideoDuration(value) {
+    return (
+        normalizeVideoDurationSeconds(value) >
+        VIDEO_MONETIZATION_MIN_DURATION_SECONDS
+    );
+}
+
 /* ========================================
    FONCTIONS UTILITAIRES
    ======================================== */
@@ -77,14 +92,35 @@ function isPlanActiveForUser(user) {
     return endMs > Date.now();
 }
 
+function getNormalizedUserPlan(user) {
+    return String(user?.plan || '').toLowerCase();
+}
+
+function getFollowerCount(user) {
+    const rawCount = user?.followers_count ?? user?.followersCount ?? 0;
+    const count = Number.parseInt(rawCount, 10);
+    return Number.isFinite(count) ? count : 0;
+}
+
+function hasMonetizationFlag(user) {
+    return user?.is_monetized === true || user?.isMonetized === true;
+}
+
+function hasActiveMonetizationPlan(user) {
+    const plan = getNormalizedUserPlan(user);
+    return ['medium', 'pro'].includes(plan) && isPlanActiveForUser(user);
+}
+
+function getMonetizationFollowerGap(user) {
+    return Math.max(0, 1000 - getFollowerCount(user));
+}
+
 // Vérifier si un créateur peut recevoir des soutiens
 function canReceiveSupport(user) {
     if (!user) return false;
-
-    const hasValidPlan = user.plan === 'medium' || user.plan === 'pro';
-    const hasActiveSubscription = isPlanActiveForUser(user);
-
-    return hasValidPlan && hasActiveSubscription;
+    if (!hasActiveMonetizationPlan(user)) return false;
+    if (isGiftedPro(user)) return true;
+    return hasMonetizationFlag(user) || getFollowerCount(user) >= 1000;
 }
 
 // Vérifier si un créateur a un plan Pro offert par un admin
@@ -99,15 +135,10 @@ function isGiftedPro(user) {
 // Vérifier si un créateur peut monétiser ses vidéos
 function canMonetizeVideos(user) {
     if (!user) return false;
-
-    if (isGiftedPro(user)) {
-        return true;
-    }
-
-    return user.plan === 'pro' &&
-           isPlanActiveForUser(user) &&
-           (user.followers_count || 0) >= 1000 &&
-           user.is_monetized === true;
+    if (getNormalizedUserPlan(user) !== 'pro') return false;
+    if (!isPlanActiveForUser(user)) return false;
+    if (isGiftedPro(user)) return true;
+    return hasMonetizationFlag(user) || getFollowerCount(user) >= 1000;
 }
 
 // Obtenir le plan actuel de l'utilisateur
@@ -396,7 +427,8 @@ async function calculateCreatorRevenue(creatorId) {
 async function recordVideoView(videoId, creatorId, videoDuration) {
     try {
         const today = new Date().toISOString().split('T')[0];
-        const isEligible = videoDuration > 60; // > 60 secondes
+        const normalizedDuration = normalizeVideoDurationSeconds(videoDuration);
+        const isEligible = isEligibleVideoDuration(normalizedDuration);
         
         // Vérifier si une entrée existe déjà pour aujourd'hui
         const { data: existing, error: checkError } = await supabase
@@ -411,11 +443,17 @@ async function recordVideoView(videoId, creatorId, videoDuration) {
         }
         
         if (existing) {
+            const existingDuration = normalizeVideoDurationSeconds(existing.video_duration);
+            const nextDuration = Math.max(existingDuration, normalizedDuration);
+
             // Incrémenter le compteur
             const { data, error } = await supabase
                 .from('video_views')
                 .update({
                     view_count: existing.view_count + 1,
+                    eligible: isEligibleVideoDuration(nextDuration),
+                    video_duration: nextDuration || null,
+                    period_month: today.substring(0, 7) + '-01',
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', existing.id)
@@ -437,7 +475,7 @@ async function recordVideoView(videoId, creatorId, videoDuration) {
                     creator_id: creatorId,
                     view_count: 1,
                     eligible: isEligible,
-                    video_duration: videoDuration,
+                    video_duration: normalizedDuration || null,
                     period_date: today,
                     period_month: today.substring(0, 7) + '-01'
                 })
@@ -479,9 +517,8 @@ async function getCreatorVideoStats(creatorId, period = 'month') {
         
         let query = supabase
             .from('video_views')
-            .select('*')
-            .eq('creator_id', creatorId)
-            .eq('eligible', true);
+            .select('video_id, view_count, eligible, video_duration, period_date')
+            .eq('creator_id', creatorId);
         
         if (startDate) {
             query = query.gte('period_date', startDate.toISOString().split('T')[0]);
@@ -502,16 +539,24 @@ async function getCreatorVideoStats(creatorId, period = 'month') {
         };
         
         if (data) {
-            const uniqueVideos = new Set();
+            const uniqueEligibleVideos = new Set();
             data.forEach(view => {
-                stats.totalViews += view.view_count || 0;
-                if (view.eligible) {
-                    stats.totalEligibleViews += view.view_count || 0;
+                const viewCount = Number(view.view_count || 0);
+                const isEligible =
+                    view.eligible === true &&
+                    isEligibleVideoDuration(view.video_duration);
+
+                stats.totalViews += viewCount;
+                if (isEligible) {
+                    stats.totalEligibleViews += viewCount;
+                    uniqueEligibleVideos.add(view.video_id);
                 }
-                uniqueVideos.add(view.video_id);
             });
-            stats.videoCount = uniqueVideos.size;
-            stats.estimatedRevenue = (stats.totalEligibleViews / 1000) * PLANS.PRO.rpmRate * 0.8; // 80% net
+            stats.videoCount = uniqueEligibleVideos.size;
+            stats.estimatedRevenue =
+                (stats.totalEligibleViews / 1000) *
+                PLANS.PRO.rpmRate *
+                (1 - PAYMENT_RULES.commissionRate);
         }
         
         return { success: true, data: stats };
@@ -561,12 +606,95 @@ async function getCreatorVideoPayouts(creatorId, options = {}) {
    PAIEMENTS (MAISHAPAY UNIQUEMENT)
    ======================================== */
 
+function resolveMonetizationApiBase() {
+    try {
+        const { protocol, hostname } = window.location;
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            return `${protocol}//${hostname}:5050`;
+        }
+        return window.location.origin;
+    } catch (error) {
+        return '';
+    }
+}
+
+async function getMonetizationAccessToken() {
+    const {
+        data: { session },
+        error,
+    } = await supabase.auth.getSession();
+
+    if (error || !session?.access_token) {
+        throw new Error('Session invalide. Reconnectez-vous.');
+    }
+
+    const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
+    if (
+        expiresAt &&
+        expiresAt - Date.now() < 2 * 60 * 1000 &&
+        typeof supabase.auth.refreshSession === 'function'
+    ) {
+        const refreshed = await supabase.auth.refreshSession();
+        if (refreshed?.error || !refreshed?.data?.session?.access_token) {
+            throw new Error('Impossible de rafraîchir la session.');
+        }
+        return refreshed.data.session.access_token;
+    }
+
+    return session.access_token;
+}
+
 // Créer une session de paiement pour un soutien
-async function createSupportPaymentSession() {
-    return {
-        success: false,
-        error: 'Les soutiens ne sont pas encore disponibles avec MaishaPay.'
-    };
+async function createSupportPaymentSession(fromUserId, toUserId, amount, description = '') {
+    try {
+        if (!fromUserId || !toUserId) {
+            return { success: false, error: 'Utilisateur source ou destination manquant.' };
+        }
+
+        const apiBase = resolveMonetizationApiBase();
+        if (!apiBase) {
+            return { success: false, error: 'Adresse API introuvable.' };
+        }
+
+        const accessToken = await getMonetizationAccessToken();
+        const response = await fetch(`${apiBase}/api/monetization/support`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                to_user_id: toUserId,
+                amount,
+                description,
+            }),
+        });
+
+        let payload = {};
+        try {
+            payload = await response.json();
+        } catch (error) {
+            payload = {};
+        }
+
+        if (!response.ok) {
+            return {
+                success: false,
+                error: payload?.error || 'Impossible d\'envoyer le soutien.',
+            };
+        }
+
+        return {
+            success: true,
+            data: payload,
+        };
+    } catch (error) {
+        console.error('Erreur createSupportPaymentSession:', error);
+        return {
+            success: false,
+            error: error?.message || 'Impossible de contacter le serveur de soutien.',
+        };
+    }
 }
 
 /* ========================================
@@ -633,6 +761,9 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         PLANS,
         PAYMENT_RULES,
+        VIDEO_MONETIZATION_MIN_DURATION_SECONDS,
+        normalizeVideoDurationSeconds,
+        isEligibleVideoDuration,
         canReceiveSupport,
         isGiftedPro,
         canMonetizeVideos,

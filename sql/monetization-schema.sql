@@ -105,6 +105,23 @@ CREATE INDEX IF NOT EXISTS idx_video_views_period_month ON video_views(period_mo
 CREATE TRIGGER update_video_views_updated_at BEFORE UPDATE ON video_views
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- Force l'eligibilite video uniquement pour les contenus > 60 secondes
+CREATE OR REPLACE FUNCTION sync_video_view_eligibility()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.period_date = COALESCE(NEW.period_date, CURRENT_DATE);
+    NEW.period_month = DATE_TRUNC('month', NEW.period_date)::DATE;
+    NEW.eligible = COALESCE(NEW.video_duration, 0) > 60;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_sync_video_view_eligibility ON video_views;
+CREATE TRIGGER trigger_sync_video_view_eligibility
+    BEFORE INSERT OR UPDATE ON video_views
+    FOR EACH ROW
+    EXECUTE FUNCTION sync_video_view_eligibility();
+
 -- ========================================
 -- 5. TABLE VIDEO PAYOUTS (REVENUS VIDÉO)
 -- ========================================
