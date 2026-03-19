@@ -272,10 +272,18 @@ function verifySignedState(state) {
         .createHmac("sha256", MAISHAPAY_CALLBACK_SECRET)
         .update(data)
         .digest("hex");
-    const valid = crypto.timingSafeEqual(
-        Buffer.from(signature, "hex"),
-        Buffer.from(expected, "hex"),
-    );
+    if (
+        !/^[a-f0-9]+$/i.test(signature) ||
+        signature.length !== expected.length
+    ) {
+        return null;
+    }
+    const providedBuffer = Buffer.from(signature, "hex");
+    const expectedBuffer = Buffer.from(expected, "hex");
+    if (providedBuffer.length !== expectedBuffer.length) {
+        return null;
+    }
+    const valid = crypto.timingSafeEqual(providedBuffer, expectedBuffer);
     if (!valid) return null;
     try {
         const payload = JSON.parse(
@@ -692,21 +700,32 @@ function getReadableServerErrorMessage(error, fallbackMessage) {
     return message.slice(0, 280);
 }
 
+function setResponseHeader(res, name, value) {
+    if (!res || !name) return;
+    if (typeof res.set === "function") {
+        res.set(name, value);
+        return;
+    }
+    if (typeof res.setHeader === "function") {
+        res.setHeader(name, value);
+    }
+}
+
 function sendCheckoutErrorResponse(res, error, fallbackMessage) {
     const sourceCode = String(error?.code || "").trim() || "UNKNOWN";
     let category = "checkout_failure";
 
     if (isMissingRelationError(error) || isMissingColumnError(error)) {
         category = "schema_missing";
-        res.set("X-Xera-Error-Category", category);
-        res.set("X-Xera-Error-Code", sourceCode);
+        setResponseHeader(res, "X-Xera-Error-Category", category);
+        setResponseHeader(res, "X-Xera-Error-Code", sourceCode);
         return res.status(503).send(getWalletSchemaErrorMessage());
     }
 
     if (isForeignKeyViolation(error)) {
         category = "foreign_key_violation";
-        res.set("X-Xera-Error-Category", category);
-        res.set("X-Xera-Error-Code", sourceCode);
+        setResponseHeader(res, "X-Xera-Error-Category", category);
+        setResponseHeader(res, "X-Xera-Error-Code", sourceCode);
         return res
             .status(409)
             .send(
@@ -716,8 +735,8 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage) {
 
     if (isNotNullViolation(error)) {
         category = "not_null_violation";
-        res.set("X-Xera-Error-Category", category);
-        res.set("X-Xera-Error-Code", sourceCode);
+        setResponseHeader(res, "X-Xera-Error-Category", category);
+        setResponseHeader(res, "X-Xera-Error-Code", sourceCode);
         return res
             .status(409)
             .send(
@@ -728,8 +747,8 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage) {
             );
     }
 
-    res.set("X-Xera-Error-Category", category);
-    res.set("X-Xera-Error-Code", sourceCode);
+    setResponseHeader(res, "X-Xera-Error-Category", category);
+    setResponseHeader(res, "X-Xera-Error-Code", sourceCode);
 
     if (String(process.env.NODE_ENV || "").toLowerCase() !== "production") {
         return res
@@ -1808,7 +1827,7 @@ async function handleMaishaPaySubscriptionCheckout(req, res) {
             method: String(method || "card").toLowerCase(),
         });
 
-        res.set("Content-Type", "text/html");
+        setResponseHeader(res, "Content-Type", "text/html");
         res.send(
             renderMaishaPayCheckoutPage({
                 amount,
@@ -1999,7 +2018,7 @@ async function handleMaishaPaySupportCheckout(req, res) {
             method: String(method || "card").toLowerCase(),
         });
 
-        res.set("Content-Type", "text/html");
+        setResponseHeader(res, "Content-Type", "text/html");
         res.send(
             renderMaishaPayCheckoutPage({
                 amount: checkoutAmount,
@@ -2030,7 +2049,7 @@ async function handleMaishaPayCallback(req, res) {
         const transactionRefId =
             params.transactionRefId || params.transaction_ref_id;
         const operatorRefId = params.operatorRefId || params.operator_ref_id;
-        const state = params.state || req.params.state;
+        const state = params.state || req.params?.state;
 
         const payload = verifySignedState(state);
         if (!payload) {
@@ -2108,7 +2127,7 @@ async function handleMaishaPayCallback(req, res) {
                 : "Retour au profil";
         const autoRedirectDelayMs = isSuccess ? 1400 : 2200;
 
-        res.set("Content-Type", "text/html");
+        setResponseHeader(res, "Content-Type", "text/html");
         res.send(`
       <!doctype html>
       <html lang="fr">
