@@ -61,6 +61,15 @@ const allowedOrigins = APP_BASE_URL.split(",")
     .filter(Boolean);
 app.use(cors({ origin: allowedOrigins, methods: ["GET", "POST"] }));
 
+// Health check endpoint pour Render
+app.get("/api/health", (req, res) => {
+    res.status(200).json({ 
+        status: "ok", 
+        timestamp: new Date().toISOString(),
+        service: "xera-backend"
+    });
+});
+
 function parseBooleanEnv(value, fallback = false) {
     if (value === undefined || value === null || value === "") {
         return fallback;

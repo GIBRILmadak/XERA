@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: xera-backend
+    runtime: node
+    plan: free
+    env: node
+    buildCommand: npm install
+    startCommand: node server/monetization-server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - fromGroup: xera-secrets
+
+databases:
+  - name: xera-db
+    databaseName: xera
+    user: xera
+    plan: free
