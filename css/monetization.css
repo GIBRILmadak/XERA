@@ -1676,6 +1676,15 @@ body.monetization-dashboard-page .video-cta p {
         flex-direction: column;
         text-align: center;
         gap: 20px;
+        padding: 20px;
+    }
+    
+    .dashboard-header h1 {
+        font-size: 22px;
+    }
+    
+    .dashboard-header p {
+        font-size: 14px;
     }
     
     .header-stats {
@@ -1684,11 +1693,30 @@ body.monetization-dashboard-page .video-cta p {
         gap: 10px;
     }
     
+    .stat-card {
+        padding: 15px 20px;
+        min-width: 140px;
+    }
+    
+    .stat-total .stat-value {
+        font-size: 24px;
+    }
+    
     .revenue-cards {
         grid-template-columns: 1fr;
         gap: 15px;
     }
-
+    
+    .wallet-cards {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .wallet-panels {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
     .wallet-form-grid {
         grid-template-columns: 1fr;
     }
@@ -1696,6 +1724,7 @@ body.monetization-dashboard-page .video-cta p {
     .wallet-panel-heading-row {
         flex-direction: column;
         align-items: stretch;
+        gap: 15px;
     }
 
     .wallet-toggle-btn {
@@ -1707,6 +1736,19 @@ body.monetization-dashboard-page .video-cta p {
         flex-direction: column;
         text-align: center;
         padding: 20px 15px;
+        gap: 15px;
+    }
+    
+    .status-icon {
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+    }
+    
+    .status-actions {
+        flex-direction: column;
+        width: 100%;
+        gap: 10px;
     }
     
     .section-header {
@@ -1715,9 +1757,20 @@ body.monetization-dashboard-page .video-cta p {
         align-items: flex-start;
     }
     
+    .section-header h2 {
+        font-size: 18px;
+    }
+    
     .period-filter {
         flex-wrap: wrap;
         gap: 8px;
+        width: 100%;
+    }
+    
+    .filter-btn {
+        flex: 1;
+        min-width: 80px;
+        text-align: center;
     }
     
     .plans-comparison {
@@ -1783,6 +1836,26 @@ body.monetization-dashboard-page .video-cta p {
         padding: 12px 20px;
         font-size: 14px;
     }
+    
+    /* Tables responsive */
+    .transactions-table-wrapper,
+    .payouts-table-wrapper,
+    .withdrawals-table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .transactions-table,
+    .payouts-table,
+    .withdrawals-table {
+        min-width: 600px;
+    }
+    
+    .modal-content {
+        width: 95%;
+        margin: 10px;
+        max-height: 85vh;
+    }
 }
 
 /* Responsive pour très petits écrans */
@@ -1791,12 +1864,44 @@ body.monetization-dashboard-page .video-cta p {
         padding: 85px 10px 25px;
     }
     
+    .dashboard-header {
+        padding: 15px;
+    }
+    
+    .dashboard-header h1 {
+        font-size: 20px;
+    }
+    
+    .dashboard-header p {
+        font-size: 13px;
+    }
+    
+    .stat-card {
+        padding: 12px 15px;
+        min-width: 120px;
+    }
+    
+    .stat-total .stat-value {
+        font-size: 20px;
+    }
+    
+    .stat-total .stat-label {
+        font-size: 11px;
+    }
+    
     .monetization-dashboard-page .revenue-cards {
         gap: 12px;
     }
     
     .monetization-dashboard-page .revenue-card {
         padding: 15px 12px;
+        gap: 12px;
+    }
+    
+    .card-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
     }
     
     .monetization-dashboard-page .stat-value {
@@ -1809,6 +1914,14 @@ body.monetization-dashboard-page .video-cta p {
     
     .monetization-dashboard-page .wallet-panel {
         padding: 15px 12px;
+    }
+    
+    .monetization-dashboard-page .wallet-card {
+        padding: 15px;
+    }
+    
+    .monetization-dashboard-page .wallet-value {
+        font-size: 22px;
     }
     
     .monetization-dashboard-page .form-group input,
@@ -1828,6 +1941,186 @@ body.monetization-dashboard-page .video-cta p {
     
     .monetization-dashboard-page .video-stats-grid {
         grid-template-columns: 1fr;
+    }
+    
+    .status-card {
+        padding: 15px 12px;
+    }
+    
+    .status-icon {
+        width: 45px;
+        height: 45px;
+        font-size: 18px;
+    }
+    
+    .status-info h3 {
+        font-size: 16px;
+    }
+    
+    .section-header h2 {
+        font-size: 16px;
+    }
+    
+    .filter-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    
+    .wallet-field input,
+    .wallet-field select,
+    .wallet-field textarea {
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+    
+    .wallet-form-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .wallet-form-actions .btn {
+        width: 100%;
+    }
+    
+    /* Modal improvements */
+    .modal-content {
+        width: 98%;
+        margin: 5px;
+        border-radius: 12px;
+    }
+    
+    .modal-header {
+        padding: 15px 20px;
+    }
+    
+    .modal-header h2 {
+        font-size: 18px;
+    }
+    
+    .modal-body {
+        padding: 20px;
+    }
+    
+    .support-modal-content {
+        max-width: 95%;
+    }
+}
+
+/* Ultra-small screens (folded phones, very old devices) */
+@media (max-width: 320px) {
+    .monetization-dashboard-page .dashboard-main {
+        padding: 80px 8px 20px;
+    }
+    
+    .dashboard-header {
+        padding: 12px;
+    }
+    
+    .dashboard-header h1 {
+        font-size: 18px;
+    }
+    
+    .dashboard-header p {
+        font-size: 12px;
+    }
+    
+    .stat-card {
+        padding: 10px 12px;
+        min-width: 100px;
+    }
+    
+    .stat-total .stat-value {
+        font-size: 18px;
+    }
+    
+    .stat-total .stat-label {
+        font-size: 10px;
+    }
+    
+    .monetization-dashboard-page .revenue-card {
+        padding: 12px 10px;
+        gap: 10px;
+    }
+    
+    .card-icon {
+        width: 35px;
+        height: 35px;
+        font-size: 14px;
+    }
+    
+    .monetization-dashboard-page .wallet-value {
+        font-size: 18px;
+    }
+    
+    .monetization-dashboard-page .wallet-label {
+        font-size: 11px;
+    }
+    
+    .monetization-dashboard-page .wallet-panel {
+        padding: 12px 10px;
+    }
+    
+    .monetization-dashboard-page .wallet-card {
+        padding: 12px;
+    }
+    
+    .status-card {
+        padding: 12px 10px;
+    }
+    
+    .status-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+    
+    .status-info h3 {
+        font-size: 14px;
+    }
+    
+    .section-header h2 {
+        font-size: 14px;
+    }
+    
+    .filter-btn {
+        padding: 5px 10px;
+        font-size: 11px;
+        min-width: 70px;
+    }
+    
+    .wallet-field input,
+    .wallet-field select,
+    .wallet-field textarea {
+        padding: 8px 10px;
+        font-size: 13px;
+    }
+    
+    .monetization-dashboard-page .btn {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+    
+    .modal-content {
+        width: 100%;
+        margin: 0;
+        border-radius: 0;
+        max-height: 95vh;
+    }
+    
+    .modal-header {
+        padding: 12px 15px;
+    }
+    
+    .modal-header h2 {
+        font-size: 16px;
+    }
+    
+    .modal-body {
+        padding: 15px;
+    }
+    
+    .support-modal-content {
+        max-width: 100%;
     }
 }
 
