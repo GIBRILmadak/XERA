@@ -1519,7 +1519,7 @@ function resolveReminderSlot(now, timeZone) {
 
 // ==================== MAISHAPAY CHECKOUT ====================
 
-app.post("/api/maishapay/checkout", async (req, res) => {
+async function handleMaishaPaySubscriptionCheckout(req, res) {
     try {
         if (!MAISHAPAY_PUBLIC_KEY || !MAISHAPAY_SECRET_KEY) {
             return res.status(500).send("MaishaPay keys not configured");
@@ -1634,9 +1634,14 @@ app.post("/api/maishapay/checkout", async (req, res) => {
             "Erreur MaishaPay",
         );
     }
-});
+}
 
-app.post("/api/maishapay/support-checkout", async (req, res) => {
+app.post(
+    ["/api/maishapay/checkout", "/api/checkout-subscription"],
+    handleMaishaPaySubscriptionCheckout,
+);
+
+async function handleMaishaPaySupportCheckout(req, res) {
     try {
         if (!MAISHAPAY_PUBLIC_KEY || !MAISHAPAY_SECRET_KEY) {
             return res.status(500).send("MaishaPay keys not configured");
@@ -1807,9 +1812,14 @@ app.post("/api/maishapay/support-checkout", async (req, res) => {
             "Erreur MaishaPay",
         );
     }
-});
+}
 
-app.all("/api/maishapay/callback/:state?", async (req, res) => {
+app.post(
+    ["/api/maishapay/support-checkout", "/api/checkout-support"],
+    handleMaishaPaySupportCheckout,
+);
+
+async function handleMaishaPayCallback(req, res) {
     try {
         const params = { ...req.query, ...req.body };
         const status = params.status ?? params.statusCode ?? "";
@@ -1929,7 +1939,9 @@ app.all("/api/maishapay/callback/:state?", async (req, res) => {
         console.error("MaishaPay callback error:", error);
         res.status(500).send("Erreur callback");
     }
-});
+}
+
+app.all("/api/maishapay/callback/:state?", handleMaishaPayCallback);
 
 // ==================== ADMIN: OFFER PLAN ====================
 
@@ -2825,7 +2837,7 @@ app.get("/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-app.get("/api/config", (req, res) => {
+function handlePublicConfig(req, res) {
     res.json({
         usdToCdfRate: USD_TO_CDF_RATE_VALUE,
         maishaPay: {
@@ -2833,7 +2845,9 @@ app.get("/api/config", (req, res) => {
             gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
         },
     });
-});
+}
+
+app.get("/api/config", handlePublicConfig);
 
 // ... (le reste du code existant pour les rappels, etc.)
 
@@ -2868,3 +2882,8 @@ if (isDirectRun) {
 
 module.exports = app;
 module.exports.sweepExpiredSubscriptions = sweepExpiredSubscriptions;
+module.exports.handleMaishaPaySubscriptionCheckout =
+    handleMaishaPaySubscriptionCheckout;
+module.exports.handleMaishaPaySupportCheckout = handleMaishaPaySupportCheckout;
+module.exports.handleMaishaPayCallback = handleMaishaPayCallback;
+module.exports.handlePublicConfig = handlePublicConfig;

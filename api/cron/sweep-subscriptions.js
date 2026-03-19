@@ -1,6 +1,6 @@
-import { sweepExpiredSubscriptions } from "../../lib/monetization";
+const { sweepExpiredSubscriptions } = require("../../server/monetization-server");
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
     if (req.method !== "GET") {
         // Vercel cron jobs typically trigger GET requests
         return res.status(405).send("Method Not Allowed");
@@ -11,4 +11,4 @@ export default async function handler(req, res) {
     res.status(200).json({
         message: "Subscription sweep initiated successfully.",
     });
-}
+};

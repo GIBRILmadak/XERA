@@ -118,7 +118,7 @@ async function resolvePaymentContext(params, user) {
         kind: PAYMENT_KIND_SUBSCRIPTION,
         planId: normalizePlan(params.get("plan")),
         billingCycle: normalizeBilling(params.get("billing")),
-        formActionPath: "/api/checkout-subscription",
+        formActionPath: "/api/maishapay/checkout",
         defaultCurrency: "USD",
         returnPath: userProfileReturnPath,
     };
@@ -187,7 +187,7 @@ async function resolveSupportContext(params, user) {
         amountUsd: Number.parseInt(String(rawAmount), 10),
         description:
             description || `Soutien pour ${creator.name || "ce créateur"}`,
-        formActionPath: "/api/checkout-support",
+        formActionPath: "/api/maishapay/support-checkout",
         defaultCurrency: "USD",
         returnPath,
     };
