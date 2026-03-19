@@ -103,6 +103,26 @@ function resolveCallbackOrigin(callbackBaseUrl, primaryOrigin) {
     return "";
 }
 
+function getRequestOrigin(req) {
+    const forwardedProto = String(
+        req?.headers?.["x-forwarded-proto"] || req?.protocol || "",
+    )
+        .split(",")[0]
+        .trim()
+        .toLowerCase();
+    const forwardedHost = String(
+        req?.headers?.["x-forwarded-host"] || req?.headers?.host || "",
+    )
+        .split(",")[0]
+        .trim();
+
+    if (!forwardedProto || !forwardedHost) {
+        return "";
+    }
+
+    return stripTrailingSlash(`${forwardedProto}://${forwardedHost}`);
+}
+
 function escapeHtmlAttr(value) {
     return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -115,8 +135,29 @@ const PRIMARY_ORIGIN = stripTrailingSlash(
     allowedOrigins[0] || APP_BASE_URL.split(",")[0] || "http://localhost:3000",
 );
 const CALLBACK_ORIGIN = resolveCallbackOrigin(CALLBACK_BASE_URL, PRIMARY_ORIGIN);
+const MAISHAPAY_CALLBACK_ALLOWED = parseBooleanEnv(MAISHAPAY_USE_CALLBACK, true);
 const MAISHAPAY_CALLBACK_ENABLED =
-    parseBooleanEnv(MAISHAPAY_USE_CALLBACK, true) && Boolean(CALLBACK_ORIGIN);
+    MAISHAPAY_CALLBACK_ALLOWED && Boolean(CALLBACK_ORIGIN);
+
+function getMaishaPayCallbackConfig(req) {
+    if (!MAISHAPAY_CALLBACK_ALLOWED) {
+        return {
+            callbackEnabled: false,
+            callbackOrigin: "",
+        };
+    }
+
+    const requestOrigin = getRequestOrigin(req);
+    const callbackOrigin = resolveCallbackOrigin(
+        CALLBACK_BASE_URL,
+        requestOrigin || PRIMARY_ORIGIN,
+    );
+
+    return {
+        callbackEnabled: Boolean(callbackOrigin),
+        callbackOrigin,
+    };
+}
 
 function buildProfileReturnPath(userId) {
     if (!userId) return "/profile.html";
@@ -183,6 +224,7 @@ const USD_TO_CDF_RATE_VALUE = Math.max(
 const WITHDRAWAL_MIN_USD = 5;
 const SUPPORT_MIN_USD = 1;
 const SUPPORT_MAX_USD = 1000;
+const SUPPORT_COMMISSION_RATE = 0.2;
 const SUPPORTED_MOBILE_MONEY_PROVIDERS = new Set([
     "airtel_money",
     "orange_money",
@@ -443,6 +485,8 @@ async function createPendingSubscriptionPayment({
     method,
     provider,
     walletId,
+    callbackEnabled = MAISHAPAY_CALLBACK_ENABLED,
+    callbackOrigin = CALLBACK_ORIGIN,
 }) {
     const checkoutRefId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
@@ -454,8 +498,8 @@ async function createPendingSubscriptionPayment({
         method: String(method || "card").toLowerCase(),
         provider: provider || null,
         wallet_id: walletId || null,
-        callback_enabled: MAISHAPAY_CALLBACK_ENABLED,
-        callback_origin: MAISHAPAY_CALLBACK_ENABLED ? CALLBACK_ORIGIN : null,
+        callback_enabled: callbackEnabled,
+        callback_origin: callbackEnabled ? callbackOrigin || null : null,
         checkout_started_at: nowIso,
     };
 
@@ -499,9 +543,12 @@ async function createPendingSupportPayment({
     description,
     senderName,
     recipientName,
+    callbackEnabled = MAISHAPAY_CALLBACK_ENABLED,
+    callbackOrigin = CALLBACK_ORIGIN,
 }) {
     const checkoutRefId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
+    const breakdown = computeSupportRevenueBreakdown(amountUsd);
     const metadata = {
         payment_provider: "maishapay",
         checkout_ref_id: checkoutRefId,
@@ -511,11 +558,14 @@ async function createPendingSupportPayment({
         method: String(method || "card").toLowerCase(),
         provider: provider || null,
         wallet_id: walletId || null,
-        support_amount_usd: roundMoney(amountUsd),
+        support_amount_usd: breakdown.gross,
         checkout_amount: checkoutAmount,
         checkout_currency: String(checkoutCurrency || "USD").toUpperCase(),
-        callback_enabled: MAISHAPAY_CALLBACK_ENABLED,
-        callback_origin: MAISHAPAY_CALLBACK_ENABLED ? CALLBACK_ORIGIN : null,
+        commission_rate: SUPPORT_COMMISSION_RATE,
+        amount_net_creator: breakdown.netCreator,
+        amount_commission_xera: breakdown.commission,
+        callback_enabled: callbackEnabled,
+        callback_origin: callbackEnabled ? callbackOrigin || null : null,
         checkout_started_at: nowIso,
     };
 
@@ -525,7 +575,9 @@ async function createPendingSupportPayment({
             from_user_id: fromUserId,
             to_user_id: toUserId,
             type: "support",
-            amount_gross: roundMoney(amountUsd),
+            amount_gross: breakdown.gross,
+            amount_net_creator: breakdown.netCreator,
+            amount_commission_xera: breakdown.commission,
             currency: "USD",
             status: "pending",
             description:
@@ -640,6 +692,44 @@ function roundMoney(value) {
     const amount = Number(value || 0);
     if (!Number.isFinite(amount)) return 0;
     return Math.round(amount * 100) / 100;
+}
+
+function computeSupportRevenueBreakdown(amountUsd) {
+    const gross = roundMoney(amountUsd);
+    const commission = roundMoney(gross * SUPPORT_COMMISSION_RATE);
+    const netCreator = roundMoney(Math.max(0, gross - commission));
+
+    return {
+        gross,
+        commission,
+        netCreator,
+    };
+}
+
+function resolveTransactionNetAmount(row) {
+    const explicitNet = Number(row?.amount_net_creator);
+    if (Number.isFinite(explicitNet) && explicitNet > 0) {
+        return roundMoney(explicitNet);
+    }
+
+    if (String(row?.type || "").toLowerCase() === "support") {
+        return computeSupportRevenueBreakdown(row?.amount_gross).netCreator;
+    }
+
+    return roundMoney(explicitNet);
+}
+
+function resolveTransactionCommissionAmount(row) {
+    const explicitCommission = Number(row?.amount_commission_xera);
+    if (Number.isFinite(explicitCommission) && explicitCommission > 0) {
+        return roundMoney(explicitCommission);
+    }
+
+    if (String(row?.type || "").toLowerCase() === "support") {
+        return computeSupportRevenueBreakdown(row?.amount_gross).commission;
+    }
+
+    return roundMoney(explicitCommission);
 }
 
 function normalizeMobileMoneyProvider(value) {
@@ -888,7 +978,7 @@ async function buildCreatorWalletOverview(userId) {
     let videoPending = 0;
 
     revenueTransactions.forEach((tx) => {
-        const net = roundMoney(tx.amount_net_creator);
+        const net = resolveTransactionNetAmount(tx);
         if (tx.type === "support") {
             if (tx.status === "succeeded") supportAvailable += net;
             if (tx.status === "pending") supportPending += net;
@@ -1492,6 +1582,7 @@ async function confirmSupportPayment({
     confirmationSource = "maishapay_callback",
 }) {
     const paymentId = transactionRefId ? `maishapay_${transactionRefId}` : null;
+    const breakdown = computeSupportRevenueBreakdown(amountUsd);
 
     let pendingPayment = null;
     if (pendingTransactionId) {
@@ -1551,7 +1642,6 @@ async function confirmSupportPayment({
         throw new Error("Createur introuvable.");
     }
 
-    const supportAmountUsd = roundMoney(amountUsd);
     const nowIso = new Date().toISOString();
     const mergedMetadata = {
         ...(pendingPayment?.metadata && typeof pendingPayment.metadata === "object"
@@ -1573,11 +1663,11 @@ async function confirmSupportPayment({
             recipientProfile?.name ||
             pendingPayment?.metadata?.recipient_name ||
             "Createur",
-        support_amount_usd: supportAmountUsd,
+        support_amount_usd: breakdown.gross,
         checkout_amount:
             checkoutAmount ||
             pendingPayment?.metadata?.checkout_amount ||
-            supportAmountUsd,
+            breakdown.gross,
         checkout_currency:
             String(
                 checkoutCurrency ||
@@ -1586,6 +1676,9 @@ async function confirmSupportPayment({
             ).toUpperCase(),
         confirmed_at: nowIso,
         confirmation_source: confirmationSource,
+        commission_rate: SUPPORT_COMMISSION_RATE,
+        amount_net_creator: breakdown.netCreator,
+        amount_commission_xera: breakdown.commission,
     };
 
     let transactionId = pendingTransactionId || null;
@@ -1595,7 +1688,9 @@ async function confirmSupportPayment({
             .update({
                 from_user_id: fromUserId,
                 to_user_id: toUserId,
-                amount_gross: supportAmountUsd,
+                amount_gross: breakdown.gross,
+                amount_net_creator: breakdown.netCreator,
+                amount_commission_xera: breakdown.commission,
                 currency: "USD",
                 status: "succeeded",
                 description:
@@ -1613,7 +1708,9 @@ async function confirmSupportPayment({
                 from_user_id: fromUserId,
                 to_user_id: toUserId,
                 type: "support",
-                amount_gross: supportAmountUsd,
+                amount_gross: breakdown.gross,
+                amount_net_creator: breakdown.netCreator,
+                amount_commission_xera: breakdown.commission,
                 currency: "USD",
                 status: "succeeded",
                 description: description || "Soutien XERA",
@@ -1632,12 +1729,14 @@ async function confirmSupportPayment({
     const notification = await createNotificationRecord({
         userId: toUserId,
         type: "support",
-        message: `${senderName} vous a envoye ${formatMoneyUsd(supportAmountUsd)} de soutien.`,
+        message: `${senderName} vous a envoye ${formatMoneyUsd(breakdown.gross)} de soutien.`,
         link: `/creator-dashboard`,
         actorId: fromUserId,
         metadata: {
             transaction_id: transactionId,
-            amount_gross: supportAmountUsd,
+            amount_gross: breakdown.gross,
+            amount_net_creator: breakdown.netCreator,
+            amount_commission_xera: breakdown.commission,
             currency: "USD",
             sender_id: fromUserId,
         },
@@ -1721,6 +1820,8 @@ async function handleMaishaPaySubscriptionCheckout(req, res) {
             return res.status(500).send("MaishaPay keys not configured");
         }
 
+        const callbackConfig = getMaishaPayCallbackConfig(req);
+
         const {
             plan,
             billing_cycle: billingCycleRaw,
@@ -1785,10 +1886,12 @@ async function handleMaishaPaySubscriptionCheckout(req, res) {
             method,
             provider,
             walletId,
+            callbackEnabled: callbackConfig.callbackEnabled,
+            callbackOrigin: callbackConfig.callbackOrigin,
         });
 
         let callbackUrl = null;
-        if (MAISHAPAY_CALLBACK_ENABLED) {
+        if (callbackConfig.callbackEnabled) {
             const statePayload = {
                 user_id: userId,
                 pending_transaction_id: pendingPayment.id,
@@ -1808,7 +1911,7 @@ async function handleMaishaPaySubscriptionCheckout(req, res) {
             if (!state) {
                 return res.status(500).send("Callback secret manquant");
             }
-            callbackUrl = `${CALLBACK_ORIGIN}/api/maishapay/callback/${encodeURIComponent(state)}`;
+            callbackUrl = `${callbackConfig.callbackOrigin}/api/maishapay/callback/${encodeURIComponent(state)}`;
         }
 
         console.info("[MaishaPay checkout]", {
@@ -1817,8 +1920,8 @@ async function handleMaishaPaySubscriptionCheckout(req, res) {
             secretKey: maskKey(MAISHAPAY_SECRET_KEY),
             publicKeyMode: inferMaishaPayKeyMode(MAISHAPAY_PUBLIC_KEY),
             secretKeyMode: inferMaishaPayKeyMode(MAISHAPAY_SECRET_KEY),
-            callbackEnabled: MAISHAPAY_CALLBACK_ENABLED,
-            callbackOrigin: CALLBACK_ORIGIN,
+            callbackEnabled: callbackConfig.callbackEnabled,
+            callbackOrigin: callbackConfig.callbackOrigin,
             pendingTransactionId: pendingPayment.id,
             checkoutRefId: pendingPayment.checkoutRefId,
             plan: planId,
@@ -1855,6 +1958,8 @@ async function handleMaishaPaySupportCheckout(req, res) {
         if (!MAISHAPAY_PUBLIC_KEY || !MAISHAPAY_SECRET_KEY) {
             return res.status(500).send("MaishaPay keys not configured");
         }
+
+        const callbackConfig = getMaishaPayCallbackConfig(req);
 
         const {
             to_user_id: toUserId,
@@ -1972,10 +2077,12 @@ async function handleMaishaPaySupportCheckout(req, res) {
                 `Soutien pour ${recipientProfile.name || "un createur"}`,
             senderName: senderProfile.name || "Utilisateur",
             recipientName: recipientProfile.name || "Createur",
+            callbackEnabled: callbackConfig.callbackEnabled,
+            callbackOrigin: callbackConfig.callbackOrigin,
         });
 
         let callbackUrl = null;
-        if (MAISHAPAY_CALLBACK_ENABLED) {
+        if (callbackConfig.callbackEnabled) {
             const statePayload = {
                 payment_kind: "support",
                 from_user_id: fromUserId,
@@ -1999,15 +2106,15 @@ async function handleMaishaPaySupportCheckout(req, res) {
             if (!state) {
                 return res.status(500).send("Callback secret manquant");
             }
-            callbackUrl = `${CALLBACK_ORIGIN}/api/maishapay/callback/${encodeURIComponent(state)}`;
+            callbackUrl = `${callbackConfig.callbackOrigin}/api/maishapay/callback/${encodeURIComponent(state)}`;
         }
 
         console.info("[MaishaPay support checkout]", {
             gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
             publicKey: maskKey(MAISHAPAY_PUBLIC_KEY),
             secretKey: maskKey(MAISHAPAY_SECRET_KEY),
-            callbackEnabled: MAISHAPAY_CALLBACK_ENABLED,
-            callbackOrigin: CALLBACK_ORIGIN,
+            callbackEnabled: callbackConfig.callbackEnabled,
+            callbackOrigin: callbackConfig.callbackOrigin,
             pendingTransactionId: pendingPayment.id,
             checkoutRefId: pendingPayment.checkoutRefId,
             fromUserId,
@@ -2542,8 +2649,8 @@ app.get("/api/creator-revenue/:userId", async (req, res) => {
         if (transactions) {
             transactions.forEach((tx) => {
                 const gross = parseFloat(tx.amount_gross || 0);
-                const net = parseFloat(tx.amount_net_creator || 0);
-                const commission = parseFloat(tx.amount_commission_xera || 0);
+                const net = resolveTransactionNetAmount(tx);
+                const commission = resolveTransactionCommissionAmount(tx);
 
                 summary.totalGross += gross;
                 summary.totalNet += net;
@@ -2663,11 +2770,15 @@ app.post("/api/monetization/support", async (req, res) => {
         }
 
         const description = String(rawDescription || "").trim().slice(0, 160);
+        const breakdown = computeSupportRevenueBreakdown(amount);
         const metadata = {
             payment_provider: "internal_support",
             support_kind: "direct",
             sender_name: senderProfile?.name || authResult.user.email || "Utilisateur",
             created_via: "support_api",
+            commission_rate: SUPPORT_COMMISSION_RATE,
+            amount_net_creator: breakdown.netCreator,
+            amount_commission_xera: breakdown.commission,
         };
 
         const { data: transaction, error: txError } = await supabase
@@ -2676,7 +2787,9 @@ app.post("/api/monetization/support", async (req, res) => {
                 from_user_id: fromUserId,
                 to_user_id: toUserId,
                 type: "support",
-                amount_gross: roundMoney(amount),
+                amount_gross: breakdown.gross,
+                amount_net_creator: breakdown.netCreator,
+                amount_commission_xera: breakdown.commission,
                 currency: "USD",
                 status: "succeeded",
                 description: description || "Soutien XERA",
@@ -2694,12 +2807,14 @@ app.post("/api/monetization/support", async (req, res) => {
         const notification = await createNotificationRecord({
             userId: toUserId,
             type: "support",
-            message: `${senderName} vous a envoye ${formatMoneyUsd(amount)} de soutien.`,
+            message: `${senderName} vous a envoye ${formatMoneyUsd(breakdown.gross)} de soutien.`,
             link: `/creator-dashboard`,
             actorId: fromUserId,
             metadata: {
                 transaction_id: transaction?.id || null,
-                amount_gross: roundMoney(amount),
+                amount_gross: breakdown.gross,
+                amount_net_creator: breakdown.netCreator,
+                amount_commission_xera: breakdown.commission,
                 currency: "USD",
                 sender_id: fromUserId,
             },
@@ -3060,10 +3175,14 @@ app.get("/health", (req, res) => {
 });
 
 function handlePublicConfig(req, res) {
+    const callbackConfig = getMaishaPayCallbackConfig(req);
     res.json({
         usdToCdfRate: USD_TO_CDF_RATE_VALUE,
         maishaPay: {
-            callbackEnabled: MAISHAPAY_CALLBACK_ENABLED,
+            callbackEnabled: callbackConfig.callbackEnabled,
+            callbackOrigin: callbackConfig.callbackEnabled
+                ? callbackConfig.callbackOrigin
+                : null,
             gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
         },
     });

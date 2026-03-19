@@ -11,6 +11,8 @@ window.creatorDashboardRefreshTimer = null;
 window.creatorDashboardPollingTimer = null;
 window.creatorDashboardLastSupportNotificationId = null;
 
+const SUPPORT_COMMISSION_RATE = 0.2;
+
 document.addEventListener('DOMContentLoaded', async () => {
     if (window.initI18n) {
         await window.initI18n();
@@ -81,6 +83,44 @@ window.navigateTo = navigateTo;
 window.handleProfileNavigation = handleProfileNavigation;
 window.openMessagesPage = openMessagesPage;
 window.toggleNotificationPanel = toggleNotificationPanel;
+
+function computeSupportBreakdown(amountGross) {
+    const gross = Number(amountGross || 0);
+    if (!Number.isFinite(gross) || gross <= 0) {
+        return { gross: 0, commission: 0, netCreator: 0 };
+    }
+
+    const commission = Math.round(gross * SUPPORT_COMMISSION_RATE * 100) / 100;
+    const netCreator = Math.round((gross - commission) * 100) / 100;
+
+    return { gross, commission, netCreator };
+}
+
+function resolveDashboardTransactionNet(entry) {
+    const explicitNet = Number(entry?.amount_net_creator);
+    if (Number.isFinite(explicitNet) && explicitNet > 0) {
+        return explicitNet;
+    }
+
+    if (String(entry?.type || '').toLowerCase() === 'support') {
+        return computeSupportBreakdown(entry?.amount_gross).netCreator;
+    }
+
+    return Number.isFinite(explicitNet) ? explicitNet : 0;
+}
+
+function resolveDashboardTransactionCommission(entry) {
+    const explicitCommission = Number(entry?.amount_commission_xera);
+    if (Number.isFinite(explicitCommission) && explicitCommission > 0) {
+        return explicitCommission;
+    }
+
+    if (String(entry?.type || '').toLowerCase() === 'support') {
+        return computeSupportBreakdown(entry?.amount_gross).commission;
+    }
+
+    return Number.isFinite(explicitCommission) ? explicitCommission : 0;
+}
 
 function resolveDashboardApiBaseUrl() {
     try {
@@ -1060,7 +1100,7 @@ async function loadRevenueData(userId, period = 'all') {
         const videoCount = creditedVideoEntries.length;
 
         supportTransactions.forEach(tx => {
-            const net = parseFloat(tx.amount_net_creator || 0);
+            const net = resolveDashboardTransactionNet(tx);
 
             totalNet += net;
             supportRevenue += net;
@@ -1184,8 +1224,8 @@ async function loadTransactions(userId, options = {}) {
                     <td>${date}</td>
                     <td>${typeLabels[tx.type] || tx.type}</td>
                     <td>${formatCurrency(tx.amount_gross)}</td>
-                    <td>${formatCurrency(tx.amount_commission_xera)}</td>
-                    <td><strong>${formatCurrency(tx.amount_net_creator)}</strong></td>
+                    <td>${formatCurrency(resolveDashboardTransactionCommission(tx))}</td>
+                    <td><strong>${formatCurrency(resolveDashboardTransactionNet(tx))}</strong></td>
                     <td>${statusLabels[tx.status] || tx.status}</td>
                 </tr>
             `;

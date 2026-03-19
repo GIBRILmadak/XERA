@@ -3,8 +3,34 @@
    Intégration des badges et boutons de soutien dans les profils et contenus
    ======================================== */
 
+let monetizationUiInitialized = false;
+
+function handleSupportButtonClick(e) {
+    const supportBtn = e.target.closest('.support-btn-active');
+    if (!supportBtn) return;
+
+    const creatorId = supportBtn.dataset.creatorId;
+    const creatorName = supportBtn.dataset.creatorName || 'Créateur';
+
+    if (!creatorId) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    openSupportModal(creatorId, creatorName, supportBtn);
+}
+
+function resolveSupportCreatorName(creatorName, sourceElement = null) {
+    const resolvedName = String(
+        creatorName || sourceElement?.dataset?.creatorName || '',
+    ).trim();
+    return resolvedName || 'Créateur';
+}
+
 // Initialiser la monétisation sur la page
 function initMonetizationUI() {
+    if (monetizationUiInitialized) return;
+    monetizationUiInitialized = true;
+
     // Injecter le CSS si pas déjà présent
     if (!document.getElementById('monetization-css')) {
         const link = document.createElement('link');
@@ -171,10 +197,15 @@ let globalSupportState = {
 // Ouvrir la modale de soutien globale
 function openSupportModal(creatorId, creatorName, sourceElement = null) {
     createSupportModal();
+
+    const resolvedCreatorName = resolveSupportCreatorName(
+        creatorName,
+        sourceElement,
+    );
     
     globalSupportState = {
         creatorId,
-        creatorName,
+        creatorName: resolvedCreatorName,
         amount: 0,
         returnPath:
             typeof buildSupportReturnPath === 'function'
@@ -182,7 +213,10 @@ function openSupportModal(creatorId, creatorName, sourceElement = null) {
                 : `${window.location.pathname}${window.location.search}${window.location.hash}`,
     };
     
-    document.getElementById('support-creator-name').textContent = creatorName;
+    const creatorNameEl = document.getElementById('support-creator-name');
+    if (creatorNameEl) {
+        creatorNameEl.textContent = resolvedCreatorName;
+    }
     
     // Réinitialiser la sélection
     document.querySelectorAll('#global-amount-options .amount-btn').forEach(btn => {
@@ -353,21 +387,6 @@ function showGlobalNotification(message, type = 'info') {
     }, 5000);
 }
 
-// Gérer les clics sur les boutons de soutien
-document.addEventListener('click', (e) => {
-    const supportBtn = e.target.closest('.support-btn-active');
-    if (supportBtn) {
-        const creatorId = supportBtn.dataset.creatorId;
-        const creatorName = supportBtn.dataset.creatorName || 'Créateur';
-        
-        if (creatorId) {
-            e.preventDefault();
-            e.stopPropagation();
-            openSupportModal(creatorId, creatorName, supportBtn);
-        }
-    }
-});
-
 // Intégrer la monétisation dans un profil
 function integrateMonetizationInProfile(profileElement, user) {
     if (!profileElement || !user) return;
@@ -419,3 +438,12 @@ document.addEventListener('DOMContentLoaded', () => {
     initMonetizationUI();
     createSupportModal();
 });
+
+window.initMonetizationUI = initMonetizationUI;
+window.openSupportModal = openSupportModal;
+window.closeGlobalSupportModal = closeGlobalSupportModal;
+window.selectGlobalSupportAmount = selectGlobalSupportAmount;
+window.handleGlobalCustomAmount = handleGlobalCustomAmount;
+window.processGlobalSupport = processGlobalSupport;
+window.integrateMonetizationInProfile = integrateMonetizationInProfile;
+window.integrateMonetizationInContentCard = integrateMonetizationInContentCard;
