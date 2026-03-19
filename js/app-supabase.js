@@ -109,7 +109,8 @@ function getPaymentReturnResumeState() {
             url.searchParams.get(APP_PAYMENT_RETURN_IMMERSIVE_USER_PARAM) || "",
         ).trim();
         const contentId = String(
-            url.searchParams.get(APP_PAYMENT_RETURN_IMMERSIVE_CONTENT_PARAM) || "",
+            url.searchParams.get(APP_PAYMENT_RETURN_IMMERSIVE_CONTENT_PARAM) ||
+                "",
         ).trim();
 
         if (!userId) return null;
@@ -696,16 +697,14 @@ function buildArcCollaboratorCornerAvatars(content, options = {}) {
     const fromImmersive = !!options.fromImmersive;
 
     const avatarsHtml = visible
-        .map(
-            (user) => {
-                const safeName = escapeHtml(user?.name || "Collaborateur");
-                return `
+        .map((user) => {
+            const safeName = escapeHtml(user?.name || "Collaborateur");
+            return `
                     <button type="button" onclick="event.stopPropagation(); handleProfileClick('${user.id}', this, ${fromImmersive})" aria-label="Voir le profil de ${safeName}">
                         <img src="${user.avatar || "https://placehold.co/32"}" alt="Collaborateur ${safeName}" style="width:${size}px; height:${size}px;">
                     </button>
                 `;
-            },
-        )
+        })
         .join("");
 
     const moreHtml =
@@ -787,9 +786,7 @@ async function closeOwnOrphanLiveSessions(userId, options = {}) {
                 ? new Date(session.started_at).getTime()
                 : 0;
             const fallbackSeenMs =
-                Number.isFinite(startedMs) && startedMs > 0
-                    ? startedMs
-                    : nowMs;
+                Number.isFinite(startedMs) && startedMs > 0 ? startedMs : nowMs;
             const lastSeenMs =
                 lastSeenByStreamId.get(session.id) || fallbackSeenMs;
             if (!lastSeenMs || nowMs - lastSeenMs <= staleMs) continue;
@@ -808,7 +805,11 @@ async function closeOwnOrphanLiveSessions(userId, options = {}) {
         return { closed, checked: liveSessions.length };
     } catch (error) {
         console.warn("Fermeture auto des lives orphelins échouée:", error);
-        return { closed: 0, checked: 0, error: error?.message || String(error) };
+        return {
+            closed: 0,
+            checked: 0,
+            error: error?.message || String(error),
+        };
     }
 }
 
@@ -903,7 +904,9 @@ async function initializeApp() {
             if (typeof SessionManager !== "undefined") {
                 SessionManager.saveSession(user);
             }
-            const orphanCleanupResult = await closeOwnOrphanLiveSessions(user.id);
+            const orphanCleanupResult = await closeOwnOrphanLiveSessions(
+                user.id,
+            );
             if (orphanCleanupResult.closed > 0) {
                 console.info(
                     `[live] ${orphanCleanupResult.closed} live(s) orphelin(s) fermé(s) automatiquement.`,
@@ -1046,26 +1049,29 @@ function updateNavigation(isLoggedIn) {
     const navProfile = document.getElementById("nav-profile");
     const navMessages = document.getElementById("messages-nav-btn");
 
-        if (navAuth) {
-            if (isLoggedIn) {
-                navAuth.style.display = "none";
-            } else {
-                navAuth.style.display = "block";
-                navAuth.textContent = "Login / Register";
-                navAuth.onclick = () => (window.location.href = "login.html");
-            }
+    if (navAuth) {
+        if (isLoggedIn) {
+            navAuth.style.display = "none";
+        } else {
+            navAuth.style.display = "block";
+            navAuth.textContent = "Login / Register";
+            navAuth.onclick = () => (window.location.href = "login.html");
         }
+    }
 
     if (navProfile) {
         if (!isLoggedIn) {
             navProfile.style.display = "none";
         } else {
-            navProfile.style.display = navProfile.classList.contains("notification-button")
+            navProfile.style.display = navProfile.classList.contains(
+                "notification-button",
+            )
                 ? "flex"
                 : "block";
             const cachedUser =
-                getUser(window.currentUser?.id || window.currentUserId || null) ||
-                null;
+                getUser(
+                    window.currentUser?.id || window.currentUserId || null,
+                ) || null;
             const directAvatar =
                 cachedUser?.avatar ||
                 window.currentUser?.avatar ||
@@ -1117,7 +1123,10 @@ function setHeroState(state) {
     const hero = document.getElementById("hero");
     if (!hero) return;
     hero.dataset.state = state;
-    hero.setAttribute("aria-busy", state === HERO_STATE.LOADING ? "true" : "false");
+    hero.setAttribute(
+        "aria-busy",
+        state === HERO_STATE.LOADING ? "true" : "false",
+    );
     hero.style.display = state === HERO_STATE.HIDDEN ? "none" : "";
 
     if (state === HERO_STATE.LOADING) {
@@ -1151,7 +1160,9 @@ function cacheArcCount(userId, count) {
 function readArcCountFromCache(userId) {
     if (userArcCounts.has(userId)) return userArcCounts.get(userId);
     try {
-        const raw = sessionStorage.getItem(`${ARC_COUNT_CACHE_KEY_PREFIX}${userId}`);
+        const raw = sessionStorage.getItem(
+            `${ARC_COUNT_CACHE_KEY_PREFIX}${userId}`,
+        );
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         if (
@@ -1581,10 +1592,10 @@ async function ensureUserProfile(user) {
             const username =
                 user.user_metadata?.username || user.email.split("@")[0];
             const accountType = user.user_metadata?.account_type || null;
-            const accountSubtypeRaw = user.user_metadata?.account_subtype || null;
-            const accountSubtype = normalizeDiscoveryAccountRole(
-                accountSubtypeRaw,
-            );
+            const accountSubtypeRaw =
+                user.user_metadata?.account_subtype || null;
+            const accountSubtype =
+                normalizeDiscoveryAccountRole(accountSubtypeRaw);
             const badge = user.user_metadata?.badge || null;
 
             const profileData = {
@@ -1685,7 +1696,8 @@ async function ensureFreshSupabaseSession() {
         const session = data?.session;
         if (!session) return { ok: false, error: new Error("No session") };
         const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
-        const needsRefresh = expiresAt && expiresAt - Date.now() < 2 * 60 * 1000;
+        const needsRefresh =
+            expiresAt && expiresAt - Date.now() < 2 * 60 * 1000;
         if (!needsRefresh) return { ok: true };
         if (supabase.auth.refreshSession) {
             const refreshed = await supabase.auth.refreshSession();
@@ -1700,15 +1712,8 @@ async function ensureFreshSupabaseSession() {
 function resolveApiBaseUrl() {
     const bodyBase = document.body?.dataset?.apiBase?.trim();
     if (bodyBase) return bodyBase;
-    try {
-        const { protocol, hostname } = window.location;
-        if (hostname === "localhost" || hostname === "127.0.0.1") {
-            return `${protocol}//${hostname}:5050`;
-        }
-        return window.location.origin;
-    } catch (e) {
-        return "";
-    }
+    // Utilisation de chemins relatifs pour Vercel
+    return "";
 }
 
 function setupPwaSwUpdateReload() {
@@ -1775,7 +1780,10 @@ function persistDiscoverCache() {
 
 function hydrateDiscoverFromCache() {
     try {
-        const ts = parseInt(localStorage.getItem(XERA_CACHE_DISCOVER_TS_KEY) || "0", 10);
+        const ts = parseInt(
+            localStorage.getItem(XERA_CACHE_DISCOVER_TS_KEY) || "0",
+            10,
+        );
         if (!ts || Date.now() - ts > XERA_CACHE_TTL_MS) return false;
 
         const cachedUsers = safeJsonParse(
@@ -1786,7 +1794,8 @@ function hydrateDiscoverFromCache() {
             localStorage.getItem(XERA_CACHE_DISCOVER_LATEST_KEY),
             null,
         );
-        if (!Array.isArray(cachedUsers) || cachedUsers.length === 0) return false;
+        if (!Array.isArray(cachedUsers) || cachedUsers.length === 0)
+            return false;
         if (!cachedLatest || typeof cachedLatest !== "object") return false;
 
         allUsers = cachedUsers;
@@ -1805,11 +1814,16 @@ function hydrateDiscoverFromCache() {
 
 function hydrateProfileContentsFromCache(userId) {
     if (!userId) return false;
-    if (Array.isArray(userContents?.[userId]) && userContents[userId].length > 0) {
+    if (
+        Array.isArray(userContents?.[userId]) &&
+        userContents[userId].length > 0
+    ) {
         return true;
     }
     try {
-        const raw = localStorage.getItem(`${XERA_CACHE_PROFILE_CONTENT_PREFIX}${userId}`);
+        const raw = localStorage.getItem(
+            `${XERA_CACHE_PROFILE_CONTENT_PREFIX}${userId}`,
+        );
         const cached = safeJsonParse(raw, null);
         if (!Array.isArray(cached) || cached.length === 0) return false;
         userContents[userId] = cached;
@@ -1906,7 +1920,9 @@ async function ensureUserProjectsLoaded(userId) {
     }
 
     const projectsResult = await getUserProjects(userId);
-    userProjects[userId] = projectsResult.success ? projectsResult.data || [] : [];
+    userProjects[userId] = projectsResult.success
+        ? projectsResult.data || []
+        : [];
     return userProjects[userId];
 }
 
@@ -1950,7 +1966,9 @@ async function loadAllData() {
             window.currentUser &&
             !allUsers.find((u) => u.id === window.currentUser.id)
         ) {
-            const userProfileResult = await getUserProfile(window.currentUser.id);
+            const userProfileResult = await getUserProfile(
+                window.currentUser.id,
+            );
             if (userProfileResult.success) {
                 allUsers.push(sanitizeUserMedia(userProfileResult.data));
             }
@@ -2056,7 +2074,9 @@ function extractTagsFromDescription(rawDescription = "") {
 }
 
 function encodeDescriptionWithTags(description, tags = []) {
-    const unique = Array.from(new Set((tags || []).map(normalizeTag).filter(Boolean)));
+    const unique = Array.from(
+        new Set((tags || []).map(normalizeTag).filter(Boolean)),
+    );
     if (unique.length === 0) return description;
     const base = (description || "").trim();
     return `${base}${base ? "\n\n" : ""}#hashtags: ${unique.join(",")}`;
@@ -2149,7 +2169,9 @@ function submitAnnouncementReply(contentId, inputId) {
     }
     const textarea = document.getElementById(inputId);
     const reply =
-        textarea && textarea.value ? textarea.value.trim() : prompt("Votre réponse :");
+        textarea && textarea.value
+            ? textarea.value.trim()
+            : prompt("Votre réponse :");
     if (!reply) return;
     const store = loadAnnouncementReplies();
     const list = store[contentId] || [];
@@ -2268,9 +2290,9 @@ function showMobileArcOnboardingNotification(userId) {
         </div>
     `;
 
-    host
-        .querySelector('[data-action="create"]')
-        ?.addEventListener("click", () => {
+    host.querySelector('[data-action="create"]')?.addEventListener(
+        "click",
+        () => {
             setPendingCreatePostAfterArc(userId, {
                 reason: "first-post-onboarding-mobile",
             });
@@ -2278,13 +2300,15 @@ function showMobileArcOnboardingNotification(userId) {
                 window.openCreateModal();
             }
             removeMobileArcOnboardingNotification();
-        });
+        },
+    );
 
-    host
-        .querySelector('[data-action="close"]')
-        ?.addEventListener("click", () => {
+    host.querySelector('[data-action="close"]')?.addEventListener(
+        "click",
+        () => {
             removeMobileArcOnboardingNotification();
-        });
+        },
+    );
 
     document.body.appendChild(host);
 }
@@ -2331,12 +2355,11 @@ async function maybeStartFirstPostFlow() {
         return;
     }
 
-    const shouldStartArc =
-        isMobileContext
-            ? true
-            : confirm(
-                  "Bienvenue sur XERA. Pour publier votre première trace, commencez par créer votre premier ARC. Lancer la création maintenant ?",
-              ) === true;
+    const shouldStartArc = isMobileContext
+        ? true
+        : confirm(
+              "Bienvenue sur XERA. Pour publier votre première trace, commencez par créer votre premier ARC. Lancer la création maintenant ?",
+          ) === true;
     if (isMobileContext) {
         showMobileArcOnboardingNotification(userId);
         return;
@@ -2494,7 +2517,8 @@ function convertSupabaseContent(supabaseContent) {
         ? getUser(supabaseContent.arcs.user_id)
         : null;
     const rawDescription = supabaseContent.description || "";
-    const { tags, cleanDescription } = extractTagsFromDescription(rawDescription);
+    const { tags, cleanDescription } =
+        extractTagsFromDescription(rawDescription);
 
     let mediaUrls = [];
     if (Array.isArray(supabaseContent.media_urls)) {
@@ -2586,9 +2610,7 @@ async function toggleFollow(viewerId, targetUserId) {
 
     const profileBtn = document.getElementById(`follow-btn-${targetUserId}`);
     const cardBtns = Array.from(
-        document.querySelectorAll(
-            `[data-follow-card-user="${targetUserId}"]`,
-        ),
+        document.querySelectorAll(`[data-follow-card-user="${targetUserId}"]`),
     );
     const immersiveBtn = document.getElementById(
         `follow-immersive-btn-${targetUserId}`,
@@ -2709,10 +2731,7 @@ async function toggleFollow(viewerId, targetUserId) {
         }
 
         // If we are in "Following" filter mode on Discover, we might need to remove the card if we unfollowed
-        if (
-            window.discoverFilter === "following" &&
-            !isNowFollowing
-        ) {
+        if (window.discoverFilter === "following" && !isNowFollowing) {
             const cards = Array.from(
                 document.querySelectorAll(
                     `.discover-grid .user-card[data-user="${targetUserId}"]`,
@@ -2765,8 +2784,7 @@ async function notifyNewFollower(followerId, targetUserId) {
     )
         return;
     try {
-        const followerName =
-            getCurrentUserDisplayName() || "Un nouveau membre";
+        const followerName = getCurrentUserDisplayName() || "Un nouveau membre";
         await createNotification(
             targetUserId,
             "follow",
@@ -2995,10 +3013,7 @@ function scheduleImmersiveViewCount(postEl, videoEl) {
 
 async function toggleCourage(contentId, btnElement) {
     if (!currentUser) {
-        ToastManager.info(
-            "Login required",
-            "Connectez-vous pour encourager",
-        );
+        ToastManager.info("Login required", "Connectez-vous pour encourager");
         return;
     }
     if (!btnElement) return;
@@ -3067,7 +3082,9 @@ async function toggleCourage(contentId, btnElement) {
     }
 
     const optimisticCount = safeCurrentCount + 1;
-    allCourageButtons.forEach((btn) => updateButtonUI(btn, true, optimisticCount));
+    allCourageButtons.forEach((btn) =>
+        updateButtonUI(btn, true, optimisticCount),
+    );
     syncLocalContentCount(optimisticCount);
 
     try {
@@ -3261,7 +3278,8 @@ function renderAnnouncements() {
             const title = escapeHtml(item.title || "Annonce");
             const body = escapeHtml(item.body || "");
             const author = item.users || {};
-            const authorId = item.author_id || author.id || SUPER_ADMIN_ID || null;
+            const authorId =
+                item.author_id || author.id || SUPER_ADMIN_ID || null;
             const authorName = escapeHtml(author.name || "Administration");
             const authorAvatar =
                 author.avatar &&
@@ -3366,7 +3384,10 @@ async function updateAdminAnnouncement(payload) {
             })
             .eq("id", id);
         if (error) throw error;
-        ToastManager?.success("Annonce mise à jour", "Modifications enregistrées.");
+        ToastManager?.success(
+            "Annonce mise à jour",
+            "Modifications enregistrées.",
+        );
         await fetchAdminAnnouncements();
         return { success: true };
     } catch (error) {
@@ -3653,7 +3674,10 @@ async function fetchTotalContentViews() {
             if (typeof sum === "number") return sum;
         }
     } catch (err) {
-        console.warn("Aggregation views.sum failed, fallback to client sum", err);
+        console.warn(
+            "Aggregation views.sum failed, fallback to client sum",
+            err,
+        );
     }
 
     try {
@@ -3694,17 +3718,18 @@ async function refreshAppPulse() {
     const thirtyStr = thirtyAgo.toISOString().slice(0, 10);
 
     try {
-        const [{ count: totalUsers, error: userError }, totalViews, dauPayload] =
-            await Promise.all([
-                supabase
-                    .from("users")
-                    .select("id", { count: "exact", head: true }),
-                fetchTotalContentViews(),
-                supabase
-                    .from("daily_metrics")
-                    .select("user_id, date")
-                    .gte("date", thirtyStr),
-            ]);
+        const [
+            { count: totalUsers, error: userError },
+            totalViews,
+            dauPayload,
+        ] = await Promise.all([
+            supabase.from("users").select("id", { count: "exact", head: true }),
+            fetchTotalContentViews(),
+            supabase
+                .from("daily_metrics")
+                .select("user_id, date")
+                .gte("date", thirtyStr),
+        ]);
 
         if (userError) throw userError;
         const dailyRows = Array.isArray(dauPayload?.data)
@@ -3850,7 +3875,9 @@ function formatAdminPaymentDate(value) {
 }
 
 function renderAdminSubscriptionPaymentsList(items) {
-    const container = document.getElementById("admin-subscription-payments-list");
+    const container = document.getElementById(
+        "admin-subscription-payments-list",
+    );
     if (!container) return;
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -3870,14 +3897,20 @@ function renderAdminSubscriptionPaymentsList(items) {
             const userId = escapeHtml(payment.userId || "");
             const checkoutRef = escapeHtml(payment.checkoutRefId || "—");
             const transactionRef = escapeHtml(payment.transactionRefId || "");
-            const plan = escapeHtml(String(payment.plan || "").toUpperCase() || "—");
-            const billing = payment.billingCycle === "annual" ? "Annuel" : "Mensuel";
+            const plan = escapeHtml(
+                String(payment.plan || "").toUpperCase() || "—",
+            );
+            const billing =
+                payment.billingCycle === "annual" ? "Annuel" : "Mensuel";
             const method = escapeHtml(payment.method || "card");
             const provider = escapeHtml(payment.provider || "—");
-            const amountLabel = Number(payment.amount || 0).toLocaleString("fr-FR", {
-                style: "currency",
-                currency: payment.currency || "USD",
-            });
+            const amountLabel = Number(payment.amount || 0).toLocaleString(
+                "fr-FR",
+                {
+                    style: "currency",
+                    currency: payment.currency || "USD",
+                },
+            );
             const currentPlan = escapeHtml(
                 String(user.plan || "free").toUpperCase(),
             );
@@ -3970,7 +4003,9 @@ async function refreshAdminSubscriptionRelatedViews(user) {
 }
 
 async function fetchAdminSubscriptionPayments() {
-    const container = document.getElementById("admin-subscription-payments-list");
+    const container = document.getElementById(
+        "admin-subscription-payments-list",
+    );
     if (!container) return;
 
     container.innerHTML = `<div class="loading-spinner"></div>`;
@@ -3994,12 +4029,14 @@ async function confirmAdminSubscriptionPayment(paymentId) {
     if (!paymentId) return;
 
     const refValue =
-        document.getElementById(`admin-sub-payment-ref-${paymentId}`)?.value || "";
-    const operatorValue =
-        document.getElementById(`admin-sub-payment-operator-${paymentId}`)?.value ||
+        document.getElementById(`admin-sub-payment-ref-${paymentId}`)?.value ||
         "";
+    const operatorValue =
+        document.getElementById(`admin-sub-payment-operator-${paymentId}`)
+            ?.value || "";
     const noteValue =
-        document.getElementById(`admin-sub-payment-note-${paymentId}`)?.value || "";
+        document.getElementById(`admin-sub-payment-note-${paymentId}`)?.value ||
+        "";
 
     try {
         const payload = await fetchSuperAdminJson(
@@ -4037,7 +4074,8 @@ async function markAdminSubscriptionPaymentFailed(paymentId) {
     if (!paymentId) return;
 
     const noteValue =
-        document.getElementById(`admin-sub-payment-note-${paymentId}`)?.value || "";
+        document.getElementById(`admin-sub-payment-note-${paymentId}`)?.value ||
+        "";
 
     try {
         await fetchSuperAdminJson("/api/admin/subscription-payments/fail", {
@@ -4185,9 +4223,11 @@ async function updateAdminWithdrawalRequestStatus(requestId, status) {
     if (!requestId || !status) return;
 
     const operatorRef =
-        document.getElementById(`admin-withdrawal-ref-${requestId}`)?.value || "";
+        document.getElementById(`admin-withdrawal-ref-${requestId}`)?.value ||
+        "";
     const note =
-        document.getElementById(`admin-withdrawal-note-${requestId}`)?.value || "";
+        document.getElementById(`admin-withdrawal-note-${requestId}`)?.value ||
+        "";
 
     try {
         await fetchSuperAdminJson("/api/admin/withdrawal-requests/status", {
@@ -4204,8 +4244,8 @@ async function updateAdminWithdrawalRequestStatus(requestId, status) {
             status === "paid"
                 ? "Retrait marqué payé."
                 : status === "processing"
-                    ? "Retrait marqué en traitement."
-                    : "Retrait refusé.";
+                  ? "Retrait marqué en traitement."
+                  : "Retrait refusé.";
         ToastManager?.success("Retrait mis à jour", successLabel);
         await fetchAdminWithdrawalRequests();
     } catch (error) {
@@ -4256,16 +4296,19 @@ function renderFeedbackInboxList(items) {
                 mood === null
                     ? "—"
                     : mood >= 2
-                        ? "🤩"
-                        : mood === 1
-                            ? "🙂"
-                            : mood === 0
-                                ? "😐"
-                                : mood === -1
-                                    ? "😕"
-                                    : "😡";
+                      ? "🤩"
+                      : mood === 1
+                        ? "🙂"
+                        : mood === 0
+                          ? "😐"
+                          : mood === -1
+                            ? "😕"
+                            : "😡";
             const safeComment = fb.comment
-                ? fb.comment.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]))
+                ? fb.comment.replace(
+                      /[<>&]/g,
+                      (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c],
+                  )
                 : "<i>—</i>";
             const date = fb.created_at
                 ? new Date(fb.created_at).toLocaleString()
@@ -4294,7 +4337,9 @@ async function fetchVerificationRequests() {
     try {
         const { data, error } = await supabase
             .from("verification_requests")
-            .select("id, user_id, type, status, created_at, users(id, name, avatar)")
+            .select(
+                "id, user_id, type, status, created_at, users(id, name, avatar)",
+            )
             .eq("status", "pending")
             .order("created_at", { ascending: false });
 
@@ -4342,15 +4387,15 @@ function isUuid(value) {
 async function resolveUserIdFlexible(input) {
     const raw = String(input || "").trim();
     if (!raw) {
-            ToastManager?.error("User not found", "Empty field.");
-            return null;
-        }
+        ToastManager?.error("User not found", "Empty field.");
+        return null;
+    }
     if (isUuid(raw)) return raw;
 
     // D'abord tenter localement (allUsers) pour éviter un échec RLS ou réseau
     const localMatch =
-        (window.allUsers || []).find(
-            (u) => (u.name || "").toLowerCase().includes(raw.toLowerCase()),
+        (window.allUsers || []).find((u) =>
+            (u.name || "").toLowerCase().includes(raw.toLowerCase()),
         ) || null;
     if (localMatch?.id) return localMatch.id;
 
@@ -4566,7 +4611,10 @@ function applyUserUpdateToCache(user) {
     }
     try {
         if (Array.isArray(allUsers) && allUsers.length > 0) {
-            localStorage.setItem(XERA_CACHE_USERS_KEY, JSON.stringify(allUsers));
+            localStorage.setItem(
+                XERA_CACHE_USERS_KEY,
+                JSON.stringify(allUsers),
+            );
         }
     } catch (e) {
         /* ignore */
@@ -5005,7 +5053,10 @@ async function addVerifiedUserId(type, userId, planValue = null) {
         }
 
         await fetchVerifiedBadges();
-        if (window.currentProfileViewed === cleanId && typeof renderProfileIntoContainer === "function") {
+        if (
+            window.currentProfileViewed === cleanId &&
+            typeof renderProfileIntoContainer === "function"
+        ) {
             renderProfileIntoContainer(cleanId);
         }
 
@@ -5050,12 +5101,18 @@ async function removeVerifiedUserId(type, userId) {
         if (error) throw error;
 
         await fetchVerifiedBadges();
-        if (window.currentProfileViewed === cleanId && typeof renderProfileIntoContainer === "function") {
+        if (
+            window.currentProfileViewed === cleanId &&
+            typeof renderProfileIntoContainer === "function"
+        ) {
             renderProfileIntoContainer(cleanId);
         }
 
         if (window.ToastManager) {
-            ToastManager.success("Badge retiré", "La vérification a été retirée.");
+            ToastManager.success(
+                "Badge retiré",
+                "La vérification a été retirée.",
+            );
         }
     } catch (error) {
         console.error("Erreur retrait badge:", error);
@@ -5452,10 +5509,8 @@ function calculateConsistency(userId) {
             return delta > 0 && delta <= MAX_GAP_MS;
         }
         // fallback dayNumber s'il n'y a pas de dates fiables
-        const dayCur =
-            current.dayNumber ?? current.day_number ?? Number.NaN;
-        const dayPrev =
-            previous.dayNumber ?? previous.day_number ?? Number.NaN;
+        const dayCur = current.dayNumber ?? current.day_number ?? Number.NaN;
+        const dayPrev = previous.dayNumber ?? previous.day_number ?? Number.NaN;
         if (Number.isInteger(dayCur) && Number.isInteger(dayPrev)) {
             return dayCur - dayPrev === 1;
         }
@@ -5608,8 +5663,7 @@ function getUserBadges(userId) {
     }
 
     const consistency = calculateConsistency(userId);
-    const isPersonalAccount =
-        !trajectoryType || trajectoryType === "solo"; // badges de constance réservés aux comptes perso
+    const isPersonalAccount = !trajectoryType || trajectoryType === "solo"; // badges de constance réservés aux comptes perso
     if (consistency && isPersonalAccount) {
         const labels = {
             consistency7: "7j consécutifs (hebdo)",
@@ -5867,10 +5921,7 @@ const DISCOVER_VERIFIED_MIX_PATTERNS = [
     ],
 ];
 
-let discoverMixChaosSeed = Math.max(
-    1,
-    Math.floor(Math.random() * 2147483646),
-);
+let discoverMixChaosSeed = Math.max(1, Math.floor(Math.random() * 2147483646));
 
 function nextDiscoverMixRandom() {
     discoverMixChaosSeed = (discoverMixChaosSeed * 48271) % 2147483647;
@@ -5942,7 +5993,9 @@ function buildDiscoverArcCardEntries(users) {
     });
 
     return entries.sort(
-        (a, b) => getDiscoverContentTime(b.content) - getDiscoverContentTime(a.content),
+        (a, b) =>
+            getDiscoverContentTime(b.content) -
+            getDiscoverContentTime(a.content),
     );
 }
 
@@ -6007,9 +6060,11 @@ function adjustMoodScores(tags = [], delta = 1) {
     if (!currentUser || !Array.isArray(tags)) return;
     const userId = currentUser.id;
     const profile = loadMoodProfile(userId);
-    tags.map(sanitizeTag).filter(Boolean).forEach((tag) => {
-        profile.tags[tag] = (profile.tags[tag] || 0) + delta;
-    });
+    tags.map(sanitizeTag)
+        .filter(Boolean)
+        .forEach((tag) => {
+            profile.tags[tag] = (profile.tags[tag] || 0) + delta;
+        });
     // trim to top tags only
     const entries = Object.entries(profile.tags).sort(
         (a, b) => (b[1] || 0) - (a[1] || 0),
@@ -6063,7 +6118,10 @@ function normalizeDiscoverItemForImmersiveScore(item) {
                 ? `live-${item.stream.id}`
                 : null),
         userId: item?.user?.id || content.user_id || content.userId || null,
-        type: item?.type === "live" ? "live" : content.type || item?.type || "text",
+        type:
+            item?.type === "live"
+                ? "live"
+                : content.type || item?.type || "text",
         state: content.state || "success",
         tags: Array.isArray(content.tags)
             ? content.tags.map(sanitizeTag).filter(Boolean)
@@ -6121,7 +6179,10 @@ function handleDiscoverInterest(contentId, action) {
     adjustMoodScores(tags, delta);
     updateImmersivePrefs(content, action === "dislike" ? "dislike" : "like");
     if (action === "dislike") {
-        ToastManager?.info("Flux ajusté", "Nous vous montrerons moins ce sujet.");
+        ToastManager?.info(
+            "Flux ajusté",
+            "Nous vous montrerons moins ce sujet.",
+        );
     } else {
         ToastManager?.success("Noté", "Nous priorisons davantage ce sujet.");
     }
@@ -6149,7 +6210,8 @@ function buildMoodDiscoverMix(
                 tags: stream.tags || [],
                 content: {
                     ...stream,
-                    createdAt: stream.created_at || stream.started_at || Date.now(),
+                    createdAt:
+                        stream.created_at || stream.started_at || Date.now(),
                     tags: stream.tags || [],
                 },
             };
@@ -6284,7 +6346,10 @@ function renderUserCard(
                     </div>
                 </div>
             `;
-        } else if (latestContent.type === "image" || latestContent.type === "text") {
+        } else if (
+            latestContent.type === "image" ||
+            latestContent.type === "text"
+        ) {
             if (hasMultiImages) {
                 const slides = mediaList
                     .map(
@@ -6362,12 +6427,11 @@ function renderUserCard(
     }
 
     // Déterminer la classe CSS selon le type de média pour l'adaptation
-    const cardClass =
-        hasMedia
-            ? `user-card has-media ${latestContent.type}`
-            : `user-card ${isTextContent ? "text-card" : ""}${
-                  isVerifiedUser ? " verified-card" : ""
-              }`;
+    const cardClass = hasMedia
+        ? `user-card has-media ${latestContent.type}`
+        : `user-card ${isTextContent ? "text-card" : ""}${
+              isVerifiedUser ? " verified-card" : ""
+          }`;
 
     // Ajout information ARC
     let arcInfo = "";
@@ -6507,12 +6571,7 @@ function renderUserCard(
             : "";
 
     const tagDataset =
-        tags.length > 0
-            ? tags
-                  .map(sanitizeTag)
-                  .filter(Boolean)
-                  .join(",")
-            : "";
+        tags.length > 0 ? tags.map(sanitizeTag).filter(Boolean).join(",") : "";
 
     const liveCta =
         latestContent?.type === "live"
@@ -6586,10 +6645,8 @@ function selectAdminVerifyTarget(userId, userName) {
 
 // Recherche live pour bannissement
 function setupAdminBanSearch() {
-    setupAdminUserSearch(
-        "admin-ban-user-id",
-        "admin-ban-suggestions",
-        (user) => selectAdminBanTarget(user.id, user.name),
+    setupAdminUserSearch("admin-ban-user-id", "admin-ban-suggestions", (user) =>
+        selectAdminBanTarget(user.id, user.name),
     );
 }
 
@@ -6624,7 +6681,9 @@ function setupAdminContentSearch() {
 
 function selectAdminContentUser(userId, userName) {
     const input = document.getElementById("admin-content-user-search");
-    const suggestions = document.getElementById("admin-content-user-suggestions");
+    const suggestions = document.getElementById(
+        "admin-content-user-suggestions",
+    );
     if (input) input.value = userName || userId;
     if (suggestions) {
         suggestions.innerHTML = `
@@ -6860,8 +6919,7 @@ async function getLiveStreamsForDiscover() {
                 isVerifiedStaffUserId(b.user_id);
             if (aVerified !== bVerified) return aVerified ? -1 : 1;
 
-            const viewersDiff =
-                (b.viewer_count || 0) - (a.viewer_count || 0);
+            const viewersDiff = (b.viewer_count || 0) - (a.viewer_count || 0);
             if (viewersDiff !== 0) return viewersDiff;
 
             const aStart = a.started_at ? new Date(a.started_at).getTime() : 0;
@@ -7023,7 +7081,8 @@ function renderLiveStreamCard(stream) {
 // Helpers to keep Discover refreshes incremental (avoid full reflows)
 function getDiscoverItemKey(item) {
     if (!item) return null;
-    if (item.type === "live" && item.stream?.id) return `live-${item.stream.id}`;
+    if (item.type === "live" && item.stream?.id)
+        return `live-${item.stream.id}`;
     if (item.type === "arc" && item.user?.id) {
         const arcSegment = item.arcId || item.arcKey || "no-arc";
         return `arc-${item.user.id}-${arcSegment}`;
@@ -7034,7 +7093,8 @@ function getDiscoverItemKey(item) {
 
 function getDiscoverItemContentId(item, userContentMap) {
     if (!item) return null;
-    if (item.type === "live" && item.stream?.id) return `live-${item.stream.id}`;
+    if (item.type === "live" && item.stream?.id)
+        return `live-${item.stream.id}`;
     if (item.type === "arc") {
         return item.content?.contentId || null;
     }
@@ -7095,7 +7155,12 @@ function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
               })
             : existing;
 
-        if (existing && !shouldReplace && contentId && !existing.dataset.contentId) {
+        if (
+            existing &&
+            !shouldReplace &&
+            contentId &&
+            !existing.dataset.contentId
+        ) {
             existing.dataset.contentId = contentId;
         }
 
@@ -7146,7 +7211,9 @@ async function renderDiscoverGrid() {
                 if (waitMessage) {
                     waitMessage.classList.add("is-hidden");
                 }
-                if (typeof window.setupDiscoverVideoInteractions === "function") {
+                if (
+                    typeof window.setupDiscoverVideoInteractions === "function"
+                ) {
                     window.setupDiscoverVideoInteractions();
                 }
                 return;
@@ -7256,7 +7323,11 @@ async function renderDiscoverGrid() {
     }
 
     // Mood-based mix (includes lives)
-    const mixedItems = buildMoodDiscoverMix(discoverArcCards, liveStreams, followedSet);
+    const mixedItems = buildMoodDiscoverMix(
+        discoverArcCards,
+        liveStreams,
+        followedSet,
+    );
     const renderItem = (item) => {
         if (item.type === "live") {
             return renderLiveStreamCard(item.stream);
@@ -7268,8 +7339,7 @@ async function renderDiscoverGrid() {
         const isEncouraged = content
             ? encouragedContentIds.has(content.contentId)
             : false;
-        const respectFilter =
-            currentFilter === "following" ? isFollowed : true;
+        const respectFilter = currentFilter === "following" ? isFollowed : true;
         if (!respectFilter) return "";
         return renderUserCard(userId, isFollowed, isEncouraged, content);
     };
@@ -7382,7 +7452,8 @@ function loadImmersivePrefs() {
             updatedAt: Number(parsed?.updatedAt) || Date.now(),
         };
 
-        const { prefs: decayedPrefs, changed } = applyTemporalDecayToPrefs(prefs);
+        const { prefs: decayedPrefs, changed } =
+            applyTemporalDecayToPrefs(prefs);
         if (changed) saveImmersivePrefs(decayedPrefs);
         return decayedPrefs;
     } catch (e) {
@@ -7516,7 +7587,11 @@ function updateImmersivePrefs(content, action) {
     bumpPref(prefs.users, content.userId, weight * 0.9);
     if (Array.isArray(content.tags)) {
         content.tags
-            .map((tag) => String(tag || "").trim().toLowerCase())
+            .map((tag) =>
+                String(tag || "")
+                    .trim()
+                    .toLowerCase(),
+            )
             .filter(Boolean)
             .forEach((tag) => bumpPref(prefs.tags, tag, weight * 0.75));
     }
@@ -7613,19 +7688,14 @@ function normalizeArcOpportunityIntent(value) {
     const raw = String(value || "")
         .trim()
         .toLowerCase();
-    if (raw === "cherche_collab" || raw === "collab")
-        return "cherche_collab";
+    if (raw === "cherche_collab" || raw === "collab") return "cherche_collab";
     if (
         raw === "cherche_investissement" ||
         raw === "investissement" ||
         raw === "investor"
     )
         return "cherche_investissement";
-    if (
-        raw === "open_to_recruit" ||
-        raw === "recruit" ||
-        raw === "recruiter"
-    )
+    if (raw === "open_to_recruit" || raw === "recruit" || raw === "recruiter")
         return "open_to_recruit";
     return null;
 }
@@ -7744,7 +7814,9 @@ function scoreImmersiveContent(content, context) {
         : 0;
     let queryPref = 0;
     if (context.topQueries && context.topQueries.length > 0) {
-        const text = `${(content.title || "").toString().toLowerCase()} ${(content.description || "")
+        const text = `${(content.title || "").toString().toLowerCase()} ${(
+            content.description || ""
+        )
             .toString()
             .toLowerCase()}`;
         const tagSet = new Set(
@@ -7939,7 +8011,10 @@ async function renderImmersiveFeed(contents) {
             });
         }
     } catch (e) {
-        console.warn("Impossible de précharger les lives pour l'immersive feed", e);
+        console.warn(
+            "Impossible de précharger les lives pour l'immersive feed",
+            e,
+        );
     }
 
     // Fetch user encouragements if logged in
@@ -8039,12 +8114,15 @@ async function renderImmersiveFeed(contents) {
                 className: "arc-collab-avatars--immersive",
                 fromImmersive: true,
             });
-            const collabCornerHtml = buildArcCollaboratorCornerAvatars(content, {
-                size: 20,
-                max: 4,
-                className: "arc-collab-avatars--immersive-corner",
-                fromImmersive: true,
-            });
+            const collabCornerHtml = buildArcCollaboratorCornerAvatars(
+                content,
+                {
+                    size: 20,
+                    max: 4,
+                    className: "arc-collab-avatars--immersive-corner",
+                    fromImmersive: true,
+                },
+            );
             const immersiveSupportButtonHtml =
                 currentUser &&
                 currentUser.id !== content.userId &&
@@ -8124,7 +8202,9 @@ async function renderImmersiveFeed(contents) {
                 }
             } else {
                 const textBody =
-                    immersiveDescription || content.title || "Nouveau post texte";
+                    immersiveDescription ||
+                    content.title ||
+                    "Nouveau post texte";
                 mediaHtml = `<div class="immersive-text-card">${collabCornerHtml}<p>${textBody}</p></div>`;
             }
 
@@ -8146,8 +8226,8 @@ async function renderImmersiveFeed(contents) {
                 isLiveContent && liveRow
                     ? `<button class="mood-btn live-join-btn" onclick="event.stopPropagation(); openLiveStreamById('${liveRow.id}', '${content.userId}', '${escapeHtml(liveRow.title || content.title || "Live en cours")}')">🔴 Rejoindre le live</button>`
                     : isLiveContent
-                        ? `<button class="mood-btn live-join-btn" onclick="event.stopPropagation(); openLiveStreamForUser('${content.userId}', '${escapeHtml(content.title || "Live en cours")}')">🔴 Rejoindre le live</button>`
-                        : "";
+                      ? `<button class="mood-btn live-join-btn" onclick="event.stopPropagation(); openLiveStreamForUser('${content.userId}', '${escapeHtml(content.title || "Live en cours")}')">🔴 Rejoindre le live</button>`
+                      : "";
 
             const moodActionsHtml = content.__askInterest
                 ? `
@@ -8502,14 +8582,19 @@ function muteOtherImmersiveVideos(activeVideo) {
 
 // Renvoie la vidéo immersive la plus visible à l'écran
 function getActiveImmersiveVideo() {
-    const videos = Array.from(document.querySelectorAll("video.immersive-video"));
+    const videos = Array.from(
+        document.querySelectorAll("video.immersive-video"),
+    );
     let best = null;
     let bestScore = 0;
     videos.forEach((vid) => {
         const rect = vid.getBoundingClientRect();
-        const visibleHeight = Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0);
-        const visibleWidth = Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0);
-        const visibleArea = Math.max(0, visibleHeight) * Math.max(0, visibleWidth);
+        const visibleHeight =
+            Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0);
+        const visibleWidth =
+            Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0);
+        const visibleArea =
+            Math.max(0, visibleHeight) * Math.max(0, visibleWidth);
         const totalArea = Math.max(1, rect.width * rect.height);
         const ratio = visibleArea / totalArea;
         if (ratio > bestScore) {
@@ -9024,11 +9109,9 @@ function setupImmersiveArrowNav() {
     }
 
     const getPosts = () =>
-        Array.from(
-            document.querySelectorAll(
-                ".immersive-post",
-            ),
-        ).filter((el) => el.offsetParent !== null); // skip hidden
+        Array.from(document.querySelectorAll(".immersive-post")).filter(
+            (el) => el.offsetParent !== null,
+        ); // skip hidden
 
     const getActiveIndex = (posts) => {
         let closestIndex = 0;
@@ -9425,9 +9508,11 @@ async function renderProfileTimeline(userId) {
 
     let followButtonHtml = "";
     if (!isOwnProfile && currentUserId) {
-        const isCommunity = user.account_subtype === 'community' || user.accountSubtype === 'community';
+        const isCommunity =
+            user.account_subtype === "community" ||
+            user.accountSubtype === "community";
         if (isCommunity) {
-             followButtonHtml = `
+            followButtonHtml = `
                 <button 
                     class="btn btn-community-join"
                     onclick="toggleFollow('${currentUserId}', '${userId}')"
@@ -9470,8 +9555,12 @@ async function renderProfileTimeline(userId) {
     const followingCount = await getFollowingCount(userId);
     const engagementTotals = await getUserEngagementTotals(userId);
     const userTraces = getUserContentLocal(userId) || [];
-    const successCount = userTraces.filter((t) => t?.state === "success").length;
-    const failureCount = userTraces.filter((t) => t?.state === "failure").length;
+    const successCount = userTraces.filter(
+        (t) => t?.state === "success",
+    ).length;
+    const failureCount = userTraces.filter(
+        (t) => t?.state === "failure",
+    ).length;
     const successRatio =
         userTraces.length > 0
             ? Math.round((successCount / userTraces.length) * 100)
@@ -9512,7 +9601,9 @@ async function renderProfileTimeline(userId) {
         `
         : "";
     const accountTypeValue = String(user.account_type || "").toLowerCase();
-    const accountSubtypeValue = String(user.account_subtype || user.accountSubtype || "").toLowerCase();
+    const accountSubtypeValue = String(
+        user.account_subtype || user.accountSubtype || "",
+    ).toLowerCase();
     const isCommunityAccount =
         accountSubtypeValue === "community" ||
         accountSubtypeValue === "enterprise" ||
@@ -9809,10 +9900,13 @@ async function renderProfileTimeline(userId) {
                         } else if (content.state === "pause") {
                             stateBadgeSvg = badgeSVGs.pause;
                         }
-                        const dateFormatted = safeFormatDate(content.createdAt, {
-                            month: "long",
-                            day: "numeric",
-                        });
+                        const dateFormatted = safeFormatDate(
+                            content.createdAt,
+                            {
+                                month: "long",
+                                day: "numeric",
+                            },
+                        );
 
                         const timeAgoStr = timeAgo(content.createdAt);
                         const dateDisplay = `${dateFormatted} - Jour ${content.dayNumber} <span style="opacity: 0.5; font-size: 0.85em; margin-left: 8px;">(${timeAgoStr})</span>`;
@@ -9982,8 +10076,7 @@ async function renderProfileTimeline(userId) {
             ? window.generatePlanBadgeHTML(user, "profile")
             : "";
     const supportButtonHtml =
-        !isOwnProfile &&
-        typeof window.generateSupportButtonHTML === "function"
+        !isOwnProfile && typeof window.generateSupportButtonHTML === "function"
             ? window.generateSupportButtonHTML(user, "profile")
             : "";
     const supportProfileHtml =
@@ -10182,7 +10275,8 @@ async function renderProfileIntoContainer(userId) {
 
         profileContainer.classList.toggle("arc-view", !!window.selectedArcId);
         if (window.loadUserArcs) window.loadUserArcs(userId);
-        if (window.renderProfileAnalytics) window.renderProfileAnalytics(userId);
+        if (window.renderProfileAnalytics)
+            window.renderProfileAnalytics(userId);
         if (window.renderWeeklyProgressChart)
             window.renderWeeklyProgressChart(userId);
         if (window.renderInfluenceReach) window.renderInfluenceReach(userId);
@@ -10278,7 +10372,9 @@ window.getProfileSkeletonMarkup = getProfileSkeletonMarkup;
 // Weekly progress chart (simple client-side aggregation)
 window.renderWeeklyProgressChart = async function (userId) {
     try {
-        const canvas = document.getElementById(`weekly-progress-chart-${userId}`);
+        const canvas = document.getElementById(
+            `weekly-progress-chart-${userId}`,
+        );
         if (!canvas || typeof Chart === "undefined") return;
 
         // Destroy existing chart instance if any
@@ -10383,7 +10479,7 @@ window.renderWeeklyProgressChart = async function (userId) {
 function syncFloatingCreateVisibility(pageId) {
     const container = document.getElementById("floating-create-container");
     if (!container) return;
-    
+
     const isLoggedIn = !!window.currentUser;
     if (!isLoggedIn || pageId === "messages") {
         container.style.display = "none";
@@ -10725,9 +10821,8 @@ function initDiscoverMoodTracking() {
 
 function initTheme() {
     const savedTheme = localStorage.getItem("rize-theme");
-    const initialTheme = savedTheme === "light" || savedTheme === "dark"
-        ? savedTheme
-        : "dark";
+    const initialTheme =
+        savedTheme === "light" || savedTheme === "dark" ? savedTheme : "dark";
 
     applyTheme(initialTheme, false);
 
@@ -10770,13 +10865,15 @@ function applyTheme(theme, persist = true) {
 }
 
 function updateThemeButtons(isLight) {
-    const controls = document.querySelectorAll(".btn-theme-toggle, .settings-theme-control");
+    const controls = document.querySelectorAll(
+        ".btn-theme-toggle, .settings-theme-control",
+    );
     controls.forEach((control) => {
         const isLegacySettingsButton = control.id === "theme-toggle-btn";
         control.textContent = isLegacySettingsButton
             ? isLight
-              ? "🌙 Passer en mode sombre"
-              : "☀️ Passer en mode clair"
+                ? "🌙 Passer en mode sombre"
+                : "☀️ Passer en mode clair"
             : isLight
               ? "🌙 Mode Sombre"
               : "☀️ Mode Clair";
@@ -11191,7 +11288,9 @@ async function openSettings(userId) {
     const deleteReasonInputs = container.querySelectorAll(
         'input[name="delete-account-reason"]',
     );
-    const deleteOtherWrap = container.querySelector(".delete-account-other-wrap");
+    const deleteOtherWrap = container.querySelector(
+        ".delete-account-other-wrap",
+    );
     const deleteOtherInput = container.querySelector("#delete-account-other");
     const syncDeleteReasonVisibility = () => {
         const selected = container.querySelector(
@@ -11360,13 +11459,20 @@ async function openSettings(userId) {
             const result = await upsertUserProfile(userId, profileData);
 
             if (result.success) {
-                const updatedAt = result.data?.updated_at || new Date().toISOString();
+                const updatedAt =
+                    result.data?.updated_at || new Date().toISOString();
                 try {
                     if (result.data?.avatar) {
-                        result.data.avatar = withCacheBust(result.data.avatar, updatedAt);
+                        result.data.avatar = withCacheBust(
+                            result.data.avatar,
+                            updatedAt,
+                        );
                     }
                     if (result.data?.banner) {
-                        result.data.banner = withCacheBust(result.data.banner, updatedAt);
+                        result.data.banner = withCacheBust(
+                            result.data.banner,
+                            updatedAt,
+                        );
                     }
                 } catch (e) {
                     /* ignore */
@@ -11384,7 +11490,10 @@ async function openSettings(userId) {
 
                 // Keep current session user fresh (important for PWA cache-first flows)
                 try {
-                    if (window.currentUser && window.currentUser.id === userId) {
+                    if (
+                        window.currentUser &&
+                        window.currentUser.id === userId
+                    ) {
                         window.currentUser = {
                             ...window.currentUser,
                             ...result.data,
@@ -11473,8 +11582,7 @@ async function openSettings(userId) {
                 if (canUseGifProfile()) return { valid: true };
                 return {
                     valid: false,
-                    error:
-                        "Astuce: les avatars animés sont réservés aux plans supérieurs. Passez à un plan Standard, Medium ou Pro pour les débloquer.",
+                    error: "Astuce: les avatars animés sont réservés aux plans supérieurs. Passez à un plan Standard, Medium ou Pro pour les débloquer.",
                 };
             },
             onUpload: (result) => {
@@ -11514,8 +11622,7 @@ async function openSettings(userId) {
                 if (canUseGifProfile()) return { valid: true };
                 return {
                     valid: false,
-                    error:
-                        "Astuce: les bannières animées sont réservées aux plans supérieurs. Passez à un plan Standard, Medium ou Pro pour les débloquer.",
+                    error: "Astuce: les bannières animées sont réservées aux plans supérieurs. Passez à un plan Standard, Medium ou Pro pour les débloquer.",
                 };
             },
             onUpload: (result) => {
@@ -11561,7 +11668,7 @@ function launchLive(userId) {
     if (!window.currentUser) {
         if (window.ToastManager) {
             ToastManager.error(
-            "Login required",
+                "Login required",
                 "Vous devez être connecté pour lancer un live",
             );
         }
@@ -12024,9 +12131,7 @@ async function stopLiveStream() {
 async function getNextDayNumber(userId) {
     const contents = getUserContentLocal(userId);
     const dayNumbers = (contents || [])
-        .map((item) =>
-            Number.parseInt(item?.dayNumber ?? item?.day_number, 10),
-        )
+        .map((item) => Number.parseInt(item?.dayNumber ?? item?.day_number, 10))
         .filter((day) => Number.isFinite(day) && day >= 0);
     const maxDay = dayNumbers.length > 0 ? Math.max(...dayNumbers) : 0;
     return maxDay + 1;
@@ -12207,12 +12312,15 @@ async function openCreateMenu(
         .map(getNumericDay)
         .filter((day) => Number.isFinite(day) && day >= 0);
     const maxDay = dayNumbers.length > 0 ? Math.max(...dayNumbers) : 0;
-    const existingDay = existingContent ? getNumericDay(existingContent) : Number.NaN;
+    const existingDay = existingContent
+        ? getNumericDay(existingContent)
+        : Number.NaN;
     const nextDay =
         Number.isFinite(existingDay) && existingDay >= 0
             ? existingDay
             : maxDay + 1;
-    const isFirstPost = !existingContent && (!contents || contents.length === 0);
+    const isFirstPost =
+        !existingContent && (!contents || contents.length === 0);
     const defaultTraceType = isFirstPost ? "text" : "image";
 
     // Generate ARC Options (Mandatory)
@@ -12245,12 +12353,15 @@ async function openCreateMenu(
         : `Trace = mise à jour rapide (texte + photo optionnelle). Annonce = étape majeure partagée publiquement.`;
 
     const existingRawDesc =
-        (existingContent && (existingContent.rawDescription || existingContent.description)) ||
+        (existingContent &&
+            (existingContent.rawDescription || existingContent.description)) ||
         "";
     const { tags: existingTags, cleanDescription: existingCleanDesc } =
         extractTagsFromDescription(existingRawDesc);
     const tagsPrefill =
-        existingTags.length > 0 ? existingTags.map((t) => `#${t}`).join(" ") : "";
+        existingTags.length > 0
+            ? existingTags.map((t) => `#${t}`).join(" ")
+            : "";
     const isAnnouncementEdit =
         existingTags && existingTags.includes("annonce") ? true : false;
     let currentMode = isAnnouncementEdit ? "announcement" : "trace";
@@ -12392,13 +12503,13 @@ async function openCreateMenu(
     const liveInput = document.getElementById("create-live-url");
     const fileInput = document.getElementById("create-media-file");
     const mediaUrlsInput = document.getElementById("create-media-urls");
-	    const dayGroup = container.querySelector(".form-group-day");
-	    const stateGroup = container.querySelector(".form-group-state");
-	    const arcGroup = container.querySelector(".form-group-arc");
-	    const descGroup = container.querySelector(".form-group-desc");
-	    const tagsGroup = container.querySelector(".form-group-tags");
-	    let isMediaUploadInProgress = false;
-	    let mediaUploadUiArmed = false;
+    const dayGroup = container.querySelector(".form-group-day");
+    const stateGroup = container.querySelector(".form-group-state");
+    const arcGroup = container.querySelector(".form-group-arc");
+    const descGroup = container.querySelector(".form-group-desc");
+    const tagsGroup = container.querySelector(".form-group-tags");
+    let isMediaUploadInProgress = false;
+    let mediaUploadUiArmed = false;
 
     // Initialize file upload
     if (typeof initializeFileInput === "function") {
@@ -12408,7 +12519,9 @@ async function openCreateMenu(
 
         const dropZone = document.getElementById("create-media-dropzone");
         const loader = document.getElementById("create-media-loader");
-        const progressBar = document.getElementById("create-media-progress-bar");
+        const progressBar = document.getElementById(
+            "create-media-progress-bar",
+        );
         const progressLabel = document.getElementById(
             "create-media-progress-label",
         );
@@ -12467,10 +12580,7 @@ async function openCreateMenu(
         );
         const syncTypeButtons = (value) => {
             typeButtons.forEach((btn) =>
-                btn.classList.toggle(
-                    "active",
-                    btn.dataset.type === value,
-                ),
+                btn.classList.toggle("active", btn.dataset.type === value),
             );
         };
         const syncModeButtons = (value) => {
@@ -12598,7 +12708,8 @@ async function openCreateMenu(
                 const file = fileInput.files && fileInput.files[0];
                 if (!file) return;
                 const isVideoSelection =
-                    (typeof isLikelyVideoFile === "function" && isLikelyVideoFile(file)) ||
+                    (typeof isLikelyVideoFile === "function" &&
+                        isLikelyVideoFile(file)) ||
                     String(file.type || "").startsWith("video/");
                 if (!isVideoSelection) return;
                 if (typeof readVideoDurationSeconds !== "function") return;
@@ -12618,7 +12729,8 @@ async function openCreateMenu(
                     }
                 } catch (e) {
                     videoDurationHint.style.color = "var(--text-secondary)";
-                    videoDurationHint.textContent = "Impossible de lire la durée de cette vidéo.";
+                    videoDurationHint.textContent =
+                        "Impossible de lire la durée de cette vidéo.";
                 }
             });
         }
@@ -12646,9 +12758,9 @@ async function openCreateMenu(
             document.head.appendChild(style);
         }
 
-	        // Custom handler to show loader
-	        fileInput.addEventListener("change", () => {
-	            if (fileInput.files.length > 0) {
+        // Custom handler to show loader
+        fileInput.addEventListener("change", () => {
+            if (fileInput.files.length > 0) {
                 isMediaUploadInProgress = true;
                 mediaUploadUiArmed = true;
                 placeholder.style.display = "none";
@@ -12687,10 +12799,10 @@ async function openCreateMenu(
             `);
         };
 
-	        initializeFileInput("create-media-file", {
-	            dropZone: dropZone,
-	            compress: true,
-	            multiple: () => !!fileInput.multiple,
+        initializeFileInput("create-media-file", {
+            dropZone: dropZone,
+            compress: true,
+            multiple: () => !!fileInput.multiple,
             onBeforeUpload: () => {
                 isMediaUploadInProgress = true;
                 if (!mediaUploadUiArmed) {
@@ -12701,12 +12813,12 @@ async function openCreateMenu(
                     setUploadProgress(0);
                 }
             },
-	            onProgress: (percent) => setUploadProgress(percent),
-	            onUpload: (result) => {
-	                if (!result?.success) {
-	                    alert("Erreur upload: " + (result?.error || "inconnue"));
-	                }
-	            },
+            onProgress: (percent) => setUploadProgress(percent),
+            onUpload: (result) => {
+                if (!result?.success) {
+                    alert("Erreur upload: " + (result?.error || "inconnue"));
+                }
+            },
             onUploadBatch: (results) => {
                 isMediaUploadInProgress = false;
                 mediaUploadUiArmed = false;
@@ -12728,7 +12840,8 @@ async function openCreateMenu(
                 }
 
                 // Keep backward compatibility: first URL in create-media-url
-                document.getElementById("create-media-url").value = successUrls[0];
+                document.getElementById("create-media-url").value =
+                    successUrls[0];
                 document.getElementById("create-media-type").value =
                     successful[0]?.type || mediaTypeInput.value;
                 mediaUrlsInput.value = JSON.stringify(successUrls);
@@ -12736,11 +12849,11 @@ async function openCreateMenu(
                 placeholder.style.display = "none";
 
                 if (successful[0]?.type === "video") {
-                previewContainer.innerHTML = buildMediaPreviewShell(
-                    `<video src="${successUrls[0]}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`,
-                );
-                return;
-            }
+                    previewContainer.innerHTML = buildMediaPreviewShell(
+                        `<video src="${successUrls[0]}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`,
+                    );
+                    return;
+                }
 
                 if (successUrls.length > 1) {
                     updateMultiPreview(successUrls);
@@ -12752,11 +12865,11 @@ async function openCreateMenu(
                     return;
                 }
 
-            previewContainer.innerHTML = buildMediaPreviewShell(
-                `<img src="${successUrls[0]}" style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">`,
-            );
-        },
-    });
+                previewContainer.innerHTML = buildMediaPreviewShell(
+                    `<img src="${successUrls[0]}" style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">`,
+                );
+            },
+        });
     }
 
     // Préremplir les champs existants si édition
@@ -12848,7 +12961,8 @@ async function openCreateMenu(
             }
 
             let mediaUrl = document.getElementById("create-media-url").value;
-            const mediaUrlsRaw = document.getElementById("create-media-urls")?.value || "";
+            const mediaUrlsRaw =
+                document.getElementById("create-media-urls")?.value || "";
             let mediaUrls = [];
             try {
                 const parsed = mediaUrlsRaw ? JSON.parse(mediaUrlsRaw) : [];
@@ -12866,13 +12980,16 @@ async function openCreateMenu(
                 document.getElementById("create-media-type").value ||
                 document.getElementById("create-type").value;
             if (selectedType !== "text" && !mediaUrl) {
-                alert("Ajoutez un média ou sélectionnez \"Post texte\".");
+                alert('Ajoutez un média ou sélectionnez "Post texte".');
                 return;
             }
 
             const tagsInput = document.getElementById("create-tags").value;
             let parsedTags = parseTagsInput(tagsInput);
-            if (currentMode === "announcement" && !parsedTags.includes("annonce")) {
+            if (
+                currentMode === "announcement" &&
+                !parsedTags.includes("annonce")
+            ) {
                 parsedTags = ["annonce", ...parsedTags];
             }
             const baseDescription =
@@ -13330,7 +13447,9 @@ function initializeVideoControls(root = document) {
     ) {
         videos = [root];
     } else if (root.querySelectorAll) {
-        videos = root.querySelectorAll("video.card-media, video.immersive-video");
+        videos = root.querySelectorAll(
+            "video.card-media, video.immersive-video",
+        );
     }
 
     videos.forEach((video) => {
@@ -13374,7 +13493,9 @@ function initializeVideoControls(root = document) {
 
         // Si une vidéo immersive commence à jouer, muter les autres
         if (video.classList.contains("immersive-video")) {
-            video.addEventListener("play", () => muteOtherImmersiveVideos(video));
+            video.addEventListener("play", () =>
+                muteOtherImmersiveVideos(video),
+            );
         }
     });
 }

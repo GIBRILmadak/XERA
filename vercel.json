@@ -1,9 +1,4 @@
 {
-  "cleanUrls": true,
-  "crons": [
-    {
-      "path": "/api/cron/sweep-subscriptions",
-      "schedule": "*/10 * * * *"
-    }
-  ]
+    "cleanUrls": true,
+    "rewrites": [{ "source": "/api/(.*)", "destination": "/api/$1" }]
 }

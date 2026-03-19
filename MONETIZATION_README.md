@@ -3,61 +3,70 @@
 ## Files Created
 
 ### 1. Database Schema
+
 - `sql/monetization-schema.sql` - Tables et policies pour la monétisation
 
 ### 2. JavaScript Logic
+
 - `js/monetization.js` - Fonctions principales de monétisation
 - `js/monetization-ui.js` - Intégration UI (badges, boutons)
 - `js/creator-dashboard.js` - Dashboard créateur
 - `js/subscription-plans.js` - Page des plans
 
 ### 3. Pages
+
 - `creator-dashboard.html` - Dashboard des revenus
 - `subscription-plans.html` - Sélection des plans
 
 ### 4. Styles
+
 - `css/monetization.css` - Styles complets de monétisation
 
 ### 5. Backend
-- `server/monetization-server.js` - Server avec webhooks et API
+
+- `/api` (Vercel Functions) - Remplace l'ancien serveur Render.
+- La logique backend est désormais hébergée sur Vercel via des Serverless Functions.
 
 ## Tables Supabase Créées
 
 1. **users** (mises à jour)
-   - plan: free, standard, medium, pro
-   - plan_status: inactive, active, past_due, canceled
-   - is_monetized: boolean
-   - followers_count: integer
+    - plan: free, standard, medium, pro
+    - plan_status: inactive, active, past_due, canceled
+    - is_monetized: boolean
+    - followers_count: integer
 
 2. **subscriptions**
-   - Gestion des abonnements via MaishaPay
+    - Gestion des abonnements via MaishaPay
 
 3. **transactions**
-   - Soutiens et revenus (commission 20% calculée auto)
+    - Soutiens et revenus (commission 20% calculée auto)
 
 4. **video_views**
-   - Tracking des vues pour monétisation
+    - Tracking des vues pour monétisation
 
 5. **video_payouts**
-   - Paiements mensuels aux créateurs
+    - Paiements mensuels aux créateurs
 
 6. **monetization_audit_logs**
-   - Logs pour conformité
+    - Logs pour conformité
 
 ## Fonctionnalités Implémentées
 
 ### Palier Standard ($2.50/mois)
+
 - Badge bleu vérifié
 - Statut vérifié
 - Pas de monétisation
 
 ### Palier Medium ($6.00/mois)
+
 - Tout le Standard +
 - Recevoir des soutiens (80% net)
 - Transferts MaishaPay
 - Nécessite 1000 abonnés
 
 ### Palier Pro ($10.00/mois)
+
 - Tout le Medium +
 - Monétisation vidéo ($0.40/1000 vues)
 - Dashboard avancé
@@ -77,24 +86,27 @@
 ### À ajouter dans les pages existantes:
 
 1. **profile.html**
-   ```html
-   <script src="js/monetization.js"></script>
-   <script src="js/monetization-ui.js"></script>
-   ```
+
+    ```html
+    <script src="js/monetization.js"></script>
+    <script src="js/monetization-ui.js"></script>
+    ```
 
 2. **Pour afficher un badge de plan:**
-   ```javascript
-   integrateMonetizationInProfile(profileElement, userData);
-   ```
+
+    ```javascript
+    integrateMonetizationInProfile(profileElement, userData);
+    ```
 
 3. **Pour afficher un bouton de soutien:**
-   ```javascript
-   generateSupportButtonHTML(user, 'profile');
-   ```
+    ```javascript
+    generateSupportButtonHTML(user, "profile");
+    ```
 
 ## Configuration Requise
 
 Variables d'environnement à ajouter:
+
 ```
 MAISHAPAY_PUBLIC_KEY=your_public_key
 MAISHAPAY_SECRET_KEY=your_secret_key
@@ -105,6 +117,7 @@ SUBSCRIPTION_SWEEP_MS=0
 ```
 
 Notes:
+
 - `MAISHAPAY_USE_CALLBACK=0` desactive l'envoi du `callbackUrl` a MaishaPay.
 - Passe a `1` uniquement quand tu as une URL HTTPS publique et stable pour `/api/maishapay/callback`.
 - Avec `MAISHAPAY_USE_CALLBACK=0`, les tentatives de paiement sont enregistrees en attente puis confirmees depuis `admin.html` apres verification de l'encaissement sur le compte MaishaPay.
