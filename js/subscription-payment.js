@@ -556,6 +556,16 @@ function setupPaymentForm(user, paymentContext, accessToken = "") {
             const responseText = await response.text();
 
             if (!response.ok) {
+                const errorCode =
+                    response.headers.get("X-Xera-Error-Code") || "UNKNOWN";
+                const errorCategory =
+                    response.headers.get("X-Xera-Error-Category") || "unknown";
+                console.error("Erreur checkout MaishaPay:", {
+                    status: response.status,
+                    errorCode,
+                    errorCategory,
+                    responseText,
+                });
                 showPaymentError(
                     extractPaymentResponseMessage(responseText) ||
                         "Erreur MaishaPay.",

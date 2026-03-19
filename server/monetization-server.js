@@ -693,11 +693,20 @@ function getReadableServerErrorMessage(error, fallbackMessage) {
 }
 
 function sendCheckoutErrorResponse(res, error, fallbackMessage) {
+    const sourceCode = String(error?.code || "").trim() || "UNKNOWN";
+    let category = "checkout_failure";
+
     if (isMissingRelationError(error) || isMissingColumnError(error)) {
+        category = "schema_missing";
+        res.set("X-Xera-Error-Category", category);
+        res.set("X-Xera-Error-Code", sourceCode);
         return res.status(503).send(getWalletSchemaErrorMessage());
     }
 
     if (isForeignKeyViolation(error)) {
+        category = "foreign_key_violation";
+        res.set("X-Xera-Error-Category", category);
+        res.set("X-Xera-Error-Code", sourceCode);
         return res
             .status(409)
             .send(
@@ -706,6 +715,9 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage) {
     }
 
     if (isNotNullViolation(error)) {
+        category = "not_null_violation";
+        res.set("X-Xera-Error-Category", category);
+        res.set("X-Xera-Error-Code", sourceCode);
         return res
             .status(409)
             .send(
@@ -715,6 +727,9 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage) {
                 ),
             );
     }
+
+    res.set("X-Xera-Error-Category", category);
+    res.set("X-Xera-Error-Code", sourceCode);
 
     if (String(process.env.NODE_ENV || "").toLowerCase() !== "production") {
         return res
