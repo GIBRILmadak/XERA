@@ -66,7 +66,7 @@
                         <p id="paymentFormSubtitle">Sélectionne carte ou mobile money, puis la devise.</p>
                     </div>
 
-                    <form id="maishapay-form" method="POST">
+                    <form id="maishapay-form" method="POST" onsubmit="return false;">
                         <input type="hidden" name="kind" id="inputKind" value="subscription">
                         <input type="hidden" name="plan" id="inputPlan">
                         <input type="hidden" name="billing_cycle" id="inputCycle">
@@ -138,6 +138,6 @@
     <script src="js/router.js"></script>
     <script src="js/supabase-config.js"></script>
     <script src="js/monetization.js?v=20260318-6"></script>
-    <script src="js/subscription-payment.js?v=20260319-2"></script>
+    <script src="js/subscription-payment.js?v=20260319-3"></script>
 </body>
 </html>

@@ -1,5 +1,20 @@
 {
-  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/login", "destination": "/login.html" },
+    { "source": "/profile", "destination": "/profile.html" },
+    { "source": "/analytics", "destination": "/analytics.html" },
+    { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/badges-admin", "destination": "/badges-admin.html" },
+    { "source": "/create-stream", "destination": "/create-stream.html" },
+    { "source": "/creator-dashboard", "destination": "/creator-dashboard.html" },
+    { "source": "/credits", "destination": "/credits.html" },
+    { "source": "/stream", "destination": "/stream.html" },
+    { "source": "/subscription-plans", "destination": "/subscription-plans.html" },
+    { "source": "/subscription-payment", "destination": "/subscription-payment.html" },
+    { "source": "/verification", "destination": "/verification.html" },
+    { "source": "/404", "destination": "/404.html" }
+  ],
   "crons": [
     {
       "path": "/api/cron/sweep-subscriptions",
