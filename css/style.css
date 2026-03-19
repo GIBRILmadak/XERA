@@ -3773,6 +3773,19 @@ input[type="text"]:focus, input[type="url"]:focus, textarea:focus, .form-input:f
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
+/* Layout en grille 2 colonnes pour le dashboard créateur */
+.creator-dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+}
+@media (min-width: 900px) {
+    .creator-dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+        align-items: start;
+    }
+}
+
 .settings-section h3 {
     font-family: var(--font-heading);
     font-size: 1.25rem;

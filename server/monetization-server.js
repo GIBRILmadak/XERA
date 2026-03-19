@@ -2633,35 +2633,45 @@ app.post("/api/monetization/withdrawals", async (req, res) => {
                 error: "Votre compte Mobile Money est inactif. Reenregistrez-le avant le retrait.",
             });
         }
-        if (requestedAmount > overview.wallet.availableBalance) {
-            return res.status(400).json({
-                error: "Solde disponible insuffisant pour ce retrait.",
-            });
+
+        // Utiliser la fonction SQL pour valider le solde et créer la demande atomiquement
+        const { data: rpcData, error: rpcError } = await supabase.rpc('request_automatic_withdrawal', {
+            p_user_id: authResult.user.id,
+            p_amount: requestedAmount
+        });
+
+        if (rpcError) {
+            console.error("RPC withdrawal error:", rpcError);
+            return res.status(400).json({ error: rpcError.message || "Erreur lors de la demande de retrait." });
         }
 
-        const { data, error } = await supabase
+        const { withdrawal_id } = rpcData;
+
+        // TODO: Ici, vous pouvez appeler l'API de Payout de MaishaPay pour effectuer le transfert réel.
+        // Exemple conceptuel :
+        // try {
+        //    const payoutResult = await maishaPay.payout({ ... });
+        //    // Si succès, mettre à jour le statut en 'paid'
+        //    await supabase.from('withdrawal_requests').update({ status: 'paid', paid_at: new Date() }).eq('id', withdrawal_id);
+        // } catch (e) {
+        //    // Si échec, remettre l'argent (il faudra une fonction revert_withdrawal_balance)
+        // }
+
+        // Récupérer la demande complète pour l'affichage frontend
+        const { data: withdrawalData, error: fetchError } = await supabase
             .from("withdrawal_requests")
-            .insert({
-                creator_id: authResult.user.id,
-                payout_setting_id: payoutSettings.id,
-                amount_usd: requestedAmount,
-                requested_amount: requestedAmount,
-                requested_currency: "USD",
-                channel: "mobile_money",
-                provider: payoutSettings.provider,
-                wallet_number: payoutSettings.walletNumber,
-                account_name: payoutSettings.accountName,
-                note,
-                status: "pending",
-                requested_at: new Date().toISOString(),
-            })
             .select("*")
+            .eq("id", withdrawal_id)
             .single();
-        if (error) throw error;
+            
+        if (fetchError) {
+             // Fallback minimal si la relecture échoue
+             return res.json({ success: true, message: "Retrait initié avec succès." });
+        }
 
         return res.json({
             success: true,
-            withdrawal: extractWithdrawalRequest(data),
+            withdrawal: extractWithdrawalRequest(withdrawalData),
         });
     } catch (error) {
         console.error("Monetization withdrawal request error:", error);
@@ -2820,6 +2830,96 @@ app.post("/api/admin/withdrawal-requests/status", async (req, res) => {
         console.error("Admin withdrawal request update error:", error);
         if (isMissingRelationError(error) || isMissingColumnError(error)) {
             return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+        }
+        return res.status(500).json({
+            error: "Impossible de mettre a jour cette demande de retrait.",
+        });
+    }
+});
+
+// ==================== API EXISTANTES ====================
+
+// Health check
+app.get("/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+app.get("/api/config", (req, res) => {
+    res.json({
+        usdToCdfRate: USD_TO_CDF_RATE_VALUE,
+        maishaPay: {
+            callbackEnabled: MAISHAPAY_CALLBACK_ENABLED,
+            gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
+        },
+    });
+});
+
+// ... (le reste du code existant pour les rappels, etc.)
+
+const isDirectRun = require.main === module;
+
+if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {
+    sweepExpiredSubscriptions();
+    setInterval(sweepExpiredSubscriptions, SUBSCRIPTION_SWEEP_MS);
+} else if (isDirectRun && SUBSCRIPTION_SWEEP_MS === 0) {
+    console.info(
+        "Subscription expiry sweep disabled (SUBSCRIPTION_SWEEP_MS=0).",
+    );
+}
+
+// Démarrer le serveur (local/dev uniquement)
+if (isDirectRun) {
+    console.info("MaishaPay configuration summary:", {
+        gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
+        publicKey: maskKey(MAISHAPAY_PUBLIC_KEY),
+        secretKey: maskKey(MAISHAPAY_SECRET_KEY),
+        publicKeyMode: inferMaishaPayKeyMode(MAISHAPAY_PUBLIC_KEY),
+        secretKeyMode: inferMaishaPayKeyMode(MAISHAPAY_SECRET_KEY),
+        callbackEnabled: MAISHAPAY_CALLBACK_ENABLED,
+        callbackOrigin: CALLBACK_ORIGIN,
+    });
+
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+        console.log(`API endpoints available at /api/*`);
+    });
+}
+
+module.exports = app;
+module.exports.sweepExpiredSubscriptions = sweepExpiredSubscriptions;
+            });
+        }
+
+        const nowIso = new Date().toISOString();
+        const updatePayload = {
+            status,
+            operator_ref_id: operatorRefId || existing.operator_ref_id || null,
+            admin_note: adminNote || existing.admin_note || null,
+            processed_at: nowIso,
+            updated_at: nowIso,
+        };
+        if (status === "paid") {
+            updatePayload.paid_at = nowIso;
+        }
+
+        const { data: updated, error: updateError } = await supabase
+            .from("withdrawal_requests")
+            .update(updatePayload)
+            .eq("id", requestId)
+            .select("*")
+            .single();
+        if (updateError) throw updateError;
+
+        return res.json({
+            success: true,
+            request: extractWithdrawalRequest(updated),
+        });
+    } catch (error) {
+        console.error("Admin withdrawal request update error:", error);
+        if (isMissingRelationError(error) || isMissingColumnError(error)) {
+            return res
+                .status(503)
+                .json({ error: getWalletSchemaErrorMessage() });
         }
         return res.status(500).json({
             error: "Impossible de mettre a jour cette demande de retrait.",

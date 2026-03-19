@@ -1,7 +1,7 @@
 /*
  * XERA Service Worker for Web Push notifications
  */
-const CACHE_NAME = "xera-shell-v6";
+const CACHE_NAME = "xera-shell-v7";
 const PRECACHE_URLS = [
     "/manifest.json",
     "/icons/logo-192x192.png",
