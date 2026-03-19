@@ -3837,9 +3837,6 @@ async function fetchSuperAdminJson(path, options = {}) {
     }
 
     const apiBase = resolveApiBaseUrl();
-    if (!apiBase) {
-        throw new Error("Adresse API introuvable.");
-    }
 
     const response = await fetch(`${apiBase}${path}`, {
         method: options.method || "GET",
@@ -4651,9 +4648,6 @@ async function requestAdminGiftPlan(userId, planValue) {
     }
 
     const apiBase = resolveApiBaseUrl();
-    if (!apiBase) {
-        throw new Error("Adresse API introuvable.");
-    }
 
     const response = await fetch(`${apiBase}/api/admin/gift-plan`, {
         method: "POST",

@@ -665,9 +665,6 @@ async function createSupportPaymentSession(
         }
 
         const apiBase = resolveMonetizationApiBase();
-        if (!apiBase) {
-            return { success: false, error: "Adresse API introuvable." };
-        }
 
         const accessToken = await getMonetizationAccessToken();
         const response = await fetch(`${apiBase}/api/monetization/support`, {
