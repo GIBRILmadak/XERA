@@ -24,9 +24,7 @@ const {
 
     MAISHAPAY_PUBLIC_KEY = "MP-LIVEPK-Gl4b.T27YY9$ydZA$1uQq0jVo1D8lRhPJ7Vw0Z5vssuO1NU3n$$0OPOdzPf52qU01u3s0dS9VK2FB7z8IbqkbYO1r6PZblygvafZFQFyMOG$JBDq$zTfy/3C",
 
-
     MAISHAPAY_SECRET_KEY = "MP-LIVESK-4PWp0AU4S0sfMqQ$E1Qpkl1jcq$zxCD3wy7jNYbGFCodo8qyX$vk$gU$quKhJrwtMwXuq363rvWAcNfeU6Z2GYLB5lNrvR4GNo/$NB10Kt/1oMyKQAAOJ2sY",
-
 
     MAISHAPAY_GATEWAY_MODE = "1",
     MAISHAPAY_CHECKOUT_URL = "https://marchand.maishapay.online/payment/vers1.0/merchant/checkout",
@@ -63,10 +61,10 @@ app.use(cors({ origin: allowedOrigins, methods: ["GET", "POST"] }));
 
 // Health check endpoint pour Render
 app.get("/api/health", (req, res) => {
-    res.status(200).json({ 
-        status: "ok", 
+    res.status(200).json({
+        status: "ok",
         timestamp: new Date().toISOString(),
-        service: "xera-backend"
+        service: "xera-backend",
     });
 });
 
@@ -95,7 +93,9 @@ function hasPublicCallbackBaseUrl(value) {
 }
 
 function stripTrailingSlash(value) {
-    return String(value || "").trim().replace(/\/+$/, "");
+    return String(value || "")
+        .trim()
+        .replace(/\/+$/, "");
 }
 
 function resolveCallbackOrigin(callbackBaseUrl, primaryOrigin) {
@@ -123,7 +123,10 @@ function escapeHtmlAttr(value) {
 const PRIMARY_ORIGIN = stripTrailingSlash(
     allowedOrigins[0] || APP_BASE_URL.split(",")[0] || "http://localhost:3000",
 );
-const CALLBACK_ORIGIN = resolveCallbackOrigin(CALLBACK_BASE_URL, PRIMARY_ORIGIN);
+const CALLBACK_ORIGIN = resolveCallbackOrigin(
+    CALLBACK_BASE_URL,
+    PRIMARY_ORIGIN,
+);
 const MAISHAPAY_CALLBACK_ENABLED =
     parseBooleanEnv(MAISHAPAY_USE_CALLBACK, true) && Boolean(CALLBACK_ORIGIN);
 
@@ -138,7 +141,9 @@ function sanitizeReturnPath(value, fallbackPath = "/") {
     if (!raw) return fallback;
 
     try {
-        const baseUrl = new URL(PRIMARY_ORIGIN || APP_BASE_URL || "http://localhost:3000");
+        const baseUrl = new URL(
+            PRIMARY_ORIGIN || APP_BASE_URL || "http://localhost:3000",
+        );
         const url = new URL(raw, baseUrl);
         if (url.origin !== baseUrl.origin) {
             return fallback;
@@ -236,7 +241,10 @@ function computeSupportCheckoutAmount(amountUsd, currency) {
     }
 
     if (String(currency).toUpperCase() === "CDF") {
-        return Math.max(1, Math.round(normalizedAmount * USD_TO_CDF_RATE_VALUE));
+        return Math.max(
+            1,
+            Math.round(normalizedAmount * USD_TO_CDF_RATE_VALUE),
+        );
     }
 
     return Math.ceil(normalizedAmount);
@@ -423,11 +431,7 @@ async function createPendingSupportPayment({
     };
 }
 
-function renderMaishaPayCheckoutPage({
-    amount,
-    currency,
-    callbackUrl,
-}) {
+function renderMaishaPayCheckoutPage({ amount, currency, callbackUrl }) {
     const callbackInput = callbackUrl
         ? `\n          <input type="hidden" name="callbackUrl" value="${escapeHtmlAttr(callbackUrl)}">`
         : "";
@@ -495,7 +499,9 @@ function extractSubscriptionPaymentDetails(row) {
             Number(row.amount_gross) > 0
                 ? Number(row.amount_gross)
                 : Number(metadata.amount || 0),
-        currency: String(row?.currency || metadata.currency || "USD").toUpperCase(),
+        currency: String(
+            row?.currency || metadata.currency || "USD",
+        ).toUpperCase(),
         status: String(row?.status || "").toLowerCase(),
         plan: String(metadata.plan || "").toLowerCase(),
         billingCycle: String(metadata.billing_cycle || "monthly").toLowerCase(),
@@ -523,9 +529,7 @@ function normalizeMobileMoneyProvider(value) {
         .trim()
         .toLowerCase()
         .replace(/[\s-]+/g, "_");
-    return SUPPORTED_MOBILE_MONEY_PROVIDERS.has(normalized)
-        ? normalized
-        : null;
+    return SUPPORTED_MOBILE_MONEY_PROVIDERS.has(normalized) ? normalized : null;
 }
 
 function sanitizeWalletNumber(value) {
@@ -536,7 +540,9 @@ function sanitizeWalletNumber(value) {
 }
 
 function sanitizePayoutText(value, maxLength = 160) {
-    return String(value || "").trim().slice(0, maxLength);
+    return String(value || "")
+        .trim()
+        .slice(0, maxLength);
 }
 
 function isMissingRelationError(error) {
@@ -581,7 +587,8 @@ function extractPayoutSettings(row) {
         channel: row.channel || "mobile_money",
         provider,
         providerLabel:
-            MOBILE_MONEY_PROVIDER_LABELS[provider] || MOBILE_MONEY_PROVIDER_LABELS.other,
+            MOBILE_MONEY_PROVIDER_LABELS[provider] ||
+            MOBILE_MONEY_PROVIDER_LABELS.other,
         accountName: row.account_name || "",
         walletNumber: row.wallet_number || "",
         countryCode: row.country_code || "CD",
@@ -601,11 +608,14 @@ function extractWithdrawalRequest(row) {
         payoutSettingId: row.payout_setting_id || null,
         amountUsd: roundMoney(row.amount_usd),
         requestedAmount: roundMoney(row.requested_amount),
-        requestedCurrency: String(row.requested_currency || "USD").toUpperCase(),
+        requestedCurrency: String(
+            row.requested_currency || "USD",
+        ).toUpperCase(),
         channel: row.channel || "mobile_money",
         provider,
         providerLabel:
-            MOBILE_MONEY_PROVIDER_LABELS[provider] || MOBILE_MONEY_PROVIDER_LABELS.other,
+            MOBILE_MONEY_PROVIDER_LABELS[provider] ||
+            MOBILE_MONEY_PROVIDER_LABELS.other,
         walletNumber: row.wallet_number || "",
         accountName: row.account_name || "",
         note: row.note || "",
@@ -765,8 +775,8 @@ async function buildCreatorWalletOverview(userId) {
                 Boolean(
                     payoutSettings?.status === "active" &&
                     payoutSettings?.walletNumber &&
-                        payoutSettings?.provider &&
-                        payoutSettings?.accountName,
+                    payoutSettings?.provider &&
+                    payoutSettings?.accountName,
                 ),
         },
     };
@@ -983,12 +993,12 @@ async function activateSubscription({
     const { data: insertedSubscription, error: insertSubError } = await supabase
         .from("subscriptions")
         .insert({
-        user_id: userId,
-        plan,
-        status: "active",
-        current_period_start: nowIso,
-        current_period_end: periodEndIso,
-    })
+            user_id: userId,
+            plan,
+            status: "active",
+            current_period_start: nowIso,
+            current_period_end: periodEndIso,
+        })
         .select("id")
         .single();
     if (insertSubError) throw insertSubError;
@@ -1008,7 +1018,8 @@ async function activateSubscription({
     if (updateUserError) throw updateUserError;
 
     const mergedMetadata = {
-        ...(pendingPayment?.metadata && typeof pendingPayment.metadata === "object"
+        ...(pendingPayment?.metadata &&
+        typeof pendingPayment.metadata === "object"
             ? pendingPayment.metadata
             : {}),
         payment_provider: "maishapay",
@@ -1101,8 +1112,7 @@ function canUserReceiveSupport(user) {
     if (!isPlanActiveForUser(user)) return false;
     if (isGiftedProUser(user)) return true;
     return (
-        user.is_monetized === true ||
-        Number(user.followers_count || 0) >= 1000
+        user.is_monetized === true || Number(user.followers_count || 0) >= 1000
     );
 }
 
@@ -1133,7 +1143,11 @@ async function createNotificationRecord({
     if (metadata && typeof metadata === "object") payload.metadata = metadata;
 
     try {
-        let query = supabase.from("notifications").insert(payload).select("*").single();
+        let query = supabase
+            .from("notifications")
+            .insert(payload)
+            .select("*")
+            .single();
         let { data, error } = await query;
 
         if (error && isMissingColumnError(error)) {
@@ -1154,7 +1168,10 @@ async function createNotificationRecord({
         if (error) throw error;
         return data || null;
     } catch (error) {
-        console.warn("Support notification insert error:", error?.message || error);
+        console.warn(
+            "Support notification insert error:",
+            error?.message || error,
+        );
         return null;
     }
 }
@@ -1162,9 +1179,15 @@ async function createNotificationRecord({
 async function purgeStalePushSubscription(endpoint) {
     if (!endpoint) return;
     try {
-        await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+        await supabase
+            .from("push_subscriptions")
+            .delete()
+            .eq("endpoint", endpoint);
     } catch (error) {
-        console.warn("Failed to purge stale push subscription:", error?.message || error);
+        console.warn(
+            "Failed to purge stale push subscription:",
+            error?.message || error,
+        );
     }
 }
 
@@ -1262,13 +1285,9 @@ async function failPendingTransaction({
             ? existing.metadata
             : {}),
         transaction_ref_id:
-            transactionRefId ||
-            existing.metadata?.transaction_ref_id ||
-            null,
+            transactionRefId || existing.metadata?.transaction_ref_id || null,
         operator_ref_id:
-            operatorRefId ||
-            existing.metadata?.operator_ref_id ||
-            null,
+            operatorRefId || existing.metadata?.operator_ref_id || null,
         failure_reason: reason || null,
         failed_at: nowIso,
         confirmation_source: confirmationSource,
@@ -1352,8 +1371,16 @@ async function confirmSupportPayment({
     }
 
     const [senderResult, recipientResult] = await Promise.all([
-        supabase.from("users").select("id, name, avatar").eq("id", fromUserId).maybeSingle(),
-        supabase.from("users").select("id, name, avatar").eq("id", toUserId).maybeSingle(),
+        supabase
+            .from("users")
+            .select("id, name, avatar")
+            .eq("id", fromUserId)
+            .maybeSingle(),
+        supabase
+            .from("users")
+            .select("id, name, avatar")
+            .eq("id", toUserId)
+            .maybeSingle(),
     ]);
     if (senderResult.error) throw senderResult.error;
     if (recipientResult.error) throw recipientResult.error;
@@ -1367,14 +1394,17 @@ async function confirmSupportPayment({
     const supportAmountUsd = roundMoney(amountUsd);
     const nowIso = new Date().toISOString();
     const mergedMetadata = {
-        ...(pendingPayment?.metadata && typeof pendingPayment.metadata === "object"
+        ...(pendingPayment?.metadata &&
+        typeof pendingPayment.metadata === "object"
             ? pendingPayment.metadata
             : {}),
         payment_provider: "maishapay",
         payment_ref: paymentId,
         transaction_ref_id: transactionRefId || null,
         operator_ref_id: operatorRefId || null,
-        method: String(method || pendingPayment?.metadata?.method || "card").toLowerCase(),
+        method: String(
+            method || pendingPayment?.metadata?.method || "card",
+        ).toLowerCase(),
         provider: provider || pendingPayment?.metadata?.provider || null,
         wallet_id: walletId || pendingPayment?.metadata?.wallet_id || null,
         support_kind: "direct",
@@ -1391,12 +1421,11 @@ async function confirmSupportPayment({
             checkoutAmount ||
             pendingPayment?.metadata?.checkout_amount ||
             supportAmountUsd,
-        checkout_currency:
-            String(
-                checkoutCurrency ||
-                    pendingPayment?.metadata?.checkout_currency ||
-                    "USD",
-            ).toUpperCase(),
+        checkout_currency: String(
+            checkoutCurrency ||
+                pendingPayment?.metadata?.checkout_currency ||
+                "USD",
+        ).toUpperCase(),
         confirmed_at: nowIso,
         confirmation_source: confirmationSource,
     };
@@ -1439,9 +1468,7 @@ async function confirmSupportPayment({
     }
 
     const senderName =
-        senderProfile?.name ||
-        mergedMetadata.sender_name ||
-        "Un utilisateur";
+        senderProfile?.name || mergedMetadata.sender_name || "Un utilisateur";
     const notification = await createNotificationRecord({
         userId: toUserId,
         type: "support",
@@ -1637,11 +1664,7 @@ app.post("/api/maishapay/checkout", async (req, res) => {
         );
     } catch (error) {
         console.error("MaishaPay checkout error:", error);
-        return sendCheckoutErrorResponse(
-            res,
-            error,
-            "Erreur MaishaPay",
-        );
+        return sendCheckoutErrorResponse(res, error, "Erreur MaishaPay");
     }
 });
 
@@ -1682,9 +1705,11 @@ app.post("/api/maishapay/support-checkout", async (req, res) => {
             amountUsd < SUPPORT_MIN_USD ||
             amountUsd > SUPPORT_MAX_USD
         ) {
-            return res.status(400).send(
-                `Le soutien doit etre entre ${SUPPORT_MIN_USD} et ${SUPPORT_MAX_USD} USD`,
-            );
+            return res
+                .status(400)
+                .send(
+                    `Le soutien doit etre entre ${SUPPORT_MIN_USD} et ${SUPPORT_MAX_USD} USD`,
+                );
         }
         if (!Number.isInteger(amountUsd)) {
             return res
@@ -1719,7 +1744,9 @@ app.post("/api/maishapay/support-checkout", async (req, res) => {
         if (!senderProfile) {
             return res
                 .status(400)
-                .send("Profil expediteur introuvable. Rechargez votre session.");
+                .send(
+                    "Profil expediteur introuvable. Rechargez votre session.",
+                );
         }
         if (!recipientProfile) {
             return res.status(404).send("Createur introuvable");
@@ -1730,7 +1757,10 @@ app.post("/api/maishapay/support-checkout", async (req, res) => {
                 .send("Ce createur n'est pas eligible aux soutiens.");
         }
 
-        const checkoutAmount = computeSupportCheckoutAmount(amountUsd, currency);
+        const checkoutAmount = computeSupportCheckoutAmount(
+            amountUsd,
+            currency,
+        );
         if (!checkoutAmount) {
             return res.status(400).send("Montant invalide");
         }
@@ -1810,11 +1840,7 @@ app.post("/api/maishapay/support-checkout", async (req, res) => {
         );
     } catch (error) {
         console.error("MaishaPay support checkout error:", error);
-        return sendCheckoutErrorResponse(
-            res,
-            error,
-            "Erreur MaishaPay",
-        );
+        return sendCheckoutErrorResponse(res, error, "Erreur MaishaPay");
     }
 });
 
@@ -1833,7 +1859,9 @@ app.all("/api/maishapay/callback/:state?", async (req, res) => {
             return res.status(400).send("Callback invalide");
         }
 
-        const paymentKind = String(payload.payment_kind || "subscription").toLowerCase();
+        const paymentKind = String(
+            payload.payment_kind || "subscription",
+        ).toLowerCase();
         const isSuccess =
             String(status) === "202" ||
             String(status).toLowerCase() === "success";
@@ -1876,13 +1904,16 @@ app.all("/api/maishapay/callback/:state?", async (req, res) => {
                 pendingTransactionId: payload.pending_transaction_id,
                 transactionRefId,
                 operatorRefId,
-                reason: description || String(status || "Paiement non confirme"),
+                reason:
+                    description || String(status || "Paiement non confirme"),
                 confirmationSource: "maishapay_callback",
             });
         }
 
         const successTitle =
-            paymentKind === "support" ? "Soutien confirmé" : "Paiement confirmé";
+            paymentKind === "support"
+                ? "Soutien confirmé"
+                : "Paiement confirmé";
         const successDescription =
             paymentKind === "support"
                 ? "Le soutien a bien ete confirme et sera visible dans le dashboard du createur."
@@ -1894,7 +1925,8 @@ app.all("/api/maishapay/callback/:state?", async (req, res) => {
         const returnPath =
             paymentKind === "support"
                 ? payload.return_path || "/"
-                : payload.return_path || buildProfileReturnPath(payload.user_id);
+                : payload.return_path ||
+                  buildProfileReturnPath(payload.user_id);
         const returnHref = String(returnPath || "").startsWith("http")
             ? String(returnPath)
             : `${PRIMARY_ORIGIN}/${String(returnPath || "/").replace(/^\//, "")}`;
@@ -2028,7 +2060,11 @@ app.get("/api/admin/subscription-payments", async (req, res) => {
 
         const requestedStatuses = String(req.query.status || "pending")
             .split(",")
-            .map((value) => String(value || "").trim().toLowerCase())
+            .map((value) =>
+                String(value || "")
+                    .trim()
+                    .toLowerCase(),
+            )
             .filter(Boolean);
         const allowedStatuses = new Set([
             "pending",
@@ -2355,14 +2391,16 @@ app.get("/api/monetization/overview", async (req, res) => {
             wallet: overview.wallet,
             payoutSettings: overview.payoutSettings,
             withdrawals: overview.withdrawals,
-            supportedProviders: Object.entries(MOBILE_MONEY_PROVIDER_LABELS).map(
-                ([value, label]) => ({ value, label }),
-            ),
+            supportedProviders: Object.entries(
+                MOBILE_MONEY_PROVIDER_LABELS,
+            ).map(([value, label]) => ({ value, label })),
         });
     } catch (error) {
         console.error("Monetization overview error:", error);
         if (isMissingRelationError(error)) {
-            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+            return res
+                .status(503)
+                .json({ error: getWalletSchemaErrorMessage() });
         }
         return res
             .status(500)
@@ -2406,20 +2444,22 @@ app.post("/api/monetization/support", async (req, res) => {
             });
         }
 
-        const [senderProfileResult, recipientProfileResult] = await Promise.all([
-            supabase
-                .from("users")
-                .select("id, name, avatar")
-                .eq("id", fromUserId)
-                .maybeSingle(),
-            supabase
-                .from("users")
-                .select(
-                    "id, name, avatar, followers_count, plan, plan_status, plan_ends_at, is_monetized",
-                )
-                .eq("id", toUserId)
-                .maybeSingle(),
-        ]);
+        const [senderProfileResult, recipientProfileResult] = await Promise.all(
+            [
+                supabase
+                    .from("users")
+                    .select("id, name, avatar")
+                    .eq("id", fromUserId)
+                    .maybeSingle(),
+                supabase
+                    .from("users")
+                    .select(
+                        "id, name, avatar, followers_count, plan, plan_status, plan_ends_at, is_monetized",
+                    )
+                    .eq("id", toUserId)
+                    .maybeSingle(),
+            ],
+        );
 
         if (senderProfileResult.error) throw senderProfileResult.error;
         if (recipientProfileResult.error) throw recipientProfileResult.error;
@@ -2437,11 +2477,14 @@ app.post("/api/monetization/support", async (req, res) => {
             });
         }
 
-        const description = String(rawDescription || "").trim().slice(0, 160);
+        const description = String(rawDescription || "")
+            .trim()
+            .slice(0, 160);
         const metadata = {
             payment_provider: "internal_support",
             support_kind: "direct",
-            sender_name: senderProfile?.name || authResult.user.email || "Utilisateur",
+            sender_name:
+                senderProfile?.name || authResult.user.email || "Utilisateur",
             created_via: "support_api",
         };
 
@@ -2465,7 +2508,9 @@ app.post("/api/monetization/support", async (req, res) => {
         if (txError) throw txError;
 
         const senderName =
-            senderProfile?.name || authResult.user.user_metadata?.username || "Un utilisateur";
+            senderProfile?.name ||
+            authResult.user.user_metadata?.username ||
+            "Un utilisateur";
         const notification = await createNotificationRecord({
             userId: toUserId,
             type: "support",
@@ -2518,14 +2563,22 @@ app.get("/api/monetization/withdrawals", async (req, res) => {
                 .json({ error: authResult.error.message });
         }
 
-        const withdrawals = await fetchCreatorWithdrawalRequests(authResult.user.id, {
-            limit: Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 30)),
-        });
+        const withdrawals = await fetchCreatorWithdrawalRequests(
+            authResult.user.id,
+            {
+                limit: Math.min(
+                    100,
+                    Math.max(1, parseInt(req.query.limit, 10) || 30),
+                ),
+            },
+        );
         return res.json({ success: true, withdrawals });
     } catch (error) {
         console.error("Monetization withdrawals list error:", error);
         if (isMissingRelationError(error)) {
-            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+            return res
+                .status(503)
+                .json({ error: getWalletSchemaErrorMessage() });
         }
         return res
             .status(500)
@@ -2546,8 +2599,10 @@ app.post("/api/monetization/payout-settings", async (req, res) => {
         const walletNumber = sanitizeWalletNumber(req.body?.wallet_number);
         const accountName = sanitizePayoutText(req.body?.account_name, 80);
         const notes = sanitizePayoutText(req.body?.notes, 280);
-        const countryCode = sanitizePayoutText(req.body?.country_code || "CD", 8)
-            .toUpperCase();
+        const countryCode = sanitizePayoutText(
+            req.body?.country_code || "CD",
+            8,
+        ).toUpperCase();
 
         if (!provider) {
             return res.status(400).json({
@@ -2591,7 +2646,9 @@ app.post("/api/monetization/payout-settings", async (req, res) => {
     } catch (error) {
         console.error("Monetization payout settings error:", error);
         if (isMissingRelationError(error) || isMissingColumnError(error)) {
-            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+            return res
+                .status(503)
+                .json({ error: getWalletSchemaErrorMessage() });
         }
         return res.status(500).json({
             error: "Impossible d'enregistrer la methode de retrait.",
@@ -2635,14 +2692,23 @@ app.post("/api/monetization/withdrawals", async (req, res) => {
         }
 
         // Utiliser la fonction SQL pour valider le solde et créer la demande atomiquement
-        const { data: rpcData, error: rpcError } = await supabase.rpc('request_automatic_withdrawal', {
-            p_user_id: authResult.user.id,
-            p_amount: requestedAmount
-        });
+        const { data: rpcData, error: rpcError } = await supabase.rpc(
+            "request_automatic_withdrawal",
+            {
+                p_user_id: authResult.user.id,
+                p_amount: requestedAmount,
+            },
+        );
 
         if (rpcError) {
             console.error("RPC withdrawal error:", rpcError);
-            return res.status(400).json({ error: rpcError.message || "Erreur lors de la demande de retrait." });
+            return res
+                .status(400)
+                .json({
+                    error:
+                        rpcError.message ||
+                        "Erreur lors de la demande de retrait.",
+                });
         }
 
         const { withdrawal_id } = rpcData;
@@ -2663,10 +2729,13 @@ app.post("/api/monetization/withdrawals", async (req, res) => {
             .select("*")
             .eq("id", withdrawal_id)
             .single();
-            
+
         if (fetchError) {
-             // Fallback minimal si la relecture échoue
-             return res.json({ success: true, message: "Retrait initié avec succès." });
+            // Fallback minimal si la relecture échoue
+            return res.json({
+                success: true,
+                message: "Retrait initié avec succès.",
+            });
         }
 
         return res.json({
@@ -2676,7 +2745,9 @@ app.post("/api/monetization/withdrawals", async (req, res) => {
     } catch (error) {
         console.error("Monetization withdrawal request error:", error);
         if (isMissingRelationError(error) || isMissingColumnError(error)) {
-            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+            return res
+                .status(503)
+                .json({ error: getWalletSchemaErrorMessage() });
         }
         return res
             .status(500)
@@ -2693,9 +2764,15 @@ app.get("/api/admin/withdrawal-requests", async (req, res) => {
                 .json({ error: authResult.error.message });
         }
 
-        const requestedStatuses = String(req.query.status || "pending,processing")
+        const requestedStatuses = String(
+            req.query.status || "pending,processing",
+        )
             .split(",")
-            .map((value) => String(value || "").trim().toLowerCase())
+            .map((value) =>
+                String(value || "")
+                    .trim()
+                    .toLowerCase(),
+            )
             .filter(Boolean);
         const allowedStatuses = new Set([
             "pending",
@@ -2753,7 +2830,9 @@ app.get("/api/admin/withdrawal-requests", async (req, res) => {
     } catch (error) {
         console.error("Admin withdrawal requests list error:", error);
         if (isMissingRelationError(error)) {
-            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+            return res
+                .status(503)
+                .json({ error: getWalletSchemaErrorMessage() });
         }
         return res
             .status(500)
@@ -2771,16 +2850,25 @@ app.post("/api/admin/withdrawal-requests/status", async (req, res) => {
         }
 
         const requestId = String(req.body?.request_id || "").trim();
-        const status = String(req.body?.status || "").trim().toLowerCase();
-        const operatorRefId = sanitizePayoutText(req.body?.operator_ref_id, 120);
+        const status = String(req.body?.status || "")
+            .trim()
+            .toLowerCase();
+        const operatorRefId = sanitizePayoutText(
+            req.body?.operator_ref_id,
+            120,
+        );
         const adminNote = sanitizePayoutText(req.body?.note, 280);
         const allowedStatuses = new Set(["processing", "paid", "rejected"]);
 
         if (!requestId) {
-            return res.status(400).json({ error: "Demande de retrait manquante." });
+            return res
+                .status(400)
+                .json({ error: "Demande de retrait manquante." });
         }
         if (!allowedStatuses.has(status)) {
-            return res.status(400).json({ error: "Statut de retrait invalide." });
+            return res
+                .status(400)
+                .json({ error: "Statut de retrait invalide." });
         }
 
         const { data: existing, error: existingError } = await supabase
@@ -2799,94 +2887,6 @@ app.post("/api/admin/withdrawal-requests/status", async (req, res) => {
         if (currentStatus === "paid" || currentStatus === "rejected") {
             return res.status(409).json({
                 error: "Cette demande a deja ete traitee definitivement.",
-            });
-        }
-
-        const nowIso = new Date().toISOString();
-        const updatePayload = {
-            status,
-            operator_ref_id: operatorRefId || existing.operator_ref_id || null,
-            admin_note: adminNote || existing.admin_note || null,
-            processed_at: nowIso,
-            updated_at: nowIso,
-        };
-        if (status === "paid") {
-            updatePayload.paid_at = nowIso;
-        }
-
-        const { data: updated, error: updateError } = await supabase
-            .from("withdrawal_requests")
-            .update(updatePayload)
-            .eq("id", requestId)
-            .select("*")
-            .single();
-        if (updateError) throw updateError;
-
-        return res.json({
-            success: true,
-            request: extractWithdrawalRequest(updated),
-        });
-    } catch (error) {
-        console.error("Admin withdrawal request update error:", error);
-        if (isMissingRelationError(error) || isMissingColumnError(error)) {
-            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
-        }
-        return res.status(500).json({
-            error: "Impossible de mettre a jour cette demande de retrait.",
-        });
-    }
-});
-
-// ==================== API EXISTANTES ====================
-
-// Health check
-app.get("/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
-app.get("/api/config", (req, res) => {
-    res.json({
-        usdToCdfRate: USD_TO_CDF_RATE_VALUE,
-        maishaPay: {
-            callbackEnabled: MAISHAPAY_CALLBACK_ENABLED,
-            gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
-        },
-    });
-});
-
-// ... (le reste du code existant pour les rappels, etc.)
-
-const isDirectRun = require.main === module;
-
-if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {
-    sweepExpiredSubscriptions();
-    setInterval(sweepExpiredSubscriptions, SUBSCRIPTION_SWEEP_MS);
-} else if (isDirectRun && SUBSCRIPTION_SWEEP_MS === 0) {
-    console.info(
-        "Subscription expiry sweep disabled (SUBSCRIPTION_SWEEP_MS=0).",
-    );
-}
-
-// Démarrer le serveur (local/dev uniquement)
-if (isDirectRun) {
-    console.info("MaishaPay configuration summary:", {
-        gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
-        publicKey: maskKey(MAISHAPAY_PUBLIC_KEY),
-        secretKey: maskKey(MAISHAPAY_SECRET_KEY),
-        publicKeyMode: inferMaishaPayKeyMode(MAISHAPAY_PUBLIC_KEY),
-        secretKeyMode: inferMaishaPayKeyMode(MAISHAPAY_SECRET_KEY),
-        callbackEnabled: MAISHAPAY_CALLBACK_ENABLED,
-        callbackOrigin: CALLBACK_ORIGIN,
-    });
-
-    app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-        console.log(`API endpoints available at /api/*`);
-    });
-}
-
-module.exports = app;
-module.exports.sweepExpiredSubscriptions = sweepExpiredSubscriptions;
             });
         }
 
