@@ -125,15 +125,8 @@ async function fetchDashboardApiJson(path, options = {}) {
             body: options.body,
         });
     } catch (error) {
-        const isLocalHost =
-            window.location.hostname === "localhost" ||
-            window.location.hostname === "127.0.0.1";
-        if (isLocalHost) {
-            throw new Error(
-                `API monétisation inaccessible sur ${apiBase}. Lancez 'npm run api' puis rechargez la page.`,
-            );
-        }
-        throw new Error("Impossible de contacter le serveur de monétisation.");
+        console.error("Fetch API error:", error);
+        throw new Error("Impossible de contacter le serveur de monétisation (Vérifiez les fonctions Vercel).");
     }
 
     let payload = {};

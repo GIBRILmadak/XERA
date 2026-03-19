@@ -514,14 +514,8 @@ function setText(id, value) {
 }
 
 function resolveApiBase() {
-    const bodyBase = document.body?.dataset?.apiBase?.trim();
-    if (bodyBase) return bodyBase;
-
-    const { protocol, hostname } = window.location;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return `${protocol}//${hostname}:5050`;
-    }
-    return window.location.origin;
+    // Utilisation de chemins relatifs pour Vercel
+    return "";
 }
 
 async function loadExchangeRate() {
