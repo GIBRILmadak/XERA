@@ -5,14 +5,12 @@ services:
     plan: free
     env: node
     buildCommand: npm install
-    startCommand: node server/monetization-server.js
-    healthCheckPath: /api/health
+    startCommand: node index.js
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
-      - fromGroup: xera-secrets
 
 databases:
   - name: xera-db
