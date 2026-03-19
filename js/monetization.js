@@ -861,10 +861,16 @@ function renderPlanBadge(plan, isMonetized) {
 function renderSupportButton(creator, options = {}) {
     const canSupport = canReceiveSupport(creator);
     const size = options.size || 'medium';
+    const creatorId = String(creator?.id || '');
+    const creatorName = String(creator?.name || 'Créateur')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
     
     if (!canSupport) {
         return `
-            <button class="support-btn support-btn-disabled ${size}" disabled title="Ce créateur ne peut pas recevoir de soutiens">
+            <button type="button" class="support-btn support-btn-disabled ${size}" disabled title="Ce créateur ne peut pas recevoir de soutiens">
                 <i class="fas fa-lock"></i>
                 Soutien indisponible
             </button>
@@ -872,9 +878,9 @@ function renderSupportButton(creator, options = {}) {
     }
     
     return `
-        <button class="support-btn support-btn-active ${size}" 
-                onclick="openSupportModal('${creator.id}')"
-                data-creator-id="${creator.id}">
+        <button type="button" class="support-btn support-btn-active ${size}"
+                data-creator-id="${creatorId}"
+                data-creator-name="${creatorName}">
             <i class="fas fa-heart"></i>
             Soutenir
         </button>

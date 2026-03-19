@@ -15,6 +15,9 @@ function handleSupportButtonClick(e) {
     if (!creatorId) return;
 
     e.preventDefault();
+    if (typeof e.stopImmediatePropagation === 'function') {
+        e.stopImmediatePropagation();
+    }
     e.stopPropagation();
     openSupportModal(creatorId, creatorName, supportBtn);
 }
@@ -41,7 +44,7 @@ function initMonetizationUI() {
     }
     
     // Ajouter les écouteurs pour les boutons de soutien
-    document.addEventListener('click', handleSupportButtonClick);
+    document.addEventListener('click', handleSupportButtonClick, true);
 }
 
 // Générer le HTML pour le badge de plan
@@ -445,5 +448,6 @@ window.closeGlobalSupportModal = closeGlobalSupportModal;
 window.selectGlobalSupportAmount = selectGlobalSupportAmount;
 window.handleGlobalCustomAmount = handleGlobalCustomAmount;
 window.processGlobalSupport = processGlobalSupport;
+window.generateSupportButtonHTML = generateSupportButtonHTML;
 window.integrateMonetizationInProfile = integrateMonetizationInProfile;
 window.integrateMonetizationInContentCard = integrateMonetizationInContentCard;
