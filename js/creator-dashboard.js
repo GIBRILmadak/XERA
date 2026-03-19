@@ -719,102 +719,11 @@ async function refreshWalletData() {
         );
         renderWalletOverviewUI(payload);
     } catch (error) {
-        console.warn(
-            "API Wallet indisponible, passage au mode fallback (Supabase direct):",
-            error,
+        console.error("Erreur chargement portefeuille:", error);
+        setWalletNotice(
+            error?.message || "Impossible de charger le portefeuille.",
+            "error",
         );
-
-        // Fallback: Calcul local via Supabase si l'API Vercel est absente (404)
-        try {
-            const userId = window.currentUser?.id || window.currentUserId;
-            if (!userId)
-                throw new Error("Utilisateur non identifié pour le fallback");
-
-            // Récupération parallèle des données
-            const [payoutSettingsRes, txRes, withdrawalsRes] =
-                await Promise.all([
-                    supabase
-                        .from("creator_payout_settings")
-                        .select("*")
-                        .eq("user_id", userId)
-                        .maybeSingle(),
-                    supabase
-                        .from("transactions")
-                        .select("amount_net_creator, status")
-                        .eq("to_user_id", userId)
-                        .eq("status", "succeeded"),
-                    supabase
-                        .from("withdrawal_requests")
-                        .select("*")
-                        .eq("creator_id", userId)
-                        .order("created_at", { ascending: false }),
-                ]);
-
-            // Mapping des réglages (snake_case DB -> camelCase UI)
-            const rawSettings = payoutSettingsRes.data || {};
-            const payoutSettings = {
-                provider: rawSettings.provider,
-                accountName: rawSettings.account_name,
-                walletNumber: rawSettings.wallet_number,
-                countryCode: rawSettings.country_code,
-                notes: rawSettings.notes,
-                status:
-                    rawSettings.status ||
-                    (rawSettings.wallet_number ? "active" : "inactive"),
-            };
-
-            // Calcul des totaux
-            const totalNetIncome = (txRes.data || []).reduce(
-                (sum, t) => sum + (Number(t.amount_net_creator) || 0),
-                0,
-            );
-
-            const withdrawalsList = withdrawalsRes.data || [];
-            const paidWithdrawals = withdrawalsList
-                .filter((w) => w.status === "paid")
-                .reduce(
-                    (sum, w) => sum + (Number(w.amount_usd || w.amount) || 0),
-                    0,
-                );
-
-            const pendingWithdrawals = withdrawalsList
-                .filter((w) => ["pending", "processing"].includes(w.status))
-                .reduce(
-                    (sum, w) => sum + (Number(w.amount_usd || w.amount) || 0),
-                    0,
-                );
-
-            const availableBalance =
-                totalNetIncome - paidWithdrawals - pendingWithdrawals;
-
-            renderWalletOverviewUI({
-                wallet: {
-                    availableBalance: Math.max(0, availableBalance),
-                    pendingIncoming: 0,
-                    pendingWithdrawals,
-                    paidWithdrawals,
-                    minimumWithdrawalUsd: 5,
-                    canRequestWithdrawal: availableBalance >= 5,
-                },
-                payoutSettings,
-                withdrawals: withdrawalsList.map((w) => ({
-                    ...w,
-                    amountUsd: w.amount_usd || w.amount,
-                })),
-            });
-
-            // Si le fallback réussit, on retire l'avis d'erreur
-            setWalletNotice("", "");
-        } catch (fallbackError) {
-            console.error(
-                "Erreur chargement portefeuille (API & Fallback):",
-                fallbackError,
-            );
-            setWalletNotice(
-                error?.message || "Impossible de charger le portefeuille.",
-                "error",
-            );
-        }
     } finally {
         if (refreshBtn) refreshBtn.disabled = false;
     }
