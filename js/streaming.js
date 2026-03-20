@@ -150,6 +150,24 @@ function setStreamStatusMode(mode, options = {}) {
 // Créer une session de streaming
 async function createStreamingSession(streamData) {
     try {
+        // Récupérer les paramètres premium de l'utilisateur
+        let isPrivate = false;
+        let quality = 'sd';
+        
+        if (currentUser) {
+            const user = getUser(currentUser.id);
+            if (user) {
+                // Vérifier si l'utilisateur peut créer des lives privés (Pro)
+                if (typeof hasPrivateLiveAccess === 'function' && hasPrivateLiveAccess(user)) {
+                    isPrivate = user.private_live === true;
+                }
+                // Vérifier si l'utilisateur peut streamer en HD (Pro)
+                if (typeof hasHDStreaming === 'function' && hasHDStreaming(user)) {
+                    quality = user.hd_streaming === true ? 'hd' : 'sd';
+                }
+            }
+        }
+
         const { data, error } = await supabase
             .from('streaming_sessions')
             .insert({
@@ -157,7 +175,9 @@ async function createStreamingSession(streamData) {
                 title: streamData.title,
                 description: streamData.description,
                 thumbnail_url: streamData.thumbnailUrl,
-                status: 'live'
+                status: 'live',
+                is_private: isPrivate,
+                quality: quality
             })
             .select()
             .single();
@@ -171,6 +191,74 @@ async function createStreamingSession(streamData) {
     } catch (error) {
         console.error('Erreur création stream:', error);
         return { success: false, error: error.message };
+    }
+}
+
+// Envoyer des notifications aux followers (Standard, Medium, Pro)
+async function notifyFollowersOfLive(stream) {
+    try {
+        // Récupérer le profil de l'hôte pour vérifier le plan
+        const { data: hostProfile, error: profileError } = await supabase
+            .from('users')
+            .select('plan, plan_status')
+            .eq('id', stream.user_id)
+            .single();
+        
+        if (profileError || !hostProfile) {
+            console.warn('Impossible de récupérer le profil de l\'hôte:', profileError);
+            return;
+        }
+        
+        const plan = String(hostProfile.plan || '').toLowerCase();
+        const planStatus = String(hostProfile.plan_status || '').toLowerCase();
+        
+        // Vérifier que l'utilisateur a un plan actif (Standard, Medium ou Pro)
+        const hasPlan = planStatus === 'active' && ['standard', 'medium', 'pro'].includes(plan);
+        if (!hasPlan) {
+            console.log('Notifications aux followers non activées: plan non éligible');
+            return;
+        }
+        
+        // Récupérer les followers de l'hôte
+        const { data: followers, error: followersError } = await supabase
+            .from('follows')
+            .select('follower_id')
+            .eq('following_id', stream.user_id);
+        
+        if (followersError || !followers || followers.length === 0) {
+            console.log('Aucun follower à notifier');
+            return;
+        }
+        
+        console.log(`Envoi de notifications à ${followers.length} follower(s)`);
+        
+        // Créer les notifications en batch (limiter à 100 par lot)
+        const followerIds = followers.map(f => f.follower_id);
+        const batchSize = 100;
+        
+        for (let i = 0; i < followerIds.length; i += batchSize) {
+            const batch = followerIds.slice(i, i + batchSize);
+            const notifications = batch.map(followerId => ({
+                user_id: followerId,
+                type: 'live_start',
+                message: `🔴 ${currentUser?.name || 'Un créateur'} a commencé un live: "${stream.title}"`,
+                link: `stream.html?id=${stream.id}&host=${stream.user_id}`,
+                read: false
+            }));
+            
+            const { error: notifError } = await supabase
+                .from('notifications')
+                .upsert(notifications, { onConflict: 'user_id,type,link' });
+            
+            if (notifError) {
+                console.warn('Erreur création notifications:', notifError);
+            }
+        }
+        
+        console.log('Notifications aux followers envoyées avec succès');
+        
+    } catch (error) {
+        console.error('Erreur notification followers:', error);
     }
 }
 
@@ -204,6 +292,9 @@ async function startStream(streamData) {
         // Démarrer le heartbeat pour maintenir la présence
         startViewerHeartbeat(currentStream.id);
         startViewerCountSync(currentStream.id);
+        
+        //Notifier les followers (Standard, Medium, Pro) - en arrière-plan
+        notifyFollowersOfLive(currentStream).catch(err => console.warn('Notification followers échouée:', err));
         
         return { success: true, stream: currentStream };
         

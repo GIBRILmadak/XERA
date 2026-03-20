@@ -11040,6 +11040,157 @@ async function openSettings(userId) {
                     <input type="hidden" id="setting-account-role" value="${accountRole}">
                 </div>
 
+                <!-- Fonctionnalités Premium -->
+                <div class="settings-section premium-features-section">
+                    <h3>⭐ Fonctionnalités Premium</h3>
+                    <p class="form-hint">Ces fonctionnalités sont disponibles selon votre plan d'abonnement.</p>
+                    
+                    ${hasAdvancedProfileCustomization(user) ? `
+                    <div class="premium-feature-item">
+                        <div class="premium-feature-header">
+                            <span class="premium-feature-icon">✨</span>
+                            <div class="premium-feature-info">
+                                <h4>Personnalisation avancée du profil</h4>
+                                <p>Personnalisez davantage votre profil avec des options avancées.</p>
+                            </div>
+                            <span class="premium-badge medium">Medium+</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="setting-advanced-profile" ${user.advanced_profile_customization ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    ` : `
+                    <div class="premium-feature-locked">
+                        <span class="premium-feature-icon">✨</span>
+                        <div class="premium-feature-info">
+                            <h4>Personnalisation avancée du profil</h4>
+                            <p>Passez au plan Medium pour débloquer cette fonctionnalité.</p>
+                        </div>
+                        <a href="subscription-plans.html" class="premium-upgrade-btn">Passer à Medium</a>
+                    </div>
+                    `}
+                    
+                    ${hasFullProfileCustomization(user) ? `
+                    <div class="premium-feature-item">
+                        <div class="premium-feature-header">
+                            <span class="premium-feature-icon">🎨</span>
+                            <div class="premium-feature-info">
+                                <h4>Personnalisation complète du profil</h4>
+                                <p>Accédez à toutes les options de personnalisation.</p>
+                            </div>
+                            <span class="premium-badge pro">Pro</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="setting-full-profile" ${user.full_profile_customization ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    ` : ''}
+                    
+                    ${hasHDStreaming(user) ? `
+                    <div class="premium-feature-item">
+                        <div class="premium-feature-header">
+                            <span class="premium-feature-icon">📹</span>
+                            <div class="premium-feature-info">
+                                <h4>Qualité HD pour les lives</h4>
+                                <p>Diffusez vos lives en haute définition (1080p).</p>
+                            </div>
+                            <span class="premium-badge pro">Pro</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="setting-hd-streaming" ${user.hd_streaming ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    ` : ''}
+                    
+                    ${hasPrivateLiveAccess(user) ? `
+                    <div class="premium-feature-item">
+                        <div class="premium-feature-header">
+                            <span class="premium-feature-icon">🔒</span>
+                            <div class="premium-feature-info">
+                                <h4>Lives privés réservés aux followers</h4>
+                                <p>Créez des lives visibles uniquement par vos followers.</p>
+                            </div>
+                            <span class="premium-badge pro">Pro</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="setting-private-live" ${user.private_live ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    ` : ''}
+                    
+                    ${hasAdvancedCollaborationTools(user) ? `
+                    <div class="premium-feature-item">
+                        <div class="premium-feature-header">
+                            <span class="premium-feature-icon">🤝</span>
+                            <div class="premium-feature-info">
+                                <h4>Outils de collaboration avancés</h4>
+                                <p>Invitez des collaborateurs sur vos ARCs et projets.</p>
+                            </div>
+                            <span class="premium-badge pro">Pro</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="setting-collab-tools" ${user.advanced_collab_tools ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    ` : ''}
+                    
+                    ${hasRealtimeAnalytics(user) ? `
+                    <div class="premium-feature-item">
+                        <div class="premium-feature-header">
+                            <span class="premium-feature-icon">📊</span>
+                            <div class="premium-feature-info">
+                                <h4>Statistiques en temps réel</h4>
+                                <p>Suivez les performances de votre contenu en direct.</p>
+                            </div>
+                            <span class="premium-badge pro">Pro</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="setting-realtime-analytics" ${user.realtime_analytics ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    ` : ''}
+                    
+                    ${hasDataExport(user) ? `
+                    <div class="premium-feature-item">
+                        <div class="premium-feature-header">
+                            <span class="premium-feature-icon">📤</span>
+                            <div class="premium-feature-info">
+                                <h4>Export des données et rapports détaillés</h4>
+                                <p>Téléchargez vos statistiques et rapports.</p>
+                            </div>
+                            <span class="premium-badge pro">Pro</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="setting-data-export" ${user.data_export ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    ` : ''}
+                    
+                    ${hasMaximumDiscoverVisibility(user) ? `
+                    <div class="premium-feature-item">
+                        <div class="premium-feature-header">
+                            <span class="premium-feature-icon">🌟</span>
+                            <div class="premium-feature-info">
+                                <h4>Visibilité maximale dans Discover</h4>
+                                <p>Votre profil apparaît en priorité dans Discover.</p>
+                            </div>
+                            <span class="premium-badge pro">Pro</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="setting-max-discover" ${user.max_discover_visibility ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    ` : ''}
+                </div>
+
                 <div class="settings-section">
                     <h3>Vérification</h3>
                     <div class="verification-section">
@@ -11335,6 +11486,16 @@ async function openSettings(userId) {
                 ? normalizeDiscoveryAccountRole(selectedRoleValue)
                 : existingSubtypeRaw;
 
+            // Collect premium feature settings
+            const advancedProfileEl = document.getElementById("setting-advanced-profile");
+            const fullProfileEl = document.getElementById("setting-full-profile");
+            const hdStreamingEl = document.getElementById("setting-hd-streaming");
+            const privateLiveEl = document.getElementById("setting-private-live");
+            const collabToolsEl = document.getElementById("setting-collab-tools");
+            const realtimeAnalyticsEl = document.getElementById("setting-realtime-analytics");
+            const dataExportEl = document.getElementById("setting-data-export");
+            const maxDiscoverEl = document.getElementById("setting-max-discover");
+
             const profileData = {
                 name: document.getElementById("setting-name").value,
                 title: document.getElementById("setting-title").value,
@@ -11344,6 +11505,15 @@ async function openSettings(userId) {
                 socialLinks: newSocialLinks,
                 account_type: accountType || "personal",
                 account_subtype: subtypeToSave,
+                // Premium features
+                advanced_profile_customization: advancedProfileEl ? advancedProfileEl.checked : false,
+                full_profile_customization: fullProfileEl ? fullProfileEl.checked : false,
+                hd_streaming: hdStreamingEl ? hdStreamingEl.checked : false,
+                private_live: privateLiveEl ? privateLiveEl.checked : false,
+                advanced_collab_tools: collabToolsEl ? collabToolsEl.checked : false,
+                realtime_analytics: realtimeAnalyticsEl ? realtimeAnalyticsEl.checked : false,
+                data_export: dataExportEl ? dataExportEl.checked : false,
+                max_discover_visibility: maxDiscoverEl ? maxDiscoverEl.checked : false,
             };
 
             const okOnline = await ensureOnlineOrNotify();

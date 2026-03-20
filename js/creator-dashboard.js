@@ -921,9 +921,6 @@ async function initDashboard() {
         // Mettre à jour le statut de monétisation
         updateMonetizationStatus(profile);
 
-        // Gérer les fonctionnalités exclusives PRO (Export, etc.)
-        updateProFeatures(profile);
-
         // Initialiser les formulaires de portefeuille
         setupWalletForms();
         await refreshWalletData();
@@ -970,17 +967,6 @@ function updateNavAvatar(avatarUrl) {
     const resolvedAvatar = String(avatarUrl).trim();
     if (!resolvedAvatar) return;
     navAvatar.src = resolvedAvatar;
-}
-
-// Activer les fonctionnalités PRO si éligible
-function updateProFeatures(profile) {
-    const exportBtn = document.getElementById('exportDataBtn');
-    const plan = getUserPlan(profile); // Fonction de monetization.js
-    
-    // Afficher l'export uniquement pour le plan PRO
-    if (exportBtn && plan.id === 'PLAN_PRO') {
-        exportBtn.style.display = 'inline-flex';
-    }
 }
 
 // Mettre à jour le bouton d'upgrade
@@ -1433,38 +1419,6 @@ function setupFilters() {
         });
     }
 }
-
-// Fonction d'exportation des données (Appelée par le bouton HTML)
-window.exportDashboardData = async function() {
-    const btn = document.getElementById('exportDataBtn');
-    if (!window.currentUser?.id) return;
-    
-    try {
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Export...';
-        }
-
-        // Utilise la fonction de monetization-utils.js
-        const result = await exportRevenueData(window.currentUser.id, 'csv');
-        
-        if (result.success) {
-            const filename = `xera_revenues_${new Date().toISOString().slice(0,10)}.csv`;
-            downloadExport(result.data, filename, 'csv');
-            showSuccess('Export téléchargé avec succès');
-        } else {
-            showError('Erreur lors de la génération de l\'export');
-        }
-    } catch (error) {
-        console.error('Erreur export:', error);
-        showError('Impossible d\'exporter les données');
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-file-export"></i> Exporter CSV';
-        }
-    }
-};
 
 // Modal d'upgrade
 function openUpgradeModal() {
