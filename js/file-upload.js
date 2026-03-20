@@ -12,7 +12,10 @@ const ALLOWED_IMAGE_TYPES = [
 ];
 const MAX_VIDEO_DURATION_SECONDS = 60 * 60; // 60 minutes
 const MAX_FILE_SIZE = Number.POSITIVE_INFINITY; // no client-side limit
-const VIDEO_COMPRESSION_ENABLED = true; // Enable video compression for large videos
+// Video compression is DISABLED by default - the canvas/MediaRecorder approach is too slow
+// It can take 10+ minutes to compress a 64-second video
+// For better compression, consider using ffmpeg.wasm or server-side processing
+const VIDEO_COMPRESSION_ENABLED = false;
 const VIDEO_COMPRESSION_MAX_SIZE_MB = 50; // Target max size after compression
 const VIDEO_COMPRESSION_QUALITY = 0.8; // Quality for video compression (0-1)
 // Passer en upload résumable pour les gros fichiers (ex: vidéos iPhone)
@@ -97,104 +100,112 @@ async function readVideoDurationSeconds(file) {
 // Compresser une vidéo en utilisant canvas et MediaRecorder
 async function compressVideo(file, onProgress) {
     return new Promise((resolve, reject) => {
-        const video = document.createElement('video');
+        const video = document.createElement("video");
         const objectUrl = URL.createObjectURL(file);
-        
+
         video.src = objectUrl;
         video.muted = true;
         video.playsInline = true;
-        
+
         video.onloadedmetadata = async () => {
             try {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                
+                const canvas = document.createElement("canvas");
+                const ctx = canvas.getContext("2d");
+
                 // Réduire la résolution pour les très grandes vidéos
                 let width = video.videoWidth;
                 let height = video.videoHeight;
                 const maxDimension = 1920; // 1080p max
-                
+
                 if (width > maxDimension || height > maxDimension) {
-                    const ratio = Math.min(maxDimension / width, maxDimension / height);
+                    const ratio = Math.min(
+                        maxDimension / width,
+                        maxDimension / height,
+                    );
                     width = Math.floor(width * ratio);
                     height = Math.floor(height * ratio);
                 }
-                
+
                 canvas.width = width;
                 canvas.height = height;
-                
+
                 const stream = canvas.captureStream(30); // 30 FPS
-                
+
                 // Utiliser VP9 pour une meilleure compression
-                const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-                    ? 'video/webm;codecs=vp9'
-                    : 'video/webm';
-                
+                const mimeType = MediaRecorder.isTypeSupported(
+                    "video/webm;codecs=vp9",
+                )
+                    ? "video/webm;codecs=vp9"
+                    : "video/webm";
+
                 const mediaRecorder = new MediaRecorder(stream, {
                     mimeType: mimeType,
-                    videoBitsPerSecond: 2500000 // 2.5 Mbps
+                    videoBitsPerSecond: 2500000, // 2.5 Mbps
                 });
-                
+
                 const chunks = [];
                 mediaRecorder.ondataavailable = (e) => {
                     if (e.data.size > 0) chunks.push(e.data);
                 };
-                
+
                 mediaRecorder.onstop = () => {
                     URL.revokeObjectURL(objectUrl);
                     if (chunks.length === 0) {
-                        reject(new Error('Aucune donnée compressée'));
+                        reject(new Error("Aucune donnée compressée"));
                         return;
                     }
-                    
+
                     const compressedBlob = new Blob(chunks, { type: mimeType });
-                    const compressedFile = new File([compressedBlob], 
-                        file.name.replace(/\.[^/.]+$/, '') + '.webm', 
-                        { type: mimeType, lastModified: Date.now() }
+                    const compressedFile = new File(
+                        [compressedBlob],
+                        file.name.replace(/\.[^/.]+$/, "") + ".webm",
+                        { type: mimeType, lastModified: Date.now() },
                     );
-                    
+
                     resolve(compressedFile);
                 };
-                
+
                 mediaRecorder.onerror = (e) => {
                     URL.revokeObjectURL(objectUrl);
                     reject(e);
                 };
-                
+
                 // Démarrer l'enregistrement
                 mediaRecorder.start();
-                
+
                 // Dessiner chaque frame
                 const drawFrame = () => {
                     if (video.paused || video.ended) return;
                     ctx.drawImage(video, 0, 0, width, height);
                     requestAnimationFrame(drawFrame);
                 };
-                
+
                 video.play();
                 drawFrame();
-                
+
                 // Arrêter quand la vidéo est terminée
                 video.onended = () => {
                     setTimeout(() => mediaRecorder.stop(), 500);
                 };
-                
+
                 // Timeout de sécurité
-                setTimeout(() => {
-                    if (mediaRecorder.state === 'recording') {
-                        mediaRecorder.stop();
-                    }
-                }, 5 * 60 * 1000);
-                
+                setTimeout(
+                    () => {
+                        if (mediaRecorder.state === "recording") {
+                            mediaRecorder.stop();
+                        }
+                    },
+                    5 * 60 * 1000,
+                );
             } catch (err) {
                 URL.revokeObjectURL(objectUrl);
                 reject(err);
             }
         };
-        
+
         video.onerror = () => {
             URL.revokeObjectURL(objectUrl);
-            reject(new Error('Erreur lecture vidéo'));
+            reject(new Error("Erreur lecture vidéo"));
         };
     });
 }
@@ -231,29 +242,55 @@ async function uploadFile(file, folder = "content", onProgress) {
         const isVideo = isLikelyVideoFile(file);
 
         if (!isImage && !isVideo) {
-                throw new Error(
-                    "Type de fichier non supporté. Utilisez une image ou une vidéo.",
-                );
+            throw new Error(
+                "Type de fichier non supporté. Utilisez une image ou une vidéo.",
+            );
+        }
+
+        // Validation PRÉVENTIVE de la taille du fichier
+        // Limite cliente : 1GB (la limite réelle dépend du plan Supabase)
+        const fileSizeMB = file.size / (1024 * 1024);
+        const MAX_UPLOAD_SIZE_MB = 1024; // 1GB
+
+        if (fileSizeMB > MAX_UPLOAD_SIZE_MB) {
+            throw new Error(
+                `Fichier trop volumineux (${fileSizeMB.toFixed(1)}MB). La taille maximale est de ${MAX_UPLOAD_SIZE_MB}MB.`,
+            );
         }
 
         if (isVideo) {
             const durationSeconds = await readVideoDurationSeconds(file);
             if (durationSeconds > MAX_VIDEO_DURATION_SECONDS) {
-                throw new Error("Vidéo trop longue. Durée maximale autorisée : 60 minutes.");
+                throw new Error(
+                    "Vidéo trop longue. Durée maximale autorisée : 60 minutes.",
+                );
             }
-            
+
             // Compresser les vidéos trop volumineuses (videos iPhone HEVC notamment)
             const fileSizeMB = file.size / (1024 * 1024);
-            if (VIDEO_COMPRESSION_ENABLED && fileSizeMB > VIDEO_COMPRESSION_MAX_SIZE_MB) {
-                console.log(`Vidéo volumineuse detectée (${fileSizeMB.toFixed(1)} MB). Tentative de compression...`);
+            if (
+                VIDEO_COMPRESSION_ENABLED &&
+                fileSizeMB > VIDEO_COMPRESSION_MAX_SIZE_MB
+            ) {
+                console.log(
+                    `Vidéo volumineuse detectée (${fileSizeMB.toFixed(1)} MB). Tentative de compression...`,
+                );
                 try {
-                    const compressedFile = await compressVideo(file, onProgress);
+                    const compressedFile = await compressVideo(
+                        file,
+                        onProgress,
+                    );
                     if (compressedFile && compressedFile.size < file.size) {
                         file = compressedFile;
-                        console.log(`Vidéo compressée: ${fileSizeMB.toFixed(1)} MB -> ${(file.size / (1024 * 1024)).toFixed(1)} MB`);
+                        console.log(
+                            `Vidéo compressée: ${fileSizeMB.toFixed(1)} MB -> ${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+                        );
                     }
                 } catch (compressError) {
-                    console.warn('Compression vidéo échouée, tentative upload original:', compressError);
+                    console.warn(
+                        "Compression vidéo échouée, tentative upload original:",
+                        compressError,
+                    );
                 }
             }
         }
@@ -349,15 +386,10 @@ async function uploadFile(file, folder = "content", onProgress) {
         if (useResumable) {
             uploadResponse = await supabase.storage
                 .from("media")
-                .uploadResumable(
-                    fileName,
-                    file,
-                    baseFileOptions,
-                    {
-                        chunkSize: RESUMABLE_CHUNK_SIZE_BYTES,
-                        onUploadProgress: notifyProgress,
-                    },
-                );
+                .uploadResumable(fileName, file, baseFileOptions, {
+                    chunkSize: RESUMABLE_CHUNK_SIZE_BYTES,
+                    onUploadProgress: notifyProgress,
+                });
         } else {
             startFakeProgress();
             try {
@@ -382,7 +414,21 @@ async function uploadFile(file, folder = "content", onProgress) {
             } else if (error.statusCode === 401) {
                 throw new Error("Non autorisé. Vérifiez votre connexion.");
             } else if (error.statusCode === 413) {
-                throw new Error("Fichier trop volumineux.");
+                throw new Error(
+                    "Fichier trop volumineux pour Supabase Storage. La limite dépend de votre abonnement (50MB gratuit, 1GB Pro).",
+                );
+            }
+
+            // Check for size limit error in message
+            const errorMsg = String(error.message || "").toLowerCase();
+            if (
+                errorMsg.includes("exceed") ||
+                errorMsg.includes("maximum size") ||
+                errorMsg.includes("trop volumineux")
+            ) {
+                throw new Error(
+                    "Le fichier dépasse la taille maximale autorisée par Supabase Storage. Upgradez votre plan Supabase pour des fichiers plus volumineux.",
+                );
             }
 
             throw new Error(
@@ -497,7 +543,9 @@ async function compressImage(file, maxWidth = 1920, quality = 0.8) {
                 canvas.toBlob(
                     (blob) => {
                         if (!blob) {
-                            reject(new Error("Impossible de compresser l'image."));
+                            reject(
+                                new Error("Impossible de compresser l'image."),
+                            );
                             return;
                         }
                         const compressedFile = new File([blob], file.name, {
@@ -547,13 +595,19 @@ function initializeFileInput(inputId, options = {}) {
 
         const allowMultiple = resolveMultiple();
         const chosen = allowMultiple ? files : files.slice(0, 1);
-        const uploaded = await handleFileSelection(chosen, preview, onUpload, compress, {
-            validate,
-            onBeforeUpload,
-            onAfterUpload,
-            onProgress,
-            folder,
-        });
+        const uploaded = await handleFileSelection(
+            chosen,
+            preview,
+            onUpload,
+            compress,
+            {
+                validate,
+                onBeforeUpload,
+                onAfterUpload,
+                onProgress,
+                folder,
+            },
+        );
         input.value = "";
 
         if (typeof onUploadBatch === "function") {
@@ -585,13 +639,19 @@ function initializeFileInput(inputId, options = {}) {
 
             const allowMultiple = resolveMultiple();
             const chosen = allowMultiple ? files : files.slice(0, 1);
-            const uploaded = await handleFileSelection(chosen, preview, onUpload, compress, {
-                validate,
-                onBeforeUpload,
-                onAfterUpload,
-                onProgress,
-                folder,
-            });
+            const uploaded = await handleFileSelection(
+                chosen,
+                preview,
+                onUpload,
+                compress,
+                {
+                    validate,
+                    onBeforeUpload,
+                    onAfterUpload,
+                    onProgress,
+                    folder,
+                },
+            );
 
             if (typeof onUploadBatch === "function") {
                 try {
@@ -633,7 +693,8 @@ async function handleFileSelection(
             const overallPercent =
                 totalFiles > 0
                     ? Math.round(
-                          ((currentIndex + safePercent / 100) / totalFiles) * 100,
+                          ((currentIndex + safePercent / 100) / totalFiles) *
+                              100,
                       )
                     : safePercent;
             onProgress(overallPercent, {
@@ -677,9 +738,7 @@ async function handleFileSelection(
         // Compresser l'image si demandé
         let fileToUpload = file;
         const shouldCompress =
-            compress &&
-            isAllowedImageFile(file) &&
-            !isGifFile(file);
+            compress && isAllowedImageFile(file) && !isGifFile(file);
         if (shouldCompress) {
             try {
                 fileToUpload = await compressImage(file);
@@ -759,9 +818,10 @@ function validateFile(file) {
         errors.push("Type de fichier non supporté");
     }
 
-    // Vérifier la taille
-    if (file.size > MAX_FILE_SIZE) {
-        errors.push("Fichier trop volumineux");
+    // Vérifier la taille (1GB max)
+    const MAX_CLIENT_SIZE = 1024 * 1024 * 1024; // 1GB
+    if (file.size > MAX_CLIENT_SIZE) {
+        errors.push("Fichier trop volumineux (max 1GB)");
     }
 
     return {

@@ -240,6 +240,279 @@ function hasMaximumDiscoverVisibility(user) {
     return plan === 'pro' && isPlanActiveForUser(user);
 }
 
+// Obtenir le plan requis pour une fonctionnalité
+function getRequiredPlanForFeature(feature) {
+    const featurePlans = {
+        'advanced_profile_customization': 'medium',
+        'full_profile_customization': 'pro',
+        'hd_streaming': 'pro',
+        'private_live': 'pro',
+        'advanced_collaboration': 'pro',
+        'realtime_analytics': 'pro',
+        'data_export': 'pro',
+        'maximum_visibility': 'pro'
+    };
+    return featurePlans[feature] || null;
+}
+
+// Obtenir le message de plan requis pour une fonctionnalité
+function getPlanRequiredMessage(feature) {
+    const messages = {
+        'advanced_profile_customization': {
+            title: 'Personnalisation avancée du profil',
+            required: 'Medium',
+            current: 'Standard',
+            message: 'Passez au plan Medium pour débloquer la personnalisation avancée du profil.'
+        },
+        'full_profile_customization': {
+            title: 'Personnalisation complète du profil',
+            required: 'Pro',
+            current: 'Standard ou Medium',
+            message: 'Passez au plan Pro pour débloquer la personnalisation complète du profil.'
+        },
+        'hd_streaming': {
+            title: 'Streaming HD',
+            required: 'Pro',
+            current: 'Standard ou Medium',
+            message: 'Passez au plan Pro pour débloquer le streaming en qualité HD.'
+        },
+        'private_live': {
+            title: 'Lives privés',
+            required: 'Pro',
+            current: 'Standard ou Medium',
+            message: 'Passez au plan Pro pour débloquer les lives privés réservés à vos followers.'
+        },
+        'advanced_collaboration': {
+            title: 'Outils de collaboration avancés',
+            required: 'Pro',
+            current: 'Standard ou Medium',
+            message: 'Passez au plan Pro pour débloquer les outils de collaboration avancés.'
+        },
+        'realtime_analytics': {
+            title: 'Statistiques en temps réel',
+            required: 'Pro',
+            current: 'Standard ou Medium',
+            message: 'Passez au plan Pro pour débloquer les statistiques en temps réel.'
+        },
+        'data_export': {
+            title: 'Export des données',
+            required: 'Pro',
+            current: 'Standard ou Medium',
+            message: 'Passez au plan Pro pour débloquer l\'export des données et rapports détaillés.'
+        },
+        'maximum_visibility': {
+            title: 'Visibilité maximale',
+            required: 'Pro',
+            current: 'Standard ou Medium',
+            message: 'Passez au plan Pro pour débloquer la visibilité maximale dans Discover.'
+        }
+    };
+    return messages[feature] || null;
+}
+
+// Vérifier si l'utilisateur peut activer une fonctionnalité (avec vérification de plan)
+function canActivateFeature(user, feature) {
+    const requiredPlan = getRequiredPlanForFeature(feature);
+    if (!requiredPlan) return true;
+    
+    const currentPlan = getNormalizedUserPlan(user);
+    const planHierarchy = ['free', 'standard', 'medium', 'pro'];
+    const requiredIndex = planHierarchy.indexOf(requiredPlan);
+    const currentIndex = planHierarchy.indexOf(currentPlan);
+    
+    return currentIndex >= requiredIndex && isPlanActiveForUser(user);
+}
+
+// Activer automatiquement les fonctionnalités Premium pour les utilisateurs avec abonnement actif
+async function autoEnablePremiumFeatures(userId) {
+    if (!userId) return { success: false, error: 'User ID manquant' };
+    
+    try {
+        // Récupérer le profil utilisateur actuel
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .single();
+        
+        if (userError) throw userError;
+        if (!user) return { success: false, error: 'Utilisateur non trouvé' };
+        
+        const plan = getNormalizedUserPlan(user);
+        const isActive = isPlanActiveForUser(user);
+        
+        if (!isActive) return { success: true, message: 'Plan inactif, aucune fonctionnalité activée' };
+        
+        // Préparer les mises à jour selon le plan
+        const updates = {
+            updated_at: new Date().toISOString()
+        };
+        
+        // Standard: déjà des fonctionnalités de base
+        if (plan === 'standard') {
+            // Standard n'a pas de fonctionnalités Premium supplémentaires
+        }
+        
+        // Medium: activer les fonctionnalités Medium
+        if (plan === 'medium') {
+            updates.advanced_profile_customization = true;
+            updates.priority_recommendations = true;
+        }
+        
+        // Pro: activer toutes les fonctionnalités
+        if (plan === 'pro') {
+            updates.advanced_profile_customization = true;
+            updates.full_profile_customization = true;
+            updates.hd_streaming = true;
+            updates.private_live = true;
+            updates.advanced_collab_tools = true;
+            updates.realtime_analytics = true;
+            updates.data_export = true;
+            updates.maximum_visibility = true;
+            updates.priority_recommendations = true;
+        }
+        
+        // Appliquer les mises à jour
+        const { data: updatedUser, error: updateError } = await supabase
+            .from('users')
+            .update(updates)
+            .eq('id', userId)
+            .select()
+            .single();
+        
+        if (updateError) throw updateError;
+        
+        console.log('Fonctionnalités Premium activées automatiquement pour:', userId, 'Plan:', plan);
+        
+        return { 
+            success: true, 
+            user: updatedUser,
+            activatedFeatures: updates 
+        };
+        
+    } catch (error) {
+        console.error('Erreur activation automatique premium:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Désactiver une fonctionnalité spécifique pour un utilisateur
+async function disablePremiumFeature(userId, feature) {
+    if (!userId || !feature) return { success: false, error: 'Paramètres manquants' };
+    
+    try {
+        const featureMap = {
+            'advanced_profile_customization': 'advanced_profile_customization',
+            'full_profile_customization': 'full_profile_customization',
+            'hd_streaming': 'hd_streaming',
+            'private_live': 'private_live',
+            'advanced_collaboration': 'advanced_collab_tools',
+            'realtime_analytics': 'realtime_analytics',
+            'data_export': 'data_export',
+            'maximum_visibility': 'maximum_visibility'
+        };
+        
+        const dbField = featureMap[feature];
+        if (!dbField) return { success: false, error: 'Fonctionnalité invalide' };
+        
+        const { data, error } = await supabase
+            .from('users')
+            .update({ 
+                [dbField]: false,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', userId)
+            .select()
+            .single();
+        
+        if (error) throw error;
+        
+        return { success: true, user: data };
+        
+    } catch (error) {
+        console.error('Erreur désactivation fonctionnalité:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Activer une fonctionnalité spécifique pour un utilisateur (si le plan le permet)
+async function enablePremiumFeature(userId, feature) {
+    if (!userId || !feature) return { success: false, error: 'Paramètres manquants' };
+    
+    try {
+        // Vérifier d'abord le plan
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .single();
+        
+        if (userError) throw userError;
+        
+        // Vérifier si l'utilisateur peut activer cette fonctionnalité
+        if (!canActivateFeature(user, feature)) {
+            const msg = getPlanRequiredMessage(feature);
+            return { 
+                success: false, 
+                error: msg?.message || 'Plan requis pour cette fonctionnalité' 
+            };
+        }
+        
+        const featureMap = {
+            'advanced_profile_customization': 'advanced_profile_customization',
+            'full_profile_customization': 'full_profile_customization',
+            'hd_streaming': 'hd_streaming',
+            'private_live': 'private_live',
+            'advanced_collaboration': 'advanced_collab_tools',
+            'realtime_analytics': 'realtime_analytics',
+            'data_export': 'data_export',
+            'maximum_visibility': 'maximum_visibility'
+        };
+        
+        const dbField = featureMap[feature];
+        if (!dbField) return { success: false, error: 'Fonctionnalité invalide' };
+        
+        const { data, error } = await supabase
+            .from('users')
+            .update({ 
+                [dbField]: true,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', userId)
+            .select()
+            .single();
+        
+        if (error) throw error;
+        
+        return { success: true, user: data };
+        
+    } catch (error) {
+        console.error('Erreur activation fonctionnalité:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Afficher le prompt de mise à niveau
+function showPlanUpgradePrompt(feature) {
+    const msg = getPlanRequiredMessage(feature);
+    if (!msg) return;
+    
+    if (window.ToastManager) {
+        ToastManager.info(
+            `${msg.title} - Plan ${msg.required} requis`,
+            msg.message,
+            8000
+        );
+    } else {
+        alert(`${msg.title}\n\n${msg.message}\n\nPlan actuel: ${msg.current}\nPlan requis: ${msg.required}`);
+    }
+    
+    // Optionnel: rediriger vers la page des plans
+    if (confirm(`Voulez-vous voir les plans disponibles pour débloquer "${msg.title}" ?`)) {
+        window.location.href = 'subscription-plans.html';
+    }
+}
+
 function getMonetizationFollowerGap(user) {
     return Math.max(0, 1000 - getFollowerCount(user));
 }
@@ -1071,6 +1344,13 @@ if (typeof window !== 'undefined') {
     window.hasRealtimeAnalytics = hasRealtimeAnalytics;
     window.hasDataExport = hasDataExport;
     window.hasMaximumDiscoverVisibility = hasMaximumDiscoverVisibility;
+    window.getRequiredPlanForFeature = getRequiredPlanForFeature;
+    window.getPlanRequiredMessage = getPlanRequiredMessage;
+    window.canActivateFeature = canActivateFeature;
+    window.showPlanUpgradePrompt = showPlanUpgradePrompt;
+    window.autoEnablePremiumFeatures = autoEnablePremiumFeatures;
+    window.disablePremiumFeature = disablePremiumFeature;
+    window.enablePremiumFeature = enablePremiumFeature;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -1103,7 +1383,7 @@ if (typeof module !== 'undefined' && module.exports) {
         renderPlanBadge,
         renderSupportButton,
         renderSupportAmounts,
-        // Nouvelles fonctions de vérification des fonctionnalités
+        // Fonctions de vérification des fonctionnalités
         hasAdvancedProfileCustomization,
         hasFullProfileCustomization,
         hasHDStreaming,
@@ -1111,6 +1391,11 @@ if (typeof module !== 'undefined' && module.exports) {
         hasAdvancedCollaborationTools,
         hasRealtimeAnalytics,
         hasDataExport,
-        hasMaximumDiscoverVisibility
+        hasMaximumDiscoverVisibility,
+        // Nouvelles fonctions de gestion des plans
+        getRequiredPlanForFeature,
+        getPlanRequiredMessage,
+        canActivateFeature,
+        showPlanUpgradePrompt
     };
 }

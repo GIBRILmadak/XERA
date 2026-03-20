@@ -478,7 +478,7 @@ function handleEmailBadgeClick(email, el) {
    INTERFACE RÉGLAGES - RENDU
    ======================================== */
 
-// Générer l'interface de réglages 
+// Générer l'interface de réglages avec accordéon
 function renderSettingsModal(userId) {
     const user = getUser(userId);
     if (!user) return '';
@@ -522,143 +522,202 @@ function renderSettingsModal(userId) {
         `;
     }).join('');
 
-    const themeButtonText = isLightMode() ? '🌙 Passer en mode sombre' : '☀️ Passer en mode clair';
+    const themeButtonText = isLightMode() ? '🌙 Mode Sombre' : '☀️ Mode Clair';
 
     return `
         <div class="settings-header">
             <h2>Paramètres</h2>
-            <p>Ajustez les détails de votre trajectoire publique.</p>
         </div>
 
         <form id="settingsForm-${userId}" onsubmit="return handleSettingsSave('${userId}')" novalidate>
-            <!-- SECTION IDENTITÉ -->
-            <div class="settings-section">
-                <h3>Identité Visuelle</h3>
-                
-                <div class="form-group">
-                    <label>Avatar</label>
-                    <div class="upload-zone">
-                        <img id="avatarPreview-${userId}" src="${data.avatar}" class="preview-avatar-circle" alt="Avatar" onclick="document.getElementById('avatarUpload-${userId}').click()">
-                        <div>
-                            <label for="avatarUpload-${userId}" class="custom-file-upload">
-                                Parcourir les fichiers
-                            </label>
-                            <input 
-                                id="avatarUpload-${userId}" 
-                                type="file" 
-                                accept="image/*" 
-                                onchange="(function(input) { 
-                                    const reader = new FileReader();
-                                    reader.onload = function(e) {
-                                        userEditData['${userId}'].avatar = e.target.result;
-                                        handleImagePreview(input, 'avatarPreview-${userId}');
-                                    };
-                                    if(input.files[0]) reader.readAsDataURL(input.files[0]);
-                                })(this)"
-                            />
-                            <div class="form-hint">Format carré recommandé. Max 2MB.</div>
-                        </div>
+            <!-- SECTION COMPTE -->
+            <div class="accordion-section">
+                <button type="button" class="accordion-header" onclick="toggleAccordion(this)">
+                    <div class="accordion-title">
+                        <img src="./icons/reglages.svg" alt="Compte" class="accordion-icon">
+                        <span>Compte</span>
                     </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Bannière de profil</label>
-                    <img id="bannerPreview-${userId}" src="${data.banner}" class="preview-banner-rect" alt="Bannière" onclick="document.getElementById('bannerUpload-${userId}').click()">
-                    <label for="bannerUpload-${userId}" class="custom-file-upload">
-                        Importer une image
-                    </label>
-                    <input 
-                        id="bannerUpload-${userId}" 
-                        type="file" 
-                        accept="image/*" 
-                        onchange="(function(input) { 
-                            const reader = new FileReader();
-                            reader.onload = function(e) {
-                                userEditData['${userId}'].banner = e.target.result;
-                                handleImagePreview(input, 'bannerPreview-${userId}');
-                            };
-                            if(input.files[0]) reader.readAsDataURL(input.files[0]);
-                        })(this)"
-                    />
-                </div>
-
-                <div class="form-group">
-                    <label>Nom public</label>
-                    <input 
-                        type="text" 
-                        class="form-input"
-                        value="${data.name}"
-                        placeholder="Ex: Jean Dupont"
-                        onchange="userEditData['${userId}'].name = this.value"
-                        maxlength="50"
-                        required
-                    >
-                </div>
-
-                <div class="form-group">
-                    <label>Bio courte</label>
-                    <textarea 
-                        class="form-input"
-                        rows="2"
-                        maxlength="120"
-                        placeholder="Une phrase qui définit votre travail..."
-                        onchange="userEditData['${userId}'].bio = this.value"
-                    >${data.bio}</textarea>
-                    <div class="form-hint">Restez concis. Max 120 caractères.</div>
+                    <svg class="accordion-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+                <div class="accordion-content">
+                    <div class="form-group">
+                        <label>Nom public</label>
+                        <input 
+                            type="text" 
+                            class="form-input"
+                            value="${data.name}"
+                            placeholder="Ex: Jean Dupont"
+                            onchange="userEditData['${userId}'].name = this.value"
+                            maxlength="50"
+                            required
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label>Bio courte</label>
+                        <textarea 
+                            class="form-input"
+                            rows="2"
+                            maxlength="120"
+                            placeholder="Une phrase qui définit votre travail..."
+                            onchange="userEditData['${userId}'].bio = this.value"
+                        >${data.bio}</textarea>
+                    </div>
                 </div>
             </div>
 
-            <!-- SECTION LIENS -->
-            <details class="settings-section settings-collapsible" open>
-                <summary>Réseaux & Liens</summary>
-                <div class="settings-collapsible-body">
-                    <p>Connectez vos autres espaces pour offrir plus de contexte à votre progression.</p>
-                    
-                    ${socialLinksHtml}
-
-                    <div class="consent-label">
-                        Les modifications sont instantanées dès la validation.
+            <!-- SECTION IDENTITÉ VISUELLE -->
+            <div class="accordion-section">
+                <button type="button" class="accordion-header" onclick="toggleAccordion(this)">
+                    <div class="accordion-title">
+                        <img src="./icons/camera.svg" alt="Identité" class="accordion-icon">
+                        <span>Identité Visuelle</span>
+                    </div>
+                    <svg class="accordion-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+                <div class="accordion-content">
+                    <div class="form-group">
+                        <label>Avatar</label>
+                        <div class="upload-zone">
+                            <img id="avatarPreview-${userId}" src="${data.avatar}" class="preview-avatar-circle" alt="Avatar" onclick="document.getElementById('avatarUpload-${userId}').click()">
+                            <div>
+                                <label for="avatarUpload-${userId}" class="custom-file-upload">
+                                    Parcourir
+                                </label>
+                                <input 
+                                    id="avatarUpload-${userId}" 
+                                    type="file" 
+                                    accept="image/*" 
+                                    onchange="(function(input) { 
+                                        const reader = new FileReader();
+                                        reader.onload = function(e) {
+                                            userEditData['${userId}'].avatar = e.target.result;
+                                            handleImagePreview(input, 'avatarPreview-${userId}');
+                                        };
+                                        if(input.files[0]) reader.readAsDataURL(input.files[0]);
+                                    })(this)"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Bannière</label>
+                        <img id="bannerPreview-${userId}" src="${data.banner}" class="preview-banner-rect" alt="Bannière" onclick="document.getElementById('bannerUpload-${userId}').click()">
+                        <label for="bannerUpload-${userId}" class="custom-file-upload">
+                            Importer
+                        </label>
+                        <input 
+                            id="bannerUpload-${userId}" 
+                            type="file" 
+                            accept="image/*" 
+                            onchange="(function(input) { 
+                                const reader = new FileReader();
+                                reader.onload = function(e) {
+                                    userEditData['${userId}'].banner = e.target.result;
+                                    handleImagePreview(input, 'bannerPreview-${userId}');
+                                };
+                                if(input.files[0]) reader.readAsDataURL(input.files[0]);
+                            })(this)"
+                        />
                     </div>
                 </div>
-            </details>
+            </div>
 
-            <!-- SECTION THÈME -->
-            <div class="settings-section">
-                <h3>Apparence</h3>
-                <div class="form-group">
-                    <label>Mode sombre/clair</label>
-                    <button 
-                        type="button" 
-                        class="btn-theme-toggle"
-                        id="theme-toggle-btn"
-                        onclick="toggleTheme()"
-                    >
-                        ${themeButtonText}
-                    </button>
-                    <div class="form-hint">Choisissez votre thème préféré pour une meilleure lisibilité.</div>
+            <!-- SECTION RÉSEAUX -->
+            <div class="accordion-section">
+                <button type="button" class="accordion-header" onclick="toggleAccordion(this)">
+                    <div class="accordion-title">
+                        <img src="./icons/link.svg" alt="Réseaux" class="accordion-icon">
+                        <span>Réseaux & Liens</span>
+                    </div>
+                    <svg class="accordion-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+                <div class="accordion-content">
+                    <p class="section-desc">Connectez vos autres espaces.</p>
+                    ${socialLinksHtml}
+                </div>
+            </div>
+
+            <!-- SECTION APPARENCE -->
+            <div class="accordion-section">
+                <button type="button" class="accordion-header" onclick="toggleAccordion(this)">
+                    <div class="accordion-title">
+                        <img src="./icons/sun.svg" alt="Apparence" class="accordion-icon">
+                        <span>Apparence</span>
+                    </div>
+                    <svg class="accordion-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+                <div class="accordion-content">
+                    <div class="form-group">
+                        <label>Thème</label>
+                        <button 
+                            type="button" 
+                            class="btn-theme-toggle"
+                            id="theme-toggle-btn"
+                            onclick="toggleTheme()"
+                        >
+                            ${themeButtonText}
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <!-- SECTION LANGUE -->
-            <div class="settings-section">
-                <h3>Langue</h3>
-                <div class="form-group">
-                    <label for="lang-select">Choisissez votre langue</label>
-                    <select id="lang-select" class="lang-select">
-                        <option value="en">English (US)</option>
-                        <option value="fr">Français</option>
-                    </select>
-                    <div class="form-hint">La langue est aussi détectée automatiquement selon votre localisation.</div>
+            <div class="accordion-section">
+                <button type="button" class="accordion-header" onclick="toggleAccordion(this)">
+                    <div class="accordion-title">
+                        <img src="./icons/email.svg" alt="Langue" class="accordion-icon">
+                        <span>Langue</span>
+                    </div>
+                    <svg class="accordion-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+                <div class="accordion-content">
+                    <div class="form-group">
+                        <label for="lang-select">Langue de l'interface</label>
+                        <select id="lang-select" class="lang-select">
+                            <option value="en">English (US)</option>
+                            <option value="fr">Français</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
             <!-- ACTIONS -->
             <div class="actions-bar">
-                <button type="submit" class="btn-save">Mettre à jour</button>
-                <button type="button" class="btn-cancel" onclick="closeSettings()">Ignorer</button>
+                <button type="submit" class="btn-save">Enregistrer</button>
+                <button type="button" class="btn-cancel" onclick="closeSettings()">Annuler</button>
             </div>
         </form>
     `;
+}
+
+// Fonction pour basculer l'accordéon
+function toggleAccordion(header) {
+    const section = header.parentElement;
+    const content = section.querySelector('.accordion-content');
+    const arrow = header.querySelector('.accordion-arrow');
+    const isOpen = section.classList.contains('active');
+    
+    if (isOpen) {
+        // Fermer la section
+        content.style.maxHeight = '0';
+        content.style.opacity = '0';
+        section.classList.remove('active');
+    } else {
+        // Ouvrir la section
+        content.style.maxHeight = content.scrollHeight + 'px';
+        content.style.opacity = '1';
+        section.classList.add('active');
+    }
 }
 
 // Gérer l'aperçu d'image

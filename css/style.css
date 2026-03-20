@@ -3741,13 +3741,13 @@ input[type="text"]:focus, input[type="url"]:focus, textarea:focus, .form-input:f
     display: flex;
     align-items: flex-start; /* allow scrolling to the very top */
     justify-content: center;
+    animation: none;
 }
 
 .settings-container {
     max-width: 700px;
     margin: 0 auto;
     padding: 3rem 1.5rem;
-    animation: fadeInSettings 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Limiter la hauteur de la boîte et activer le scroll interne */
@@ -4008,6 +4008,138 @@ input[type="text"]:focus, input[type="url"]:focus, textarea:focus, .form-input:f
     padding: 0 2.5rem 2.5rem;
 }
 
+/* --- SYSTÈME D'ACCORDÉON POUR PARAMÈTRES --- */
+.accordion-section {
+    background: #0c0c0c;
+    border: 1px solid #1a1a1a;
+    border-radius: 16px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.accordion-section:hover {
+    border-color: #2a2a2a;
+}
+
+.accordion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    width: 100%;
+    text-align: left;
+    color: #f5f5f5;
+    transition: background 0.2s ease;
+}
+
+.accordion-header:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.accordion-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.accordion-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 10px;
+}
+
+.accordion-icon svg,
+.accordion-icon img {
+    width: 20px;
+    height: 20px;
+    stroke: #fff;
+    stroke-width: 2;
+    fill: none;
+    object-fit: contain;
+}
+
+.accordion-title span {
+    font-family: var(--font-heading);
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.accordion-arrow {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease;
+    flex-shrink: 0;
+}
+
+.accordion-arrow svg {
+    width: 16px;
+    height: 16px;
+    stroke: #777;
+    stroke-width: 2.5;
+    fill: none;
+}
+
+.accordion-section.active .accordion-arrow {
+    transform: rotate(180deg);
+    background: rgba(255,255,255,0.08);
+}
+
+.accordion-section.active .accordion-arrow svg {
+    stroke: #fff;
+}
+
+.accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    opacity: 0;
+}
+
+.accordion-section.active .accordion-content {
+    max-height: 2000px;
+    opacity: 1;
+}
+
+.accordion-body {
+    padding: 0 1.5rem 1.5rem;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    margin-top: 0;
+    padding-top: 1.5rem;
+}
+
+/* Form groups within accordion */
+.accordion-body .form-group {
+    margin-bottom: 1.5rem;
+}
+
+.accordion-body .form-group:last-child {
+    margin-bottom: 0;
+}
+
+/* Section description */
+.section-desc {
+    color: #666;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+/* --- FORMULAIRES AMÉLIORÉS --- */
 .form-group {
     margin-bottom: 1.75rem;
 }
@@ -4500,13 +4632,153 @@ html.light-mode .btn-theme-toggle:hover {
     top: calc(2rem + 5cm);
 }
 
+/* --- MOBILE FULLSCREEN POUR PARAMÈTRES --- */
 @media (max-width: 768px) {
+    #settings-modal {
+        padding: 0;
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        align-items: flex-end;
+        border-radius: 0;
+    }
+
+    #settings-modal.active {
+        align-items: flex-end;
+    }
+
     .settings-container {
-        padding: 2rem 1rem;
+        width: 100%;
+        max-width: 100%;
+        height: 100%;
+        max-height: 100%;
+        padding: 1.5rem;
+        padding-top: 1rem;
+        border-radius: 24px 24px 0 0;
+        animation: slideUpMobile 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        overflow-y: scroll;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    @keyframes slideUpMobile {
+        from {
+            opacity: 0;
+            transform: translateY(100%);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Hide scrollbar but keep functionality */
+    .settings-container::-webkit-scrollbar {
+        display: none;
+    }
+
+    .settings-header {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #1a1a1a;
+        position: sticky;
+        top: 0;
+        background: #050505;
+        z-index: 10;
+        margin: -1.5rem -1.5rem 1.5rem;
+        padding: 1rem 1.5rem;
+    }
+
+    .settings-header h2 {
+        font-size: 1.5rem;
+    }
+
+    .settings-header p {
+        font-size: 0.9rem;
     }
 
     .settings-section {
-        padding: 1.5rem;
+        padding: 1.25rem;
+        border-radius: 14px;
+        margin-bottom: 1rem;
+    }
+
+    /* Accordion mobile styles */
+    .accordion-header {
+        padding: 1rem 1.25rem;
+    }
+
+    .accordion-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        padding: 8px;
+    }
+
+    .accordion-icon svg,
+    .accordion-icon img {
+        width: 18px;
+        height: 18px;
+    }
+
+    .accordion-title span {
+        font-size: 1rem;
+    }
+
+    .accordion-body {
+        padding: 0 1.25rem 1.25rem;
+        padding-top: 1.25rem;
+    }
+
+    /* Form inputs full width on mobile */
+    .form-group {
+        margin-bottom: 1.25rem;
+    }
+
+    .form-group label {
+        font-size: 0.7rem;
+    }
+
+    .form-input {
+        padding: 0.8rem 1rem;
+        font-size: 1rem;
+    }
+
+    .actions-bar {
+        flex-direction: column;
+        gap: 0.75rem;
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+    }
+
+    .btn-save, .btn-cancel {
+        width: 100%;
+        padding: 1rem;
+        font-size: 1rem;
+    }
+
+    .upload-zone {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .preview-avatar-circle {
+        width: 80px;
+        height: 80px;
+        border-radius: 20px;
+    }
+
+    .preview-banner-rect {
+        height: 120px;
+    }
+
+    .btn-settings-profile {
+        top: 0.75rem;
+        right: 0.75rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    .btn-settings-profile svg {
+        width: 14px;
+        height: 14px;
     }
 
     .upload-zone {
