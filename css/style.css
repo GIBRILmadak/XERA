@@ -1569,6 +1569,35 @@ nav {
     }
 }
 
+@media (max-width: 600px) {
+    .immersive-post {
+        padding: 0;
+    }
+    .post-content-wrap {
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        border-radius: 0 !important;
+        border: none !important;
+        aspect-ratio: auto !important;
+    }
+    .post-info {
+        padding: 4rem 1.2rem calc(1.2rem + env(safe-area-inset-bottom)) !important;
+    }
+    .close-immersive {
+        top: calc(10px + env(safe-area-inset-top));
+        right: 15px;
+        background: rgba(0,0,0,0.3);
+        backdrop-filter: blur(4px);
+    }
+    .post-content-wrap > img,
+    .post-content-wrap > video,
+    .post-content-wrap .immersive-video {
+        object-fit: cover !important;
+    }
+}
+
 #immersive-overlay::-webkit-scrollbar {
     width: 0;
     height: 0;
