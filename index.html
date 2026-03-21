@@ -210,22 +210,22 @@
             <div class="container hero-grid">
                 <div class="hero-copy">
                     <p class="hero-eyebrow" data-i18n="heroEyebrow">
-                        TRACK YOUR GOALS WITH ARCS
+                        TRACK YOUR GOALS WITH projets
                     </p>
                     <h1 class="hero-title" data-i18n="heroTitle">
                         Transform ideas into results.
                     </h1>
                     <p class="hero-lede" data-i18n="heroLede">
-                        Create goal ARCs, log daily traces, watch your trajectory dashboard grow.
+                        Create goal projets, log daily updates, watch your trajectory dashboard grow.
                     </p>
                     <ul class="hero-bullets" id="hero-bullets">
-                        <li data-i18n="heroBullet1">Create goal ARCs (start-to-finish plans)</li>
-                        <li data-i18n="heroBullet2">Log daily traces with proof, not dopamine feeds</li>
+                        <li data-i18n="heroBullet1">Create goal projets (start-to-finish plans)</li>
+                        <li data-i18n="heroBullet2">Log daily updates with proof, not dopamine feeds</li>
                         <li data-i18n="heroBullet3">See your trajectory dashboard climb in real time</li>
                     </ul>
                     <div class="hero-actions">
                         <button class="btn btn-primary btn-large" id="hero-start-btn" data-i18n="heroCTA">
-                            Start your first ARC
+                            Start your first project
                         </button>
                         <button class="btn btn-ghost hero-secondary" id="hero-watch-btn">
                             <span data-i18n="heroWatch">Watch 60s demo</span>
@@ -234,10 +234,10 @@
                             </svg>
                         </button>
                     </div>
-                    <p class="hero-meta" data-i18n="heroMeta">ARC creation → trace logging → dashboard.</p>
+                    <p class="hero-meta" data-i18n="heroMeta">projet creation → trace logging → dashboard.</p>
                     <div class="hero-mobile-demo-card">
                         <strong>How it works</strong>
-                        <p>30s pour comprendre ARC → Trace → Dashboard.</p>
+                        <p>30s pour comprendre projet → mise à jour → Dashboard.</p>
                         <button class="btn btn-ghost" type="button" onclick="window.scrollTo({top: document.getElementById('discover')?.offsetTop || 0, behavior: 'smooth'})">Voir des exemples</button>
                     </div>
                 </div>
@@ -263,7 +263,7 @@
                         </div>
                     </div>
                     <p class="hero-footnote" data-i18n="heroFootnote">
-                        Trimmed to the essentials: ARC creation → trace logging → dashboard.
+                        Trimmed to the essentials: projet creation → trace logging → dashboard.
                     </p>
                 </div>
             </div>
@@ -386,9 +386,9 @@
         
         <!-- BOUTON RÉGLAGES (FIXED POSITION) -->
         <div id="settings-button-container"></div>
-        <!-- Bouton flottant pour publier une trace -->
+        <!-- Bouton flottant pour publier une mise à jour -->
         <div id="floating-create-container">
-            <button id="floating-create-btn" class="btn-add" title="Publier une trace">
+            <button id="floating-create-btn" class="btn-add" title="Publier une mise à jour">
                 <img src="icons/plus.svg" alt="Publier">
             </button>
         </div>
@@ -455,7 +455,7 @@
                 if (floatingBtn) {
                     floatingBtn.addEventListener("click", () => {
                         if (!window.currentUser) {
-                            alert("Connectez-vous pour publier une trace.");
+                            alert("Connectez-vous pour publier une mise à jour.");
                             return;
                         }
                         if (typeof window.openCreateMenu === "function") {

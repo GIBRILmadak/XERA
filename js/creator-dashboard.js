@@ -1211,7 +1211,7 @@ async function loadVideoStats(userId) {
                     userId;
                 if (!uid) {
                     console.warn(
-                        "Impossible de déterminer l’utilisateur courant pour créer une trace.",
+                        "Impossible de déterminer l’utilisateur courant pour créer une mise à jour.",
                     );
                     return;
                 }

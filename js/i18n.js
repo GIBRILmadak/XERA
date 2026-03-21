@@ -24,43 +24,45 @@
             navDiscover: "Discover",
             navProfile: "My Trajectory",
             navAuth: "Login / Register",
-            heroEyebrow: "TRACK YOUR GOALS WITH ARCS",
+            heroEyebrow: "TRACK YOUR GOALS WITH PROJECTS",
             heroTitle: "Transform ideas into results.",
             heroLede:
-                "Create goal ARCs, log daily traces, watch your trajectory dashboard grow.",
-            heroBullet1: "Create goal ARCs (start-to-finish plans)",
-            heroBullet2: "Log daily traces with proof, not dopamine feeds",
+                "Create goal projects, log daily updates, watch your trajectory dashboard grow.",
+            heroBullet1: "Create goal projects (start-to-finish plans)",
+            heroBullet2: "Log daily updates with proof, not dopamine feeds",
             heroBullet3: "See your trajectory dashboard climb in real time",
-            heroCTA: "Start your first ARC",
+            heroCTA: "Start your first project",
             heroWatch: "Watch 60s demo",
-            heroMeta: "ARC creation → trace logging → dashboard.",
+            heroMeta: "Project creation → update logging → dashboard.",
             heroBadge: "60s demo preview",
             heroFootnote:
-                "Trimmed to the essentials: ARC creation → trace logging → dashboard.",
+                "Trimmed to the essentials: Project creation → update logging → dashboard.",
             discoverTitle: "In motion",
             discoverSub: "Tap to dive into a trajectory.",
-            searchPlaceholder: "Search creators or ARCs",
+            searchPlaceholder: "Search creators or projects",
         },
         fr: {
             navDiscover: "Découvrir",
             navProfile: "Ma Trajectoire",
             navAuth: "Connexion / Inscription",
-            heroEyebrow: "SUIVEZ VOS OBJECTIFS AVEC LES ARCS",
+            heroEyebrow: "SUIVEZ VOS OBJECTIFS AVEC LES PROJETS",
             heroTitle: "Transformez vos idées en résultats.",
             heroLede:
-                "Créez des ARCs objectifs, consignez des traces quotidiennes, voyez votre trajectoire grandir.",
-            heroBullet1: "Créez des ARCs (plans du début à la fin)",
-            heroBullet2: "Consignez des traces quotidiennes avec preuves, sans feeds dopaminés",
+                "Créez des projets objectifs, consignez des mises à jour quotidiennes, voyez votre trajectoire grandir.",
+            heroBullet1: "Créez des projets (plans du début à la fin)",
+            heroBullet2:
+                "Consignez des mises à jour quotidiennes avec preuves, sans feeds dopaminés",
             heroBullet3: "Voyez votre tableau de trajectoire monter en direct",
-            heroCTA: "Lancez votre premier ARC",
+            heroCTA: "Lancez votre premier projet",
             heroWatch: "Voir la démo 60s",
-            heroMeta: "Création d'ARC → trace quotidienne → tableau de bord.",
+            heroMeta:
+                "Création de projet → mise à jour quotidienne → tableau de bord.",
             heroBadge: "Aperçu démo 60s",
             heroFootnote:
-                "Essentiels : création ARC → trace → dashboard.",
+                "Essentiels : création projet → mise à jour → dashboard.",
             discoverTitle: "En mouvement",
             discoverSub: "Cliquez pour plonger dans une trajectoire.",
-            searchPlaceholder: "Recherchez des créateurs ou des ARCs",
+            searchPlaceholder: "Recherchez des créateurs ou des projets",
         },
     };
 
@@ -103,9 +105,9 @@
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), GEO_TIMEOUT_MS);
         try {
-        const res = await fetch("https://ipapi.co/json/", {
-            signal: controller.signal,
-        });
+            const res = await fetch("https://ipapi.co/json/", {
+                signal: controller.signal,
+            });
             clearTimeout(timer);
             if (!res.ok) return null;
             const data = await res.json();

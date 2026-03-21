@@ -1,75 +1,5 @@
 // --- ARCS MODULE ---
 
-const ARC_HOOKS = [
-    "30 jours pour devenir développeur frontend",
-    "Créer une app utilisée par 100 personnes",
-    "De zéro à premier client payant",
-    "Lancer un SaaS en 30 jours",
-    "Apprendre le code sans diplôme",
-    "Construire un produit chaque jour pendant 14 jours",
-    "Créer une startup sans lever de fonds",
-    "Vivre de l’internet sans être connu",
-    "Mon premier revenu en ligne",
-    "Créer un produit open-source utile",
-    "Passer de freelance à fondateur",
-    "Apprendre l’IA sans maths",
-    "Mon premier bug en production (et comment je l’ai réparé)",
-    "De simple idée à produit réel",
-    "Poster tous les jours pendant 30 jours",
-    "De 0 vue à une communauté",
-    "Créer du contenu sans montrer son visage",
-    "De l’ombre à l’algorithme",
-    "Apprendre à parler devant une caméra",
-    "Construire une audience sans trends",
-    "Faire du contenu utile, pas viral",
-    "De créateur invisible à créateur régulier",
-    "Trouver sa voix sur internet",
-    "Créer sans pression de performance",
-    "Vivre de ma musique",
-    "Sortir un projet musical complet",
-    "Créer une prod par jour",
-    "Apprendre la MAO de zéro",
-    "Publier sans avoir peur du regard",
-    "Composer un EP en 30 jours",
-    "De chambre à Spotify",
-    "Reprendre confiance en ma créativité",
-    "Créer sans validation extérieure",
-    "Finir Hollow Knight en no-hit",
-    "Terminer Dark Souls sans mourir",
-    "De joueur casual à joueur discipliné",
-    "Créer mon premier jeu vidéo",
-    "Apprendre Unity de zéro",
-    "De gamer à game dev",
-    "Finir un jeu que j’ai abandonné",
-    "Speedrun mon jeu préféré",
-    "Créer un boss from scratch",
-    "Reprendre le contrôle de ma vie",
-    "30 jours sans procrastiner",
-    "Me lever à 5h pendant 21 jours",
-    "Construire une routine solide",
-    "Apprendre à être constant",
-    "Sortir du chaos",
-    "Tenir une promesse que je me fais",
-    "De bordel mental à clarté",
-    "Redevenir fiable envers moi-même",
-    "Perdre 10kg",
-    "Reprendre le sport après des années",
-    "Transformer mon corps sans salle",
-    "30 jours sans sucre",
-    "Courir 5km sans m’arrêter",
-    "Construire une discipline physique",
-    "Me sentir bien dans mon corps",
-    "Passer de fatigué à énergique",
-    "Documenter plutôt que réussir",
-    "Construire en public, sans filtre",
-    "Mon parcours, pas mon résultat",
-    "Je ne suis pas encore arrivé",
-    "Apprendre à échouer proprement",
-    "Rendre visible l’effort",
-    "Devenir quelqu’un, pas juste réussir",
-    "Mon chaos en version documentée"
-];
-
 const ARC_STAGE_OPTIONS = [
     { value: "idee", label: "Idée" },
     { value: "prototype", label: "Prototype" },
@@ -172,8 +102,8 @@ function renderArcCreationForm(arcToEdit = null) {
     if (!createContainer) return;
 
     const isEdit = !!arcToEdit;
-    const title = isEdit ? 'Modifier votre ARC' : 'Démarrez votre transformation';
-    const btnText = isEdit ? 'Mettre à jour' : 'Lancer l\'ARC';
+    const title = isEdit ? 'Modifier votre projet' : 'Démarrez votre projet';
+    const btnText = isEdit ? 'Mettre à jour' : 'Lancer le projet';
     const defaultStageLevel = normalizeArcStageLevel(
         isEdit ? arcToEdit.stage_level : "idee",
     );
@@ -205,14 +135,14 @@ function renderArcCreationForm(arcToEdit = null) {
     createContainer.innerHTML = `
         <div class="arc-creation-header">
             <h2>${title}</h2>
-            <p>Qu'est-ce qu'un ARC ? Un conteneur d'objectifs reliant vos traces quotidiennes à votre résultat.</p>
+            <p>Qu'est-ce qu'un Projet ? Un conteneur d'objectifs reliant vos mises à jour quotidiennes à votre résultat.</p>
         </div>
 
         <form id="create-arc-form" class="arc-form">
             ${isEdit ? `<input type="hidden" name="arc_id" value="${arcToEdit.id}">` : ''}
             
             <div class="form-group">
-                <label for="arc-title">Titre de votre ARC *</label>
+                <label for="arc-title">Titre de votre projet *</label>
                 <input type="text" id="arc-title" name="title" placeholder="Ex: 30 jours pour..." required class="form-input large-input" value="${isEdit ? escapeHtml(arcToEdit.title) : ''}">
             </div>
 
@@ -263,7 +193,7 @@ function renderArcCreationForm(arcToEdit = null) {
             </div>
 
             <div class="form-group">
-                <label>Couverture de l'ARC (Image ou Vidéo)</label>
+                <label>Couverture du projet (Image ou Vidéo)</label>
                 <div id="arc-cover-upload-container">
                     <div class="upload-zone" id="arc-cover-dropzone" style="border: 2px dashed var(--border-color); padding: 2rem; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.3s ease; background: rgba(255,255,255,0.02);">
                         <div id="arc-cover-preview-container" style="${isEdit && arcToEdit.media_url ? 'display: block;' : 'display: none;'} margin-bottom: 1rem;">
@@ -458,7 +388,7 @@ window.openCreateModal = openCreateModal;
 
 function openEditArcModal(arc) {
     if (!arc || !arc.id) {
-        alert("Impossible d'ouvrir la modification de cet ARC.");
+        alert("Impossible d'ouvrir la modification de ce projet.");
         return;
     }
     renderArcCreationForm(arc);
@@ -472,7 +402,7 @@ function openEditArcModal(arc) {
 function openArcEditFromDetails() {
     const arcToEdit = window.currentArc;
     if (!arcToEdit || !arcToEdit.id) {
-        alert("Impossible de charger cet ARC pour modification.");
+        alert("Impossible de charger ce projet pour modification.");
         return;
     }
 
@@ -529,7 +459,7 @@ function buildArcLaunchTracePayload(arcData, authUserId, arcId) {
     const descriptionParts = [];
     if (goal) descriptionParts.push(`Objectif: ${goal}`);
     if (details) descriptionParts.push(details);
-    const baseDescription = descriptionParts.join('\n\n').trim() || "Debut d'un nouvel ARC.";
+    const baseDescription = descriptionParts.join('\n\n').trim() || "Début d'un nouveau projet.";
 
     const hasMedia = !!arcData?.media_url;
     const mediaType = String(arcData?.media_type || '').toLowerCase();
@@ -543,7 +473,7 @@ function buildArcLaunchTracePayload(arcData, authUserId, arcId) {
         dayNumber: 0,
         type: contentType,
         state: 'pause',
-        title: `NOUVEL ARC: ${safeTitle}`,
+        title: `NOUVEAU PROJET: ${safeTitle}`,
         description: baseDescription,
         mediaUrl: hasMedia ? arcData.media_url : null,
         mediaUrls: hasMedia ? [arcData.media_url] : []
@@ -581,7 +511,7 @@ async function createArcLaunchTrace(arcRow, arcData, authUser) {
         if (error) throw error;
         return data || null;
     } catch (error) {
-        console.warn('ARC launch trace creation failed:', error);
+        console.warn('ARC launch update creation failed:', error);
         return null;
     }
 }
@@ -658,7 +588,7 @@ async function handleCreateArc(e) {
 
     const authUser = await getArcAuthUser();
     if (!authUser) {
-        alert("Vous devez être connecté pour créer un ARC.");
+        alert("Vous devez être connecté pour créer un projet.");
         return;
     }
 
@@ -791,7 +721,7 @@ async function handleCreateArc(e) {
             }).catch((e) => console.warn("notifyFollowersOfArcStart error", e));
         }
 
-        alert(arcId ? "ARC mis à jour avec succès !" : "ARC créé avec succès !");
+        alert(arcId ? "Projet mis à jour avec succès !" : "Projet créé avec succès !");
         closeCreateModal();
         e.target.reset();
 
@@ -808,7 +738,7 @@ async function handleCreateArc(e) {
         console.error('Error saving ARC:', error);
         const msg = error?.message || String(error || "");
         const code = error?.code ? ` (${error.code})` : "";
-        alert(`Erreur lors de l'enregistrement de l'ARC${code}: ${msg}`);
+        alert(`Erreur lors de l'enregistrement du projet${code}: ${msg}`);
     } finally {
         btn.disabled = false;
         btn.textContent = originalText;
@@ -932,7 +862,7 @@ async function loadUserArcs(userId) {
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                     </svg>
-                    ARCs en cours
+                    Projets en cours
                 </h3>
                 <div class="arcs-grid">
                     ${arcs.map(arc => {
@@ -1163,19 +1093,19 @@ function renderArcDetails(arc, followersCount, isFollowing, content) {
         }
         // Always allow deletion
         actionButtons += `
-            <button class="btn btn-ghost" style="color:var(--failure); border-color:var(--failure); margin-top:1rem;" onclick="deleteArc('${arc.id}')">Supprimer l'ARC</button>
+            <button class="btn btn-ghost" style="color:var(--failure); border-color:var(--failure); margin-top:1rem;" onclick="deleteArc('${arc.id}')">Supprimer le projet</button>
         `;
     } else if (currentUser) {
         actionButtons = `
             <button class="btn ${isFollowing ? 'btn-ghost' : 'btn-primary'}" onclick="toggleFollowArc('${arc.id}')">
-                ${isFollowing ? 'Ne plus suivre' : 'Suivre cet ARC'}
+                ${isFollowing ? 'Ne plus suivre' : 'Suivre ce projet'}
             </button>
         `;
     }
 
     const contentHtml = content && content.length > 0 
         ? `<div class="arc-content-grid">${content.map(c => createContentCardSimple(c, isOwner)).join('')}</div>`
-        : `<p style="text-align:center; opacity:0.6; margin-top:2rem;">Aucune trace pour le moment.</p>`;
+        : `<p style="text-align:center; opacity:0.6; margin-top:2rem;">Aucune mise à jour pour le moment.</p>`;
 
     overlay.innerHTML = `
         <div class="arc-details-container" style="max-width: 800px; margin: 0 auto; padding: 2rem; padding-bottom: 100px;">
@@ -1261,7 +1191,7 @@ function createContentCardSimple(content, isOwner) {
 
 async function toggleFollowArc(arcId) {
     if (!currentUser) {
-        alert("Connectez-vous pour suivre un ARC.");
+        alert("Connectez-vous pour suivre un projet.");
         return;
     }
 
@@ -1294,7 +1224,7 @@ async function toggleFollowArc(arcId) {
 }
 
 async function updateArcStatus(arcId, newStatus) {
-    if (!confirm(`Êtes-vous sûr de vouloir marquer cet ARC comme ${newStatus} ?`)) return;
+    if (!confirm(`Êtes-vous sûr de vouloir marquer ce projet comme ${newStatus} ?`)) return;
 
     try {
         const { error } = await supabase
@@ -1319,7 +1249,7 @@ async function updateArcStatus(arcId, newStatus) {
 }
 
 async function deleteArc(arcId) {
-    if (!confirm("Attention : Cette action est irréversible. Voulez-vous vraiment supprimer cet ARC et tout son historique ?")) return;
+    if (!confirm("Attention : Cette action est irréversible. Voulez-vous vraiment supprimer ce projet et tout son historique ?")) return;
     
     try {
         const { error } = await supabase
@@ -1329,7 +1259,7 @@ async function deleteArc(arcId) {
 
         if (error) throw error;
 
-        alert("ARC supprimé.");
+        alert("Projet supprimé.");
         closeImmersive();
         
         // Refresh profile if open

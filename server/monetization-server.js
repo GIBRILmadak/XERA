@@ -211,6 +211,43 @@ const PROTECTED_BADGES = new Set([
     "ambassador",
 ]);
 
+/**
+ * Calcule les fonctionnalités premium selon le plan
+ * @param {string} plan - Le plan (standard, medium, pro)
+ * @returns {object} Les fonctionnalités premium activées
+ */
+function computePremiumFeatures(plan) {
+    const normalizedPlan = String(plan || "").toLowerCase();
+    const features = {
+        advanced_profile_customization: false,
+        priority_recommendations: false,
+        full_profile_customization: false,
+        hd_streaming: false,
+        private_live: false,
+        advanced_collab_tools: false,
+        realtime_analytics: false,
+        data_export: false,
+        maximum_visibility: false,
+    };
+
+    if (normalizedPlan === "medium") {
+        features.advanced_profile_customization = true;
+        features.priority_recommendations = true;
+    } else if (normalizedPlan === "pro") {
+        features.advanced_profile_customization = true;
+        features.priority_recommendations = true;
+        features.full_profile_customization = true;
+        features.hd_streaming = true;
+        features.private_live = true;
+        features.advanced_collab_tools = true;
+        features.realtime_analytics = true;
+        features.data_export = true;
+        features.maximum_visibility = true;
+    }
+
+    return features;
+}
+
 const MAISHAPAY_PLANS = {
     standard: 2.99,
     medium: 7.99,
@@ -1101,6 +1138,19 @@ async function sweepExpiredSubscriptions() {
         const userIds = (expiredUsers || [])
             .map((row) => row.id)
             .filter(Boolean);
+        // Révoquer toutes les fonctionnalités premium lors de l'expiration
+        const expiredFeatures = {
+            advanced_profile_customization: false,
+            priority_recommendations: false,
+            full_profile_customization: false,
+            hd_streaming: false,
+            private_live: false,
+            advanced_collab_tools: false,
+            realtime_analytics: false,
+            data_export: false,
+            maximum_visibility: false,
+        };
+
         if (userIds.length > 0) {
             await supabase
                 .from("users")
@@ -1109,6 +1159,7 @@ async function sweepExpiredSubscriptions() {
                     plan_status: "inactive",
                     is_monetized: false,
                     updated_at: nowIso,
+                    ...expiredFeatures,
                 })
                 .in("id", userIds);
 
@@ -1277,6 +1328,9 @@ async function activateSubscription({
         .single();
     if (insertSubError) throw insertSubError;
 
+    // Calculer les fonctionnalités premium selon le plan
+    const premiumFeatures = computePremiumFeatures(normalizedPlan);
+
     const { data: updatedUser, error: updateUserError } = await supabase
         .from("users")
         .update({
@@ -1285,6 +1339,7 @@ async function activateSubscription({
             plan_ends_at: periodEndIso,
             badge: badgeToApply,
             is_monetized: isMonetized,
+            ...premiumFeatures,
         })
         .eq("id", userId)
         .select("*")
@@ -2346,6 +2401,9 @@ app.post("/api/admin/gift-plan", async (req, res) => {
                 ? true
                 : normalizedPlan === "medium" && followersCount >= 1000;
 
+        // Calculer les fonctionnalités premium selon le plan
+        const premiumFeatures = computePremiumFeatures(normalizedPlan);
+
         const { data: updated, error: updateError } = await supabase
             .from("users")
             .update({
@@ -2355,6 +2413,7 @@ app.post("/api/admin/gift-plan", async (req, res) => {
                 badge: badgeToApply,
                 is_monetized: isMonetized,
                 updated_at: new Date().toISOString(),
+                ...premiumFeatures,
             })
             .eq("id", targetUserId)
             .select()

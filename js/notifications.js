@@ -229,7 +229,7 @@ function getNotificationIcon(type) {
     const icons = {
         support: '💖',
         follow: '👤',
-        new_trace: '📝',
+        new_update: '📝',
         new_arc: '📈',
         stream: '🔴',
         live_start: '🔴',
@@ -248,8 +248,8 @@ function getNotificationTitle(notification) {
     const titles = {
         support: 'Nouveau soutien',
         follow: 'Nouvel abonné',
-        new_trace: 'Nouvelle trace',
-        new_arc: 'Nouvel ARC',
+        new_update: 'Nouvelle mise à jour',
+        new_arc: 'Nouveau projet',
         stream: 'Live en cours',
         live_start: 'Live en cours',
         encouragement: 'Nouvel encouragement',

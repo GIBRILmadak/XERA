@@ -635,6 +635,30 @@ export async function activateSubscription({
     const isMonetized =
         ["medium", "pro"].includes(normalizedPlan) && followersCount >= 1000;
 
+    // Préparation des mises à jour avec activation automatique des avantages
+    const userUpdates = {
+        plan,
+        plan_status: "active",
+        plan_ends_at: periodEndIso,
+        badge: badgeToApply,
+        is_monetized: isMonetized,
+    };
+
+    if (normalizedPlan === "medium") {
+        userUpdates.advanced_profile_customization = true;
+        userUpdates.priority_recommendations = true;
+    } else if (normalizedPlan === "pro") {
+        userUpdates.advanced_profile_customization = true;
+        userUpdates.priority_recommendations = true;
+        userUpdates.full_profile_customization = true;
+        userUpdates.hd_streaming = true;
+        userUpdates.private_live = true;
+        userUpdates.advanced_collab_tools = true;
+        userUpdates.realtime_analytics = true;
+        userUpdates.data_export = true;
+        userUpdates.maximum_visibility = true;
+    }
+
     const { error: cancelSubsError } = await supabase
         .from("subscriptions")
         .update({
@@ -661,13 +685,7 @@ export async function activateSubscription({
 
     const { data: updatedUser, error: updateUserError } = await supabase
         .from("users")
-        .update({
-            plan,
-            plan_status: "active",
-            plan_ends_at: periodEndIso,
-            badge: badgeToApply,
-            is_monetized: isMonetized,
-        })
+        .update(userUpdates)
         .eq("id", userId)
         .select("*")
         .single();
@@ -691,6 +709,14 @@ export async function activateSubscription({
     };
     if (confirmedBy) mergedMetadata.confirmed_by = confirmedBy;
     if (note) mergedMetadata.admin_note = note;
+
+    // Journalisation de l'activation des avantages
+    console.log(
+        `[Subscription] Plan ${plan} activé pour ${userId}. Avantages appliqués:`,
+        Object.keys(userUpdates).filter(
+            (k) => userUpdates[k] === true && !["is_monetized"].includes(k),
+        ),
+    );
 
     let transactionId = pendingTransactionId || null;
     if (pendingTransactionId) {
@@ -1494,6 +1520,16 @@ export async function sweepExpiredSubscriptions() {
                     plan_status: "inactive",
                     is_monetized: false,
                     updated_at: nowIso,
+                    // Révocation automatique de tous les avantages
+                    advanced_profile_customization: false,
+                    priority_recommendations: false,
+                    full_profile_customization: false,
+                    hd_streaming: false,
+                    private_live: false,
+                    advanced_collab_tools: false,
+                    realtime_analytics: false,
+                    data_export: false,
+                    maximum_visibility: false,
                 })
                 .in("id", userIds);
 
@@ -1507,6 +1543,10 @@ export async function sweepExpiredSubscriptions() {
                     .update({ badge: null, updated_at: nowIso })
                     .in("id", badgeIds);
             }
+
+            console.log(
+                `[Subscription] Avantages révoqués pour ${userIds.length} utilisateurs expirés.`,
+            );
         }
         console.log(
             `Subscription sweep completed. Expired ${subscriptionIds.length} subscriptions and ${userIds.length} users.`,

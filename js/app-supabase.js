@@ -494,7 +494,7 @@ async function requestArcCollaboration(arcId, ownerId) {
     if (window.currentUser.id === ownerId) {
         ToastManager?.info(
             "Déjà propriétaire",
-            "Vous êtes déjà propriétaire de cet ARC.",
+            "Vous êtes déjà propriétaire de ce projet.",
         );
         return;
     }
@@ -599,7 +599,7 @@ async function leaveArcCollaboration(arcId) {
         invalidateArcCollaboratorCache(arcId);
         ToastManager?.info(
             "Collaboration quittée",
-            "Vous ne collaborez plus sur cet ARC.",
+            "Vous ne collaborez plus sur ce projet.",
         );
         await renderProfileIntoContainer(
             window.currentProfileViewed || window.currentUser.id,
@@ -2281,15 +2281,15 @@ function showMobileArcOnboardingNotification(userId) {
         <div style="display:flex; gap:10px; align-items:flex-start;">
             <div style="font-size:1.1rem; line-height:1;">🚀</div>
             <div style="flex:1; min-width:0;">
-                <div style="font-weight:700; font-size:0.95rem; margin-bottom:4px;">Démarrez votre premier ARC</div>
+                <div style="font-weight:700; font-size:0.95rem; margin-bottom:4px;">Démarrez votre premier projet</div>
                 <div style="font-size:0.84rem; color:rgba(245,245,245,0.82); line-height:1.35;">
-                    Sur XERA, un ARC est votre trajectoire. Créez-le pour publier vos traces et suivre votre progression.
+                    Sur XERA, un projet est votre trajectoire. Créez-le pour publier vos mises à jour et suivre votre progression.
                 </div>
             </div>
         </div>
         <div style="display:flex; gap:8px; margin-top:10px;">
             <button type="button" data-action="create" style="flex:1; border:none; border-radius:10px; padding:9px 10px; font-weight:700; font-size:0.86rem; background:#10b981; color:#072018; cursor:pointer;">
-                Créer un ARC
+                Créer un projet
             </button>
             <button type="button" data-action="close" style="border:1px solid rgba(255,255,255,0.16); border-radius:10px; padding:9px 12px; font-weight:700; font-size:0.84rem; background:transparent; color:#f5f5f5; cursor:pointer;">
                 Fermer
@@ -2354,7 +2354,7 @@ async function maybeStartFirstPostFlow() {
         if (isMobileContext) return;
         const shouldOpenCreate =
             confirm(
-                "Bienvenue sur XERA. Voulez-vous publier votre première trace maintenant ?",
+                "Bienvenue sur XERA. Voulez-vous publier votre première mise à jour maintenant ?",
             ) === true;
         if (shouldOpenCreate) {
             openCreateMenu(userId, firstArcId);
@@ -2365,7 +2365,7 @@ async function maybeStartFirstPostFlow() {
     const shouldStartArc = isMobileContext
         ? true
         : confirm(
-              "Bienvenue sur XERA. Pour publier votre première trace, commencez par créer votre premier ARC. Lancer la création maintenant ?",
+              "Bienvenue sur XERA. Pour publier votre première mise à jour, commencez par créer votre premier projet. Lancer la création maintenant ?",
           ) === true;
     if (isMobileContext) {
         showMobileArcOnboardingNotification(userId);
@@ -2816,13 +2816,13 @@ async function notifyFollowersOfTrace(contentRow) {
         const followerIds = await getFollowerIds(userId);
         if (!followerIds.length) return;
         const actorName = getCurrentUserDisplayName();
-        const message = `${actorName} a publié une nouvelle trace : ${contentRow.title || "Nouvelle mise à jour"}`;
+        const message = `${actorName} a publié une nouvelle mise à jour : ${contentRow.title || "Nouvelle mise à jour"}`;
         const link = safeProfileLink(userId);
         await Promise.allSettled(
             followerIds
                 .filter((fid) => fid && fid !== userId)
                 .map((fid) =>
-                    createNotification(fid, "new_trace", message, link),
+                    createNotification(fid, "new_update", message, link),
                 ),
         );
     } catch (e) {
@@ -2843,7 +2843,7 @@ async function notifyFollowersOfArcStart(arcRow) {
         const followerIds = await getFollowerIds(userId);
         if (!followerIds.length) return;
         const actorName = getCurrentUserDisplayName();
-        const message = `${actorName} a lancé un nouvel ARC : ${arcRow.title || "Nouvel ARC"}`;
+        const message = `${actorName} a lancé un nouveau projet : ${arcRow.title || "Nouveau projet"}`;
         const link = safeProfileLink(userId);
         await Promise.allSettled(
             followerIds
@@ -2923,7 +2923,7 @@ async function notifyEncouragement(contentId) {
     const ownerId = owner.user_id;
     if (ownerId === currentUser?.id) return; // Pas de notif pour soi-même
     const actorName = getCurrentUserDisplayName();
-    const message = `${actorName} t'a encouragé sur "${owner.title || "ta trace"}"`;
+    const message = `${actorName} t'a encouragé sur "${owner.title || "ta mise à jour"}"`;
     const link = safeProfileLink(ownerId);
     try {
         await createNotification(ownerId, "encouragement", message, link);
@@ -3116,7 +3116,7 @@ async function toggleCourage(contentId, btnElement) {
 
         const content = findContentById(contentId);
         updateImmersivePrefs(content, "like");
-        // Notifier l'auteur de la trace (sauf auto-encouragement)
+        // Notifier l'auteur de la mise à jour (sauf auto-encouragement)
         notifyEncouragement(contentId).catch((e) =>
             console.warn("notifyEncouragement error", e),
         );
@@ -4746,6 +4746,22 @@ async function applyGiftPlanToUser(userId, planValue) {
         is_monetized: isMonetized,
         updated_at: new Date().toISOString(),
     };
+
+    // Application automatique des avantages locaux (fallback ou direct)
+    if (plan === "medium") {
+        updates.advanced_profile_customization = true;
+        updates.priority_recommendations = true;
+    } else if (plan === "pro") {
+        updates.advanced_profile_customization = true;
+        updates.priority_recommendations = true;
+        updates.full_profile_customization = true;
+        updates.hd_streaming = true;
+        updates.private_live = true;
+        updates.advanced_collab_tools = true;
+        updates.realtime_analytics = true;
+        updates.data_export = true;
+        updates.maximum_visibility = true;
+    }
 
     const { data, error } = await supabase
         .from("users")
@@ -9415,7 +9431,7 @@ async function renderProfileTimeline(userId) {
                     <div style="font-size: 0.8rem; color: var(--text-secondary);">${arc.status === "completed" ? "Terminé" : "En cours"}</div>
                     ${collabBadgeHtml}
                     ${ownerLabelHtml}
-                    ${isActive ? '<div style="margin-top:0.5rem; font-size:0.75rem; color:var(--accent-color);">Voir les traces</div>' : ""}
+                    ${isActive ? '<div style="margin-top:0.5rem; font-size:0.75rem; color:var(--accent-color);">Voir les mises à jour</div>' : ""}
                     ${collabActionHtml}
                 </div>
             `;
@@ -9425,7 +9441,7 @@ async function renderProfileTimeline(userId) {
         arcsHtml = `
             <div class="arcs-section" style="margin: 2rem 0;">
                 <h3 style="margin-bottom: 1rem; display:flex; align-items:center; justify-content:space-between;">
-                    ARCs
+                    Projets
                     ${window.selectedArcId ? `<button onclick="selectArc(null, '${userId}')" style="background:none; border:none; color:var(--text-secondary); font-size:0.8rem; cursor:pointer;">Voir tout</button>` : ""}
                 </h3>
                 <div class="arcs-scroller" style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem;">
@@ -9579,7 +9595,7 @@ async function renderProfileTimeline(userId) {
     const progressSnapshotHtml = `
         <div class="profile-progress-snapshot">
             <div class="snapshot-item">
-                <div class="snapshot-label">Dernière trace</div>
+                <div class="snapshot-label">Dernière mise à jour</div>
                 <div class="snapshot-value">${latestTraceLabel}</div>
             </div>
             <div class="snapshot-item">
@@ -9630,7 +9646,7 @@ async function renderProfileTimeline(userId) {
             </div>
             <div class="follower-stat">
                 <div class="follower-stat-count">${userTraces.length}</div>
-                <div class="follower-stat-label">Traces</div>
+                <div class="follower-stat-label">Updates</div>
             </div>
         </div>
     `;
@@ -9652,7 +9668,7 @@ async function renderProfileTimeline(userId) {
             dayNumber: 0,
             content: null,
             state: "empty-arc",
-            message: "Aucune trace dans cet ARC pour le moment.",
+            message: "Aucune mise à jour dans ce projet pour le moment.",
         });
     } else if (window.selectedArcId) {
         // ARC sélectionné: afficher TOUT le contenu de l'ARC, trié par jour décroissant
@@ -9737,7 +9753,7 @@ async function renderProfileTimeline(userId) {
                     ${emptyBadgeSvg}
                     <div class="timeline-date">Jour ${item.dayNumber}</div>
                     <div class="timeline-card" style="opacity: 0.5;">
-                        <span class="empty-indicator">Aucune trace aujourd'hui.</span>
+                        <span class="empty-indicator">Aucune mise à jour aujourd'hui.</span>
                     </div>
                 </div>
             `;
@@ -9887,7 +9903,7 @@ async function renderProfileTimeline(userId) {
                         const message =
                             lastItem.state === "empty-arc"
                                 ? lastItem.message
-                                : "Aucune trace aujourd'hui.";
+                                : "Aucune mise à jour aujourd'hui.";
                         return `
                             <div class="timeline-dot-badge">
                                 ${badgeSVGs.empty}
@@ -10094,7 +10110,7 @@ async function renderProfileTimeline(userId) {
     const noArcNoticeHtml = !hasArcs
         ? `
         <div class="no-arc-notice" style="margin: 1.5rem 0; padding: 1rem 1.25rem; border: 1px dashed var(--border-color); border-radius: 12px; color: var(--text-secondary); text-align: center;">
-            L'utilisateur n'a pas encore créé d'ARC.
+            L'utilisateur n'a pas encore créé de projet.
         </div>
     `
         : "";
@@ -10105,9 +10121,9 @@ async function renderProfileTimeline(userId) {
             <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
                 <div>
                     <h4 style="margin:0;">Progression hebdomadaire</h4>
-                    <p style="margin:0; color: var(--text-secondary); font-size:0.9rem;">Survolez pour voir les traces par jour.</p>
+                    <p style="margin:0; color: var(--text-secondary); font-size:0.9rem;">Survolez pour voir les mises à jour par jour.</p>
                 </div>
-                <button class="btn-secondary" onclick="window.openCreateModal && window.openCreateModal()" style="padding:0.45rem 0.8rem; border-radius:10px;">Créer un ARC</button>
+                <button class="btn-secondary" onclick="window.openCreateModal && window.openCreateModal()" style="padding:0.45rem 0.8rem; border-radius:10px;">Créer un projet</button>
             </div>
             <div style="margin-top:1rem; min-height:220px;">
                 <canvas id="weekly-progress-chart-${userId}" aria-label="Progression hebdomadaire" role="img"></canvas>
@@ -10175,13 +10191,13 @@ async function renderProfileTimeline(userId) {
                 ${progressSnapshotHtml}
                 ${verificationCtaHtml}
                 <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center;"> 
-                    <button class="btn-add" onclick="openCreateMenu('${userId}')" title="Ajouter une trace">
+                    <button class="btn-add" onclick="openCreateMenu('${userId}')" title="Ajouter une mise à jour">
                         <img src="icons/plus.svg" alt="Ajouter" style="width:18px;height:18px">
                     </button>
                     ${shareButtonHtml}
-                    <button class="btn-secondary profile-arc-btn" onclick="window.openCreateModal ? window.openCreateModal() : console.error('openCreateModal function not found')" title="Démarrer un ARC" style="padding: 0.5rem 1rem; border-radius: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <button class="btn-secondary profile-arc-btn" onclick="window.openCreateModal ? window.openCreateModal() : console.error('openCreateModal function not found')" title="Démarrer un projet" style="padding: 0.5rem 1rem; border-radius: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                        Nouvel ARC
+                        Nouveau projet
                     </button>
                     ${settingsButtonHtml}
                 </div>
@@ -10224,7 +10240,7 @@ async function renderProfileTimeline(userId) {
         </section>
         ${analyticsSectionHtml}
         <div class="timeline">
-            ${window.selectedArcId && selectedArc ? `<div style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 1rem; text-align: center;">Affichage des traces pour l'ARC : <strong>${selectedArc.title}</strong></div>` : ""}
+            ${window.selectedArcId && selectedArc ? `<div style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 1rem; text-align: center;">Affichage des mises à jour pour le projet : <strong>${selectedArc.title}</strong></div>` : ""}
             ${timelinesHtml}
         </div>
         
@@ -10466,7 +10482,8 @@ window.renderWeeklyProgressChart = async function (userId) {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: (ctx) => `${ctx.parsed.y || 0} trace(s)`,
+                            label: (ctx) =>
+                                `${ctx.parsed.y || 0} mise(s) à jour(s)`,
                         },
                     },
                 },
@@ -11064,440 +11081,290 @@ async function openSettings(userId) {
             </div>
 
             <form id="settings-form" novalidate class="settings-form-layout">
-                <div class="settings-section">
-                    <h3>Préférences de l'application</h3>
-                    <div class="settings-preferences-grid">
-                        <div class="form-group">
-                            <label for="lang-select">Langue</label>
-                            <select id="lang-select" class="lang-select">
-                                <option value="en">English (US)</option>
-                                <option value="fr">Français</option>
-                            </select>
-                            <div class="form-hint">La langue est aussi détectée automatiquement selon votre localisation.</div>
+                <!-- Préférences -->
+                <div class="accordion-section">
+                    <button type="button" class="accordion-header">
+                        <div class="accordion-title">
+                            <span>Préférences de l'application</span>
                         </div>
-                        <div class="form-group">
-                            <label>Thème</label>
-                            <button type="button" class="btn-theme-toggle settings-theme-control" onclick="toggleTheme()">
-                                ${isLightMode() ? "🌙 Mode Sombre" : "☀️ Mode Clair"}
-                            </button>
-                            <div class="form-hint">Choisissez l'affichage qui vous convient.</div>
+                        <div class="accordion-arrow">
+                            <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </div>
-                    </div>
-                </div>
-
-                <div class="settings-section">
-                    <h3>Identité</h3>
-
-            <div class="upload-section" style="display: flex; flex-direction: column; gap: 2rem; margin-bottom: 2rem;">
-                <!-- Avatar Section -->
-                <div style="display: flex; flex-direction: column; align-items: center;">
-                    <label class="form-hint" style="margin-bottom:0.5rem; display:block;">Avatar</label>
-                    <div style="position: relative; cursor: pointer;" onclick="document.getElementById('setting-avatar-file').click()">
-                        <img src="${user.avatar && user.avatar.startsWith("http") ? user.avatar : "https://placehold.co/150"}" class="preview-avatar-circle" id="preview-avatar" alt="Avatar" style="object-fit: cover;">
-                        <div style="position: absolute; bottom: 0; right: 0; background: #fff; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 10px rgba(0,0,0,0.5);">
-                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#000" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                        </div>
-                    </div>
-                    <input type="file" id="setting-avatar-file" accept="image/*" style="display: none;">
-                    <input type="hidden" id="setting-avatar" value="${user.avatar || ""}">
-                    <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">Cliquez pour changer</p>
-                </div>
-
-                <!-- Banner Section -->
-                <div>
-                    <label class="form-hint" style="margin-bottom:0.5rem; display:block;">Bannière</label>
-                    <div style="position: relative; cursor: pointer;" onclick="document.getElementById('setting-banner-file').click()">
-                        <img src="${user.banner && user.banner.startsWith("http") ? user.banner : "https://placehold.co/1200x300/1a1a2e/00ff88?text=Ma+Trajectoire"}" class="preview-banner-rect" id="preview-banner" alt="Bannière" style="object-fit: cover;">
-                        <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; border-radius: 14px;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
-                            <span style="background: rgba(0,0,0,0.6); color: white; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.9rem;">Changer la bannière</span>
-                        </div>
-                    </div>
-                    <input type="file" id="setting-banner-file" accept="image/*" style="display: none;">
-                    <input type="hidden" id="setting-banner" value="${user.banner || ""}">
-                </div>
-            </div>
-
-                <div class="form-group">
-                    <label>Nom d'affichage</label>
-                    <input type="text" id="setting-name" class="form-input" value="${user.name}" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Titre / Rôle</label>
-                    <input type="text" id="setting-title" class="form-input" value="${user.title}" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Bio</label>
-                    <textarea id="setting-bio" class="form-input" rows="4">${user.bio || ""}</textarea>
-                </div>
-                </div>
-
-                <div class="settings-section">
-                    <h3>Type de compte</h3>
-                    <p class="form-hint">Par défaut votre compte reste <strong>fan</strong>. Vous pouvez passer à recruteur ou investisseur à tout moment.</p>
-                    <div class="account-type-toggle account-role-toggle">
-                        <button type="button" class="account-type-btn account-role-btn ${accountRole === "fan" ? "active" : ""}" data-role="fan">Fan</button>
-                        <button type="button" class="account-type-btn account-role-btn ${accountRole === "recruiter" ? "active" : ""}" data-role="recruiter">Recruteur</button>
-                        <button type="button" class="account-type-btn account-role-btn ${accountRole === "investor" ? "active" : ""}" data-role="investor">Investisseur</button>
-                    </div>
-                    <input type="hidden" id="setting-account-role" value="${accountRole}">
-                </div>
-
-                <!-- Fonctionnalités Premium -->
-                <div class="settings-section premium-features-section">
-                    <h3>⭐ Fonctionnalités Premium</h3>
-                    <p class="form-hint">Ces fonctionnalités sont disponibles selon votre plan d'abonnement.</p>
-                    
-                    ${
-                        hasAdvancedProfileCustomization(user)
-                            ? `
-                    <div class="premium-feature-item">
-                        <div class="premium-feature-header">
-                            <span class="premium-feature-icon">✨</span>
-                            <div class="premium-feature-info">
-                                <h4>Personnalisation avancée du profil</h4>
-                                <p>Personnalisez davantage votre profil avec des options avancées.</p>
-                            </div>
-                            <span class="premium-badge medium">Medium+</span>
-                        </div>
-                        ${typeof window.hasAdvancedProfileCustomization === 'function' && window.hasAdvancedProfileCustomization(user) ? `
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="setting-advanced-profile" ${user.advanced_profile_customization ? 'checked' : ''}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        ` : `
-                        <label class="toggle-switch" title="Plan Medium requis" onclick="if(typeof window.showPlanUpgradePrompt==='function')window.showPlanUpgradePrompt('advanced_profile_customization')">
-                            <input type="checkbox" id="setting-advanced-profile" ${user.advanced_profile_customization ? 'checked' : ''} disabled>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <span class="premium-lock-badge medium">Medium</span>
-                        `}
-                    </div>
-                    `
-                            : `
-                    <div class="premium-feature-locked">
-                        <span class="premium-feature-icon">✨</span>
-                        <div class="premium-feature-info">
-                            <h4>Personnalisation avancée du profil</h4>
-                            <p>Passez au plan Medium pour débloquer cette fonctionnalité.</p>
-                        </div>
-                        <a href="subscription-plans.html" class="premium-upgrade-btn">Passer à Medium</a>
-                    </div>
-                    `
-                    }
-                    
-                    ${
-                        hasFullProfileCustomization(user)
-                            ? `
-                    <div class="premium-feature-item">
-                        <div class="premium-feature-header">
-                            <span class="premium-feature-icon">🎨</span>
-                            <div class="premium-feature-info">
-                                <h4>Personnalisation complète du profil</h4>
-                                <p>Accédez à toutes les options de personnalisation.</p>
-                            </div>
-                            <span class="premium-badge pro">Pro</span>
-                        </div>
-                        ${
-                            typeof window.hasFullProfileCustomization ===
-                                "function" &&
-                            window.hasFullProfileCustomization(user)
-                                ? `
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="setting-full-profile" ${user.full_profile_customization ? "checked" : ""}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        `
-                                : `
-                        <label class="toggle-switch" title="Plan Pro requis" onclick="if(typeof window.showPlanUpgradePrompt==='function')window.showPlanUpgradePrompt('full_profile_customization')">
-                            <input type="checkbox" id="setting-full-profile" ${user.full_profile_customization ? "checked" : ""} disabled>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <span class="premium-lock-badge pro">Pro</span>
-                        `
-                        }
-                    </div>
-                    `
-                            : ""
-                    }
-                    
-                    ${
-                        hasHDStreaming(user)
-                            ? `
-                    <div class="premium-feature-item">
-                        <div class="premium-feature-header">
-                            <span class="premium-feature-icon">📹</span>
-                            <div class="premium-feature-info">
-                                <h4>Qualité HD pour les lives</h4>
-                                <p>Diffusez vos lives en haute définition (1080p).</p>
-                            </div>
-                            <span class="premium-badge pro">Pro</span>
-                        </div>
-                        ${
-                            typeof window.hasHDStreaming === "function" &&
-                            window.hasHDStreaming(user)
-                                ? `
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="setting-hd-streaming" ${user.hd_streaming ? "checked" : ""}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        `
-                                : `
-                        <label class="toggle-switch" title="Plan Pro requis" onclick="if(typeof window.showPlanUpgradePrompt==='function')window.showPlanUpgradePrompt('hd_streaming')">
-                            <input type="checkbox" id="setting-hd-streaming" ${user.hd_streaming ? "checked" : ""} disabled>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <span class="premium-lock-badge pro">Pro</span>
-                        `
-                        }
-                    </div>
-                    `
-                            : ""
-                    }
-                    
-                    ${
-                        hasPrivateLiveAccess(user)
-                            ? `
-                    <div class="premium-feature-item">
-                        <div class="premium-feature-header">
-                            <span class="premium-feature-icon">🔒</span>
-                            <div class="premium-feature-info">
-                                <h4>Lives privés réservés aux followers</h4>
-                                <p>Créez des lives visibles uniquement par vos followers.</p>
-                            </div>
-                            <span class="premium-badge pro">Pro</span>
-                        </div>
-                        ${
-                            typeof window.hasPrivateLiveAccess === "function" &&
-                            window.hasPrivateLiveAccess(user)
-                                ? `
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="setting-private-live" ${user.private_live ? "checked" : ""}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        `
-                                : `
-                        <label class="toggle-switch" title="Plan Pro requis" onclick="if(typeof window.showPlanUpgradePrompt==='function')window.showPlanUpgradePrompt('private_live')">
-                            <input type="checkbox" id="setting-private-live" ${user.private_live ? "checked" : ""} disabled>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <span class="premium-lock-badge pro">Pro</span>
-                        `
-                        }
-                    </div>
-                    `
-                            : ""
-                    }
-                    
-                    ${
-                        hasAdvancedCollaborationTools(user)
-                            ? `
-                    <div class="premium-feature-item">
-                        <div class="premium-feature-header">
-                            <span class="premium-feature-icon">🤝</span>
-                            <div class="premium-feature-info">
-                                <h4>Outils de collaboration avancés</h4>
-                                <p>Invitez des collaborateurs sur vos ARCs et projets.</p>
-                            </div>
-                            <span class="premium-badge pro">Pro</span>
-                        </div>
-                        ${typeof window.hasAdvancedCollaborationTools === 'function' && window.hasAdvancedCollaborationTools(user) ? `
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="setting-collab-tools" ${user.advanced_collab_tools ? 'checked' : ''}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        ` : `
-                        <label class="toggle-switch" title="Plan Pro requis" onclick="if(typeof window.showPlanUpgradePrompt==='function')window.showPlanUpgradePrompt('advanced_collaboration')">
-                            <input type="checkbox" id="setting-collab-tools" ${user.advanced_collab_tools ? 'checked' : ''} disabled>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <span class="premium-lock-badge pro">Pro</span>
-                        `}
-                    </div>
-                    `
-                            : ""
-                    }
-                    
-                    ${
-                        hasRealtimeAnalytics(user)
-                            ? `
-                    <div class="premium-feature-item">
-                        <div class="premium-feature-header">
-                            <span class="premium-feature-icon">📊</span>
-                            <div class="premium-feature-info">
-                                <h4>Statistiques en temps réel</h4>
-                                <p>Suivez les performances de votre contenu en direct.</p>
-                            </div>
-                            <span class="premium-badge pro">Pro</span>
-                        </div>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="setting-realtime-analytics" ${user.realtime_analytics ? "checked" : ""}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                    `
-                            : ""
-                    }
-                    
-                    ${
-                        hasDataExport(user)
-                            ? `
-                    <div class="premium-feature-item">
-                        <div class="premium-feature-header">
-                            <span class="premium-feature-icon">📤</span>
-                            <div class="premium-feature-info">
-                                <h4>Export des données et rapports détaillés</h4>
-                                <p>Téléchargez vos statistiques et rapports.</p>
-                            </div>
-                            <span class="premium-badge pro">Pro</span>
-                        </div>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="setting-data-export" ${user.data_export ? "checked" : ""}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                    `
-                            : ""
-                    }
-                    
-                    ${
-                        hasMaximumDiscoverVisibility(user)
-                            ? `
-                    <div class="premium-feature-item">
-                        <div class="premium-feature-header">
-                            <span class="premium-feature-icon">🌟</span>
-                            <div class="premium-feature-info">
-                                <h4>Visibilité maximale dans Discover</h4>
-                                <p>Votre profil apparaît en priorité dans Discover.</p>
-                            </div>
-                            <span class="premium-badge pro">Pro</span>
-                        </div>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="setting-max-discover" ${user.max_discover_visibility ? "checked" : ""}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                    `
-                            : ""
-                    }
-                </div>
-
-                <div class="settings-section">
-                    <h3>Vérification</h3>
-                    <div class="verification-section">
-                        ${verificationStatusHtml}
-                        ${verificationCtaHtml}
-                    </div>
-                </div>
-
-                <details class="settings-collapsible" open>
-                    <summary>Réseaux Sociaux</summary>
-                    <div class="settings-collapsible-body">
-                        <div class="form-group">
-                            <div class="social-link-item">
-                                <img src="icons/email.svg" alt="Email">
-                                <input type="email" class="form-input" data-social="email" placeholder="email@exemple.com" value="${socialLinks.email || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/github.svg" alt="GitHub">
-                                <input type="text" class="form-input" data-social="github" placeholder="github.com/username" value="${socialLinks.github || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/instagram.svg" alt="Instagram">
-                                <input type="text" class="form-input" data-social="instagram" placeholder="instagram.com/username" value="${socialLinks.instagram || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/snapchat.svg" alt="Snapchat">
-                                <input type="text" class="form-input" data-social="snapchat" placeholder="snapchat.com/username" value="${socialLinks.snapchat || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/twitter.svg" alt="X">
-                                <input type="text" class="form-input" data-social="twitter" placeholder="x (twitter).com/username" value="${socialLinks.twitter || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/youtube.svg" alt="YouTube">
-                                <input type="text" class="form-input" data-social="youtube" placeholder="https://youtube.com" value="${socialLinks.youtube || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/twitch.svg" alt="Twitch">
-                                <input type="text" class="form-input" data-social="twitch" placeholder="twitch.com/username" value="${socialLinks.twitch || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/spotify.svg" alt="Spotify">
-                                <input type="text" class="form-input" data-social="spotify" placeholder="spotify.com/username" value="${socialLinks.spotify || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/tiktok.svg" alt="TikTok">
-                                <input type="text" class="form-input" data-social="tiktok" placeholder="tiktok.com/username" value="${socialLinks.tiktok || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/discord.svg" alt="Discord">
-                                <input type="text" class="form-input" data-social="discord" placeholder="discord.com/username" value="${socialLinks.discord || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/reddit.svg" alt="Reddit">
-                                <input type="text" class="form-input" data-social="reddit" placeholder="reddit.com/username" value="${socialLinks.reddit || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/pinterest.svg" alt="Pinterest">
-                                <input type="text" class="form-input" data-social="pinterest" placeholder="pinterest.com/username" value="${socialLinks.pinterest || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/linkedin.svg" alt="LinkedIn">
-                                <input type="text" class="form-input" data-social="linkedin" placeholder="linkedin.com/username" value="${socialLinks.linkedin || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/facebook.svg" alt="Facebook">
-                                <input type="text" class="form-input" data-social="facebook" placeholder="facebook.com/username" value="${socialLinks.facebook || ""}">
-                            </div>
-                            <div class="social-link-item">
-                                <img src="icons/link.svg" alt="Site">
-                                <input type="text" class="form-input" data-social="site" placeholder="https://example.com" value="${socialLinks.site || ""}">
-                            </div>
-                        </div>
-                    </div>
-                </details>
-
-                <div class="settings-section settings-danger-zone">
-                    <h3>Session</h3>
-                    <p>Déconnectez cet appareil si besoin.</p>
-                    <button type="button" class="btn-signout-settings" onclick="handleSignOut()">
-                        Se déconnecter
                     </button>
+                    <div class="accordion-content">
+                        <div class="accordion-body">
+                            <div class="settings-preferences-grid">
+                                <div class="form-group">
+                                    <label for="lang-select">Langue</label>
+                                    <select id="lang-select" class="lang-select">
+                                        <option value="en">English (US)</option>
+                                        <option value="fr">Français</option>
+                                    </select>
+                                    <div class="form-hint">La langue est aussi détectée automatiquement selon votre localisation.</div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Thème</label>
+                                    <button type="button" class="btn-theme-toggle settings-theme-control" onclick="toggleTheme()">
+                                        ${isLightMode() ? "🌙 Mode Sombre" : "☀️ Mode Clair"}
+                                    </button>
+                                    <div class="form-hint">Choisissez l'affichage qui vous convient.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                    <div class="delete-account-box">
-                        <h4>Supprimer mon compte</h4>
-                        <p>Cette action est irréversible. Toutes vos données seront supprimées.</p>
-                        <div class="delete-account-reasons">
-                            <label class="delete-account-reason-item">
-                                <input type="radio" name="delete-account-reason" value="inactive">
-                                <span>Je n'utilise plus XERA</span>
-                            </label>
-                            <label class="delete-account-reason-item">
-                                <input type="radio" name="delete-account-reason" value="technical">
-                                <span>J'ai des problèmes techniques</span>
-                            </label>
-                            <label class="delete-account-reason-item">
-                                <input type="radio" name="delete-account-reason" value="privacy">
-                                <span>Confidentialité / sécurité</span>
-                            </label>
-                            <label class="delete-account-reason-item">
-                                <input type="radio" name="delete-account-reason" value="experience">
-                                <span>L'expérience ne me convient pas</span>
-                            </label>
-                            <label class="delete-account-reason-item">
-                                <input type="radio" name="delete-account-reason" value="other">
-                                <span>Autre</span>
-                            </label>
+                <!-- Identité -->
+                <div class="accordion-section">
+                    <button type="button" class="accordion-header">
+                        <div class="accordion-title">
+                            <span>Identité</span>
                         </div>
-                        <div class="delete-account-other-wrap" style="display:none;">
-                            <label for="delete-account-other">Précisez la raison</label>
-                            <textarea id="delete-account-other" class="form-input" rows="3" placeholder="Expliquez brièvement..." disabled></textarea>
+                        <div class="accordion-arrow">
+                            <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </div>
-                        <button type="button" class="btn-delete-account" onclick="requestAccountDeletion('${userId}')">
-                            Supprimer définitivement mon compte
-                        </button>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="accordion-body">
+                            <div class="upload-section" style="display: flex; flex-direction: column; gap: 2rem; margin-bottom: 2rem;">
+                                <!-- Avatar Section -->
+                                <div style="display: flex; flex-direction: column; align-items: center;">
+                                    <label class="form-hint" style="margin-bottom:0.5rem; display:block;">Avatar</label>
+                                    <div style="position: relative; cursor: pointer;" onclick="document.getElementById('setting-avatar-file').click()">
+                                        <img src="${user.avatar && user.avatar.startsWith("http") ? user.avatar : "https://placehold.co/150"}" class="preview-avatar-circle" id="preview-avatar" alt="Avatar" style="object-fit: cover;">
+                                        <div style="position: absolute; bottom: 0; right: 0; background: #fff; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 10px rgba(0,0,0,0.5);">
+                                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#000" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                        </div>
+                                    </div>
+                                    <input type="file" id="setting-avatar-file" accept="image/*" style="display: none;">
+                                    <input type="hidden" id="setting-avatar" value="${user.avatar || ""}">
+                                    <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">Cliquez pour changer</p>
+                                </div>
+
+                                <!-- Banner Section -->
+                                <div>
+                                    <label class="form-hint" style="margin-bottom:0.5rem; display:block;">Bannière</label>
+                                    <div style="position: relative; cursor: pointer;" onclick="document.getElementById('setting-banner-file').click()">
+                                        <img src="${user.banner && user.banner.startsWith("http") ? user.banner : "https://placehold.co/1200x300/1a1a2e/00ff88?text=Ma+Trajectoire"}" class="preview-banner-rect" id="preview-banner" alt="Bannière" style="object-fit: cover;">
+                                        <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; border-radius: 14px;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
+                                            <span style="background: rgba(0,0,0,0.6); color: white; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.9rem;">Changer la bannière</span>
+                                        </div>
+                                    </div>
+                                    <input type="file" id="setting-banner-file" accept="image/*" style="display: none;">
+                                    <input type="hidden" id="setting-banner" value="${user.banner || ""}">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Nom d'affichage</label>
+                                <input type="text" id="setting-name" class="form-input" value="${user.name}" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Titre / Rôle</label>
+                                <input type="text" id="setting-title" class="form-input" value="${user.title}" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Bio</label>
+                                <textarea id="setting-bio" class="form-input" rows="4">${user.bio || ""}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <!-- Type de compte -->
+                <div class="accordion-section">
+                    <button type="button" class="accordion-header">
+                        <div class="accordion-title">
+                            <span>Type de compte</span>
+                        </div>
+                        <div class="accordion-arrow">
+                            <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="accordion-body">
+                            <p class="form-hint">Par défaut votre compte reste <strong>fan</strong>. Vous pouvez passer à recruteur ou investisseur à tout moment.</p>
+                            <div class="account-type-toggle account-role-toggle">
+                                <button type="button" class="account-type-btn account-role-btn ${accountRole === "fan" ? "active" : ""}" data-role="fan">Fan</button>
+                                <button type="button" class="account-type-btn account-role-btn ${accountRole === "recruiter" ? "active" : ""}" data-role="recruiter">Recruteur</button>
+                                <button type="button" class="account-type-btn account-role-btn ${accountRole === "investor" ? "active" : ""}" data-role="investor">Investisseur</button>
+                            </div>
+                            <input type="hidden" id="setting-account-role" value="${accountRole}">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vérification -->
+                <div class="accordion-section">
+                    <button type="button" class="accordion-header">
+                        <div class="accordion-title">
+                            <span>Vérification</span>
+                        </div>
+                        <div class="accordion-arrow">
+                            <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="accordion-body">
+                            <div class="verification-section">
+                                ${verificationStatusHtml}
+                                ${verificationCtaHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Réseaux Sociaux -->
+                <div class="accordion-section">
+                    <button type="button" class="accordion-header">
+                        <div class="accordion-title">
+                            <span>Réseaux Sociaux</span>
+                        </div>
+                        <div class="accordion-arrow">
+                            <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="accordion-body">
+                            <div class="form-group">
+                                <div class="social-link-item">
+                                    <img src="icons/email.svg" alt="Email">
+                                    <input type="email" class="form-input" data-social="email" placeholder="email@exemple.com" value="${socialLinks.email || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/github.svg" alt="GitHub">
+                                    <input type="text" class="form-input" data-social="github" placeholder="github.com/username" value="${socialLinks.github || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/instagram.svg" alt="Instagram">
+                                    <input type="text" class="form-input" data-social="instagram" placeholder="instagram.com/username" value="${socialLinks.instagram || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/snapchat.svg" alt="Snapchat">
+                                    <input type="text" class="form-input" data-social="snapchat" placeholder="snapchat.com/username" value="${socialLinks.snapchat || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/twitter.svg" alt="X">
+                                    <input type="text" class="form-input" data-social="twitter" placeholder="x (twitter).com/username" value="${socialLinks.twitter || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/youtube.svg" alt="YouTube">
+                                    <input type="text" class="form-input" data-social="youtube" placeholder="https://youtube.com" value="${socialLinks.youtube || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/twitch.svg" alt="Twitch">
+                                    <input type="text" class="form-input" data-social="twitch" placeholder="twitch.com/username" value="${socialLinks.twitch || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/spotify.svg" alt="Spotify">
+                                    <input type="text" class="form-input" data-social="spotify" placeholder="spotify.com/username" value="${socialLinks.spotify || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/tiktok.svg" alt="TikTok">
+                                    <input type="text" class="form-input" data-social="tiktok" placeholder="tiktok.com/username" value="${socialLinks.tiktok || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/discord.svg" alt="Discord">
+                                    <input type="text" class="form-input" data-social="discord" placeholder="discord.com/username" value="${socialLinks.discord || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/reddit.svg" alt="Reddit">
+                                    <input type="text" class="form-input" data-social="reddit" placeholder="reddit.com/username" value="${socialLinks.reddit || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/pinterest.svg" alt="Pinterest">
+                                    <input type="text" class="form-input" data-social="pinterest" placeholder="pinterest.com/username" value="${socialLinks.pinterest || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/linkedin.svg" alt="LinkedIn">
+                                    <input type="text" class="form-input" data-social="linkedin" placeholder="linkedin.com/username" value="${socialLinks.linkedin || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/facebook.svg" alt="Facebook">
+                                    <input type="text" class="form-input" data-social="facebook" placeholder="facebook.com/username" value="${socialLinks.facebook || ""}">
+                                </div>
+                                <div class="social-link-item">
+                                    <img src="icons/link.svg" alt="Site">
+                                    <input type="text" class="form-input" data-social="site" placeholder="https://example.com" value="${socialLinks.site || ""}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Session -->
+                <div class="accordion-section">
+                    <button type="button" class="accordion-header">
+                        <div class="accordion-title">
+                            <span>Session</span>
+                        </div>
+                        <div class="accordion-arrow">
+                            <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="accordion-body">
+                            <p>Déconnectez cet appareil si besoin.</p>
+                            <button type="button" class="btn-signout-settings" onclick="handleSignOut()">
+                                Se déconnecter
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Suppression de compte -->
+                <div class="accordion-section settings-danger-zone">
+                    <button type="button" class="accordion-header">
+                        <div class="accordion-title">
+                            <span style="color: #fca5a5;">Suppression du compte</span>
+                        </div>
+                        <div class="accordion-arrow">
+                            <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="accordion-body">
+                            <div class="delete-account-box" style="border-top: none; margin-top: 0; padding-top: 0;">
+                                <p style="color: #fca5a5; font-weight: 600; margin-bottom: 1rem;">
+                                    ⚠️ AVERTISSEMENT : Cette action est définitive et irréversible.
+                                </p>
+                                <p>Toutes vos données, publications, ARCs et informations de profil seront supprimées de façon permanente.</p>
+                                
+                                <div class="delete-account-reasons">
+                                    <label class="delete-account-reason-item">
+                                        <input type="radio" name="delete-account-reason" value="inactive">
+                                        <span>Je n'utilise plus XERA</span>
+                                    </label>
+                                    <label class="delete-account-reason-item">
+                                        <input type="radio" name="delete-account-reason" value="technical">
+                                        <span>J'ai des problèmes techniques</span>
+                                    </label>
+                                    <label class="delete-account-reason-item">
+                                        <input type="radio" name="delete-account-reason" value="privacy">
+                                        <span>Confidentialité / sécurité</span>
+                                    </label>
+                                    <label class="delete-account-reason-item">
+                                        <input type="radio" name="delete-account-reason" value="experience">
+                                        <span>L'expérience ne me convient pas</span>
+                                    </label>
+                                    <label class="delete-account-reason-item">
+                                        <input type="radio" name="delete-account-reason" value="other">
+                                        <span>Autre</span>
+                                    </label>
+                                </div>
+                                <div class="delete-account-other-wrap" style="display:none;">
+                                    <label for="delete-account-other">Précisez la raison</label>
+                                    <textarea id="delete-account-other" class="form-input" rows="3" placeholder="Expliquez brièvement..." disabled></textarea>
+                                </div>
+                                <button type="button" class="btn-delete-account" onclick="requestAccountDeletion('${userId}')" style="width: 100%; margin-top: 1.5rem; background: #dc2626; border: 1px solid #b91c1c; padding: 1rem; border-radius: 12px; color: white; font-weight: 700; cursor: pointer;">
+                                    Supprimer définitivement mon compte
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -11514,6 +11381,25 @@ async function openSettings(userId) {
     // Force reflow
     modal.offsetHeight;
     modal.classList.add("active");
+
+    // Logic for accordion behavior
+    const accordionSections = container.querySelectorAll(".accordion-section");
+    accordionSections.forEach((section, index) => {
+        const header = section.querySelector(".accordion-header");
+        header.addEventListener("click", () => {
+            const isActive = section.classList.contains("active");
+            // Close all sections
+            accordionSections.forEach((s) => s.classList.remove("active"));
+            // If the clicked section wasn't active, open it
+            if (!isActive) {
+                section.classList.add("active");
+            }
+        });
+        // Open the first section by default
+        if (index === 0) {
+            section.classList.add("active");
+        }
+    });
 
     if (window.refreshLanguageControl) {
         window.refreshLanguageControl();
@@ -11680,95 +11566,7 @@ async function openSettings(userId) {
                 ? normalizeDiscoveryAccountRole(selectedRoleValue)
                 : existingSubtypeRaw;
 
-            // Collect premium feature settings
-            const advancedProfileEl = document.getElementById(
-                "setting-advanced-profile",
-            );
-            const fullProfileEl = document.getElementById(
-                "setting-full-profile",
-            );
-            const hdStreamingEl = document.getElementById(
-                "setting-hd-streaming",
-            );
-            const privateLiveEl = document.getElementById(
-                "setting-private-live",
-            );
-            const collabToolsEl = document.getElementById(
-                "setting-collab-tools",
-            );
 
-            // Validate premium features against user's plan before saving
-            const user = getUser(userId) || window.currentUser;
-            const checkPremiumAccess = (el, featureKey) => {
-                if (!el) return false;
-                const wanted = el.checked;
-                if (!wanted) return false; // Not enabling, allow
-                // Check if user can actually enable this feature
-                if (typeof window.canActivateFeature === "function") {
-                    return window.canActivateFeature(user, featureKey);
-                }
-                return true;
-            };
-
-            // If user tries to enable premium features without plan, show error and prevent save
-            const featuresToCheck = [
-                {
-                    el: fullProfileEl,
-                    key: "full_profile_customization",
-                    name: "Personnalisation complète du profil",
-                },
-                {
-                    el: hdStreamingEl,
-                    key: "hd_streaming",
-                    name: "Streaming HD",
-                },
-                {
-                    el: privateLiveEl,
-                    key: "private_live",
-                    name: "Lives privés",
-                },
-                {
-                    el: collabToolsEl,
-                    key: "advanced_collaboration",
-                    name: "Outils de collaboration avancés",
-                },
-            ];
-
-            for (const feature of featuresToCheck) {
-                if (feature.el && feature.el.checked) {
-                    if (
-                        typeof window.canActivateFeature === "function" &&
-                        !window.canActivateFeature(user, feature.key)
-                    ) {
-                        e.preventDefault();
-                        if (window.ToastManager) {
-                            window.ToastManager.error(
-                                "Plan requis",
-                                `Vous devez avoir le plan Pro pour activer "${feature.name}".`,
-                                6000,
-                            );
-                        } else {
-                            alert(
-                                `Vous devez avoir le plan Pro pour activer "${feature.name}".\n\nRendez-vous sur la page des plans pour upgrade: subscription-plans.html`,
-                            );
-                        }
-                        // Optionally redirect to plans
-                        if (
-                            confirm("Voulez-vous voir les plans disponibles ?")
-                        ) {
-                            window.location.href = "subscription-plans.html";
-                        }
-                        return;
-                    }
-                }
-            }
-            const realtimeAnalyticsEl = document.getElementById(
-                "setting-realtime-analytics",
-            );
-            const dataExportEl = document.getElementById("setting-data-export");
-            const maxDiscoverEl = document.getElementById(
-                "setting-max-discover",
-            );
 
             const profileData = {
                 name: document.getElementById("setting-name").value,
@@ -11779,25 +11577,6 @@ async function openSettings(userId) {
                 socialLinks: newSocialLinks,
                 account_type: accountType || "personal",
                 account_subtype: subtypeToSave,
-                // Premium features
-                advanced_profile_customization: advancedProfileEl
-                    ? advancedProfileEl.checked
-                    : false,
-                full_profile_customization: fullProfileEl
-                    ? fullProfileEl.checked
-                    : false,
-                hd_streaming: hdStreamingEl ? hdStreamingEl.checked : false,
-                private_live: privateLiveEl ? privateLiveEl.checked : false,
-                advanced_collab_tools: collabToolsEl
-                    ? collabToolsEl.checked
-                    : false,
-                realtime_analytics: realtimeAnalyticsEl
-                    ? realtimeAnalyticsEl.checked
-                    : false,
-                data_export: dataExportEl ? dataExportEl.checked : false,
-                max_discover_visibility: maxDiscoverEl
-                    ? maxDiscoverEl.checked
-                    : false,
             };
 
             const okOnline = await ensureOnlineOrNotify();
@@ -12640,7 +12419,7 @@ async function openCreateMenu(
     if (arcs.length === 0 && !existingContent) {
         if (
             confirm(
-                "Vous devez créer un ARC avant de pouvoir poster une trace. Voulez-vous créer votre premier ARC maintenant ?",
+                "Vous devez créer un projet avant de pouvoir poster une mise à jour. Voulez-vous créer votre premier projet maintenant ?",
             )
         ) {
             setPendingCreatePostAfterArc(userId, { reason: "arc-required" });
@@ -12649,7 +12428,7 @@ async function openCreateMenu(
                 window.openCreateModal();
             } else {
                 alert(
-                    "Erreur: Impossible d'ouvrir la fenêtre de création d'ARC.",
+                    "Erreur: Impossible d'ouvrir la fenêtre de création de projet.",
                 );
             }
         }
@@ -12680,8 +12459,8 @@ async function openCreateMenu(
 
     // Generate ARC Options (Mandatory)
     let arcOptions = "";
-    // Si on édite une trace existante qui n'a pas d'arc (legacy), on laisse l'option vide ou on force ?
-    // Le user veut "chaque trace publiée doit faire partie d'un arc".
+    // Si on édite une mise à jour existante qui n'a pas d'arc (legacy), on laisse l'option vide ou on force ?
+    // Le user veut "chaque mise à jour publiée doit faire partie d'un arc".
     // On va forcer la sélection.
 
     arcOptions = arcs
@@ -12702,10 +12481,10 @@ async function openCreateMenu(
         .join("");
 
     const isEdit = !!existingContent;
-    const title = isEdit ? "Modifier la Trace" : "Nouvelle Trace";
+    const title = isEdit ? "Modifier l'Update" : "Nouvelle Update";
     const subtitle = isEdit
-        ? `Modifier la trace du jour ${nextDay}`
-        : `Trace = mise à jour rapide (texte + photo optionnelle). Annonce = étape majeure partagée publiquement.`;
+        ? `Modifier la mise à jour du jour ${nextDay}`
+        : `Update = mise à jour rapide (texte + photo optionnelle). Annonce = étape majeure partagée publiquement.`;
 
     const existingRawDesc =
         (existingContent &&
@@ -12719,7 +12498,7 @@ async function openCreateMenu(
             : "";
     const isAnnouncementEdit =
         existingTags && existingTags.includes("annonce") ? true : false;
-    let currentMode = isAnnouncementEdit ? "announcement" : "trace";
+    let currentMode = isAnnouncementEdit ? "announcement" : "update";
 
     container.innerHTML = `
         <div class="settings-section">
@@ -12734,7 +12513,7 @@ async function openCreateMenu(
                 <div class="form-group">
                     <label>Mode de publication</label>
                     <div class="mode-switch">
-                        <button type="button" class="${isAnnouncementEdit ? "" : "active"}" data-mode="trace">Trace</button>
+                        <button type="button" class="${isAnnouncementEdit ? "" : "active"}" data-mode="update">Mise à jour</button>
                         <button type="button" class="${isAnnouncementEdit ? "active" : ""}" data-mode="announcement">Annonce</button>
                     </div>
                     <p class="form-hint">Trace : mise à jour rapide (texte + photo optionnelle). Annonce : étape majeure partagée publiquement.</p>
@@ -12771,9 +12550,9 @@ async function openCreateMenu(
                 </div>
 
                 <div class="form-group form-group-arc">
-                    <label>ARC (Requis)</label>
+                    <label>Projet (Requis)</label>
                     <select id="create-arc" class="form-input" required>
-                        <option value="" disabled ${!isEdit && !preSelectedArcId ? "selected" : ""}>Choisir un ARC...</option>
+                        <option value="" disabled ${!isEdit && !preSelectedArcId ? "selected" : ""}>Choisir un projet...</option>
                         ${arcOptions}
                     </select>
                 </div>
@@ -12827,7 +12606,7 @@ async function openCreateMenu(
                     <!-- URL Input for Live -->
                     <div id="media-url-container" style="display: none;">
                         <input type="text" id="create-live-url" class="form-input" placeholder="Lien du Live (ex: Twitch, YouTube...)" style="margin-bottom: 0.5rem;">
-                        <p class="form-hint">Le lien sera affiché comme une trace active.</p>
+                        <p class="form-hint">Le lien sera affiché comme une mise à jour active.</p>
                     </div>
 
                     <input type="hidden" id="create-media-url" value="${isEdit && (existingContent.media_url || existingContent.mediaUrl) ? existingContent.media_url || existingContent.mediaUrl : ""}">
@@ -12837,7 +12616,7 @@ async function openCreateMenu(
 
                 <div class="actions-bar">
                     <button type="button" class="btn-cancel" onclick="closeCreateMenu()">Annuler</button>
-                    <button type="submit" class="btn-save">${isEdit ? "Mettre à jour" : "Publier la trace"}</button>
+                    <button type="submit" class="btn-save">${isEdit ? "Mettre à jour" : "Publier la mise à jour"}</button>
                 </div>
             </form>
         </div>
@@ -13475,7 +13254,7 @@ async function editContent(contentId) {
 async function deleteContent(contentId) {
     if (
         !confirm(
-            "Êtes-vous sûr de vouloir supprimer cette trace ? Cette action est irréversible.",
+            "Êtes-vous sûr de vouloir supprimer cette mise à jour ? Cette action est irréversible.",
         )
     ) {
         return;
@@ -13485,7 +13264,7 @@ async function deleteContent(contentId) {
     console.log("Utilisateur actuel:", currentUser);
 
     if (!window.currentUser) {
-        alert("Vous devez être connecté pour supprimer une trace.");
+        alert("Vous devez être connecté pour supprimer une mise à jour.");
         return;
     }
 
@@ -13555,10 +13334,12 @@ async function deleteContent(contentId) {
             }
         }
 
-        alert("Trace supprimée avec succès.");
+        alert("Update supprimée avec succès.");
     } catch (error) {
         console.error("Erreur lors de la suppression:", error);
-        alert("Erreur lors de la suppression de la trace: " + error.message);
+        alert(
+            "Erreur lors de la suppression de la mise à jour: " + error.message,
+        );
     }
 }
 

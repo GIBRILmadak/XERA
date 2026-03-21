@@ -980,7 +980,7 @@ function renderProfileTimeline(userId, viewerId = 'user-1') {
                     ${emptyBadgeSvg}
                     <div class="timeline-date">Jour ${item.dayNumber}</div>
                     <div class="timeline-card" style="opacity: 0.5;">
-                        <span class="empty-indicator">Aucune trace aujourd'hui.</span>
+                        <span class="empty-indicator">Aucune mise à jour aujourd'hui.</span>
                     </div>
                 </div>
             `;
@@ -1031,7 +1031,7 @@ function renderProfileTimeline(userId, viewerId = 'user-1') {
                             </div>
                             <div class="timeline-date">Jour ${lastItem.dayNumber}</div>
                             <div class="timeline-card" style="opacity: 0.5;">
-                                <span class="empty-indicator">Aucune trace aujourd'hui.</span>
+                                <span class="empty-indicator">Aucune mise à jour aujourd'hui.</span>
                             </div>
                         `;
                     } else {
