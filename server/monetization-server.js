@@ -14,10 +14,17 @@ const {
     SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzYnVhZ3F3anB0eWhhdmlua3hnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTk1MjUzMywiZXhwIjoyMDg1NTI4NTMzfQ._aEaTXFxqpfx64bts6Z7FoP3L4oHMGcqoi08yREU33s",
     VAPID_PUBLIC_KEY = "BDyU4kv_cnxruA5n_i3kw0-ipEXZTINrLmwVAhyyFhXsIVC6eImDqhkLVLs77Fl-TJdyOJVZsnp-k6z_7bu0bTM",
     VAPID_PRIVATE_KEY = "6dmRHoFpyGEFgL487qqwBc9BQ184TC8N9Yd3siS94Skpka",
-    PUSH_CONTACT_EMAIL = "mailto:notifications@xera.app",
+    PUSH_CONTACT_EMAIL = "mailto:notif.xera@zohomail.com",
     RETURN_REMINDER_HOURS = "10,18",
     RETURN_REMINDER_WINDOW_MINUTES = "15",
     RETURN_REMINDER_SWEEP_MS = "600000",
+    RETURN_REMINDER_EMAIL_ENABLED = "1",
+    RETURN_REMINDER_EMAIL_PROVIDER = "none",
+    RETURN_REMINDER_EMAIL_FROM = "XERA <notif.xera@zohomail.com>",
+    RETURN_REMINDER_EMAIL_REPLY_TO = "",
+    RETURN_REMINDER_EMAIL_API_KEY = "",
+    RETURN_REMINDER_EMAIL_WEBHOOK_URL = "",
+    RETURN_REMINDER_EMAIL_WEBHOOK_TOKEN = "",
     USD_TO_CDF_RATE = "2300",
     CALLBACK_BASE_URL = "",
     MAISHAPAY_USE_CALLBACK = "1",
@@ -193,6 +200,29 @@ const REMINDER_SWEEP_MS = Math.max(
     30000,
     parseInt(RETURN_REMINDER_SWEEP_MS, 10) || 60000,
 );
+const REMINDER_EMAIL_ENABLED = parseBooleanEnv(
+    RETURN_REMINDER_EMAIL_ENABLED,
+    true,
+);
+const REMINDER_EMAIL_PROVIDER = String(
+    RETURN_REMINDER_EMAIL_PROVIDER || "none",
+)
+    .trim()
+    .toLowerCase();
+const REMINDER_EMAIL_FROM = String(RETURN_REMINDER_EMAIL_FROM || "").trim();
+const REMINDER_EMAIL_REPLY_TO = String(
+    RETURN_REMINDER_EMAIL_REPLY_TO || "",
+).trim();
+const REMINDER_EMAIL_API_KEY = String(
+    RETURN_REMINDER_EMAIL_API_KEY || "",
+).trim();
+const REMINDER_EMAIL_WEBHOOK_URL = String(
+    RETURN_REMINDER_EMAIL_WEBHOOK_URL || "",
+).trim();
+const REMINDER_EMAIL_WEBHOOK_TOKEN = String(
+    RETURN_REMINDER_EMAIL_WEBHOOK_TOKEN || "",
+).trim();
+const DAY_MS = 24 * 60 * 60 * 1000;
 let reminderSweepInFlight = false;
 const rawSubscriptionSweepMs = parseInt(process.env.SUBSCRIPTION_SWEEP_MS, 10);
 const SUBSCRIPTION_SWEEP_MS = Number.isFinite(rawSubscriptionSweepMs)
@@ -1871,7 +1901,713 @@ function resolveReminderSlot(now, timeZone) {
     const slotHour = REMINDER_HOURS.find((h) => h === parts.hour);
     if (slotHour === undefined) return null;
     if (parts.minute < 0 || parts.minute >= REMINDER_WINDOW_MIN) return null;
-    return { hour: slotHour, dateKey: parts.dateKey };
+    const hourKey = String(slotHour).padStart(2, "0");
+    return {
+        hour: slotHour,
+        dateKey: parts.dateKey,
+        slotKey: `${parts.dateKey}-${hourKey}`,
+    };
+}
+
+function supportsEmailReminders() {
+    if (!REMINDER_EMAIL_ENABLED) return false;
+    if (REMINDER_EMAIL_PROVIDER === "resend") {
+        return Boolean(REMINDER_EMAIL_API_KEY && REMINDER_EMAIL_FROM);
+    }
+    if (REMINDER_EMAIL_PROVIDER === "webhook") {
+        return Boolean(REMINDER_EMAIL_WEBHOOK_URL);
+    }
+    return false;
+}
+
+function buildProfileReminderUrl(userId) {
+    return `${PRIMARY_ORIGIN.replace(/\/$/, "")}/profile.html?user=${encodeURIComponent(userId || "")}`;
+}
+
+function buildCreateReminderUrl(userId) {
+    const profileUrl = buildProfileReminderUrl(userId);
+    return `${profileUrl}&action=create`;
+}
+
+function buildDiscoverReminderUrl() {
+    return `${PRIMARY_ORIGIN.replace(/\/$/, "")}/`;
+}
+
+function hashString(value) {
+    const input = String(value || "");
+    let hash = 0;
+    for (let index = 0; index < input.length; index += 1) {
+        hash = (hash * 31 + input.charCodeAt(index)) >>> 0;
+    }
+    return hash;
+}
+
+function pickDeterministicVariant(seed, variants = []) {
+    if (!Array.isArray(variants) || variants.length === 0) return null;
+    return variants[hashString(seed) % variants.length] || variants[0];
+}
+
+function getDaysSince(dateValue, now = new Date()) {
+    const time = Date.parse(dateValue || "");
+    if (!Number.isFinite(time)) return Number.POSITIVE_INFINITY;
+    return Math.max(0, Math.floor((now.getTime() - time) / DAY_MS));
+}
+
+function isSentRecently(dateValue, minGapMs, now = new Date()) {
+    const time = Date.parse(dateValue || "");
+    if (!Number.isFinite(time)) return false;
+    return now.getTime() - time < minGapMs;
+}
+
+function buildReminderEmailLayout({
+    eyebrow,
+    greeting,
+    headline,
+    bodyLines = [],
+    ctaLabel,
+    ctaUrl,
+    footer,
+}) {
+    const safeLines = bodyLines
+        .map((line) => String(line || "").trim())
+        .filter(Boolean);
+    const safeGreeting = String(greeting || "Bonjour,").trim() || "Bonjour,";
+    const safeHeadline = String(headline || "").trim();
+    const safeCtaLabel = String(ctaLabel || "Revenir sur XERA").trim();
+    const safeCtaUrl = String(ctaUrl || buildDiscoverReminderUrl()).trim();
+    const safeFooter =
+        String(
+            footer ||
+                "Tu recois ce message parce que tu as active les rappels email sur XERA. Tu peux les couper quand tu veux dans les reglages.",
+        ).trim() ||
+        "Tu recois ce message parce que tu as active les rappels email sur XERA. Tu peux les couper quand tu veux dans les reglages.";
+
+    const htmlParagraphs = safeLines
+        .map(
+            (line) =>
+                `<p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:#334155;">${escapeHtmlAttr(line)}</p>`,
+        )
+        .join("");
+    const text = [
+        safeGreeting,
+        "",
+        safeHeadline,
+        "",
+        ...safeLines,
+        "",
+        `${safeCtaLabel}: ${safeCtaUrl}`,
+        "",
+        safeFooter,
+    ].join("\n");
+
+    return {
+        html: `
+<!doctype html>
+<html lang="fr">
+  <body style="margin:0;padding:24px;background:#f5f7fb;font-family:Arial,sans-serif;color:#111827;">
+    <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:20px;padding:32px;border:1px solid #e5e7eb;">
+      <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;margin-bottom:12px;">${escapeHtmlAttr(eyebrow || "XERA")}</div>
+      <p style="margin:0 0 12px;font-size:16px;line-height:1.6;color:#334155;">${escapeHtmlAttr(safeGreeting)}</p>
+      <h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#0f172a;">${escapeHtmlAttr(safeHeadline)}</h1>
+      ${htmlParagraphs}
+      <a href="${escapeHtmlAttr(safeCtaUrl)}" style="display:inline-block;padding:12px 20px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-weight:700;">${escapeHtmlAttr(safeCtaLabel)}</a>
+      <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#64748b;">${escapeHtmlAttr(safeFooter)}</p>
+    </div>
+  </body>
+</html>`.trim(),
+        text,
+    };
+}
+
+function buildDailyPostReminderCampaign(user, context, slot) {
+    if (!slot || context.hasPostedToday) return null;
+    if (!Array.isArray(context.activeArcs) || context.activeArcs.length === 0) {
+        return null;
+    }
+    if (user.last_email_reminder_slot === slot.slotKey) return null;
+
+    const arcTitle =
+        String(context.activeArcs[0]?.title || "").trim() || "ton projet";
+    const ctaUrl = buildCreateReminderUrl(user.id);
+    const greeting = user.name ? `Bonjour ${user.name},` : "Bonjour,";
+    const variants = [
+        {
+            subject: `XERA - ${arcTitle} t'attend toujours`,
+            headline: "Si tu as 30 secondes, reviens nous montrer ou tu en es.",
+            bodyLines: [
+                `Ton projet "${arcTitle}" est toujours en cours.`,
+                "Pas besoin d'un long texte: une petite update suffit pour garder le fil.",
+            ],
+            ctaLabel: "Revenir poster",
+        },
+        {
+            subject: `XERA - On n'a pas oublie ${arcTitle}`,
+            headline: "On n'a pas oublie ton projet.",
+            bodyLines: [
+                `Tu peux revenir sur "${arcTitle}" quand tu veux.`,
+                "Une photo, deux lignes, un point rapide: tout compte.",
+            ],
+            ctaLabel: "Ouvrir mon update",
+        },
+        {
+            subject: `XERA - Tu veux remettre ${arcTitle} en mouvement ?`,
+            headline: "Tu peux remettre ton projet en mouvement aujourd'hui.",
+            bodyLines: [
+                `"${arcTitle}" merite sa petite mise a jour du jour.`,
+                "Le plus dur, c'est souvent d'ouvrir l'app. On te facilite le retour.",
+            ],
+            ctaLabel: "Publier en un clic",
+        },
+        {
+            subject: `XERA - Un petit signe de vie pour ${arcTitle} ?`,
+            headline: "Un petit signe de vie suffit.",
+            bodyLines: [
+                `Si tu avances sur "${arcTitle}", viens nous montrer ca.`,
+                "Meme une update courte garde ton elan visible.",
+            ],
+            ctaLabel: "Faire ma mise a jour",
+        },
+    ];
+    const variant = pickDeterministicVariant(
+        `daily:${user.id}:${slot.slotKey}`,
+        variants,
+    );
+    const layout = buildReminderEmailLayout({
+        eyebrow: slot.hour < 14 ? "Un petit rappel" : "Avant de finir la journee",
+        greeting,
+        headline: variant.headline,
+        bodyLines: variant.bodyLines,
+        ctaLabel: variant.ctaLabel,
+        ctaUrl,
+    });
+
+    return {
+        type: "daily_post",
+        subject: variant.subject,
+        html: layout.html,
+        text: layout.text,
+        slotKey: slot.slotKey,
+        ctaUrl,
+    };
+}
+
+function buildInactiveReengagementCampaign(user, context, now) {
+    if (!Array.isArray(context.activeArcs) || context.activeArcs.length === 0) {
+        return null;
+    }
+    const noRecentPost = !Number.isFinite(context.inactivityDays);
+    if (
+        (!noRecentPost && context.inactivityDays < 7) ||
+        (noRecentPost && context.projectAgeDays < 7)
+    ) {
+        return null;
+    }
+    if (
+        isSentRecently(user.last_inactive_reminder_sent_at, 7 * DAY_MS, now)
+    ) {
+        return null;
+    }
+
+    const arcTitle =
+        String(context.activeArcs[0]?.title || "").trim() || "ton projet";
+    const ctaUrl = buildCreateReminderUrl(user.id);
+    const greeting = user.name ? `Bonjour ${user.name},` : "Bonjour,";
+    const variants = [
+        {
+            subject: `XERA - ${arcTitle} t'attend toujours`,
+            headline: "On peut reprendre tranquillement.",
+            bodyLines: [
+                `"${arcTitle}" est toujours la.`,
+                `Cela fait environ ${noRecentPost ? context.projectAgeDays : context.inactivityDays} jours depuis ta derniere update, mais tu peux reprendre sans pression.`,
+            ],
+            ctaLabel: "Revenir sur mon projet",
+        },
+        {
+            subject: "XERA - Ca fait un moment. On reprend ensemble ?",
+            headline: "Ton projet n'est pas perdu.",
+            bodyLines: [
+                `Si tu veux, on te ramene directement a "${arcTitle}".`,
+                "Pas besoin de revenir avec quelque chose de parfait. Une petite mise a jour suffit.",
+            ],
+            ctaLabel: "Relancer mon projet",
+        },
+        {
+            subject: `XERA - ${arcTitle} peut repartir aujourd'hui`,
+            headline: "Ton elan peut revenir plus vite que tu ne le penses.",
+            bodyLines: [
+                `On n'a pas vu de nouvelle avancee recente sur "${arcTitle}".`,
+                "Si tu veux reprendre le fil aujourd'hui, XERA t'attend au bon endroit.",
+            ],
+            ctaLabel: "Revenir sur XERA",
+        },
+        {
+            subject: `XERA - Tu peux revenir la ou tu t'etais arrete`,
+            headline: "Tu peux revenir la ou tu t'etais arrete.",
+            bodyLines: [
+                `Ton projet "${arcTitle}" est encore en cours.`,
+                "On te remet directement dans l'app pour reprendre sans friction.",
+            ],
+            ctaLabel: "Continuer mon projet",
+        },
+    ];
+    const variant = pickDeterministicVariant(
+        `inactive:${user.id}:${context.dateKey}`,
+        variants,
+    );
+    const layout = buildReminderEmailLayout({
+        eyebrow: "On pense a ton projet",
+        greeting,
+        headline: variant.headline,
+        bodyLines: variant.bodyLines,
+        ctaLabel: variant.ctaLabel,
+        ctaUrl,
+    });
+
+    return {
+        type: "inactive_week",
+        subject: variant.subject,
+        html: layout.html,
+        text: layout.text,
+        ctaUrl,
+    };
+}
+
+function buildSocialProgressCampaign(user, context, now) {
+    const noRecentPost = !Number.isFinite(context.inactivityDays);
+    if (
+        (!noRecentPost && context.inactivityDays < 2) ||
+        (noRecentPost && context.projectAgeDays < 2)
+    ) {
+        return null;
+    }
+    if (!context.socialSignal) return null;
+    if (
+        isSentRecently(user.last_social_progress_email_sent_at, DAY_MS, now)
+    ) {
+        return null;
+    }
+
+    const authorName = String(context.socialSignal.authorName || "")
+        .trim() || "Quelqu'un que tu suis";
+    const activityTitle = String(context.socialSignal.title || "")
+        .trim() || "une nouvelle avancee";
+    const activityCount = Math.max(1, Number(context.socialSignal.count || 1));
+    const ctaUrl = buildDiscoverReminderUrl();
+    const greeting = user.name ? `Bonjour ${user.name},` : "Bonjour,";
+    const variants = [
+        {
+            subject: `XERA - ${authorName} a publie quelque chose de nouveau`,
+            headline: "Ca bouge encore du cote des comptes que tu suis.",
+            bodyLines: [
+                `${authorName} a partage ${activityTitle}.`,
+                "Si tu veux reprendre le rythme, c'est peut-etre le bon moment pour revenir.",
+            ],
+            ctaLabel: "Voir ce qu'il y a de neuf",
+        },
+        {
+            subject: "XERA - Pendant ton absence, quelques updates sont tombees",
+            headline: "Tu as peut-etre manque deux ou trois choses.",
+            bodyLines: [
+                `${activityCount} update${activityCount > 1 ? "s" : ""} recente${activityCount > 1 ? "s" : ""} viennent d'apparaitre chez les comptes que tu suis.`,
+                "Reviens jeter un oeil, puis publier la tienne si tu en as envie.",
+            ],
+            ctaLabel: "Retourner dans l'app",
+        },
+        {
+            subject: "XERA - Les autres avancent, et ta place est toujours la",
+            headline: "Les autres avancent, et ta place est toujours la.",
+            bodyLines: [
+                `${authorName} et d'autres continuent a documenter leur progression.`,
+                "Reviens voir ce qui se passe et poster la tienne quand tu veux.",
+            ],
+            ctaLabel: "Revenir sur XERA",
+        },
+        {
+            subject: "XERA - Il y a du nouveau dans ton reseau",
+            headline: "Il y a du nouveau dans ton reseau.",
+            bodyLines: [
+                `${authorName} bouge, et tu n'es pas loin de reprendre toi aussi.`,
+                "On te remet dans l'app en un clic.",
+            ],
+            ctaLabel: "Voir les nouvelles updates",
+        },
+    ];
+    const variant = pickDeterministicVariant(
+        `social:${user.id}:${context.dateKey}:${authorName}:${activityCount}`,
+        variants,
+    );
+    const layout = buildReminderEmailLayout({
+        eyebrow: "Pendant ce temps sur XERA",
+        greeting,
+        headline: variant.headline,
+        bodyLines: variant.bodyLines,
+        ctaLabel: variant.ctaLabel,
+        ctaUrl,
+    });
+
+    return {
+        type: "social_progress",
+        subject: variant.subject,
+        html: layout.html,
+        text: layout.text,
+        ctaUrl,
+    };
+}
+
+async function buildEmailReminderContexts(users = [], now = new Date()) {
+    const userIds = Array.from(
+        new Set((users || []).map((user) => user?.id).filter(Boolean)),
+    );
+    if (userIds.length === 0) return new Map();
+
+    const recentOwnActivityIso = new Date(now.getTime() - 8 * DAY_MS).toISOString();
+    const recentSocialActivityIso = new Date(now.getTime() - 3 * DAY_MS).toISOString();
+
+    const [arcsResult, ownContentResult, followRowsResult] = await Promise.all([
+        supabase
+            .from("arcs")
+            .select("id, user_id, title, status, created_at")
+            .in("user_id", userIds)
+            .eq("status", "in_progress"),
+        supabase
+            .from("content")
+            .select("id, user_id, title, created_at, arc_id")
+            .in("user_id", userIds)
+            .gte("created_at", recentOwnActivityIso)
+            .order("created_at", { ascending: false }),
+        supabase
+            .from("followers")
+            .select("follower_id, following_id")
+            .in("follower_id", userIds),
+    ]);
+
+    if (arcsResult.error) throw arcsResult.error;
+    if (ownContentResult.error) throw ownContentResult.error;
+    if (followRowsResult.error) throw followRowsResult.error;
+
+    const activeArcsByUser = new Map();
+    (arcsResult.data || []).forEach((arc) => {
+        if (!activeArcsByUser.has(arc.user_id)) {
+            activeArcsByUser.set(arc.user_id, []);
+        }
+        activeArcsByUser.get(arc.user_id).push(arc);
+    });
+
+    const latestOwnContentByUser = new Map();
+    (ownContentResult.data || []).forEach((row) => {
+        if (!latestOwnContentByUser.has(row.user_id)) {
+            latestOwnContentByUser.set(row.user_id, row);
+        }
+    });
+
+    const followingsByUser = new Map();
+    (followRowsResult.data || []).forEach((row) => {
+        if (!followingsByUser.has(row.follower_id)) {
+            followingsByUser.set(row.follower_id, []);
+        }
+        followingsByUser.get(row.follower_id).push(row.following_id);
+    });
+
+    const followedUserIds = Array.from(
+        new Set((followRowsResult.data || []).map((row) => row.following_id).filter(Boolean)),
+    );
+
+    let recentSocialRows = [];
+    let followedUsers = [];
+    if (followedUserIds.length > 0) {
+        const [socialContentResult, followedUsersResult] = await Promise.all([
+            supabase
+                .from("content")
+                .select("id, user_id, title, created_at, arc_id")
+                .in("user_id", followedUserIds)
+                .gte("created_at", recentSocialActivityIso)
+                .order("created_at", { ascending: false }),
+            supabase
+                .from("users")
+                .select("id, name")
+                .in("id", followedUserIds),
+        ]);
+
+        if (socialContentResult.error) throw socialContentResult.error;
+        if (followedUsersResult.error) throw followedUsersResult.error;
+        recentSocialRows = socialContentResult.data || [];
+        followedUsers = followedUsersResult.data || [];
+    }
+
+    const followedUsersById = new Map(
+        followedUsers.map((row) => [row.id, row]),
+    );
+    const recentSocialByAuthor = new Map();
+    recentSocialRows.forEach((row) => {
+        if (!recentSocialByAuthor.has(row.user_id)) {
+            recentSocialByAuthor.set(row.user_id, []);
+        }
+        recentSocialByAuthor.get(row.user_id).push(row);
+    });
+
+    const contexts = new Map();
+    users.forEach((user) => {
+        const timeZone = sanitizeTimeZone(user.email_reminder_timezone || "UTC");
+        const slot = resolveReminderSlot(now, timeZone);
+        const dateKey = getTimePartsInZone(now, timeZone).dateKey;
+        const activeArcs = activeArcsByUser.get(user.id) || [];
+        const lastOwnContent = latestOwnContentByUser.get(user.id) || null;
+        const oldestActiveArc = activeArcs
+            .slice()
+            .sort(
+                (left, right) =>
+                    Date.parse(left.created_at || 0) -
+                    Date.parse(right.created_at || 0),
+            )[0] || null;
+        const lastOwnDateKey = lastOwnContent?.created_at
+            ? getTimePartsInZone(new Date(lastOwnContent.created_at), timeZone)
+                  .dateKey
+            : "";
+        const hasPostedToday = Boolean(lastOwnDateKey && lastOwnDateKey === dateKey);
+        const inactivityDays = getDaysSince(lastOwnContent?.created_at, now);
+        const projectAgeDays = oldestActiveArc?.created_at
+            ? getDaysSince(oldestActiveArc.created_at, now)
+            : 0;
+
+        const followedIds = Array.from(
+            new Set((followingsByUser.get(user.id) || []).filter(Boolean)),
+        );
+        const socialCandidates = followedIds
+            .flatMap((followedId) => {
+                const rows = recentSocialByAuthor.get(followedId) || [];
+                return rows.slice(0, 1).map((row) => ({
+                    ...row,
+                    authorName:
+                        followedUsersById.get(followedId)?.name || "Un createur",
+                }));
+            })
+            .sort(
+                (left, right) =>
+                    Date.parse(right.created_at || 0) -
+                    Date.parse(left.created_at || 0),
+            );
+
+        contexts.set(user.id, {
+            timeZone,
+            slot,
+            dateKey,
+            activeArcs,
+            lastOwnContent,
+            hasPostedToday,
+            inactivityDays,
+            projectAgeDays,
+            socialSignal:
+                socialCandidates.length > 0
+                    ? {
+                          count: socialCandidates.length,
+                          authorName: socialCandidates[0].authorName,
+                          title: socialCandidates[0].title || "une nouvelle avancee",
+                          createdAt: socialCandidates[0].created_at || null,
+                      }
+                    : null,
+        });
+    });
+
+    return contexts;
+}
+
+function selectReminderCampaign(user, context, now = new Date()) {
+    if (!user || !context) return null;
+    return (
+        buildInactiveReengagementCampaign(user, context, now) ||
+        buildSocialProgressCampaign(user, context, now) ||
+        buildDailyPostReminderCampaign(user, context, context.slot)
+    );
+}
+
+async function resolveReminderEmailAddress(userId) {
+    const safeUserId = String(userId || "").trim();
+    if (!safeUserId) return "";
+
+    try {
+        const { data, error } = await supabase.auth.admin.getUserById(safeUserId);
+        if (error) throw error;
+        return String(data?.user?.email || "")
+            .trim()
+            .toLowerCase();
+    } catch (error) {
+        console.warn(
+            "Unable to resolve reminder email address:",
+            safeUserId,
+            error?.message || error,
+        );
+        return "";
+    }
+}
+
+async function sendReminderEmail(payload) {
+    if (!supportsEmailReminders()) return { success: false, skipped: true };
+    if (!payload?.to || !payload?.subject) {
+        return { success: false, skipped: true };
+    }
+
+    try {
+        let response = null;
+
+        if (REMINDER_EMAIL_PROVIDER === "resend") {
+            const body = {
+                from: REMINDER_EMAIL_FROM,
+                to: [payload.to],
+                subject: payload.subject,
+                html: payload.html || "",
+                text: payload.text || "",
+            };
+            if (REMINDER_EMAIL_REPLY_TO) {
+                body.reply_to = REMINDER_EMAIL_REPLY_TO;
+            }
+
+            response = await fetch("https://api.resend.com/emails", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${REMINDER_EMAIL_API_KEY}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(body),
+            });
+        } else if (REMINDER_EMAIL_PROVIDER === "webhook") {
+            const headers = {
+                "Content-Type": "application/json",
+            };
+            if (REMINDER_EMAIL_WEBHOOK_TOKEN) {
+                headers.Authorization = `Bearer ${REMINDER_EMAIL_WEBHOOK_TOKEN}`;
+            }
+
+            response = await fetch(REMINDER_EMAIL_WEBHOOK_URL, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                    ...payload,
+                    from: REMINDER_EMAIL_FROM || null,
+                    replyTo: REMINDER_EMAIL_REPLY_TO || null,
+                }),
+            });
+        } else {
+            return { success: false, skipped: true };
+        }
+
+        if (!response?.ok) {
+            const details = await response.text().catch(() => "");
+            throw new Error(
+                `Email provider error ${response?.status || "unknown"} ${details.slice(0, 280)}`.trim(),
+            );
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.warn("Reminder email send failed:", error?.message || error);
+        return { success: false, error };
+    }
+}
+
+async function sweepReturnReminderEmails(now = new Date()) {
+    if (!supportsEmailReminders()) return { ok: true, skipped: true };
+
+    const { data: users, error } = await supabase
+        .from("users")
+        .select(
+            "id, name, email_reminder_enabled, email_reminder_timezone, last_email_reminder_slot, last_inactive_reminder_sent_at, last_social_progress_email_sent_at",
+        )
+        .eq("email_reminder_enabled", true);
+
+    if (error) {
+        if (isMissingColumnError(error)) {
+            console.warn(
+                "Email reminder columns missing in users. Run sql/email-reminders.sql to enable email reminders.",
+            );
+            return {
+                ok: false,
+                schemaMissing: true,
+            };
+        }
+        throw error;
+    }
+
+    const contextsByUserId = await buildEmailReminderContexts(users || [], now);
+    let sentCount = 0;
+    for (const user of users || []) {
+        if (!user?.id) continue;
+
+        const context = contextsByUserId.get(user.id) || null;
+        const campaign = selectReminderCampaign(user, context, now);
+        if (!campaign) continue;
+        const email = await resolveReminderEmailAddress(user.id);
+        if (!email) continue;
+
+        const payload = {
+            to: email,
+            subject: campaign.subject,
+            html: campaign.html,
+            text: campaign.text,
+        };
+        const result = await sendReminderEmail(payload);
+        if (!result.success) continue;
+
+        const updatePayload = {
+            email_reminder_timezone: context?.timeZone || "UTC",
+        };
+        if (campaign.type === "daily_post" && campaign.slotKey) {
+            updatePayload.last_email_reminder_slot = campaign.slotKey;
+        }
+        if (campaign.type === "inactive_week") {
+            updatePayload.last_inactive_reminder_sent_at =
+                now.toISOString();
+        }
+        if (campaign.type === "social_progress") {
+            updatePayload.last_social_progress_email_sent_at =
+                now.toISOString();
+        }
+
+        const { error: updateError } = await supabase
+            .from("users")
+            .update(updatePayload)
+            .eq("id", user.id);
+
+        if (updateError && !isMissingColumnError(updateError)) {
+            console.warn(
+                "Failed to persist email reminder slot:",
+                updateError?.message || updateError,
+            );
+        }
+
+        sentCount += 1;
+    }
+
+    return {
+        ok: true,
+        sentCount,
+    };
+}
+
+async function sendScheduledReturnReminders() {
+    if (reminderSweepInFlight) return;
+    reminderSweepInFlight = true;
+
+    try {
+        await sweepReturnReminderEmails(new Date());
+    } catch (error) {
+        console.error("Return reminder sweep error:", error);
+    } finally {
+        reminderSweepInFlight = false;
+    }
+}
+
+function startReminderScheduler() {
+    if (!supportsEmailReminders()) return;
+
+    setInterval(() => {
+        sendScheduledReturnReminders().catch((error) => {
+            console.error("Reminder scheduler tick error:", error);
+        });
+    }, REMINDER_SWEEP_MS);
+
+    sendScheduledReturnReminders().catch((error) => {
+        console.error("Initial reminder sweep error:", error);
+    });
 }
 
 // ==================== MAISHAPAY CHECKOUT ====================
@@ -3252,9 +3988,101 @@ app.post("/api/admin/withdrawal-requests/status", async (req, res) => {
 
 // ==================== API EXISTANTES ====================
 
+app.post("/api/reminders/email/preferences", async (req, res) => {
+    try {
+        const authResult = await authenticateRequest(req);
+        if (authResult.error) {
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        }
+
+        const targetUserId = String(
+            req.body?.userId || authResult.user.id || "",
+        ).trim();
+        if (!targetUserId || targetUserId !== authResult.user.id) {
+            return res
+                .status(403)
+                .json({ error: "Utilisateur cible invalide." });
+        }
+
+        const metadata =
+            authResult.user.user_metadata &&
+            typeof authResult.user.user_metadata === "object"
+                ? authResult.user.user_metadata
+                : {};
+        const enabled = req.body?.enabled !== false;
+        const safeTimezone = sanitizeTimeZone(req.body?.timezone || "UTC");
+        const nowIso = new Date().toISOString();
+
+        await ensurePublicUserRecord(targetUserId, {
+            email: authResult.user.email,
+            username: metadata.username || null,
+            name: metadata.name || metadata.full_name || null,
+            avatarUrl: metadata.avatar_url || metadata.avatar || null,
+            accountType: metadata.account_type || null,
+            accountSubtype: metadata.account_subtype || null,
+            badge: metadata.badge || null,
+        });
+
+        const updatePayload = {
+            email_reminder_enabled: enabled,
+            email_reminder_timezone: safeTimezone,
+            updated_at: nowIso,
+        };
+        if (enabled) {
+            updatePayload.email_reminder_opted_in_at = nowIso;
+        }
+
+        const { error } = await supabase
+            .from("users")
+            .update(updatePayload)
+            .eq("id", targetUserId);
+
+        if (error) {
+            if (isMissingColumnError(error)) {
+                return res.status(503).json({
+                    error:
+                        "Colonnes de rappel email manquantes. Executez sql/email-reminders.sql.",
+                });
+            }
+            throw error;
+        }
+
+        return res.json({
+            ok: true,
+            enabled,
+            timezone: safeTimezone,
+            email: authResult.user.email || null,
+            deliveryReady: supportsEmailReminders(),
+            provider: supportsEmailReminders() ? REMINDER_EMAIL_PROVIDER : null,
+        });
+    } catch (error) {
+        console.error("Email reminder preference error:", error);
+        return res.status(500).json({
+            error:
+                error?.message ||
+                "Impossible d'enregistrer la preference email.",
+        });
+    }
+});
+
 // Health check
 app.get("/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+app.get("/api/health", (_req, res) => {
+    res.json({
+        ok: true,
+        reminderHours: REMINDER_HOURS,
+        reminderWindowMinutes: REMINDER_WINDOW_MIN,
+        emailReminders: supportsEmailReminders()
+            ? REMINDER_EMAIL_PROVIDER
+            : "disabled",
+        emailReminderFrom: REMINDER_EMAIL_FROM || null,
+        subscriptionSweepMs: SUBSCRIPTION_SWEEP_MS,
+    });
 });
 
 function handlePublicConfig(req, res) {
@@ -3301,11 +4129,20 @@ if (isDirectRun) {
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
         console.log(`API endpoints available at /api/*`);
+        if (supportsEmailReminders()) {
+            startReminderScheduler();
+        } else {
+            console.info(
+                "Email reminder scheduler disabled (provider not configured).",
+            );
+        }
     });
 }
 
 module.exports = app;
 module.exports.sweepExpiredSubscriptions = sweepExpiredSubscriptions;
+module.exports.sweepReturnReminderEmails = sweepReturnReminderEmails;
+module.exports.sendScheduledReturnReminders = sendScheduledReturnReminders;
 module.exports.handleMaishaPaySubscriptionCheckout =
     handleMaishaPaySubscriptionCheckout;
 module.exports.handleMaishaPaySupportCheckout = handleMaishaPaySupportCheckout;

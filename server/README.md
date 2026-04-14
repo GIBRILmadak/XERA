@@ -34,3 +34,23 @@ Rappels programmés (10h / 18h)
   - `RETURN_REMINDER_HOURS=10,18`
   - `RETURN_REMINDER_WINDOW_MINUTES=15` (fenêtre d'envoi après l'heure cible)
   - `RETURN_REMINDER_SWEEP_MS=60000` (fréquence de scan des abonnements)
+
+Rappels email (optionnels)
+- Exécuter `sql/email-reminders.sql` sur la base Supabase pour ajouter les préférences de rappel email.
+- Endpoint utilisateur:
+  - `POST /api/reminders/email/preferences`
+  - headers: `Authorization: Bearer <access_token>`
+  - body: `{ "userId": "<uuid>", "enabled": true, "timezone": "Africa/Lubumbashi" }`
+- Variables d'environnement optionnelles:
+  - `RETURN_REMINDER_EMAIL_ENABLED=1`
+  - `RETURN_REMINDER_EMAIL_PROVIDER=resend` ou `webhook`
+  - `RETURN_REMINDER_EMAIL_FROM="XERA <notif.xera@zohomail.com>"`
+  - `RETURN_REMINDER_EMAIL_REPLY_TO=team@xera.app`
+  - `RETURN_REMINDER_EMAIL_API_KEY=<cle API>` (si provider `resend`)
+  - `RETURN_REMINDER_EMAIL_WEBHOOK_URL=https://...` (si provider `webhook`)
+  - `RETURN_REMINDER_EMAIL_WEBHOOK_TOKEN=<token optionnel>`
+- En mode Vercel, le cron `/api/cron/send-reminder-emails` lance un sweep toutes les 10 minutes.
+- Campagnes email actuellement gerees:
+  - rappel de post du jour avec lien direct vers l'ouverture du formulaire
+  - reactivation apres 7 jours sans update
+  - retour social quand des comptes suivis avancent pendant l'absence de l'utilisateur

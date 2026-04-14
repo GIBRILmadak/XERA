@@ -585,6 +585,10 @@ function initializeFileInput(inputId, options = {}) {
         typeof options.multiple === "function"
             ? !!options.multiple()
             : !!options.multiple;
+    const parallelUploads = Math.max(
+        1,
+        Number.parseInt(options.parallelUploads, 10) || 1,
+    );
     const compress = options.compress || false;
     const validate = options.validate;
 
@@ -606,6 +610,7 @@ function initializeFileInput(inputId, options = {}) {
                 onAfterUpload,
                 onProgress,
                 folder,
+                parallelUploads,
             },
         );
         input.value = "";
@@ -650,6 +655,7 @@ function initializeFileInput(inputId, options = {}) {
                     onAfterUpload,
                     onProgress,
                     folder,
+                    parallelUploads,
                 },
             );
 
@@ -679,49 +685,50 @@ async function handleFileSelection(
     const onProgress = options.onProgress;
     const folder = options.folder || "content";
     const totalFiles = Array.isArray(files) ? files.length : 0;
-    let fileIndex = 0;
+    const parallelUploads = Math.max(
+        1,
+        Number.parseInt(options.parallelUploads, 10) || 1,
+    );
+    const progressState = new Array(totalFiles).fill(0);
 
-    for (const file of files) {
-        const currentIndex = fileIndex;
-        fileIndex += 1;
-        const reportProgress = (filePercent) => {
-            if (typeof onProgress !== "function") return;
-            const safePercent =
-                typeof filePercent === "number" && Number.isFinite(filePercent)
-                    ? Math.max(0, Math.min(100, filePercent))
-                    : 0;
-            const overallPercent =
-                totalFiles > 0
-                    ? Math.round(
-                          ((currentIndex + safePercent / 100) / totalFiles) *
-                              100,
-                      )
-                    : safePercent;
-            onProgress(overallPercent, {
-                filePercent: safePercent,
-                fileIndex: currentIndex,
-                totalFiles,
-                file,
-            });
-        };
+    const emitProgress = (currentIndex, file, filePercent) => {
+        if (typeof onProgress !== "function") return;
+        const safePercent =
+            typeof filePercent === "number" && Number.isFinite(filePercent)
+                ? Math.max(0, Math.min(100, filePercent))
+                : 0;
+        progressState[currentIndex] = safePercent;
+        const completed = progressState.reduce((sum, value) => sum + value, 0);
+        const overallPercent =
+            totalFiles > 0 ? Math.round(completed / totalFiles) : safePercent;
+        onProgress(overallPercent, {
+            filePercent: safePercent,
+            fileIndex: currentIndex,
+            totalFiles,
+            file,
+        });
+    };
 
+    const processFile = async (file, currentIndex) => {
         if (typeof validate === "function") {
             const validation = validate(file);
             if (validation === false) {
                 notifyUploadError("Fichier non autorisé.");
-                continue;
+                emitProgress(currentIndex, file, 100);
+                return null;
             }
             if (typeof validation === "string") {
                 notifyUploadError(validation);
-                continue;
+                emitProgress(currentIndex, file, 100);
+                return null;
             }
             if (validation && validation.valid === false) {
                 notifyUploadError(validation.error || "Fichier non autorisé.");
-                continue;
+                emitProgress(currentIndex, file, 100);
+                return null;
             }
         }
 
-        // Afficher l'aperçu si demandé
         if (preview && isAllowedImageFile(file)) {
             createImagePreview(file, (dataUrl) => {
                 if (typeof preview === "function") {
@@ -735,7 +742,6 @@ async function handleFileSelection(
             });
         }
 
-        // Compresser l'image si demandé
         let fileToUpload = file;
         const shouldCompress =
             compress && isAllowedImageFile(file) && !isGifFile(file);
@@ -747,7 +753,6 @@ async function handleFileSelection(
             }
         }
 
-        // Uploader le fichier
         if (typeof onBeforeUpload === "function") {
             try {
                 onBeforeUpload(fileToUpload);
@@ -755,10 +760,14 @@ async function handleFileSelection(
                 console.error("Erreur onBeforeUpload:", e);
             }
         }
+
         let result;
         try {
-            result = await uploadFile(fileToUpload, folder, reportProgress);
+            result = await uploadFile(fileToUpload, folder, (filePercent) =>
+                emitProgress(currentIndex, file, filePercent),
+            );
         } finally {
+            emitProgress(currentIndex, file, 100);
             if (typeof onAfterUpload === "function") {
                 try {
                     onAfterUpload();
@@ -767,15 +776,33 @@ async function handleFileSelection(
                 }
             }
         }
-        uploadedFiles.push(result);
 
-        // Callback après upload
+        uploadedFiles[currentIndex] = result;
         if (onUpload) {
             onUpload(result);
         }
+        return result;
+    };
+
+    if (parallelUploads <= 1 || totalFiles <= 1) {
+        for (let index = 0; index < totalFiles; index += 1) {
+            await processFile(files[index], index);
+        }
+        return uploadedFiles.filter((item) => item !== undefined);
     }
 
-    return uploadedFiles;
+    let nextIndex = 0;
+    const workerCount = Math.min(parallelUploads, totalFiles);
+    const workers = Array.from({ length: workerCount }, async () => {
+        while (nextIndex < totalFiles) {
+            const currentIndex = nextIndex;
+            nextIndex += 1;
+            await processFile(files[currentIndex], currentIndex);
+        }
+    });
+    await Promise.all(workers);
+
+    return uploadedFiles.filter((item) => item !== undefined);
 }
 
 function notifyUploadError(message) {

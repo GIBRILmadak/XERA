@@ -17,8 +17,10 @@ window.hasLoadedUsers = false;
 window.userLoadError = null;
 window.arcCollaboratorsCache = new Map();
 window.arcCollaboratorsPending = new Set();
+window.pendingLatestPublishedHighlightUserId = null;
 window.pendingCreatePostAfterArc = null;
 let firstPostOnboardingHandled = false;
+let initialEmailActionHandled = false;
 const CONTENT_PREFETCH_BATCH_SIZE = 10;
 const CONTENT_FETCH_BATCH_SIZE = 50;
 const FOLLOWED_IDS_CACHE_TTL_MS = 15000;
@@ -37,6 +39,25 @@ function getInitialProfileUserId() {
         return params.get("user") || params.get("u");
     } catch (error) {
         return null;
+    }
+}
+
+function getInitialAppAction() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        return String(params.get("action") || "").trim().toLowerCase();
+    } catch (error) {
+        return "";
+    }
+}
+
+function clearInitialAppAction() {
+    try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("action");
+        window.history.replaceState({}, document.title, url.toString());
+    } catch (error) {
+        // ignore
     }
 }
 
@@ -955,6 +976,7 @@ async function initializeApp() {
         } else if (window.currentUserId) {
             await renderProfileIntoContainer(window.currentUserId);
         }
+        await maybeHandleInitialEmailAction();
 
         await maybeResumePaymentReturnContext();
         handleLoginPromptContext();
@@ -1557,6 +1579,61 @@ async function requestAccountDeletion(userId) {
     }
 }
 
+async function saveEmailReminderPreferences({
+    userId,
+    enabled,
+    timezone,
+} = {}) {
+    try {
+        const {
+            data: { session },
+            error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError || !session?.access_token) {
+            throw new Error("Session invalide. Reconnectez-vous.");
+        }
+
+        const response = await fetch("/api/reminders/email/preferences", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+                userId,
+                enabled: enabled !== false,
+                timezone: timezone || "UTC",
+            }),
+        });
+
+        let payload = {};
+        try {
+            payload = await response.json();
+        } catch (error) {
+            payload = {};
+        }
+
+        if (!response.ok) {
+            throw new Error(
+                payload?.error ||
+                    "Impossible d'enregistrer la preference email.",
+            );
+        }
+
+        return {
+            success: true,
+            data: payload,
+        };
+    } catch (error) {
+        console.error("Email reminder preference save error:", error);
+        return {
+            success: false,
+            error: error?.message || "Erreur de sauvegarde.",
+        };
+    }
+}
+
 /* ========================================
    GESTION DU PROFIL UTILISATEUR
    ======================================== */
@@ -2093,7 +2170,6 @@ function encodeDescriptionWithTags(description, tags = []) {
 function isAnnouncementContent(content) {
     return (
         content &&
-        content.type === "text" &&
         Array.isArray(content.tags) &&
         content.tags.includes("annonce")
     );
@@ -2233,6 +2309,264 @@ function setPendingCreatePostAfterArc(userId, options = {}) {
 
 function clearPendingCreatePostAfterArc() {
     window.pendingCreatePostAfterArc = null;
+}
+
+const XERA_CREATE_PREFS_KEY_PREFIX = "xera:create:prefs:";
+const XERA_CREATE_METRICS_KEY_PREFIX = "xera:create:metrics:";
+const XERA_CREATE_METRIC_HISTORY_LIMIT = 8;
+const XERA_CREATE_TAG_LIMIT = 6;
+const XERA_CREATE_TITLE_LIMIT = 4;
+
+function getCreatePrefsStorageKey(userId) {
+    return `${XERA_CREATE_PREFS_KEY_PREFIX}${userId || "anon"}`;
+}
+
+function getCreateMetricsStorageKey(userId) {
+    return `${XERA_CREATE_METRICS_KEY_PREFIX}${userId || "anon"}`;
+}
+
+function readCreatePrefs(userId) {
+    if (!userId) return {};
+    try {
+        const raw = localStorage.getItem(getCreatePrefsStorageKey(userId));
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function writeCreatePrefs(userId, prefs) {
+    if (!userId) return;
+    try {
+        localStorage.setItem(
+            getCreatePrefsStorageKey(userId),
+            JSON.stringify(prefs || {}),
+        );
+    } catch (e) {
+        // ignore
+    }
+}
+
+function updateCreatePrefs(userId, patch = {}) {
+    const previous = readCreatePrefs(userId);
+    const next = {
+        ...previous,
+        ...patch,
+        updatedAt: Date.now(),
+    };
+    writeCreatePrefs(userId, next);
+    return next;
+}
+
+function readCreateMetrics(userId) {
+    if (!userId) return [];
+    try {
+        const raw = localStorage.getItem(getCreateMetricsStorageKey(userId));
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function recordCreateMetric(userId, durationMs) {
+    if (!userId || !Number.isFinite(durationMs) || durationMs <= 0) return;
+    try {
+        const previous = readCreateMetrics(userId);
+        const next = [
+            ...previous,
+            {
+                durationMs: Math.round(durationMs),
+                createdAt: Date.now(),
+            },
+        ].slice(-XERA_CREATE_METRIC_HISTORY_LIMIT);
+        localStorage.setItem(
+            getCreateMetricsStorageKey(userId),
+            JSON.stringify(next),
+        );
+    } catch (e) {
+        // ignore
+    }
+}
+
+function normalizeCreateText(value = "") {
+    const input = String(value || "");
+    try {
+        return input.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    } catch (e) {
+        return input;
+    }
+}
+
+function findArcInList(arcs = [], arcId = null) {
+    if (!arcId) return null;
+    return (arcs || []).find((arc) => arc && arc.id === arcId) || null;
+}
+
+function toCreateTitleCase(value = "") {
+    const clean = String(value || "").trim();
+    if (!clean) return "";
+    return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+function guessTitleFromFileName(fileName = "") {
+    const withoutExt = String(fileName || "").replace(/\.[^.]+$/, "");
+    const cleaned = withoutExt
+        .replace(/[_-]+/g, " ")
+        .replace(
+            /\b(img|image|photo|video|vid|dsc|pxl|capture|screen|recording|whatsapp)\b/gi,
+            " ",
+        )
+        .replace(/\d{4,}/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (cleaned.length < 5) return "";
+    return toCreateTitleCase(cleaned);
+}
+
+function collectSuggestedTags(contents = [], selectedArc = null, limit = 6) {
+    const scores = new Map();
+    const recent = Array.isArray(contents) ? contents.slice(0, 14) : [];
+
+    const addTag = (tag, score = 1) => {
+        const clean = normalizeTag(tag || "");
+        if (!clean || clean === "annonce") return;
+        scores.set(clean, (scores.get(clean) || 0) + score);
+    };
+
+    recent.forEach((content, index) => {
+        const tags = Array.isArray(content?.tags) ? content.tags : [];
+        const baseScore = Math.max(1, recent.length - index);
+        const arcBoost =
+            selectedArc && content?.arcId === selectedArc.id ? 3 : 0;
+        tags.forEach((tag) => addTag(tag, baseScore + arcBoost));
+    });
+
+    const titleWords = String(selectedArc?.title || "")
+        .split(/[^a-zA-Z0-9À-ÿ]+/)
+        .map((word) => normalizeCreateText(word).toLowerCase())
+        .filter((word) => word.length >= 4);
+    titleWords.slice(0, 2).forEach((word, index) => addTag(word, 2 - index));
+
+    return Array.from(scores.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([tag]) => tag)
+        .slice(0, Math.max(1, limit));
+}
+
+function buildTitleSuggestions({
+    selectedArc = null,
+    type = "text",
+    dayNumber = null,
+    fileName = "",
+} = {}) {
+    const suggestions = [];
+    const arcTitle = String(selectedArc?.title || "").trim();
+    const safeDay = Number.isFinite(dayNumber) ? dayNumber : null;
+    const inferredFromFile = guessTitleFromFileName(fileName);
+
+    if (inferredFromFile) suggestions.push(inferredFromFile);
+
+    if (arcTitle) {
+        if (type === "video") {
+            suggestions.push(`Point video sur ${arcTitle}`);
+            suggestions.push(`${arcTitle} en video`);
+        } else if (type === "image") {
+            suggestions.push(`${arcTitle} en images`);
+            suggestions.push(`Avancee visuelle sur ${arcTitle}`);
+        } else if (type === "live") {
+            suggestions.push(`Live sur ${arcTitle}`);
+        } else {
+            suggestions.push(`Nouvelle avancee sur ${arcTitle}`);
+            suggestions.push(`Point rapide sur ${arcTitle}`);
+        }
+
+        if (safeDay !== null && safeDay > 0) {
+            suggestions.push(`Jour ${safeDay} - ${arcTitle}`);
+        }
+    }
+
+    if (safeDay !== null && safeDay > 0 && !arcTitle) {
+        suggestions.push(`Jour ${safeDay} - nouvelle avancee`);
+    }
+
+    return Array.from(
+        new Set(
+            suggestions
+                .map((item) => String(item || "").trim())
+                .filter(Boolean)
+                .map((item) => item.slice(0, 100)),
+        ),
+    ).slice(0, XERA_CREATE_TITLE_LIMIT);
+}
+
+function buildSmartCreateDefaults({
+    userId,
+    arcs = [],
+    contents = [],
+    preSelectedArcId = null,
+    defaultType = "image",
+    nextDay = 1,
+} = {}) {
+    const prefs = readCreatePrefs(userId);
+    const recentContents = Array.isArray(contents) ? contents : [];
+    const recentUpdates = recentContents.filter(
+        (content) => content && !isAnnouncementContent(content),
+    );
+
+    const isArcAvailable = (arcId) =>
+        !!arcId && (arcs || []).some((arc) => arc && arc.id === arcId);
+    const preferredArcId =
+        (isArcAvailable(preSelectedArcId) && preSelectedArcId) ||
+        (isArcAvailable(window.selectedArcId) && window.selectedArcId) ||
+        (isArcAvailable(prefs.lastArcId) && prefs.lastArcId) ||
+        (recentUpdates.find((item) => isArcAvailable(item?.arcId))?.arcId ||
+            null) ||
+        ((arcs || []).length === 1 ? arcs[0].id : null);
+
+    const selectedArc = findArcInList(arcs, preferredArcId);
+    const preferredType = ["text", "image", "video"].includes(
+        prefs.lastType,
+    )
+        ? prefs.lastType
+        : defaultType;
+    const safeType = preferredType || defaultType;
+    const preferredState =
+        prefs.lastState ||
+        recentUpdates.find((item) => item?.state)?.state ||
+        "success";
+    const recentTags = Array.isArray(prefs.recentTags)
+        ? prefs.recentTags.map(normalizeTag).filter(Boolean)
+        : [];
+    const tagSuggestions = Array.from(
+        new Set(
+            [
+                ...collectSuggestedTags(
+                    recentUpdates,
+                    selectedArc,
+                    XERA_CREATE_TAG_LIMIT,
+                ),
+                ...recentTags,
+            ].filter(Boolean),
+        ),
+    ).slice(0, XERA_CREATE_TAG_LIMIT);
+
+    return {
+        preferredArcId,
+        preferredType: safeType,
+        preferredState,
+        selectedArc,
+        tagSuggestions,
+        titleSuggestions: buildTitleSuggestions({
+            selectedArc,
+            type: safeType,
+            dayNumber: nextDay,
+        }),
+    };
 }
 
 function isMobileOrPwaMobileContext() {
@@ -2376,6 +2710,26 @@ async function maybeStartFirstPostFlow() {
     setPendingCreatePostAfterArc(userId, { reason: "first-post-onboarding" });
     if (typeof window.openCreateModal === "function") {
         window.openCreateModal();
+    }
+}
+
+async function maybeHandleInitialEmailAction() {
+    if (initialEmailActionHandled) return;
+
+    const action = getInitialAppAction();
+    if (action !== "create") return;
+    if (!window.currentUser || !window.currentUserId) return;
+
+    const targetUserId = getInitialProfileUserId() || window.currentUserId;
+    if (targetUserId !== window.currentUserId) return;
+
+    initialEmailActionHandled = true;
+    clearInitialAppAction();
+
+    try {
+        await openCreateMenu(window.currentUserId);
+    } catch (error) {
+        console.error("Erreur ouverture create menu depuis email:", error);
     }
 }
 
@@ -5503,8 +5857,20 @@ const badgeSVGs = {
 };
 
 function calculateConsistency(userId) {
-    const contents = getUserContentLocal(userId);
-    if (!contents || contents.length === 0) return null;
+    const details = getPostingStreakDetails(getUserContentLocal(userId));
+    if (!details) return null;
+
+    const isFresh = (limitDays) => details.daysSinceLast <= limitDays;
+
+    if (details.streak >= 365 && isFresh(7)) return "consistency365";
+    if (details.streak >= 100 && isFresh(7)) return "consistency100";
+    if (details.streak >= 30 && isFresh(30)) return "consistency30";
+    if (details.streak >= 7 && isFresh(7)) return "consistency7";
+    return null;
+}
+
+function getPostingStreakDetails(contents = []) {
+    if (!Array.isArray(contents) || contents.length === 0) return null;
 
     const sorted = [...contents].sort((a, b) => {
         const dateA =
@@ -5555,14 +5921,12 @@ function calculateConsistency(userId) {
         ? (Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24)
         : Infinity;
 
-    // Règles de réinitialisation : le badge disparaît si on n'a pas posté depuis plus que sa fenêtre
-    const isFresh = (limitDays) => daysSinceLast <= limitDays;
-
-    if (streak >= 365 && isFresh(7)) return "consistency365";
-    if (streak >= 100 && isFresh(7)) return "consistency100";
-    if (streak >= 30 && isFresh(30)) return "consistency30";
-    if (streak >= 7 && isFresh(7)) return "consistency7";
-    return null;
+    return {
+        streak,
+        daysSinceLast,
+        lastDate,
+        total: sorted.length,
+    };
 }
 
 function determineTrajectoryType(userId) {
@@ -10304,6 +10668,7 @@ async function renderProfileIntoContainer(userId) {
             window.renderWeeklyProgressChart(userId);
         if (window.renderInfluenceReach) window.renderInfluenceReach(userId);
         maybeShowAmbassadorWelcome(userId);
+        maybeApplyLatestPublishedPostHighlight(userId);
     };
 
     if (
@@ -11067,6 +11432,22 @@ async function openSettings(userId) {
 
     // Social links preparation
     const socialLinks = user.social_links || user.socialLinks || {};
+    const accountEmail = String(
+        window.currentUser?.email || user.email || "",
+    ).trim();
+    const safeAccountEmailHtml = escapeHtml(accountEmail);
+    const emailReminderEnabled = user.email_reminder_enabled === true;
+    const browserTimeZone = (() => {
+        try {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        } catch (error) {
+            return "UTC";
+        }
+    })();
+    const emailReminderTimeZone = String(
+        user.email_reminder_timezone || browserTimeZone || "UTC",
+    ).trim();
+    const safeEmailReminderTimeZoneHtml = escapeHtml(emailReminderTimeZone);
 
     container.innerHTML = `
         <div class="settings-shell">
@@ -11108,6 +11489,29 @@ async function openSettings(userId) {
                                         ${isLightMode() ? "🌙 Mode Sombre" : "☀️ Mode Clair"}
                                     </button>
                                     <div class="form-hint">Choisissez l'affichage qui vous convient.</div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="setting-email-reminder-enabled">Rappels email</label>
+                                    <label style="display:flex; align-items:flex-start; gap:0.75rem; cursor:pointer; padding:0.9rem 1rem; border:1px solid rgba(255,255,255,0.08); border-radius:14px; background:rgba(255,255,255,0.03);">
+                                        <input
+                                            type="checkbox"
+                                            id="setting-email-reminder-enabled"
+                                            ${emailReminderEnabled ? "checked" : ""}
+                                            ${accountEmail ? "" : "disabled"}
+                                            style="margin-top:0.2rem;"
+                                        >
+                                        <span style="display:block;">
+                                            <span style="display:block; font-weight:700;">Recevoir un rappel pour poster</span>
+                                            <span class="form-hint" style="display:block; margin-top:0.35rem;">
+                                                ${
+                                                    accountEmail
+                                                        ? `Envoi a ${safeAccountEmailHtml} vers 10h et 18h selon votre fuseau (${safeEmailReminderTimeZoneHtml}).`
+                                                        : "Adresse email du compte indisponible pour le moment."
+                                                }
+                                            </span>
+                                        </span>
+                                    </label>
+                                    <div class="form-hint">Vous pouvez couper ces emails a tout moment.</div>
                                 </div>
                             </div>
                         </div>
@@ -11554,6 +11958,20 @@ async function openSettings(userId) {
 
             const selectedRoleValue =
                 document.getElementById("setting-account-role")?.value || "fan";
+            const emailReminderCheckbox = document.getElementById(
+                "setting-email-reminder-enabled",
+            );
+            const reminderTimezone = (() => {
+                try {
+                    return (
+                        Intl.DateTimeFormat().resolvedOptions().timeZone ||
+                        emailReminderTimeZone ||
+                        "UTC"
+                    );
+                } catch (error) {
+                    return emailReminderTimeZone || "UTC";
+                }
+            })();
             const existingSubtypeRaw = String(
                 user.account_subtype || user.accountSubtype || "",
             ).trim();
@@ -11593,6 +12011,15 @@ async function openSettings(userId) {
             const result = await upsertUserProfile(userId, profileData);
 
             if (result.success) {
+                let reminderSaveResult = { success: true };
+                if (emailReminderCheckbox && !emailReminderCheckbox.disabled) {
+                    reminderSaveResult = await saveEmailReminderPreferences({
+                        userId,
+                        enabled: emailReminderCheckbox.checked,
+                        timezone: reminderTimezone,
+                    });
+                }
+
                 const updatedAt =
                     result.data?.updated_at || new Date().toISOString();
                 try {
@@ -11619,6 +12046,13 @@ async function openSettings(userId) {
                     allUsers[userIndex] = {
                         ...allUsers[userIndex],
                         ...result.data,
+                        ...(reminderSaveResult.success
+                            ? {
+                                  email_reminder_enabled:
+                                      emailReminderCheckbox?.checked === true,
+                                  email_reminder_timezone: reminderTimezone,
+                              }
+                            : {}),
                     };
                 }
 
@@ -11678,7 +12112,14 @@ async function openSettings(userId) {
                     /* ignore */
                 }
 
-                closeSettings();
+                if (!reminderSaveResult.success) {
+                    alert(
+                        "Profil enregistre, mais le rappel email n'a pas pu etre sauvegarde: " +
+                            reminderSaveResult.error,
+                    );
+                } else {
+                    closeSettings();
+                }
             } else {
                 alert("Erreur: " + result.error);
             }
@@ -12349,6 +12790,241 @@ function closeCreateMenu() {
     }, 300);
 }
 
+function getContentRecencyValue(item) {
+    return (
+        new Date(item?.created_at || item?.createdAt || 0).getTime() ||
+        (item?.dayNumber ?? item?.day_number ?? 0)
+    );
+}
+
+function getRecentContentsForFeedback(userId) {
+    return [...(getUserContentLocal(userId) || [])].sort(
+        (left, right) =>
+            getContentRecencyValue(right) - getContentRecencyValue(left),
+    );
+}
+
+function queueLatestPublishedPostHighlight(userId) {
+    window.pendingLatestPublishedHighlightUserId = userId || null;
+}
+
+function maybeApplyLatestPublishedPostHighlight(userId) {
+    if (window.pendingLatestPublishedHighlightUserId !== userId) return;
+    if (window.currentProfileViewed !== userId) return;
+
+    const profileContainer = document.querySelector(".profile-container");
+    if (!profileContainer) return;
+
+    const targetCard =
+        profileContainer.querySelector(".timeline-item-latest .timeline-card") ||
+        profileContainer.querySelector(".timeline-full .timeline-item .timeline-card");
+
+    if (!targetCard) return;
+
+    window.pendingLatestPublishedHighlightUserId = null;
+    targetCard.classList.remove("timeline-card-just-published");
+    void targetCard.offsetWidth;
+    targetCard.classList.add("timeline-card-just-published");
+    targetCard.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    window.setTimeout(() => {
+        targetCard.classList.remove("timeline-card-just-published");
+    }, 2200);
+}
+
+async function focusLatestPublishedPost(userId) {
+    if (!userId) return;
+    queueLatestPublishedPostHighlight(userId);
+
+    const isOwnProfileOpen =
+        !!document.querySelector("#profile.active") &&
+        window.currentProfileViewed === userId;
+
+    if (isOwnProfileOpen) {
+        maybeApplyLatestPublishedPostHighlight(userId);
+        return;
+    }
+
+    await navigateToUserProfile(userId);
+}
+
+function buildPublishFeedbackPayload({
+    userId,
+    contentData,
+    isEdit = false,
+    arcTitle = "",
+} = {}) {
+    const recentContents = getRecentContentsForFeedback(userId);
+    const streakDetails = getPostingStreakDetails(recentContents) || {
+        streak: 1,
+        total: recentContents.length,
+    };
+    const previousContent = recentContents[1] || null;
+    const previousPublishedAt = previousContent
+        ? new Date(
+              previousContent.created_at || previousContent.createdAt || 0,
+          ).getTime()
+        : Number.NaN;
+    const previousGapDays = Number.isFinite(previousPublishedAt)
+        ? (Date.now() - previousPublishedAt) / (1000 * 60 * 60 * 24)
+        : Number.POSITIVE_INFINITY;
+    const totalPosts = Math.max(0, streakDetails.total || recentContents.length);
+    const safeArcTitle = String(arcTitle || "").trim();
+    const isProfileOpen =
+        !!document.querySelector("#profile.active") &&
+        window.currentProfileViewed === userId;
+
+    let eyebrow = isEdit ? "Mise a jour en ligne" : "C'est publie";
+    let title = "";
+    let message = "";
+
+    if (isEdit) {
+        title = "Tes changements sont deja visibles.";
+        message = safeArcTitle
+            ? `"${safeArcTitle}" a bien ete mis a jour.`
+            : "Ta publication a ete mise a jour avec succes.";
+    } else if (totalPosts <= 1) {
+        eyebrow = "Nouveau depart";
+        title = "Ton premier post est en ligne.";
+        message = safeArcTitle
+            ? `Tu viens de lancer "${safeArcTitle}" sur XERA.`
+            : "Tu viens de publier ton premier contenu sur XERA.";
+    } else if (previousGapDays >= 3) {
+        eyebrow = "Bon retour";
+        title = "Tu viens de relancer ton rythme.";
+        message = safeArcTitle
+            ? `"${safeArcTitle}" repart avec une nouvelle update.`
+            : "Ta progression repart sur XERA.";
+    } else if (streakDetails.streak >= 7) {
+        eyebrow = "Serie en cours";
+        title = `${streakDetails.streak} jours de suite.`;
+        message = safeArcTitle
+            ? `Tu gardes un vrai elan sur "${safeArcTitle}".`
+            : "Tu maintiens une belle regularite.";
+    } else if (streakDetails.streak >= 2) {
+        eyebrow = "Bien joue";
+        title = "+1 jour de constance.";
+        message = safeArcTitle
+            ? `Nouvelle avancee publiee pour "${safeArcTitle}".`
+            : "Tu continues sur ta lancee.";
+    } else {
+        title = "Ta mise a jour est en ligne.";
+        message = safeArcTitle
+            ? `"${safeArcTitle}" a recu une nouvelle avancee.`
+            : "Ton contenu est maintenant visible sur XERA.";
+    }
+
+    const chips = [];
+    if (safeArcTitle) chips.push(safeArcTitle);
+    if (!isEdit && streakDetails.streak > 1) {
+        chips.push(`${streakDetails.streak} jours de suite`);
+    }
+    if (totalPosts > 0) {
+        chips.push(`${totalPosts} post${totalPosts > 1 ? "s" : ""}`);
+    }
+    if (!isEdit && contentData?.type === "video") chips.push("video publiee");
+    if (!isEdit && contentData?.type === "image") chips.push("media en ligne");
+
+    return {
+        eyebrow,
+        title,
+        message,
+        chips: chips.slice(0, 3),
+        primaryLabel: isProfileOpen
+            ? "Voir ma publication"
+            : "Voir mon profil",
+        secondaryLabel: "Continuer",
+        onPrimary: () => focusLatestPublishedPost(userId),
+    };
+}
+
+function showPublishFeedbackCard(feedback) {
+    if (!feedback) return;
+
+    const existing = document.getElementById("publish-feedback-card");
+    if (existing) existing.remove();
+
+    const card = document.createElement("div");
+    card.id = "publish-feedback-card";
+    card.className = "publish-feedback-card";
+    card.setAttribute("role", "status");
+    card.setAttribute("aria-live", "polite");
+
+    const chipsHtml = (feedback.chips || [])
+        .map(
+            (chip) =>
+                `<span class="publish-feedback-chip">${escapeHtml(chip)}</span>`,
+        )
+        .join("");
+
+    card.innerHTML = `
+        <div class="publish-feedback-glow" aria-hidden="true"></div>
+        <div class="publish-feedback-sparks" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <button type="button" class="publish-feedback-close" aria-label="Fermer">✕</button>
+        <p class="publish-feedback-eyebrow">${escapeHtml(feedback.eyebrow || "Publication")}</p>
+        <h3 class="publish-feedback-title">${escapeHtml(feedback.title || "C'est en ligne")}</h3>
+        <p class="publish-feedback-message">${escapeHtml(feedback.message || "")}</p>
+        ${
+            chipsHtml
+                ? `<div class="publish-feedback-chips">${chipsHtml}</div>`
+                : ""
+        }
+        <div class="publish-feedback-actions">
+            <button type="button" class="publish-feedback-btn publish-feedback-btn-primary">
+                ${escapeHtml(feedback.primaryLabel || "Voir")}
+            </button>
+            <button type="button" class="publish-feedback-btn publish-feedback-btn-secondary">
+                ${escapeHtml(feedback.secondaryLabel || "Continuer")}
+            </button>
+        </div>
+    `;
+
+    const removeCard = () => {
+        card.classList.remove("is-visible");
+        window.setTimeout(() => {
+            if (card.parentNode) {
+                card.parentNode.removeChild(card);
+            }
+        }, 240);
+    };
+
+    card
+        .querySelector(".publish-feedback-close")
+        ?.addEventListener("click", removeCard);
+    card
+        .querySelector(".publish-feedback-btn-secondary")
+        ?.addEventListener("click", removeCard);
+    card
+        .querySelector(".publish-feedback-btn-primary")
+        ?.addEventListener("click", async () => {
+            removeCard();
+            if (typeof feedback.onPrimary === "function") {
+                await feedback.onPrimary();
+            }
+        });
+
+    document.body.appendChild(card);
+    requestAnimationFrame(() => card.classList.add("is-visible"));
+
+    if (
+        typeof navigator !== "undefined" &&
+        typeof navigator.vibrate === "function"
+    ) {
+        try {
+            navigator.vibrate([18, 40, 18]);
+        } catch (error) {
+            // ignore
+        }
+    }
+
+    window.setTimeout(removeCard, 7000);
+}
+
 async function openCreateMenu(
     userId,
     preSelectedArcId = null,
@@ -12456,6 +13132,49 @@ async function openCreateMenu(
     const isFirstPost =
         !existingContent && (!contents || contents.length === 0);
     const defaultTraceType = isFirstPost ? "text" : "image";
+    const isEdit = !!existingContent;
+    const existingRawDesc =
+        (existingContent &&
+            (existingContent.rawDescription || existingContent.description)) ||
+        "";
+    const { tags: existingTags, cleanDescription: existingCleanDesc } =
+        extractTagsFromDescription(existingRawDesc);
+    const isAnnouncementEdit =
+        existingTags && existingTags.includes("annonce") ? true : false;
+    let currentMode = isAnnouncementEdit ? "announcement" : "update";
+
+    const smartDefaults = isEdit
+        ? null
+        : buildSmartCreateDefaults({
+              userId,
+              arcs,
+              contents,
+              preSelectedArcId,
+              defaultType: defaultTraceType,
+              nextDay,
+          });
+    const selectedArcId =
+        (existingContent &&
+            (existingContent.arcId || existingContent.arc_id || null)) ||
+        preSelectedArcId ||
+        smartDefaults?.preferredArcId ||
+        null;
+    const selectedArc = findArcInList(arcs, selectedArcId);
+    const initialType = isEdit
+        ? existingContent.type
+        : smartDefaults?.preferredType || defaultTraceType;
+    const initialState = isEdit
+        ? existingContent.state
+        : smartDefaults?.preferredState || "success";
+    const initialTagSuggestions = isEdit
+        ? []
+        : smartDefaults?.tagSuggestions || [];
+    const initialTitleSuggestions = isEdit
+        ? []
+        : smartDefaults?.titleSuggestions || [];
+    const tagsPrefill = isEdit
+        ? existingTags.map((t) => `#${t}`).join(" ")
+        : "";
 
     // Generate ARC Options (Mandatory)
     let arcOptions = "";
@@ -12466,10 +13185,7 @@ async function openCreateMenu(
     arcOptions = arcs
         .map((a) => {
             const selected =
-                (preSelectedArcId && a.id === preSelectedArcId) ||
-                (existingContent &&
-                    (existingContent.arcId === a.id ||
-                        existingContent.arc_id === a.id))
+                selectedArcId && a.id === selectedArcId
                     ? "selected"
                     : "";
             const label =
@@ -12480,25 +13196,10 @@ async function openCreateMenu(
         })
         .join("");
 
-    const isEdit = !!existingContent;
     const title = isEdit ? "Modifier l'Update" : "Nouvelle Update";
     const subtitle = isEdit
         ? `Modifier la mise à jour du jour ${nextDay}`
         : `Update = mise à jour rapide (texte + photo optionnelle). Annonce = étape majeure partagée publiquement.`;
-
-    const existingRawDesc =
-        (existingContent &&
-            (existingContent.rawDescription || existingContent.description)) ||
-        "";
-    const { tags: existingTags, cleanDescription: existingCleanDesc } =
-        extractTagsFromDescription(existingRawDesc);
-    const tagsPrefill =
-        existingTags.length > 0
-            ? existingTags.map((t) => `#${t}`).join(" ")
-            : "";
-    const isAnnouncementEdit =
-        existingTags && existingTags.includes("annonce") ? true : false;
-    let currentMode = isAnnouncementEdit ? "announcement" : "update";
 
     container.innerHTML = `
         <div class="settings-section">
@@ -12526,7 +13227,21 @@ async function openCreateMenu(
 
                 <div class="form-group form-group-title">
                     <label>Titre de l'accomplissement</label>
-                    <input type="text" id="create-title" class="form-input" placeholder="Ex: Intégration de l'API terminée" value="${isEdit ? existingContent.title : ""}" required>
+                    <input type="text" id="create-title" class="form-input" placeholder="${escapeHtml(initialTitleSuggestions[0] || "Ex: Intégration de l'API terminée")}" value="${isEdit ? existingContent.title : ""}" required>
+                </div>
+
+                <div class="create-smart-panel">
+                    <div class="create-smart-summary" id="create-smart-summary">
+                        ${isEdit ? "Edition complete active." : escapeHtml(selectedArc ? `Projet preselectionne: ${selectedArc.title}` : "Choisissez un projet pour declencher les suggestions rapides.")}
+                    </div>
+                    <div class="create-smart-row" id="create-title-suggestions-row">
+                        <span class="create-smart-label">Titres rapides</span>
+                        <div class="create-chip-list" id="create-title-suggestions"></div>
+                    </div>
+                    <div class="create-smart-row" id="create-tag-suggestions-row">
+                        <span class="create-smart-label">Tags suggérés</span>
+                        <div class="create-chip-list" id="create-tag-suggestions"></div>
+                    </div>
                 </div>
 
                 <div class="form-group form-group-desc">
@@ -12537,22 +13252,22 @@ async function openCreateMenu(
                 <div class="form-group form-group-tags">
                     <label>Hashtags (séparés par espaces ou virgules)</label>
                     <input type="text" id="create-tags" class="form-input" placeholder="#build #vlog #code" value="${tagsPrefill}">
-                    <p class="form-hint">Servez-vous de 3 à 8 tags max pour personnaliser le feed.</p>
+                    <p class="form-hint">Les tags proposés sont optionnels. L'utilisateur peut saisir les hashtags qu'il veut.</p>
                 </div>
 
                 <div class="form-group form-group-state">
                     <label>État</label>
                     <select id="create-state" class="form-input">
-                        <option value="success" ${isEdit && existingContent.state === "success" ? "selected" : ""}>Victoire (Vert)</option>
-                        <option value="failure" ${isEdit && existingContent.state === "failure" ? "selected" : ""}>Bloqué / Échec (Rouge)</option>
-                        <option value="pause" ${isEdit && existingContent.state === "pause" ? "selected" : ""}>Pause / Réflexion (Violet)</option>
+                        <option value="success" ${initialState === "success" ? "selected" : ""}>Victoire (Vert)</option>
+                        <option value="failure" ${initialState === "failure" ? "selected" : ""}>Bloqué / Échec (Rouge)</option>
+                        <option value="pause" ${initialState === "pause" ? "selected" : ""}>Pause / Réflexion (Violet)</option>
                     </select>
                 </div>
 
                 <div class="form-group form-group-arc">
                     <label>Projet (Requis)</label>
                     <select id="create-arc" class="form-input" required>
-                        <option value="" disabled ${!isEdit && !preSelectedArcId ? "selected" : ""}>Choisir un projet...</option>
+                        <option value="" disabled ${!selectedArcId ? "selected" : ""}>Choisir un projet...</option>
                         ${arcOptions}
                     </select>
                 </div>
@@ -12560,10 +13275,10 @@ async function openCreateMenu(
                 <div class="form-group">
                     <label>Type de publication</label>
                     <select id="create-type" class="form-input">
-                        <option value="text" ${isEdit && existingContent.type === "text" ? "selected" : !isEdit && defaultTraceType === "text" ? "selected" : ""}>Texte</option>
-                        <option value="image" ${isEdit && existingContent.type === "image" ? "selected" : !isEdit && defaultTraceType === "image" ? "selected" : ""}>Image</option>
-                        <option value="video" ${isEdit && existingContent.type === "video" ? "selected" : ""}>Vidéo</option>
-                        <option value="live" ${isEdit && existingContent.type === "live" ? "selected" : ""}>Live / Stream</option>
+                        <option value="text" ${initialType === "text" ? "selected" : ""}>Texte</option>
+                        <option value="image" ${initialType === "image" ? "selected" : ""}>Image</option>
+                        <option value="video" ${initialType === "video" ? "selected" : ""}>Vidéo</option>
+                        <option value="live" ${initialType === "live" ? "selected" : ""}>Live / Stream</option>
                     </select>
                     <div class="type-quick">
                         <button type="button" data-type="text">Texte</button>
@@ -12601,6 +13316,7 @@ async function openCreateMenu(
                             </div>
                         </div>
                         <input type="file" id="create-media-file" accept="image/*,video/*" style="display: none;">
+                        <p class="form-hint" id="create-video-duration-hint"></p>
                     </div>
 
                     <!-- URL Input for Live -->
@@ -12611,7 +13327,7 @@ async function openCreateMenu(
 
                     <input type="hidden" id="create-media-url" value="${isEdit && (existingContent.media_url || existingContent.mediaUrl) ? existingContent.media_url || existingContent.mediaUrl : ""}">
                     <input type="hidden" id="create-media-urls" value="">
-                    <input type="hidden" id="create-media-type" value="${isEdit && existingContent.type ? existingContent.type : defaultTraceType}">
+                    <input type="hidden" id="create-media-type" value="${initialType}">
                 </div>
 
                 <div class="actions-bar">
@@ -12636,307 +13352,546 @@ async function openCreateMenu(
     const urlContainer = document.getElementById("media-url-container");
     const liveInput = document.getElementById("create-live-url");
     const fileInput = document.getElementById("create-media-file");
+    const mediaUrlInput = document.getElementById("create-media-url");
     const mediaUrlsInput = document.getElementById("create-media-urls");
+    const mediaTypeInput = document.getElementById("create-media-type");
+    const typeSelect = document.getElementById("create-type");
+    const titleInput = document.getElementById("create-title");
+    const tagsInput = document.getElementById("create-tags");
+    const descInput = document.getElementById("create-desc");
+    const dayInput = document.getElementById("create-day");
+    const stateSelect = document.getElementById("create-state");
+    const arcSelect = document.getElementById("create-arc");
+    const smartSummary = document.getElementById("create-smart-summary");
+    const titleSuggestionsRow = document.getElementById(
+        "create-title-suggestions-row",
+    );
+    const titleSuggestionsContainer = document.getElementById(
+        "create-title-suggestions",
+    );
+    const tagSuggestionsRow = document.getElementById(
+        "create-tag-suggestions-row",
+    );
+    const tagSuggestionsContainer = document.getElementById(
+        "create-tag-suggestions",
+    );
+    const videoDurationHint = document.getElementById(
+        "create-video-duration-hint",
+    );
     const dayGroup = container.querySelector(".form-group-day");
     const stateGroup = container.querySelector(".form-group-state");
     const arcGroup = container.querySelector(".form-group-arc");
     const descGroup = container.querySelector(".form-group-desc");
     const tagsGroup = container.querySelector(".form-group-tags");
+    const dropZone = document.getElementById("create-media-dropzone");
+    const loader = document.getElementById("create-media-loader");
+    const progressBar = document.getElementById("create-media-progress-bar");
+    const progressLabel = document.getElementById(
+        "create-media-progress-label",
+    );
+    const typeButtons = Array.from(
+        container.querySelectorAll(".type-quick button"),
+    );
+    const modeButtons = Array.from(
+        container.querySelectorAll(".mode-switch button"),
+    );
+    const typeOptions = Array.from(typeSelect?.options || []).filter(
+        (option) => !!option.value,
+    );
     let isMediaUploadInProgress = false;
     let mediaUploadUiArmed = false;
+    let latestSelectedFileName = "";
+    let currentTitleSuggestions = initialTitleSuggestions.slice();
+    let currentTagSuggestions = initialTagSuggestions.slice();
+    const createFlowStartedAt = Date.now();
+
+    const setUploadProgressIndeterminate = () => {
+        if (progressBar) {
+            progressBar.classList.add("is-indeterminate");
+            progressBar.style.width = "";
+        }
+        if (progressLabel) progressLabel.textContent = "";
+    };
+
+    const setUploadProgress = (percent) => {
+        if (!progressBar) return;
+        const safePercent =
+            typeof percent === "number" && Number.isFinite(percent)
+                ? Math.max(0, Math.min(100, Math.round(percent)))
+                : 0;
+        progressBar.classList.remove("is-indeterminate");
+        progressBar.style.width = `${safePercent}%`;
+        if (progressLabel) progressLabel.textContent = `${safePercent}%`;
+    };
+
+    const buildMediaPreviewShell = (innerHtml) => `
+        <div class="media-preview-shell">
+            <button type="button" class="media-remove-btn" title="Retirer le media">X</button>
+            ${innerHtml}
+        </div>
+    `;
+
+    const updateMultiPreview = (urls = []) => {
+        const clean = (urls || []).filter(Boolean);
+        if (clean.length === 0) {
+            previewContainer.style.display = "none";
+            return;
+        }
+        const slides = clean
+            .map(
+                (u) =>
+                    `<div class="xera-carousel-slide"><img src="${u}" alt="Media" loading="lazy" decoding="async"></div>`,
+            )
+            .join("");
+        const dots =
+            clean.length > 1
+                ? `<div class="xera-carousel-dots">${clean
+                      .map(
+                          (_, i) =>
+                              `<span class="xera-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
+                      )
+                      .join("")}</div>`
+                : "";
+        previewContainer.innerHTML = buildMediaPreviewShell(`
+            <div class="xera-carousel" data-carousel>
+                <div class="xera-carousel-track">${slides}</div>
+                ${dots}
+            </div>
+        `);
+    };
+
+    const setGroupVisible = (group, visible) => {
+        if (!group) return;
+        group.style.display = visible ? "" : "none";
+    };
+
+    const syncTypeButtons = (value) => {
+        typeButtons.forEach((btn) =>
+            btn.classList.toggle("active", btn.dataset.type === value),
+        );
+    };
+
+    const syncModeButtons = (value) => {
+        modeButtons.forEach((btn) =>
+            btn.classList.toggle("active", btn.dataset.mode === value),
+        );
+    };
+
+    const getAllowedTypesForCurrentMode = () => {
+        if (currentMode === "announcement") {
+            return ["text", "image", "video"];
+        }
+
+        const updateTypes = ["image", "video", "live"];
+        if (
+            isEdit &&
+            existingContent &&
+            existingContent.type === "text" &&
+            !isAnnouncementEdit
+        ) {
+            return ["text", ...updateTypes];
+        }
+        return updateTypes;
+    };
+
+    const syncTypeAvailability = () => {
+        const allowedTypes = getAllowedTypesForCurrentMode();
+        const allowedSet = new Set(allowedTypes);
+
+        typeOptions.forEach((option) => {
+            const allowed = allowedSet.has(option.value);
+            option.disabled = !allowed;
+            option.hidden = !allowed;
+        });
+
+        typeButtons.forEach((btn) => {
+            const allowed = allowedSet.has(btn.dataset.type);
+            btn.disabled = !allowed;
+            btn.hidden = !allowed;
+        });
+
+        if (!allowedSet.has(typeSelect.value)) {
+            typeSelect.value = allowedTypes[0] || "image";
+        }
+    };
+
+    const markSmartValue = (input, value, { manual = false } = {}) => {
+        if (!input) return;
+        input.dataset.autoApplying = "1";
+        input.value = value || "";
+        input.dataset.autoApplying = "0";
+        input.dataset.autofilled =
+            !manual && String(value || "").trim() ? "1" : "0";
+        input.dataset.manuallyEdited = manual ? "1" : "0";
+    };
+
+    const canAutofillField = (input) =>
+        !!input &&
+        input.dataset.manuallyEdited !== "1" &&
+        (!String(input.value || "").trim() || input.dataset.autofilled === "1");
+
+    titleInput.dataset.manuallyEdited =
+        isEdit && titleInput.value.trim() ? "1" : "0";
+    titleInput.dataset.autofilled = "0";
+    tagsInput.dataset.manuallyEdited =
+        isEdit && tagsInput.value.trim() ? "1" : "0";
+    if (!isEdit && tagsInput.value.trim()) {
+        tagsInput.dataset.autofilled = "1";
+    }
+
+    [titleInput, tagsInput].forEach((input) => {
+        if (!input) return;
+        input.addEventListener("input", () => {
+            if (input.dataset.autoApplying === "1") return;
+            input.dataset.manuallyEdited = "1";
+            input.dataset.autofilled = "0";
+        });
+    });
+
+    const renderTitleSuggestions = () => {
+        if (!titleSuggestionsContainer || !titleSuggestionsRow) return;
+        if (currentTitleSuggestions.length === 0) {
+            titleSuggestionsRow.style.display = "none";
+            titleSuggestionsContainer.innerHTML = "";
+            return;
+        }
+        titleSuggestionsRow.style.display = "";
+        titleSuggestionsContainer.innerHTML = currentTitleSuggestions
+            .map(
+                (suggestion) =>
+                    `<button type="button" class="create-chip" data-create-title="${escapeHtml(suggestion)}">${escapeHtml(suggestion)}</button>`,
+            )
+            .join("");
+    };
+
+    const renderTagSuggestions = () => {
+        if (!tagSuggestionsContainer || !tagSuggestionsRow) return;
+        if (currentMode === "announcement" || currentTagSuggestions.length === 0) {
+            tagSuggestionsRow.style.display = "none";
+            tagSuggestionsContainer.innerHTML = "";
+            return;
+        }
+        const activeTags = new Set(parseTagsInput(tagsInput.value));
+        tagSuggestionsRow.style.display = "";
+        tagSuggestionsContainer.innerHTML = currentTagSuggestions
+            .map((tag) => {
+                const isActive = activeTags.has(tag);
+                return `<button type="button" class="create-chip ${isActive ? "active" : ""}" data-create-tag="${escapeHtml(tag)}">#${escapeHtml(tag)}</button>`;
+            })
+            .join("");
+    };
+
+    const updateSmartSummary = () => {
+        if (!smartSummary) return;
+        const parts = [];
+        const activeArc = findArcInList(arcs, arcSelect?.value);
+        if (currentMode !== "announcement" && activeArc) {
+            parts.push(`Projet: ${activeArc.title}`);
+        }
+        const tagsCount = parseTagsInput(tagsInput?.value || "").length;
+        if (tagsCount > 0) {
+            parts.push(
+                `${tagsCount} tag${tagsCount > 1 ? "s" : ""} pret${tagsCount > 1 ? "s" : ""}`,
+            );
+        }
+        if (latestSelectedFileName) {
+            parts.push("media pret");
+        }
+        smartSummary.textContent =
+            parts.join(" • ") ||
+            "Choisissez un projet pour declencher les suggestions rapides.";
+    };
+
+    const refreshSmartSuggestions = ({ fileName = latestSelectedFileName } = {}) => {
+        latestSelectedFileName = fileName || "";
+        const activeArc = findArcInList(arcs, arcSelect?.value);
+        const suggestionType =
+            currentMode === "announcement"
+                ? "text"
+                : mediaTypeInput?.value || typeSelect?.value || initialType;
+        currentTitleSuggestions = isEdit
+            ? []
+            : buildTitleSuggestions({
+                  selectedArc: activeArc,
+                  type: suggestionType,
+                  dayNumber: Number.parseInt(dayInput?.value, 10),
+                  fileName: latestSelectedFileName,
+              });
+        currentTagSuggestions = isEdit
+            ? []
+            : collectSuggestedTags(
+                  contents.filter((content) => !isAnnouncementContent(content)),
+                  activeArc,
+                  XERA_CREATE_TAG_LIMIT,
+              );
+
+        if (!isEdit && currentMode !== "announcement") {
+            if (
+                currentTitleSuggestions[0] &&
+                latestSelectedFileName &&
+                canAutofillField(titleInput)
+            ) {
+                markSmartValue(titleInput, currentTitleSuggestions[0]);
+            }
+        }
+
+        if (
+            titleInput &&
+            !titleInput.value &&
+            Array.isArray(currentTitleSuggestions) &&
+            currentTitleSuggestions[0]
+        ) {
+            titleInput.placeholder = currentTitleSuggestions[0];
+        }
+
+        renderTitleSuggestions();
+        renderTagSuggestions();
+        updateSmartSummary();
+    };
+
+    const syncFormSectionsVisibility = () => {
+        if (currentMode === "announcement") {
+            setGroupVisible(dayGroup, false);
+            setGroupVisible(stateGroup, false);
+            setGroupVisible(arcGroup, false);
+            setGroupVisible(tagsGroup, true);
+            setGroupVisible(descGroup, true);
+            if (dayInput) dayInput.required = false;
+            if (stateSelect) stateSelect.required = false;
+            if (arcSelect) arcSelect.required = false;
+            if (descInput) descInput.required = false;
+            return;
+        }
+
+        setGroupVisible(dayGroup, true);
+        setGroupVisible(stateGroup, true);
+        setGroupVisible(tagsGroup, true);
+        setGroupVisible(descGroup, true);
+        setGroupVisible(arcGroup, true);
+        if (dayInput) dayInput.required = true;
+        if (stateSelect) stateSelect.required = true;
+        if (arcSelect) arcSelect.required = true;
+        if (descInput) descInput.required = false;
+    };
+
+    const applyMode = (mode) => {
+        currentMode = mode === "announcement" ? "announcement" : "update";
+        syncModeButtons(currentMode);
+        syncTypeAvailability();
+        syncFormSectionsVisibility();
+        typeSelect.dispatchEvent(new Event("change"));
+        refreshSmartSuggestions();
+    };
+
+    const clearMediaSelection = () => {
+        mediaUrlInput.value = "";
+        mediaUrlsInput.value = "";
+        mediaTypeInput.value = currentMode === "announcement"
+            ? "text"
+            : typeSelect.value;
+        latestSelectedFileName = "";
+        if (fileInput) fileInput.value = "";
+        if (videoDurationHint) videoDurationHint.textContent = "";
+        previewContainer.innerHTML = "";
+        previewContainer.style.display = "none";
+        placeholder.style.display = "block";
+        refreshSmartSuggestions();
+    };
+
+    if (previewContainer && !previewContainer.dataset.clearHandler) {
+        previewContainer.addEventListener("click", (e) => {
+            const btn = e.target.closest(".media-remove-btn");
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            clearMediaSelection();
+        });
+        previewContainer.dataset.clearHandler = "true";
+    }
+
+    modeButtons.forEach((btn) =>
+        btn.addEventListener("click", () => applyMode(btn.dataset.mode)),
+    );
+
+    typeSelect.addEventListener("change", () => {
+        const type = typeSelect.value;
+        mediaTypeInput.value = type;
+        syncTypeButtons(type);
+
+        if (type === "live") {
+            uploadContainer.style.display = "none";
+            urlContainer.style.display = "block";
+            mediaUrlInput.value = liveInput.value;
+        } else if (type === "text") {
+            uploadContainer.style.display = "block";
+            urlContainer.style.display = "none";
+            fileInput.accept = "image/*";
+            fileInput.multiple = currentMode === "announcement";
+            mediaTypeInput.value = "text";
+            if (placeholder) placeholder.style.display = "block";
+        } else {
+            uploadContainer.style.display = "block";
+            urlContainer.style.display = "none";
+            if (type === "image") {
+                fileInput.accept = "image/*";
+                fileInput.multiple = true;
+            } else if (type === "video") {
+                fileInput.accept = "video/*";
+                fileInput.multiple = false;
+            }
+        }
+
+        if (!isEdit && currentMode !== "announcement") {
+            updateCreatePrefs(userId, { lastType: type });
+        }
+        refreshSmartSuggestions();
+    });
+
+    typeButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const targetType = btn.dataset.type;
+            typeSelect.value = targetType;
+            typeSelect.dispatchEvent(new Event("change"));
+        });
+    });
+
+    arcSelect?.addEventListener("change", () => {
+        if (!isEdit) {
+            updateCreatePrefs(userId, { lastArcId: arcSelect.value || null });
+        }
+        refreshSmartSuggestions();
+    });
+    dayInput?.addEventListener("input", () => refreshSmartSuggestions());
+    tagsInput?.addEventListener("input", () => {
+        renderTagSuggestions();
+        updateSmartSummary();
+    });
+    stateSelect?.addEventListener("change", () => {
+        if (!isEdit) {
+            updateCreatePrefs(userId, { lastState: stateSelect.value });
+        }
+    });
+
+    titleSuggestionsContainer?.addEventListener("click", (e) => {
+        const button = e.target.closest("[data-create-title]");
+        if (!button) return;
+        const nextTitle = button.getAttribute("data-create-title") || "";
+        markSmartValue(titleInput, nextTitle, { manual: true });
+        updateSmartSummary();
+    });
+
+    tagSuggestionsContainer?.addEventListener("click", (e) => {
+        const button = e.target.closest("[data-create-tag]");
+        if (!button) return;
+        const tag = normalizeTag(button.getAttribute("data-create-tag") || "");
+        const nextTags = new Set(parseTagsInput(tagsInput.value));
+        if (nextTags.has(tag)) nextTags.delete(tag);
+        else nextTags.add(tag);
+        markSmartValue(
+            tagsInput,
+            Array.from(nextTags)
+                .slice(0, 8)
+                .map((item) => `#${item}`)
+                .join(" "),
+            { manual: true },
+        );
+        renderTagSuggestions();
+        updateSmartSummary();
+    });
+
+    // initial sync
+    syncTypeAvailability();
+    syncTypeButtons(typeSelect.value);
+    syncModeButtons(currentMode);
+    applyMode(currentMode);
+
+    if (fileInput && fileInput.dataset.durationHintBound !== "1") {
+        fileInput.dataset.durationHintBound = "1";
+        fileInput.addEventListener("change", async () => {
+            if (!videoDurationHint) return;
+            videoDurationHint.textContent = "";
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+            const isVideoSelection =
+                (typeof isLikelyVideoFile === "function" &&
+                    isLikelyVideoFile(file)) ||
+                String(file.type || "").startsWith("video/");
+            if (!isVideoSelection) return;
+            if (typeof readVideoDurationSeconds !== "function") return;
+
+            try {
+                const seconds = await readVideoDurationSeconds(file);
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.round(seconds % 60)
+                    .toString()
+                    .padStart(2, "0");
+                if (seconds > 60 * 60) {
+                    videoDurationHint.style.color = "#ef4444";
+                    videoDurationHint.textContent = `Durée détectée: ${mins}:${secs} (max 60:00)`;
+                } else {
+                    videoDurationHint.style.color = "#10b981";
+                    videoDurationHint.textContent = `Durée détectée: ${mins}:${secs}`;
+                }
+            } catch (e) {
+                videoDurationHint.style.color = "var(--text-secondary)";
+                videoDurationHint.textContent =
+                    "Impossible de lire la durée de cette vidéo.";
+            }
+        });
+    }
+
+    liveInput.addEventListener("input", () => {
+        if (typeSelect.value === "live") {
+            mediaUrlInput.value = liveInput.value;
+        }
+    });
+
+    dropZone.addEventListener("click", (e) => {
+        if (e.target.tagName !== "IMG" && e.target.tagName !== "VIDEO") {
+            fileInput.click();
+        }
+    });
+
+    if (!document.getElementById("spin-style")) {
+        const style = document.createElement("style");
+        style.id = "spin-style";
+        style.innerHTML = "@keyframes spin { to { transform: rotate(360deg); } }";
+        document.head.appendChild(style);
+    }
+
+    fileInput.addEventListener("change", () => {
+        const files = Array.from(fileInput.files || []);
+        if (files.length === 0) return;
+        const firstFile = files[0];
+        latestSelectedFileName = firstFile?.name || "";
+        const inferredType = isLikelyVideoFile(firstFile)
+            ? "video"
+            : isAllowedImageFile(firstFile)
+              ? "image"
+              : null;
+        const allowedTypes = new Set(getAllowedTypesForCurrentMode());
+        if (inferredType && allowedTypes.has(inferredType)) {
+            typeSelect.value = inferredType;
+            typeSelect.dispatchEvent(new Event("change"));
+        }
+        isMediaUploadInProgress = true;
+        mediaUploadUiArmed = true;
+        placeholder.style.display = "none";
+        previewContainer.style.display = "none";
+        loader.style.display = "block";
+        setUploadProgress(0);
+        refreshSmartSuggestions({ fileName: latestSelectedFileName });
+    });
+
+    refreshSmartSuggestions();
 
     // Initialize file upload
     if (typeof initializeFileInput === "function") {
-        const typeSelect = document.getElementById("create-type");
-        const mediaUrlInput = document.getElementById("create-media-url");
-        const mediaTypeInput = document.getElementById("create-media-type");
-
-        const dropZone = document.getElementById("create-media-dropzone");
-        const loader = document.getElementById("create-media-loader");
-        const progressBar = document.getElementById(
-            "create-media-progress-bar",
-        );
-        const progressLabel = document.getElementById(
-            "create-media-progress-label",
-        );
-
-        const setUploadProgressIndeterminate = () => {
-            if (progressBar) {
-                progressBar.classList.add("is-indeterminate");
-                progressBar.style.width = "";
-            }
-            if (progressLabel) progressLabel.textContent = "";
-        };
-
-        const setUploadProgress = (percent) => {
-            if (!progressBar) return;
-            const safePercent =
-                typeof percent === "number" && Number.isFinite(percent)
-                    ? Math.max(0, Math.min(100, Math.round(percent)))
-                    : 0;
-            progressBar.classList.remove("is-indeterminate");
-            progressBar.style.width = `${safePercent}%`;
-            if (progressLabel) progressLabel.textContent = `${safePercent}%`;
-        };
-
-        const buildMediaPreviewShell = (innerHtml) => `
-            <div class="media-preview-shell">
-                <button type="button" class="media-remove-btn" title="Retirer le media">X</button>
-                ${innerHtml}
-            </div>
-        `;
-
-        const clearMediaSelection = () => {
-            mediaUrlInput.value = "";
-            mediaUrlsInput.value = "";
-            if (fileInput) fileInput.value = "";
-            previewContainer.innerHTML = "";
-            previewContainer.style.display = "none";
-            placeholder.style.display = "block";
-        };
-
-        if (previewContainer && !previewContainer.dataset.clearHandler) {
-            previewContainer.addEventListener("click", (e) => {
-                const btn = e.target.closest(".media-remove-btn");
-                if (!btn) return;
-                e.preventDefault();
-                e.stopPropagation();
-                clearMediaSelection();
-            });
-            previewContainer.dataset.clearHandler = "true";
-        }
-
-        const typeButtons = Array.from(
-            container.querySelectorAll(".type-quick button"),
-        );
-        const modeButtons = Array.from(
-            container.querySelectorAll(".mode-switch button"),
-        );
-        const syncTypeButtons = (value) => {
-            typeButtons.forEach((btn) =>
-                btn.classList.toggle("active", btn.dataset.type === value),
-            );
-        };
-        const syncModeButtons = (value) => {
-            modeButtons.forEach((btn) =>
-                btn.classList.toggle("active", btn.dataset.mode === value),
-            );
-        };
-
-        const applyMode = (mode) => {
-            currentMode = mode;
-            syncModeButtons(mode);
-            if (mode === "announcement") {
-                typeSelect.value = "text";
-                typeSelect.disabled = true;
-                mediaTypeInput.value = "text";
-                fileInput.accept = "image/*";
-                fileInput.multiple = true;
-                uploadContainer.style.display = "block";
-                urlContainer.style.display = "none";
-                if (dayGroup) {
-                    dayGroup.style.display = "none";
-                    const dayInput = dayGroup.querySelector("input");
-                    if (dayInput) dayInput.required = false;
-                }
-                if (stateGroup) {
-                    stateGroup.style.display = "none";
-                    const stateSelect = stateGroup.querySelector("select");
-                    if (stateSelect) stateSelect.required = false;
-                }
-                if (arcGroup) {
-                    arcGroup.style.display = "none";
-                    const arcSelect = arcGroup.querySelector("select");
-                    if (arcSelect) arcSelect.required = false;
-                }
-                if (tagsGroup) tagsGroup.style.display = "none";
-                if (descGroup) {
-                    descGroup.style.display = "none";
-                    const descTextarea = descGroup.querySelector("textarea");
-                    if (descTextarea) descTextarea.required = false;
-                }
-            } else {
-                typeSelect.disabled = false;
-                fileInput.multiple = false;
-                if (dayGroup) {
-                    dayGroup.style.display = "";
-                    const dayInput = dayGroup.querySelector("input");
-                    if (dayInput) dayInput.required = true;
-                }
-                if (stateGroup) {
-                    stateGroup.style.display = "";
-                    const stateSelect = stateGroup.querySelector("select");
-                    if (stateSelect) stateSelect.required = true;
-                }
-                if (arcGroup) {
-                    arcGroup.style.display = "";
-                    const arcSelect = arcGroup.querySelector("select");
-                    if (arcSelect) arcSelect.required = true;
-                }
-                if (tagsGroup) tagsGroup.style.display = "";
-                if (descGroup) {
-                    descGroup.style.display = "";
-                    const descTextarea = descGroup.querySelector("textarea");
-                    if (descTextarea) descTextarea.required = true;
-                }
-            }
-            typeSelect.dispatchEvent(new Event("change"));
-        };
-
-        modeButtons.forEach((btn) =>
-            btn.addEventListener("click", () => applyMode(btn.dataset.mode)),
-        );
-
-        // Toggle logic
-        typeSelect.addEventListener("change", () => {
-            const type = typeSelect.value;
-            mediaTypeInput.value = type;
-            syncTypeButtons(type);
-
-            if (type === "live") {
-                uploadContainer.style.display = "none";
-                urlContainer.style.display = "block";
-                mediaUrlInput.value = liveInput.value;
-            } else if (type === "text") {
-                uploadContainer.style.display = "block";
-                urlContainer.style.display = "none";
-                fileInput.accept = "image/*";
-                fileInput.multiple = currentMode === "announcement";
-                mediaTypeInput.value = "text";
-                if (placeholder) placeholder.style.display = "block";
-            } else {
-                uploadContainer.style.display = "block";
-                urlContainer.style.display = "none";
-                if (type === "image") {
-                    fileInput.accept = "image/*";
-                    fileInput.multiple = true;
-                } else if (type === "video") {
-                    fileInput.accept = "video/*";
-                    fileInput.multiple = false;
-                }
-            }
-        });
-        typeButtons.forEach((btn) => {
-            btn.addEventListener("click", () => {
-                const t = btn.dataset.type;
-                typeSelect.value = t;
-                typeSelect.dispatchEvent(new Event("change"));
-            });
-        });
-        // initial sync
-        syncTypeButtons(typeSelect.value);
-        syncModeButtons(currentMode);
-        if (currentMode === "announcement") {
-            applyMode("announcement");
-        } else {
-            // Appliquer immédiatement le bon mode de sélection (single/multiple)
-            // selon le type courant, sans attendre une action utilisateur.
-            typeSelect.dispatchEvent(new Event("change"));
-        }
-
-        if (fileInput && fileInput.dataset.durationHintBound !== "1") {
-            fileInput.dataset.durationHintBound = "1";
-            fileInput.addEventListener("change", async () => {
-                if (!videoDurationHint) return;
-                videoDurationHint.textContent = "";
-                const file = fileInput.files && fileInput.files[0];
-                if (!file) return;
-                const isVideoSelection =
-                    (typeof isLikelyVideoFile === "function" &&
-                        isLikelyVideoFile(file)) ||
-                    String(file.type || "").startsWith("video/");
-                if (!isVideoSelection) return;
-                if (typeof readVideoDurationSeconds !== "function") return;
-
-                try {
-                    const seconds = await readVideoDurationSeconds(file);
-                    const mins = Math.floor(seconds / 60);
-                    const secs = Math.round(seconds % 60)
-                        .toString()
-                        .padStart(2, "0");
-                    if (seconds > 60 * 60) {
-                        videoDurationHint.style.color = "#ef4444";
-                        videoDurationHint.textContent = `Durée détectée: ${mins}:${secs} (max 60:00)`;
-                    } else {
-                        videoDurationHint.style.color = "#10b981";
-                        videoDurationHint.textContent = `Durée détectée: ${mins}:${secs}`;
-                    }
-                } catch (e) {
-                    videoDurationHint.style.color = "var(--text-secondary)";
-                    videoDurationHint.textContent =
-                        "Impossible de lire la durée de cette vidéo.";
-                }
-            });
-        }
-
-        // Live URL handler
-        liveInput.addEventListener("input", () => {
-            if (typeSelect.value === "live") {
-                mediaUrlInput.value = liveInput.value;
-            }
-        });
-
-        // Handle click on dropzone (prevent double click if clicking preview)
-        dropZone.addEventListener("click", (e) => {
-            if (e.target.tagName !== "IMG" && e.target.tagName !== "VIDEO") {
-                fileInput.click();
-            }
-        });
-
-        // Add spinning animation style if not exists
-        if (!document.getElementById("spin-style")) {
-            const style = document.createElement("style");
-            style.id = "spin-style";
-            style.innerHTML =
-                "@keyframes spin { to { transform: rotate(360deg); } }";
-            document.head.appendChild(style);
-        }
-
-        // Custom handler to show loader
-        fileInput.addEventListener("change", () => {
-            if (fileInput.files.length > 0) {
-                isMediaUploadInProgress = true;
-                mediaUploadUiArmed = true;
-                placeholder.style.display = "none";
-                previewContainer.style.display = "none";
-                loader.style.display = "block";
-                setUploadProgress(0);
-            }
-        });
-
-        const updateMultiPreview = (urls = []) => {
-            const clean = (urls || []).filter(Boolean);
-            if (clean.length === 0) {
-                previewContainer.style.display = "none";
-                return;
-            }
-            const slides = clean
-                .map(
-                    (u) =>
-                        `<div class="xera-carousel-slide"><img src="${u}" alt="Media" loading="lazy" decoding="async"></div>`,
-                )
-                .join("");
-            const dots =
-                clean.length > 1
-                    ? `<div class="xera-carousel-dots">${clean
-                          .map(
-                              (_, i) =>
-                                  `<span class="xera-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
-                          )
-                          .join("")}</div>`
-                    : "";
-            previewContainer.innerHTML = buildMediaPreviewShell(`
-                <div class="xera-carousel" data-carousel>
-                    <div class="xera-carousel-track">${slides}</div>
-                    ${dots}
-                </div>
-            `);
-        };
-
         initializeFileInput("create-media-file", {
-            dropZone: dropZone,
+            dropZone,
             compress: true,
             multiple: () => !!fileInput.multiple,
+            parallelUploads: 2,
             onBeforeUpload: () => {
                 isMediaUploadInProgress = true;
                 if (!mediaUploadUiArmed) {
@@ -12967,25 +13922,34 @@ async function openCreateMenu(
                 setUploadProgressIndeterminate();
 
                 if (successUrls.length === 0) {
+                    mediaUrlInput.value = "";
+                    mediaUrlsInput.value = "";
                     placeholder.style.display = "block";
                     previewContainer.style.display = "none";
-                    mediaUrlsInput.value = "";
                     return;
                 }
 
-                // Keep backward compatibility: first URL in create-media-url
-                document.getElementById("create-media-url").value =
-                    successUrls[0];
-                document.getElementById("create-media-type").value =
-                    successful[0]?.type || mediaTypeInput.value;
+                mediaUrlInput.value = successUrls[0];
+                mediaTypeInput.value = successful[0]?.type || mediaTypeInput.value;
                 mediaUrlsInput.value = JSON.stringify(successUrls);
                 previewContainer.style.display = "block";
                 placeholder.style.display = "none";
+
+                const allowedTypes = new Set(getAllowedTypesForCurrentMode());
+                if (
+                    successful[0]?.type &&
+                    allowedTypes.has(successful[0].type) &&
+                    typeSelect.value !== successful[0].type
+                ) {
+                    typeSelect.value = successful[0].type;
+                    typeSelect.dispatchEvent(new Event("change"));
+                }
 
                 if (successful[0]?.type === "video") {
                     previewContainer.innerHTML = buildMediaPreviewShell(
                         `<video src="${successUrls[0]}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`,
                     );
+                    refreshSmartSuggestions({ fileName: latestSelectedFileName });
                     return;
                 }
 
@@ -12996,12 +13960,14 @@ async function openCreateMenu(
                     } catch (e) {
                         /* ignore */
                     }
+                    refreshSmartSuggestions({ fileName: latestSelectedFileName });
                     return;
                 }
 
                 previewContainer.innerHTML = buildMediaPreviewShell(
                     `<img src="${successUrls[0]}" style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">`,
                 );
+                refreshSmartSuggestions({ fileName: latestSelectedFileName });
             },
         });
     }
@@ -13094,9 +14060,8 @@ async function openCreateMenu(
                 console.warn("Session refresh failed", sessionCheck.error);
             }
 
-            let mediaUrl = document.getElementById("create-media-url").value;
-            const mediaUrlsRaw =
-                document.getElementById("create-media-urls")?.value || "";
+            let mediaUrl = mediaUrlInput.value;
+            const mediaUrlsRaw = mediaUrlsInput?.value || "";
             let mediaUrls = [];
             try {
                 const parsed = mediaUrlsRaw ? JSON.parse(mediaUrlsRaw) : [];
@@ -13111,15 +14076,13 @@ async function openCreateMenu(
                 mediaUrls = [mediaUrl];
             }
             const selectedType =
-                document.getElementById("create-media-type").value ||
-                document.getElementById("create-type").value;
+                mediaTypeInput.value || typeSelect.value;
             if (selectedType !== "text" && !mediaUrl) {
                 alert('Ajoutez un média ou sélectionnez "Post texte".');
                 return;
             }
 
-            const tagsInput = document.getElementById("create-tags").value;
-            let parsedTags = parseTagsInput(tagsInput);
+            let parsedTags = parseTagsInput(tagsInput.value);
             if (
                 currentMode === "announcement" &&
                 !parsedTags.includes("annonce")
@@ -13128,8 +14091,8 @@ async function openCreateMenu(
             }
             const baseDescription =
                 currentMode === "announcement"
-                    ? document.getElementById("create-desc").value || ""
-                    : document.getElementById("create-desc").value;
+                    ? descInput.value || ""
+                    : descInput.value;
             const descriptionWithTags = encodeDescriptionWithTags(
                 baseDescription,
                 parsedTags,
@@ -13139,26 +14102,32 @@ async function openCreateMenu(
             const originalText = btnSave.textContent;
             btnSave.disabled = true;
             btnSave.textContent = isEdit ? "Mise à jour..." : "Publication...";
+            const selectedArcLabel =
+                currentMode === "announcement"
+                    ? ""
+                    : String(
+                          arcSelect?.selectedOptions?.[0]?.textContent || "",
+                      ).trim();
 
             const contentData = {
                 userId: userId,
                 dayNumber:
                     currentMode === "announcement"
                         ? 0
-                        : parseInt(document.getElementById("create-day").value),
-                title: document.getElementById("create-title").value,
+                        : parseInt(dayInput.value),
+                title: titleInput.value,
                 description: descriptionWithTags,
                 state:
                     currentMode === "announcement"
                         ? "pause"
-                        : document.getElementById("create-state").value,
-                type: currentMode === "announcement" ? "text" : selectedType,
+                        : stateSelect.value,
+                type: selectedType,
                 mediaUrl: mediaUrl || null,
                 mediaUrls: mediaUrls,
                 arcId:
                     currentMode === "announcement"
                         ? null
-                        : document.getElementById("create-arc").value || null,
+                        : arcSelect.value || null,
             };
 
             let result;
@@ -13172,6 +14141,21 @@ async function openCreateMenu(
             }
 
             if (result.success) {
+                const rememberedTags = parsedTags
+                    .filter((tag) => tag !== "annonce")
+                    .slice(0, XERA_CREATE_TAG_LIMIT);
+                updateCreatePrefs(userId, {
+                    lastArcId: contentData.arcId,
+                    lastState: contentData.state,
+                    lastType: contentData.type,
+                    recentTags: rememberedTags,
+                });
+                if (!isEdit) {
+                    recordCreateMetric(
+                        userId,
+                        Math.max(0, Date.now() - createFlowStartedAt),
+                    );
+                }
                 if (!isEdit && result.data) {
                     notifyFollowersOfTrace(result.data).catch((e) =>
                         console.warn("notifyFollowersOfTrace error", e),
@@ -13184,6 +14168,16 @@ async function openCreateMenu(
                     userContents[userId] = contentResult.data.map(
                         convertSupabaseContent,
                     );
+                }
+
+                const publishFeedback = buildPublishFeedbackPayload({
+                    userId,
+                    contentData,
+                    isEdit,
+                    arcTitle: selectedArcLabel,
+                });
+                if (!isEdit) {
+                    queueLatestPublishedPostHighlight(userId);
                 }
 
                 // Reload profile view
@@ -13209,6 +14203,9 @@ async function openCreateMenu(
                 }
 
                 closeCreateMenu();
+                requestAnimationFrame(() =>
+                    showPublishFeedbackCard(publishFeedback),
+                );
             } else {
                 alert("Erreur: " + result.error);
             }
