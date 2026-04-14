@@ -130,6 +130,41 @@ function getRequestOrigin(req) {
     return stripTrailingSlash(`${forwardedProto}://${forwardedHost}`);
 }
 
+function readHeader(req, headerName) {
+    if (!req || !req.headers) return "";
+    const directValue = req.headers[headerName];
+    if (typeof directValue === "string") return directValue.trim();
+
+    const normalizedKey = Object.keys(req.headers).find(
+        (key) => key && key.toLowerCase() === String(headerName).toLowerCase(),
+    );
+    return normalizedKey ? String(req.headers[normalizedKey] || "").trim() : "";
+}
+
+function authorizeCronRequest(req) {
+    const configuredSecret = String(process.env.CRON_SECRET || "").trim();
+    if (!configuredSecret) {
+        return { ok: true, unsecured: true };
+    }
+
+    const authHeader = readHeader(req, "authorization");
+    const bearerToken = authHeader.startsWith("Bearer ")
+        ? authHeader.slice("Bearer ".length).trim()
+        : "";
+    const headerSecret = readHeader(req, "x-cron-secret");
+    const providedSecret = bearerToken || headerSecret;
+
+    if (providedSecret && providedSecret === configuredSecret) {
+        return { ok: true, unsecured: false };
+    }
+
+    return {
+        ok: false,
+        status: 401,
+        message: "Unauthorized cron request.",
+    };
+}
+
 function escapeHtmlAttr(value) {
     return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -4065,6 +4100,37 @@ app.post("/api/reminders/email/preferences", async (req, res) => {
                 "Impossible d'enregistrer la preference email.",
         });
     }
+});
+
+app.get("/api/cron/send-reminder-emails", async (req, res) => {
+    const auth = authorizeCronRequest(req);
+    if (!auth.ok) {
+        return res.status(auth.status || 401).json({
+            error: auth.message || "Unauthorized cron request.",
+        });
+    }
+
+    const result = await sweepReturnReminderEmails(new Date());
+
+    return res.status(200).json({
+        message: "Reminder email sweep completed.",
+        result,
+    });
+});
+
+app.get("/api/cron/sweep-subscriptions", async (req, res) => {
+    const auth = authorizeCronRequest(req);
+    if (!auth.ok) {
+        return res.status(auth.status || 401).json({
+            error: auth.message || "Unauthorized cron request.",
+        });
+    }
+
+    await sweepExpiredSubscriptions();
+
+    return res.status(200).json({
+        message: "Subscription sweep initiated successfully.",
+    });
 });
 
 // Health check
