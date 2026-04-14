@@ -1,5 +1,8 @@
 ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS email_reminder_enabled BOOLEAN DEFAULT false;
+    ADD COLUMN IF NOT EXISTS email_reminder_enabled BOOLEAN;
+
+ALTER TABLE users
+    ALTER COLUMN email_reminder_enabled SET DEFAULT true;
 
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS email_reminder_timezone TEXT DEFAULT 'UTC';
@@ -18,7 +21,7 @@ ALTER TABLE users
 
 UPDATE users
 SET
-    email_reminder_enabled = COALESCE(email_reminder_enabled, false),
+    email_reminder_enabled = COALESCE(email_reminder_enabled, true),
     email_reminder_timezone = COALESCE(NULLIF(TRIM(email_reminder_timezone), ''), 'UTC')
 WHERE
     email_reminder_enabled IS NULL

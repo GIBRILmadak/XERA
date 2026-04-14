@@ -11436,19 +11436,7 @@ async function openSettings(userId) {
         window.currentUser?.email || user.email || "",
     ).trim();
     const safeAccountEmailHtml = escapeHtml(accountEmail);
-    const emailReminderEnabled = user.email_reminder_enabled === true;
-    const browserTimeZone = (() => {
-        try {
-            return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-        } catch (error) {
-            return "UTC";
-        }
-    })();
-    const emailReminderTimeZone = String(
-        user.email_reminder_timezone || browserTimeZone || "UTC",
-    ).trim();
-    const safeEmailReminderTimeZoneHtml = escapeHtml(emailReminderTimeZone);
-
+    const emailReminderEnabled = user.email_reminder_enabled !== false;
     container.innerHTML = `
         <div class="settings-shell">
             <div class="settings-header" style="border:none; margin-bottom:1rem; padding-bottom:0;">
@@ -11491,7 +11479,7 @@ async function openSettings(userId) {
                                     <div class="form-hint">Choisissez l'affichage qui vous convient.</div>
                                 </div>
                                 <div class="form-group">
-                                    <label for="setting-email-reminder-enabled">Rappels email</label>
+                                    <label for="setting-email-reminder-enabled">Emails</label>
                                     <label style="display:flex; align-items:flex-start; gap:0.75rem; cursor:pointer; padding:0.9rem 1rem; border:1px solid rgba(255,255,255,0.08); border-radius:14px; background:rgba(255,255,255,0.03);">
                                         <input
                                             type="checkbox"
@@ -11501,12 +11489,12 @@ async function openSettings(userId) {
                                             style="margin-top:0.2rem;"
                                         >
                                         <span style="display:block;">
-                                            <span style="display:block; font-weight:700;">Recevoir un rappel pour poster</span>
+                                            <span style="display:block; font-weight:700;">RECEVOIR DES EMAILS</span>
                                             <span class="form-hint" style="display:block; margin-top:0.35rem;">
                                                 ${
                                                     accountEmail
-                                                        ? `Envoi a ${safeAccountEmailHtml} vers 10h et 18h selon votre fuseau (${safeEmailReminderTimeZoneHtml}).`
-                                                        : "Adresse email du compte indisponible pour le moment."
+                                                        ? `evnoie à ${safeAccountEmailHtml}`
+                                                        : "evnoie à l'adresse email du compte"
                                                 }
                                             </span>
                                         </span>
