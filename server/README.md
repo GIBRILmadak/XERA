@@ -49,7 +49,11 @@ Rappels email (optionnels)
   - `RETURN_REMINDER_EMAIL_API_KEY=<cle API>` (si provider `resend`)
   - `RETURN_REMINDER_EMAIL_WEBHOOK_URL=https://...` (si provider `webhook`)
   - `RETURN_REMINDER_EMAIL_WEBHOOK_TOKEN=<token optionnel>`
-- En mode Vercel, le cron `/api/cron/send-reminder-emails` lance un sweep toutes les 10 minutes.
+- En `Vercel Hobby`, les crons `*/10 * * * *` ne sont pas acceptes. Utilisez un scheduler externe qui appelle:
+  - `GET /api/cron/send-reminder-emails`
+  - `GET /api/cron/sweep-subscriptions`
+  - header recommande: `Authorization: Bearer <CRON_SECRET>`
+- Si vous passez plus tard sur `Vercel Pro`, vous pouvez reintroduire des crons Vercel avec le meme `CRON_SECRET`.
 - Campagnes email actuellement gerees:
   - rappel de post du jour avec lien direct vers l'ouverture du formulaire
   - reactivation apres 7 jours sans update

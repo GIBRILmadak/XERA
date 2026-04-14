@@ -14,15 +14,5 @@
     { "source": "/subscription-payment", "destination": "/subscription-payment.html" },
     { "source": "/verification", "destination": "/verification.html" },
     { "source": "/404", "destination": "/404.html" }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/sweep-subscriptions",
-      "schedule": "*/10 * * * *"
-    },
-    {
-      "path": "/api/cron/send-reminder-emails",
-      "schedule": "*/10 * * * *"
-    }
   ]
 }
