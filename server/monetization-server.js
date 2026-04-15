@@ -66,7 +66,35 @@ app.use(express.urlencoded({ extended: false }));
 const allowedOrigins = APP_BASE_URL.split(",")
     .map((v) => v.trim())
     .filter(Boolean);
-app.use(cors({ origin: allowedOrigins, methods: ["GET", "POST"] }));
+
+function isLoopbackOrigin(origin) {
+    try {
+        const url = new URL(String(origin || "").trim());
+        return (
+            url.protocol === "http:" &&
+            (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+        );
+    } catch (error) {
+        return false;
+    }
+}
+
+app.use(
+    cors({
+        origin(origin, callback) {
+            if (!origin) {
+                callback(null, true);
+                return;
+            }
+            if (allowedOrigins.includes(origin) || isLoopbackOrigin(origin)) {
+                callback(null, true);
+                return;
+            }
+            callback(new Error("Origin not allowed by CORS"));
+        },
+        methods: ["GET", "POST", "OPTIONS"],
+    }),
+);
 
 function parseBooleanEnv(value, fallback = false) {
     if (value === undefined || value === null || value === "") {
@@ -3137,6 +3165,12 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
         if (!subject || !body) {
             return res.status(400).json({ error: "Sujet ou contenu manquant." });
         }
+        if (!supportsEmailReminders()) {
+            return res.status(503).json({
+                error:
+                    "Envoi email non configure. Verifiez RETURN_REMINDER_EMAIL_PROVIDER et les variables de livraison.",
+            });
+        }
 
         const layout = buildReminderEmailLayout({
             eyebrow: "Annonce XERA",
@@ -3148,25 +3182,32 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
         });
 
         let sentCount = 0;
-        let lastId = null;
-        let hasMore = true;
+        let failedCount = 0;
+        let skippedCount = 0;
+        let attemptedCount = 0;
+        let page = 1;
+        const perPage = 100;
+        let lastErrorMessage = "";
 
-        while (hasMore) {
+        while (true) {
             const { data, error } = await supabase.auth.admin.listUsers({
-                limit: 100,
-                // On pourrait utiliser offset ou lastId selon la version de @supabase/supabase-js
+                page,
+                perPage,
             });
 
             if (error) throw error;
 
             const users = data.users || [];
             if (users.length === 0) {
-                hasMore = false;
                 break;
             }
 
             for (const user of users) {
-                if (!user.email) continue;
+                if (!user.email) {
+                    skippedCount += 1;
+                    continue;
+                }
+                attemptedCount += 1;
 
                 const payload = {
                     to: user.email,
@@ -3178,17 +3219,53 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
                 const result = await sendReminderEmail(payload);
                 if (result.success) {
                     sentCount++;
+                } else {
+                    failedCount++;
+                    if (!lastErrorMessage) {
+                        lastErrorMessage = String(
+                            result?.error?.message || result?.error || "",
+                        ).trim();
+                    }
                 }
             }
 
-            // Pagination simple si listUsers ne supporte pas de curseur facilement dans cette version
-            // En fait, sans curseur, on ne peut pas facilement faire de boucle infinie sécurisée si listUsers renvoie toujours les mêmes
-            // @supabase/supabase-js v2 supporte pagination via `page` et `perPage` ou curseur.
-            // Pour l'instant, on va juste faire un essai sur les 1000 premiers utilisateurs si pas de pagination complexe.
-            hasMore = false; // TODO: Implement full pagination if needed
+            if (users.length < perPage) {
+                break;
+            }
+            page += 1;
         }
 
-        return res.json({ success: true, sentCount });
+        if (attemptedCount === 0) {
+            return res.status(404).json({
+                error: "Aucun utilisateur avec email n'a ete trouve.",
+                attemptedCount,
+                sentCount,
+                failedCount,
+                skippedCount,
+            });
+        }
+
+        if (sentCount === 0 && failedCount > 0) {
+            return res.status(502).json({
+                error:
+                    lastErrorMessage ||
+                    "Aucun email n'a pu etre envoye par le fournisseur.",
+                attemptedCount,
+                sentCount,
+                failedCount,
+                skippedCount,
+                provider: REMINDER_EMAIL_PROVIDER,
+            });
+        }
+
+        return res.json({
+            success: failedCount === 0,
+            attemptedCount,
+            sentCount,
+            failedCount,
+            skippedCount,
+            provider: REMINDER_EMAIL_PROVIDER,
+        });
     } catch (error) {
         console.error("Admin broadcast email error:", error);
         return res.status(500).json({ error: "Erreur serveur." });

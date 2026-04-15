@@ -4231,15 +4231,28 @@ async function fetchSuperAdminJson(path, options = {}) {
         throw new Error("Adresse API introuvable.");
     }
 
-    const response = await fetch(`${apiBase}${path}`, {
-        method: options.method || "GET",
-        headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            ...(options.body ? { "Content-Type": "application/json" } : {}),
-            ...(options.headers || {}),
-        },
-        body: options.body,
-    });
+    let response;
+    try {
+        response = await fetch(`${apiBase}${path}`, {
+            method: options.method || "GET",
+            headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                ...(options.body ? { "Content-Type": "application/json" } : {}),
+                ...(options.headers || {}),
+            },
+            body: options.body,
+        });
+    } catch (error) {
+        const isLocalHost =
+            window.location.hostname === "localhost" ||
+            window.location.hostname === "127.0.0.1";
+        if (isLocalHost) {
+            throw new Error(
+                `API super-admin inaccessible sur ${apiBase}. Lancez 'npm run api' puis rechargez la page.`,
+            );
+        }
+        throw new Error("Impossible de contacter le serveur super-admin.");
+    }
 
     let payload = {};
     try {
@@ -14977,3 +14990,97 @@ observer.observe(document.body, {
     childList: true,
     subtree: true,
 });
+
+// ==================== ADMIN: BROADCAST EMAIL ====================
+async function sendAdminBroadcastEmail() {
+    const subject = document.getElementById("admin-broadcast-subject")?.value?.trim();
+    const body = document.getElementById("admin-broadcast-body")?.value?.trim();
+    const ctaLabel = document.getElementById("admin-broadcast-cta-label")?.value?.trim() || "";
+    const ctaUrl = document.getElementById("admin-broadcast-cta-url")?.value?.trim() || "";
+    const defaultLabel = "Envoyer à tous les utilisateurs";
+    const loadingLabel = "Envoi en cours...";
+    const successLabel = "Email envoyé";
+    const partialLabel = "Envoi partiel";
+    const errorLabel = "Échec de l'envoi";
+    const minimumBusyMs = 1200;
+    const resultLabelMs = 2200;
+
+    if (!subject || !body) {
+        window.ToastManager?.error("Erreur", "Le sujet et le contenu sont requis.");
+        return;
+    }
+
+    const submitBtn = document.getElementById("admin-broadcast-submit");
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = loadingLabel;
+    }
+
+    const startedAt = Date.now();
+    const wait = (ms) =>
+        new Promise((resolve) => {
+            window.setTimeout(resolve, Math.max(0, ms));
+        });
+    const ensureMinimumBusyTime = async () => {
+        const elapsed = Date.now() - startedAt;
+        if (elapsed < minimumBusyMs) {
+            await wait(minimumBusyMs - elapsed);
+        }
+    };
+
+    try {
+        const result = await fetchSuperAdminJson("/api/admin/broadcast-email", {
+            method: "POST",
+            body: JSON.stringify({ subject, body, ctaLabel, ctaUrl }),
+        });
+
+        await ensureMinimumBusyTime();
+
+        const sentCount = Number(result.sentCount || 0);
+        const failedCount = Number(result.failedCount || 0);
+        const attemptedCount = Number(result.attemptedCount || sentCount);
+        const summary = [
+            `${sentCount} email${sentCount > 1 ? "s" : ""} envoyé${sentCount > 1 ? "s" : ""}`,
+            failedCount > 0
+                ? `${failedCount} échec${failedCount > 1 ? "s" : ""}`
+                : null,
+            attemptedCount > sentCount + failedCount
+                ? `${attemptedCount - sentCount - failedCount} utilisateur${attemptedCount - sentCount - failedCount > 1 ? "s" : ""} sans adresse email`
+                : null,
+        ]
+            .filter(Boolean)
+            .join(" • ");
+
+        if (failedCount > 0) {
+            if (submitBtn) {
+                submitBtn.textContent = partialLabel;
+            }
+            window.ToastManager?.info("Envoi partiel", summary || "L'envoi est partiellement terminé.");
+        } else {
+            if (submitBtn) {
+                submitBtn.textContent = successLabel;
+            }
+            window.ToastManager?.success("Succès", summary || "Email envoyé.");
+        }
+
+        // Clear form
+        if (document.getElementById("admin-broadcast-subject")) document.getElementById("admin-broadcast-subject").value = "";
+        if (document.getElementById("admin-broadcast-body")) document.getElementById("admin-broadcast-body").value = "";
+        if (document.getElementById("admin-broadcast-cta-label")) document.getElementById("admin-broadcast-cta-label").value = "";
+        if (document.getElementById("admin-broadcast-cta-url")) document.getElementById("admin-broadcast-cta-url").value = "";
+        await wait(resultLabelMs);
+    } catch (error) {
+        await ensureMinimumBusyTime();
+        if (submitBtn) {
+            submitBtn.textContent = errorLabel;
+        }
+        console.error("Broadcast email error:", error);
+        window.ToastManager?.error("Erreur", error.message || "Impossible d'envoyer l'email.");
+        await wait(resultLabelMs);
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = defaultLabel;
+        }
+    }
+}
