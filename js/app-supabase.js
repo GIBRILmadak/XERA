@@ -4016,6 +4016,24 @@ function getSuperAdminPanelHtml() {
                 </div>
                 <div id="admin-feedback-list" class="admin-feedback-list" style="margin-top: 0.75rem; display:flex; flex-direction:column; gap:0.75rem;"></div>
             </div>
+
+            <div class="verification-admin-block" style="margin-top: 1.5rem;">
+                <h4>Envoyer un email à tout le monde</h4>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                    Envoyer un email officiel XERA à tous les utilisateurs enregistrés.
+                </p>
+                <div class="verification-input-row" style="flex-direction: column; align-items: stretch;">
+                    <input type="text" id="admin-broadcast-subject" class="form-input" placeholder="Sujet de l'email">
+                    <textarea id="admin-broadcast-body" class="form-input" rows="5" placeholder="Contenu de l'email (Markdown supporté par sauts de ligne)"></textarea>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+                        <input type="text" id="admin-broadcast-cta-label" class="form-input" placeholder="Label du bouton (ex: Ouvrir l'app)">
+                        <input type="text" id="admin-broadcast-cta-url" class="form-input" placeholder="URL du bouton (optionnel)">
+                    </div>
+                    <button type="button" class="btn-verify" id="admin-broadcast-submit" onclick="sendAdminBroadcastEmail()">
+                        Envoyer à tous les utilisateurs
+                    </button>
+                </div>
+            </div>
         </div>
     `;
 }
@@ -11088,7 +11106,7 @@ function syncFloatingCreateVisibility(pageId) {
 
 function navigateTo(pageId) {
     // Vérifier si l'utilisateur essaie d'accéder à son profil sans être connecté
-    if (pageId === "profile" && !currentUser && !window.currentProfileViewed) {
+    if (pageId === "profile" && !window.currentUser && !window.currentProfileViewed) {
         if (window.XeraRouter?.navigate) {
             window.XeraRouter.navigate("login");
         } else {
@@ -11120,7 +11138,7 @@ function navigateTo(pageId) {
     }
 
     if (pageId === "messages") {
-        if (!currentUser) {
+        if (!window.currentUser) {
             if (window.XeraRouter?.navigate) {
                 window.XeraRouter.navigate("login");
             } else {
