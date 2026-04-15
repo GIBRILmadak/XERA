@@ -1973,14 +1973,39 @@ function resolveReminderSlot(now, timeZone) {
 }
 
 function supportsEmailReminders() {
-    if (!REMINDER_EMAIL_ENABLED) return false;
+    return !getEmailDeliveryIssue();
+}
+
+function getEmailDeliveryIssue() {
+    if (!REMINDER_EMAIL_ENABLED) {
+        return "Envoi email desactive via RETURN_REMINDER_EMAIL_ENABLED.";
+    }
     if (REMINDER_EMAIL_PROVIDER === "resend") {
-        return Boolean(REMINDER_EMAIL_API_KEY && REMINDER_EMAIL_FROM);
+        if (!REMINDER_EMAIL_API_KEY) {
+            return "Cle API Resend manquante.";
+        }
+        const normalizedApiKey = REMINDER_EMAIL_API_KEY.toLowerCase();
+        if (
+            REMINDER_EMAIL_API_KEY === "re_123456789" ||
+            normalizedApiKey.includes("<cle api>") ||
+            normalizedApiKey.includes("<api key>") ||
+            normalizedApiKey.includes("example") ||
+            normalizedApiKey.includes("changeme")
+        ) {
+            return "Cle API Resend invalide ou de demonstration.";
+        }
+        if (!REMINDER_EMAIL_FROM) {
+            return "Adresse d'expedition email manquante.";
+        }
+        return null;
     }
     if (REMINDER_EMAIL_PROVIDER === "webhook") {
-        return Boolean(REMINDER_EMAIL_WEBHOOK_URL);
+        if (!REMINDER_EMAIL_WEBHOOK_URL) {
+            return "URL webhook email manquante.";
+        }
+        return null;
     }
-    return false;
+    return "Fournisseur email non configure.";
 }
 
 function buildProfileReminderUrl(userId) {
@@ -3165,10 +3190,11 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
         if (!subject || !body) {
             return res.status(400).json({ error: "Sujet ou contenu manquant." });
         }
-        if (!supportsEmailReminders()) {
+        const emailDeliveryIssue = getEmailDeliveryIssue();
+        if (emailDeliveryIssue) {
             return res.status(503).json({
-                error:
-                    "Envoi email non configure. Verifiez RETURN_REMINDER_EMAIL_PROVIDER et les variables de livraison.",
+                error: `Envoi email non configure. ${emailDeliveryIssue}`,
+                provider: REMINDER_EMAIL_PROVIDER || null,
             });
         }
 
@@ -4241,6 +4267,7 @@ app.post("/api/reminders/email/preferences", async (req, res) => {
             email: authResult.user.email || null,
             deliveryReady: supportsEmailReminders(),
             provider: supportsEmailReminders() ? REMINDER_EMAIL_PROVIDER : null,
+            deliveryIssue: getEmailDeliveryIssue(),
         });
     } catch (error) {
         console.error("Email reminder preference error:", error);
@@ -4297,6 +4324,7 @@ app.get("/api/health", (_req, res) => {
             ? REMINDER_EMAIL_PROVIDER
             : "disabled",
         emailReminderFrom: REMINDER_EMAIL_FROM || null,
+        emailRemindersIssue: getEmailDeliveryIssue(),
         subscriptionSweepMs: SUBSCRIPTION_SWEEP_MS,
     });
 });
