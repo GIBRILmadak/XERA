@@ -4049,27 +4049,7 @@ function formatStatNumber(value) {
 }
 
 async function fetchTotalContentViews() {
-    // Essaie d'abord une agrégation côté BDD (views.sum), sinon fallback en local
-    try {
-        const { data, error } = await supabase
-            .from("content")
-            .select("views.sum")
-            .single();
-        if (!error && data) {
-            const sum =
-                data.sum ??
-                data["views.sum"] ??
-                (data.views && data.views.sum) ??
-                0;
-            if (typeof sum === "number") return sum;
-        }
-    } catch (err) {
-        console.warn(
-            "Aggregation views.sum failed, fallback to client sum",
-            err,
-        );
-    }
-
+    // Pas d'agrégat Supabase configuré ici: on somme côté client.
     try {
         const { data, error } = await supabase.from("content").select("views");
         if (error) throw error;

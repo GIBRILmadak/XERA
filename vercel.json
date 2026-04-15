@@ -1,5 +1,7 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/router?path=:path*" },
     { "source": "/", "destination": "/index.html" },
     { "source": "/login", "destination": "/login.html" },
     { "source": "/profile", "destination": "/profile.html" },
