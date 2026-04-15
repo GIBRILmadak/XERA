@@ -1889,7 +1889,6 @@ function hydrateDiscoverFromCache() {
         });
         window.userLoadError = null;
         window.hasLoadedUsers = true;
-        computeAmbassadors();
         return true;
     } catch (e) {
         return false;
@@ -2058,8 +2057,6 @@ async function loadAllData() {
             }
         }
 
-        computeAmbassadors();
-
         // Charger les badges vérifiés avant de rendre les annonces pour que le badge apparaisse
         await fetchVerifiedBadges();
         await Promise.all([
@@ -2093,8 +2090,6 @@ async function loadPublicData() {
         }
 
         allUsers = (usersResult.data || []).map((u) => sanitizeUserMedia(u));
-        computeAmbassadors();
-
         // Même ordre côté public pour assurer l'affichage correct des badges dans les annonces
         await fetchVerifiedBadges();
         await Promise.all([
@@ -3504,9 +3499,7 @@ async function toggleCourage(contentId, btnElement) {
    SYSTÈME DE BADGES (CONSERVÉ)
    ======================================== */
 
-const AMBASSADOR_LIMIT = 150;
 const BADGE_ASSET_VERSION = "2";
-let ambassadorUserIds = new Set();
 
 const SUPER_ADMIN_ID = "b0f9f893-1706-4721-899c-d26ad79afc86";
 const VERIFICATION_ADMIN_IDS = new Set([SUPER_ADMIN_ID]);
@@ -3546,21 +3539,6 @@ function getBanRemainingLabel(userProfile) {
     if (diffHours < 48) return `${diffHours} h`;
     const diffDays = Math.ceil(diffHours / 24);
     return `${diffDays} j`;
-}
-
-function computeAmbassadors() {
-    if (!Array.isArray(allUsers) || allUsers.length === 0) {
-        ambassadorUserIds = new Set();
-        return;
-    }
-
-    const sortedByCreation = [...allUsers]
-        .filter((user) => user && user.created_at)
-        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-
-    ambassadorUserIds = new Set(
-        sortedByCreation.slice(0, AMBASSADOR_LIMIT).map((user) => user.id),
-    );
 }
 
 async function fetchVerifiedBadges() {
@@ -4976,7 +4954,12 @@ function sanitizeUserMedia(user) {
 }
 
 function isAmbassadorUserId(userId) {
-    return ambassadorUserIds.has(userId);
+    if (!userId) return false;
+    const user = getUser(userId) || {};
+    return (
+        String(user.badge || user.user_metadata?.badge || "").toLowerCase() ===
+        "ambassador"
+    );
 }
 
 function applyUserUpdateToCache(user) {
@@ -5336,19 +5319,7 @@ function renderUsernameWithBadge(nameHtml, userId) {
 }
 
 function maybeShowAmbassadorWelcome(userId) {
-    if (!window.currentUser || !window.ToastManager) return;
-    if (window.currentUserId !== userId) return;
-    if (!isAmbassadorUserId(userId)) return;
-
-    const storageKey = `rize_ambassador_welcome_${userId}`;
-    if (localStorage.getItem(storageKey)) return;
-
-    ToastManager.success(
-        "Félicitations",
-        "Vous êtes l'un des premiers bêta testeurs. En guise de récompense, vous avez reçu un badge ambassadeur.",
-        7000,
-    );
-    localStorage.setItem(storageKey, "1");
+    return;
 }
 
 async function requestVerification(type) {
