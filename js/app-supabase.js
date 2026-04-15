@@ -2209,7 +2209,7 @@ function renderAnnouncementReplies(contentId) {
                 .slice(-20)
                 .map((r) => {
                     const user = getUser(r.userId);
-                    const name = user ? user.name : "Utilisateur";
+                    const name = escapeHtml(user ? user.name : "Utilisateur");
                     const avatar =
                         user?.avatar ||
                         "https://api.dicebear.com/7.x/identicon/svg?seed=anon";
@@ -2222,7 +2222,7 @@ function renderAnnouncementReplies(contentId) {
                                     <span class="reply-name">${name}</span>
                                     <span class="reply-time">${timeLabel}</span>
                                 </div>
-                                <p>${r.body}</p>
+                                <p>${escapeHtml(String(r.body || "")).replace(/\n/g, "<br>")}</p>
                             </div>
                         </div>
                     `;
@@ -2230,6 +2230,17 @@ function renderAnnouncementReplies(contentId) {
                 .join("")}
         </div>
     `;
+}
+
+function toggleProfileAnnouncementReplies(contentId) {
+    if (!contentId) return;
+    document
+        .querySelectorAll(`[data-profile-reply-panel="${contentId}"]`)
+        .forEach((panel) => {
+            const nextHidden = !panel.hidden;
+            panel.hidden = nextHidden;
+            panel.classList.toggle("is-open", !nextHidden);
+        });
 }
 
 function refreshRepliesUI(contentId) {
@@ -6239,6 +6250,531 @@ function handleEmailBadgeClick(email, el) {
     }
 }
 
+function getProfileContentTimeValue(content) {
+    const raw = content?.createdAt || content?.created_at || content?.started_at;
+    const time = new Date(raw || 0).getTime();
+    return Number.isFinite(time) ? time : 0;
+}
+
+function getProfileStateMeta(state) {
+    if (state === "failure") {
+        return {
+            label: "Bloque",
+            accent: "#ef4444",
+            svg: badgeSVGs.failure,
+        };
+    }
+    if (state === "pause") {
+        return {
+            label: "Pause",
+            accent: "#f59e0b",
+            svg: badgeSVGs.pause,
+        };
+    }
+    return {
+        label: "Victoire",
+        accent: "#10b981",
+        svg: badgeSVGs.success,
+    };
+}
+
+function getProfileContentTypeLabel(content) {
+    if (isAnnouncementContent(content)) return "Annonce";
+    if (content?.type === "video") return "Video";
+    if (content?.type === "image") return "Media";
+    if (content?.type === "live") return "Live";
+    return "Texte";
+}
+
+function renderProfileContentMedia(content, options = {}) {
+    const compact = options.compact === true;
+    const mediaUrls = Array.isArray(content?.mediaUrls)
+        ? content.mediaUrls.filter(Boolean)
+        : [];
+    const primaryMediaUrl = mediaUrls[0] || content?.mediaUrl || "";
+    if (!primaryMediaUrl) return "";
+
+    const extraCount =
+        mediaUrls.length > 1
+            ? `<span class="profile-update-media-count">+${mediaUrls.length - 1} media${mediaUrls.length - 1 > 1 ? "s" : ""}</span>`
+            : "";
+
+    if (content?.type === "video") {
+        return `
+            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}">
+                <video src="${primaryMediaUrl}" controls playsinline preload="metadata"></video>
+                ${extraCount}
+            </div>
+        `;
+    }
+
+    if (content?.type === "image") {
+        return `
+            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}">
+                <img src="${primaryMediaUrl}" alt="${escapeHtml(content?.title || "Media update")}" loading="lazy" decoding="async">
+                ${extraCount}
+            </div>
+        `;
+    }
+
+    if (content?.type === "live" || content?.type === "gif") {
+        return `
+            <div class="timeline-media profile-update-media-link">
+                <a href="${primaryMediaUrl}" target="_blank" rel="noopener noreferrer">Voir le media</a>
+            </div>
+        `;
+    }
+
+    return "";
+}
+
+function renderProfileUpdateCard(
+    content,
+    {
+        profileUserId,
+        currentUserId,
+        isAdminViewer = false,
+        encouragedContentIds = new Set(),
+        compact = false,
+        featured = false,
+        selectedArcMode = false,
+    } = {},
+) {
+    if (!content) return "";
+
+    const stateMeta = getProfileStateMeta(content.state);
+    const typeLabel = getProfileContentTypeLabel(content);
+    const dateLabel = safeFormatDate(content.createdAt, {
+        month: "long",
+        day: "numeric",
+    });
+    const agoLabel = timeAgo(content.createdAt);
+    const dayValue =
+        typeof content.dayNumber === "number" && content.dayNumber > 0
+            ? content.dayNumber
+            : typeof content.day_number === "number" && content.day_number > 0
+              ? content.day_number
+              : 0;
+    const dayChip = dayValue
+        ? `<span class="profile-update-pill">Jour ${dayValue}</span>`
+        : "";
+    const descriptionSource =
+        content.description || content.title || "Nouvelle mise a jour";
+    const descriptionHtml = escapeHtml(descriptionSource).replace(
+        /\n/g,
+        "<br>",
+    );
+    const titleHtml = escapeHtml(content.title || "Mise a jour");
+    const mediaHtml = renderProfileContentMedia(content, { compact });
+    const contextItems = [];
+
+    if (!selectedArcMode && content.arc?.title) {
+        contextItems.push(
+            `<button type="button" class="context-tag arc-tag" onclick="event.stopPropagation(); selectArc('${content.arc.id}', '${profileUserId}')">${escapeHtml(content.arc.title)}</button>`,
+        );
+    }
+
+    if (content.project?.name) {
+        contextItems.push(
+            `<span class="context-tag project-tag">${escapeHtml(content.project.name)}</span>`,
+        );
+    }
+
+    const safeTags = Array.isArray(content.tags)
+        ? content.tags.map(normalizeTag).filter(Boolean).slice(0, 3)
+        : [];
+    safeTags.forEach((tag) => {
+        contextItems.push(`<span class="context-tag">#${escapeHtml(tag)}</span>`);
+    });
+
+    const contextHtml = contextItems.length
+        ? `<div class="timeline-context profile-update-context">${contextItems.join("")}</div>`
+        : "";
+
+    const contentAuthor =
+        content.userId && content.userId !== profileUserId
+            ? getUser(content.userId)
+            : null;
+    const authorHtml = contentAuthor
+        ? `
+            <div class="profile-update-author">
+                <span class="profile-update-author-label">par</span>
+                <span class="profile-update-author-name">${renderUsernameWithBadge(contentAuthor.name, contentAuthor.id)}</span>
+            </div>
+        `
+        : "";
+
+    const isAnnouncement = isAnnouncementContent(content);
+    const replyCount = isAnnouncement ? getReplyCount(content.contentId) : 0;
+    const viewerCanEncourage =
+        !!content.contentId && currentUserId && currentUserId !== content.userId;
+    const isEncouraged = encouragedContentIds.has(content.contentId);
+    const courageIcon = isEncouraged
+        ? "icons/courage-green.svg"
+        : "icons/courage-blue.svg";
+    const encourageButtonHtml = viewerCanEncourage
+        ? `
+            <button class="btn btn-secondary courage-btn profile-encourage-btn ${isEncouraged ? "encouraged" : ""}" data-content-id="${content.contentId}" onclick="event.stopPropagation(); toggleCourage('${content.contentId}', this)">
+                <img src="${courageIcon}" width="16" height="16" alt="">
+                <span>Encourager</span>
+                <span class="courage-count profile-encourage-count">${content.encouragementsCount || 0}</span>
+            </button>
+        `
+        : `
+            <div class="profile-update-stat-pill">
+                <img src="icons/courage-blue.svg" width="16" height="16" alt="">
+                <span>${content.encouragementsCount || 0} encouragement${Number(content.encouragementsCount || 0) > 1 ? "s" : ""}</span>
+            </div>
+        `;
+
+    const replyPanelHtml = isAnnouncement
+        ? `
+            <div class="profile-update-reply-block">
+                <button type="button" class="reply-btn" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies('${content.contentId}')">
+                    Repondre
+                    <span class="reply-count" data-reply-count="${content.contentId}">${replyCount}</span>
+                </button>
+                <div class="profile-reply-panel" data-profile-reply-panel="${content.contentId}" hidden>
+                    <div class="reply-inline">
+                        <textarea id="profile-reply-input-${content.contentId}" class="reply-input" placeholder="Votre reponse..."></textarea>
+                        <div class="reply-actions">
+                            <button class="btn-primary" onclick="event.stopPropagation(); submitAnnouncementReply('${content.contentId}', 'profile-reply-input-${content.contentId}')">Envoyer</button>
+                        </div>
+                    </div>
+                    <div data-replies-container="${content.contentId}">
+                        ${renderAnnouncementReplies(content.contentId)}
+                    </div>
+                </div>
+            </div>
+        `
+        : "";
+
+    let managementHtml = "";
+    if (currentUser && currentUser.id === profileUserId) {
+        managementHtml = `
+            <div class="profile-update-management">
+                <button class="btn-action" onclick="editContent('${content.contentId || content.id}')">Modifier</button>
+                <button class="btn-action btn-action-danger" onclick="deleteContent('${content.contentId || content.id}')">Supprimer</button>
+            </div>
+        `;
+    }
+    if (isAdminViewer && currentUserId !== profileUserId) {
+        managementHtml += `
+            <div class="profile-update-management">
+                <button class="btn-action btn-action-warn" onclick="moderateContentFromProfile('${content.contentId || content.id}', 'hide', '${profileUserId}')">Masquer</button>
+                <button class="btn-action" onclick="moderateContentFromProfile('${content.contentId || content.id}', 'restore', '${profileUserId}')">Restaurer</button>
+                <button class="btn-action btn-action-danger" onclick="moderateContentFromProfile('${content.contentId || content.id}', 'hard', '${profileUserId}')">Supprimer definitivement</button>
+            </div>
+        `;
+    }
+
+    const viewsCount = Number(content.views) || 0;
+    const cardClasses = [
+        "timeline-card",
+        "profile-update-card",
+        compact ? "profile-update-card--compact" : "",
+        featured ? "profile-update-card--featured" : "",
+        selectedArcMode ? "profile-update-card--project" : "",
+    ]
+        .filter(Boolean)
+        .join(" ");
+
+    return `
+        <article class="${cardClasses}">
+            <div class="profile-update-top">
+                <div class="profile-update-badges">
+                    <span class="profile-update-state" style="--profile-update-accent:${stateMeta.accent};">${stateMeta.label}</span>
+                    <span class="profile-update-pill">${typeLabel}</span>
+                    ${dayChip}
+                </div>
+                <div class="profile-update-meta">
+                    <span>${dateLabel}</span>
+                    <span>${agoLabel}</span>
+                </div>
+            </div>
+            <div class="profile-update-main">
+                <h4>${titleHtml}</h4>
+                ${authorHtml}
+                <p>${descriptionHtml}</p>
+                ${contextHtml}
+                ${mediaHtml}
+            </div>
+            <div class="profile-update-footer">
+                <div class="profile-update-stats">
+                    <span>${viewsCount} vue${viewsCount > 1 ? "s" : ""}</span>
+                    <span>${content.encouragementsCount || 0} encouragement${Number(content.encouragementsCount || 0) > 1 ? "s" : ""}</span>
+                </div>
+                <div class="profile-update-actions">
+                    ${encourageButtonHtml}
+                </div>
+            </div>
+            ${replyPanelHtml}
+            ${managementHtml}
+        </article>
+    `;
+}
+
+function buildProfileContentGroups(contents, allArcs = []) {
+    const arcLookup = new Map(
+        (allArcs || []).map((arc) => [arc.id, arc]),
+    );
+    const groups = new Map();
+    const sortedContents = [...(contents || [])].sort(
+        (left, right) =>
+            getProfileContentTimeValue(right) - getProfileContentTimeValue(left),
+    );
+
+    sortedContents.forEach((content) => {
+        const arcId = content?.arcId || content?.arc?.id || null;
+        const projectId = content?.projectId || content?.project?.id || null;
+        const key = arcId || projectId || "misc";
+        if (!groups.has(key)) {
+            const arc = arcId ? content.arc || arcLookup.get(arcId) || null : null;
+            groups.set(key, {
+                key,
+                arcId,
+                arc,
+                title:
+                    arc?.title ||
+                    content?.project?.name ||
+                    "Updates recentes",
+                status: arc?.status || "active",
+                contents: [],
+            });
+        }
+        groups.get(key).contents.push(content);
+    });
+
+    return Array.from(groups.values()).sort((left, right) => {
+        const leftTime = getProfileContentTimeValue(left.contents[0]);
+        const rightTime = getProfileContentTimeValue(right.contents[0]);
+        return rightTime - leftTime;
+    });
+}
+
+function renderProfileOverviewContent(
+    contents,
+    {
+        profileUserId,
+        currentUserId,
+        isAdminViewer = false,
+        encouragedContentIds = new Set(),
+        allArcs = [],
+    } = {},
+) {
+    const safeContents = [...(contents || [])].sort(
+        (left, right) =>
+            getProfileContentTimeValue(right) - getProfileContentTimeValue(left),
+    );
+    if (safeContents.length === 0) {
+        return `
+            <section class="profile-content-empty">
+                <h3>Aucune update publiee</h3>
+                <p>Ce profil n'a pas encore partage de progression visible.</p>
+            </section>
+        `;
+    }
+
+    const featuredContent = safeContents[0];
+    const groups = buildProfileContentGroups(safeContents, allArcs);
+
+    const groupsHtml = groups
+        .map((group) => {
+            const groupUpdates = group.contents.slice(0, 3);
+            const latest = group.contents[0];
+            const contributors = new Set(
+                group.contents.map((item) => item.userId).filter(Boolean),
+            ).size;
+            const totalEncouragements = group.contents.reduce(
+                (sum, item) => sum + (Number(item.encouragementsCount) || 0),
+                0,
+            );
+            const groupMetaParts = [
+                `${group.contents.length} update${group.contents.length > 1 ? "s" : ""}`,
+                `${contributors} contributeur${contributors > 1 ? "s" : ""}`,
+                `${totalEncouragements} encouragement${totalEncouragements > 1 ? "s" : ""}`,
+            ];
+            const headerAction = group.arcId
+                ? `<button class="btn btn-secondary profile-update-link-btn" onclick="selectArc('${group.arcId}', '${profileUserId}')">Voir le projet</button>`
+                : "";
+            return `
+                <section class="profile-update-group">
+                    <div class="profile-update-group-head">
+                        <div>
+                            <h3>${escapeHtml(group.title)}</h3>
+                            <p>${groupMetaParts.join(" · ")} · Derniere update ${timeAgo(latest.createdAt)}</p>
+                        </div>
+                        ${headerAction}
+                    </div>
+                    <div class="profile-update-group-grid">
+                        ${groupUpdates
+                            .map((content) =>
+                                renderProfileUpdateCard(content, {
+                                    profileUserId,
+                                    currentUserId,
+                                    isAdminViewer,
+                                    encouragedContentIds,
+                                    compact: true,
+                                    selectedArcMode: false,
+                                }),
+                            )
+                            .join("")}
+                    </div>
+                    ${
+                        group.arcId && group.contents.length > 3
+                            ? `<div class="profile-update-group-footer"><button class="btn btn-secondary profile-update-link-btn" onclick="selectArc('${group.arcId}', '${profileUserId}')">Voir les ${group.contents.length} updates</button></div>`
+                            : ""
+                    }
+                </section>
+            `;
+        })
+        .join("");
+
+    return `
+        <section class="profile-content-overview">
+            <div class="profile-content-heading">
+                <div>
+                    <h3>Contenu publie</h3>
+                    <p>Les updates sont organisees par projet pour rendre la progression plus lisible.</p>
+                </div>
+                <div class="profile-content-summary">
+                    <span>${safeContents.length} update${safeContents.length > 1 ? "s" : ""}</span>
+                    <span>${groups.length} projet${groups.length > 1 ? "s" : ""}</span>
+                </div>
+            </div>
+
+            <div class="timeline-latest profile-featured-update">
+                <div class="timeline-item-latest profile-featured-shell">
+                    <div class="profile-featured-header">
+                        <span class="profile-section-kicker">Derniere publication</span>
+                    </div>
+                    ${renderProfileUpdateCard(featuredContent, {
+                        profileUserId,
+                        currentUserId,
+                        isAdminViewer,
+                        encouragedContentIds,
+                        featured: true,
+                        selectedArcMode: false,
+                    })}
+                </div>
+            </div>
+
+            <div class="profile-update-groups">
+                ${groupsHtml}
+            </div>
+        </section>
+    `;
+}
+
+function renderProfileSelectedArcContent(
+    selectedArc,
+    contents,
+    {
+        profileUserId,
+        currentUserId,
+        isAdminViewer = false,
+        encouragedContentIds = new Set(),
+    } = {},
+) {
+    const safeContents = [...(contents || [])];
+    if (safeContents.length === 0) {
+        return `
+            <section class="profile-project-focus">
+                <div class="profile-arc-focus-header">
+                    <div>
+                        <span class="profile-section-kicker">Projet</span>
+                        <h3>${escapeHtml(selectedArc?.title || "Projet")}</h3>
+                        <p>Aucune update pour ce projet pour le moment.</p>
+                    </div>
+                    <button class="btn btn-secondary profile-update-link-btn" onclick="selectArc(null, '${profileUserId}')">Voir tout</button>
+                </div>
+            </section>
+        `;
+    }
+
+    const uniqueUsers = new Set(safeContents.map((item) => item.userId).filter(Boolean));
+    const sortByDay = uniqueUsers.size <= 1 && safeContents.some((item) => Number(item.dayNumber) > 0);
+    safeContents.sort((left, right) => {
+        if (sortByDay) {
+            return (Number(right.dayNumber) || 0) - (Number(left.dayNumber) || 0);
+        }
+        return getProfileContentTimeValue(right) - getProfileContentTimeValue(left);
+    });
+
+    const encouragements = safeContents.reduce(
+        (sum, item) => sum + (Number(item.encouragementsCount) || 0),
+        0,
+    );
+    const latestUpdate = safeContents[0];
+    const metrics = [
+        {
+            label: "Updates",
+            value: safeContents.length,
+        },
+        {
+            label: "Encouragements",
+            value: encouragements,
+        },
+        {
+            label: "Contributeurs",
+            value: uniqueUsers.size || 1,
+        },
+        {
+            label: "Derniere",
+            value: timeAgo(latestUpdate.createdAt),
+        },
+    ];
+
+    return `
+        <section class="profile-project-focus">
+            <div class="profile-arc-focus-header">
+                <div>
+                    <span class="profile-section-kicker">Projet selectionne</span>
+                    <h3>${escapeHtml(selectedArc?.title || "Projet")}</h3>
+                    <p>Vue detaillee des updates de ce projet, dans un ordre clair et coherent.</p>
+                </div>
+                <button class="btn btn-secondary profile-update-link-btn" onclick="selectArc(null, '${profileUserId}')">Revenir a tous les projets</button>
+            </div>
+            <div class="profile-arc-focus-metrics">
+                ${metrics
+                    .map(
+                        (metric) => `
+                            <div class="profile-arc-focus-metric">
+                                <span>${metric.label}</span>
+                                <strong>${metric.value}</strong>
+                            </div>
+                        `,
+                    )
+                    .join("")}
+            </div>
+            <div class="profile-project-updates">
+                ${safeContents
+                    .map(
+                        (content) => `
+                            <div class="profile-project-update profile-project-update--${content.state || "success"}">
+                                <div class="timeline-dot-badge filled profile-project-update-dot">
+                                    ${getProfileStateMeta(content.state).svg}
+                                </div>
+                                <div class="profile-project-update-body">
+                                    ${renderProfileUpdateCard(content, {
+                                        profileUserId,
+                                        currentUserId,
+                                        isAdminViewer,
+                                        encouragedContentIds,
+                                        selectedArcMode: true,
+                                    })}
+                                </div>
+                            </div>
+                        `,
+                    )
+                    .join("")}
+            </div>
+        </section>
+    `;
+}
+
+window.toggleProfileAnnouncementReplies = toggleProfileAnnouncementReplies;
+
 /* ========================================
    RENDERING - DISCOVER GRID
    ======================================== */
@@ -9749,6 +10285,35 @@ async function renderProfileTimeline(userId) {
         ? await fetchPendingArcCollabRequests(userId)
         : [];
 
+    let encouragedContentIds = new Set();
+    if (currentUserId && displayContents.length > 0) {
+        try {
+            const contentIds = displayContents
+                .map((content) => content.contentId)
+                .filter(Boolean)
+                .slice(0, 500);
+            if (contentIds.length > 0) {
+                const { data } = await supabase
+                    .from("content_encouragements")
+                    .select("content_id")
+                    .eq("user_id", currentUserId)
+                    .in("content_id", contentIds);
+                if (Array.isArray(data)) {
+                    data.forEach((row) => {
+                        if (row?.content_id) {
+                            encouragedContentIds.add(row.content_id);
+                        }
+                    });
+                }
+            }
+        } catch (error) {
+            console.error(
+                "Erreur chargement encouragements profil:",
+                error,
+            );
+        }
+    }
+
     // Générer HTML des ARCs
     let arcsHtml = "";
     if (allArcs.length > 0) {
@@ -10015,376 +10580,21 @@ async function renderProfileTimeline(userId) {
         </div>
     `;
 
-    // Générer la timeline (avec displayContents filtré)
-    const getDayNumberValue = (c) => {
-        if (!c) return 0;
-        return typeof c.dayNumber === "number"
-            ? c.dayNumber
-            : typeof c.day_number === "number"
-              ? c.day_number
-              : 0;
-    };
-    const timeline = [];
-
-    if (window.selectedArcId && displayContents.length === 0) {
-        // Si ARC sélectionné mais vide
-        timeline.push({
-            dayNumber: 0,
-            content: null,
-            state: "empty-arc",
-            message: "Aucune mise à jour dans ce projet pour le moment.",
-        });
-    } else if (window.selectedArcId) {
-        // ARC sélectionné: afficher TOUT le contenu de l'ARC, trié par jour décroissant
-        const uniqueArcUsers = new Set(
-            displayContents.map((c) => c.userId).filter(Boolean),
-        );
-        const isMultiUserArc = uniqueArcUsers.size > 1;
-        const arcItems = [...displayContents].sort((a, b) => {
-            if (isMultiUserArc)
-                return new Date(b.createdAt) - new Date(a.createdAt);
-            return getDayNumberValue(b) - getDayNumberValue(a);
-        });
-        arcItems.forEach((content) => {
-            timeline.push({
-                dayNumber: getDayNumberValue(content),
-                content,
-                state: content.state,
-            });
-        });
-    } else {
-        const dayNumbers = (displayContents || []).map(getDayNumberValue);
-        const positiveDays = dayNumbers.filter((d) => d > 0);
-        const hasNonPositiveDay = dayNumbers.some((d) => !d || d <= 0);
-        const hasDuplicatePositiveDays =
-            positiveDays.length !== new Set(positiveDays).size;
-        const arcIds = (displayContents || [])
-            .map((c) => c?.arcId || c?.arc?.id || null)
-            .filter(Boolean);
-        const hasMultipleArcs = new Set(arcIds).size > 1;
-
-        // On the global profile timeline, day numbers can clash across ARCs or be missing (0).
-        // In these cases, prefer a chronological timeline so nothing "disappears".
-        const useChronological =
-            hasMultipleArcs || hasDuplicatePositiveDays || hasNonPositiveDay;
-
-        if (useChronological) {
-            const getContentTime = (c) => {
-                const raw = c?.createdAt || c?.created_at || c?.started_at || 0;
-                const t = new Date(raw).getTime();
-                return Number.isFinite(t) ? t : 0;
-            };
-            const sorted = [...(displayContents || [])].sort(
-                (a, b) => getContentTime(b) - getContentTime(a),
-            );
-            sorted.forEach((content) => {
-                timeline.push({
-                    dayNumber: getDayNumberValue(content),
-                    content,
-                    state: content.state,
-                });
-            });
-        } else {
-            // Single ARC with clean day numbers: timeline complète par jour avec trous
-            const maxDay = positiveDays.reduce((max, d) => Math.max(max, d), 0);
-            for (let day = maxDay; day >= 1; day--) {
-                const dayContent = displayContents.find(
-                    (c) => getDayNumberValue(c) === day,
-                );
-                timeline.push({
-                    dayNumber: day,
-                    content: dayContent || null,
-                    state: dayContent ? dayContent.state : "empty",
-                });
-            }
-        }
-    }
-
-    const timelineItems = timeline
-        .map((item) => {
-            if (item.state === "empty-arc") {
-                return `<div style="text-align:center; padding:2rem; color:var(--text-secondary);">${item.message}</div>`;
-            }
-            if (item.state === "empty") {
-                const emptyBadgeSvg = `
-                <div class="timeline-dot-badge">
-                    ${badgeSVGs.empty}
-                </div>
-            `;
-
-                return `
-                <div class="timeline-item item-empty">
-                    ${emptyBadgeSvg}
-                    <div class="timeline-date">Jour ${item.dayNumber}</div>
-                    <div class="timeline-card" style="opacity: 0.5;">
-                        <span class="empty-indicator">Aucune mise à jour aujourd'hui.</span>
-                    </div>
-                </div>
-            `;
-            }
-
-            const content = item.content;
-            const itemClass = `item-${content.state}`;
-            const dateFormatted = safeFormatDate(content.createdAt, {
-                month: "long",
-                day: "numeric",
-            });
-
-            const timeAgoStr = timeAgo(content.createdAt);
-            const dateDisplay = `${dateFormatted} - Jour ${content.dayNumber} <span style="opacity: 0.5; font-size: 0.85em; margin-left: 8px;">(${timeAgoStr})</span>`;
-
-            let stateBadgeSvg = "";
-            if (content.state === "success") {
-                stateBadgeSvg = badgeSVGs.success;
-            } else if (content.state === "failure") {
-                stateBadgeSvg = badgeSVGs.failure;
-            } else if (content.state === "pause") {
-                stateBadgeSvg = badgeSVGs.pause;
-            }
-
-            let authorHtml = "";
-            if (
-                window.selectedArcId &&
-                content.userId &&
-                content.userId !== userId
-            ) {
-                const author = getUser(content.userId);
-                const authorName = author
-                    ? renderUsernameWithBadge(author.name, author.id)
-                    : "Collaborateur";
-                authorHtml = `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">par ${authorName}</div>`;
-            }
-
-            // Ajouter le média s'il existe
-            let mediaHtml = "";
-            if (content.mediaUrl) {
-                if (content.type === "video") {
-                    mediaHtml = `<div class="timeline-media"><video src="${content.mediaUrl}" controls style="max-width: 100%; border-radius: 8px; margin-top: 1rem;"></video></div>`;
-                } else if (content.type === "image") {
-                    mediaHtml = `<div class="timeline-media"><img src="${content.mediaUrl}" alt="${content.title}" style="max-width: 100%; border-radius: 8px; margin-top: 1rem;"></div>`;
-                } else if (content.type === "live" || content.type === "gif") {
-                    mediaHtml = `<div class="timeline-media"><a href="${content.mediaUrl}" target="_blank" style="color: var(--accent-color); text-decoration: underline; margin-top: 1rem; display: block;">Voir le média</a></div>`;
-                }
-            }
-
-            // Ajouter les références ARC/Projet
-            let contextHtml = "";
-            const contextItems = [];
-
-            if (content.arc) {
-                const arcStatusColor =
-                    content.arc.status === "completed"
-                        ? "#10b981"
-                        : content.arc.status === "abandoned"
-                          ? "#ef4444"
-                          : "#f59e0b";
-                contextItems.push(
-                    `<span class="context-tag arc-tag" style="background: ${arcStatusColor}20; color: ${arcStatusColor}; border: 1px solid ${arcStatusColor}30;" onclick="openArcDetails('${content.arc.id}')">🎯 ${content.arc.title}</span>`,
-                );
-            }
-
-            if (content.project) {
-                contextItems.push(
-                    `<span class="context-tag project-tag" style="background: var(--accent-color)20; color: var(--accent-color); border: 1px solid var(--accent-color)30;">📁 ${content.project.name}</span>`,
-                );
-            }
-
-            if (contextItems.length > 0) {
-                contextHtml = `<div class="timeline-context" style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">${contextItems.join("")}</div>`;
-            }
-
-            // Ajouter boutons de modification/suppression si c'est le profil de l'utilisateur connecté
-            let actionsHtml = "";
-            if (currentUser && currentUser.id === userId) {
-                // Log de débogage pour vérifier l'ID
-                console.log(
-                    "Content ID pour les boutons:",
-                    content.contentId,
-                    "Content complet:",
-                    content,
-                );
-
-                actionsHtml = `
-                <div class="timeline-actions" style="margin-top: 0.5rem; display: flex; gap: 0.5rem; opacity: 0.7;">
-                    <button class="btn-action" onclick="editContent('${content.contentId || content.id}')" style="background: none; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
-                        ✏️ Modifier
-                    </button>
-                    <button class="btn-action" onclick="deleteContent('${content.contentId || content.id}')" style="background: none; border: 1px solid #ef4444; color: #ef4444; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
-                        🗑️ Supprimer
-                    </button>
-                </div>
-            `;
-            }
-            if (isAdminViewer && currentUserId !== userId) {
-                actionsHtml += `
-                <div class="timeline-actions" style="margin-top: 0.5rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                    <button class="btn-action" style="background:none; border:1px solid #f59e0b; color:#f59e0b; padding:0.25rem 0.5rem; border-radius:4px; font-size:0.75rem; cursor:pointer;"
-                        onclick="moderateContentFromProfile('${content.contentId || content.id}', 'hide', '${userId}')">
-                        🛑 Masquer
-                    </button>
-                    <button class="btn-action" style="background:none; border:1px solid var(--border-color); color:var(--text-secondary); padding:0.25rem 0.5rem; border-radius:4px; font-size:0.75rem; cursor:pointer;"
-                        onclick="moderateContentFromProfile('${content.contentId || content.id}', 'restore', '${userId}')">
-                        ↩️ Restaurer
-                    </button>
-                    <button class="btn-action" style="background:none; border:1px solid #ef4444; color:#ef4444; padding:0.25rem 0.5rem; border-radius:4px; font-size:0.75rem; cursor:pointer;"
-                        onclick="moderateContentFromProfile('${content.contentId || content.id}', 'hard', '${userId}')">
-                        ❌ Supprimer définitivement
-                    </button>
-                </div>
-            `;
-            }
-
-            return `
-            <div class="timeline-item ${itemClass}">
-                <div class="timeline-dot-badge filled">
-                    ${stateBadgeSvg}
-                </div>
-                <div class="timeline-date">${dateDisplay}</div>
-                <div class="timeline-card">
-                    <h4>${content.title}</h4>
-                    ${authorHtml}
-                    <p>${content.description}</p>
-                    ${contextHtml}
-                    ${mediaHtml}
-                    ${actionsHtml}
-                </div>
-            </div>
-        `;
-        })
-        .join("");
-
-    const timelineCollapsedHtml =
-        timeline.length > 0
-            ? `
-        <div class="timeline-latest">
-            <div class="timeline-item-latest">
-                ${(() => {
-                    const lastItem = timeline[0];
-                    if (
-                        lastItem.state === "empty" ||
-                        lastItem.state === "empty-arc"
-                    ) {
-                        const message =
-                            lastItem.state === "empty-arc"
-                                ? lastItem.message
-                                : "Aucune mise à jour aujourd'hui.";
-                        return `
-                            <div class="timeline-dot-badge">
-                                ${badgeSVGs.empty}
-                            </div>
-                            <div class="timeline-date">Jour ${lastItem.dayNumber}</div>
-                            <div class="timeline-card" style="opacity: 0.5;">
-                                <span class="empty-indicator">${message}</span>
-                            </div>
-                        `;
-                    } else {
-                        const content = lastItem.content;
-                        let stateBadgeSvg = "";
-                        if (content.state === "success") {
-                            stateBadgeSvg = badgeSVGs.success;
-                        } else if (content.state === "failure") {
-                            stateBadgeSvg = badgeSVGs.failure;
-                        } else if (content.state === "pause") {
-                            stateBadgeSvg = badgeSVGs.pause;
-                        }
-                        const dateFormatted = safeFormatDate(
-                            content.createdAt,
-                            {
-                                month: "long",
-                                day: "numeric",
-                            },
-                        );
-
-                        const timeAgoStr = timeAgo(content.createdAt);
-                        const dateDisplay = `${dateFormatted} - Jour ${content.dayNumber} <span style="opacity: 0.5; font-size: 0.85em; margin-left: 8px;">(${timeAgoStr})</span>`;
-
-                        // Ajouter le média s'il existe pour la vue condensée
-                        let mediaHtmlLatest = "";
-                        if (content.mediaUrl) {
-                            if (content.type === "video") {
-                                mediaHtmlLatest = `<div class="timeline-media"><video src="${content.mediaUrl}" controls style="max-width: 100%; border-radius: 8px; margin-top: 1rem;"></video></div>`;
-                            } else if (content.type === "image") {
-                                mediaHtmlLatest = `<div class="timeline-media"><img src="${content.mediaUrl}" alt="${content.title}" style="max-width: 100%; border-radius: 8px; margin-top: 1rem;"></div>`;
-                            } else if (
-                                content.type === "live" ||
-                                content.type === "gif"
-                            ) {
-                                mediaHtmlLatest = `<div class="timeline-media"><a href="${content.mediaUrl}" target="_blank" style="color: var(--accent-color); text-decoration: underline; margin-top: 1rem; display: block;">Voir le média</a></div>`;
-                            }
-                        }
-
-                        // Ajouter les références ARC/Projet pour la vue condensée
-                        let contextHtmlLatest = "";
-                        const contextItemsLatest = [];
-
-                        if (content.arc) {
-                            const arcStatusColor =
-                                content.arc.status === "completed"
-                                    ? "#10b981"
-                                    : content.arc.status === "abandoned"
-                                      ? "#ef4444"
-                                      : "#f59e0b";
-                            contextItemsLatest.push(
-                                `<span class="context-tag arc-tag" style="background: ${arcStatusColor}20; color: ${arcStatusColor}; border: 1px solid ${arcStatusColor}30;" onclick="openArcDetails('${content.arc.id}')">🎯 ${content.arc.title}</span>`,
-                            );
-                        }
-
-                        if (content.project) {
-                            contextItemsLatest.push(
-                                `<span class="context-tag project-tag" style="background: var(--accent-color)20; color: var(--accent-color); border: 1px solid var(--accent-color)30;">📁 ${content.project.name}</span>`,
-                            );
-                        }
-
-                        if (contextItemsLatest.length > 0) {
-                            contextHtmlLatest = `<div class="timeline-context" style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">${contextItemsLatest.join("")}</div>`;
-                        }
-
-                        let authorHtmlLatest = "";
-                        if (
-                            window.selectedArcId &&
-                            content.userId &&
-                            content.userId !== userId
-                        ) {
-                            const author = getUser(content.userId);
-                            const authorName = author
-                                ? renderUsernameWithBadge(
-                                      author.name,
-                                      author.id,
-                                  )
-                                : "Collaborateur";
-                            authorHtmlLatest = `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">par ${authorName}</div>`;
-                        }
-
-                        return `
-                            <div class="timeline-dot-badge filled">
-                                ${stateBadgeSvg}
-                            </div>
-                            <div class="timeline-date">${dateDisplay}</div>
-                            <div class="timeline-card">
-                                <h4>${content.title}</h4>
-                                ${authorHtmlLatest}
-                                <p>${content.description}</p>
-                                ${contextHtmlLatest}
-                                ${mediaHtmlLatest}
-                            </div>
-                        `;
-                    }
-                })()}
-            </div>
-            <button class="btn-toggle-timeline" onclick="toggleTimelineExpand(this)">
-                <span class="toggle-text">Afficher l'historique complet</span>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-            </button>
-            <div class="timeline-full hidden" id="timeline-full-${userId}">
-                ${timelineItems}
-            </div>
-        </div>
-    `
-            : "";
-
-    const timelinesHtml = timelineCollapsedHtml;
+    const timelinesHtml =
+        window.selectedArcId && selectedArc
+            ? renderProfileSelectedArcContent(selectedArc, displayContents, {
+                  profileUserId: userId,
+                  currentUserId,
+                  isAdminViewer,
+                  encouragedContentIds,
+              })
+            : renderProfileOverviewContent(displayContents, {
+                  profileUserId: userId,
+                  currentUserId,
+                  isAdminViewer,
+                  encouragedContentIds,
+                  allArcs,
+              });
 
     const imageVersion = encodeURIComponent(
         user.updated_at || user.updatedAt || Date.now(),
@@ -10603,8 +10813,7 @@ async function renderProfileTimeline(userId) {
             </div>
         </section>
         ${analyticsSectionHtml}
-        <div class="timeline">
-            ${window.selectedArcId && selectedArc ? `<div style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 1rem; text-align: center;">Affichage des mises à jour pour le projet : <strong>${selectedArc.title}</strong></div>` : ""}
+        <div class="timeline profile-content-shell">
             ${timelinesHtml}
         </div>
         
@@ -13013,6 +13222,67 @@ function showPublishFeedbackCard(feedback) {
     window.setTimeout(removeCard, 7000);
 }
 
+function showBackgroundPublishBanner({
+    state = "loading",
+    title = "",
+    message = "",
+    autoHideMs = 0,
+} = {}) {
+    let banner = document.getElementById("background-publish-banner");
+    if (!banner) {
+        banner = document.createElement("div");
+        banner.id = "background-publish-banner";
+        banner.className = "background-publish-banner";
+        banner.setAttribute("role", "status");
+        banner.setAttribute("aria-live", "polite");
+        banner.innerHTML = `
+            <div class="background-publish-banner__inner">
+                <div class="background-publish-banner__icon" aria-hidden="true"></div>
+                <div class="background-publish-banner__content">
+                    <strong class="background-publish-banner__title"></strong>
+                    <span class="background-publish-banner__message"></span>
+                </div>
+                <button type="button" class="background-publish-banner__close" aria-label="Fermer">✕</button>
+            </div>
+        `;
+        banner
+            .querySelector(".background-publish-banner__close")
+            ?.addEventListener("click", () => hideBackgroundPublishBanner());
+        document.body.appendChild(banner);
+    }
+
+    banner.dataset.state = state;
+    banner.querySelector(".background-publish-banner__title").textContent =
+        title || "Publication";
+    banner.querySelector(".background-publish-banner__message").textContent =
+        message || "";
+
+    if (window.backgroundPublishBannerTimer) {
+        window.clearTimeout(window.backgroundPublishBannerTimer);
+        window.backgroundPublishBannerTimer = null;
+    }
+
+    requestAnimationFrame(() => banner.classList.add("is-visible"));
+
+    if (autoHideMs > 0) {
+        window.backgroundPublishBannerTimer = window.setTimeout(() => {
+            hideBackgroundPublishBanner();
+        }, autoHideMs);
+    }
+
+    return banner;
+}
+
+function hideBackgroundPublishBanner() {
+    const banner = document.getElementById("background-publish-banner");
+    if (!banner) return;
+    banner.classList.remove("is-visible");
+    if (window.backgroundPublishBannerTimer) {
+        window.clearTimeout(window.backgroundPublishBannerTimer);
+        window.backgroundPublishBannerTimer = null;
+    }
+}
+
 async function openCreateMenu(
     userId,
     preSelectedArcId = null,
@@ -14118,88 +14388,125 @@ async function openCreateMenu(
                         : arcSelect.value || null,
             };
 
-            let result;
-            if (isEdit) {
-                // Mise à jour
-                const contentId = document.getElementById("content-id").value;
-                result = await updateContent(contentId, contentData);
-            } else {
-                // Création
-                result = await createContent(contentData);
-            }
+            closeCreateMenu();
+            showBackgroundPublishBanner({
+                state: "loading",
+                title: isEdit
+                    ? "Mise a jour en cours"
+                    : "Publication en cours",
+                message:
+                    "Votre contenu est en train d'etre envoye en arriere-plan.",
+            });
 
-            if (result.success) {
-                const rememberedTags = parsedTags
-                    .filter((tag) => tag !== "annonce")
-                    .slice(0, XERA_CREATE_TAG_LIMIT);
-                updateCreatePrefs(userId, {
-                    lastArcId: contentData.arcId,
-                    lastState: contentData.state,
-                    lastType: contentData.type,
-                    recentTags: rememberedTags,
-                });
-                if (!isEdit) {
-                    recordCreateMetric(
-                        userId,
-                        Math.max(0, Date.now() - createFlowStartedAt),
-                    );
-                }
-                if (!isEdit && result.data) {
-                    notifyFollowersOfTrace(result.data).catch((e) =>
-                        console.warn("notifyFollowersOfTrace error", e),
-                    );
-                }
-                clearPendingCreatePostAfterArc();
-                // Recharger les données locales et rafraîchir l'interface
-                const contentResult = await getUserContent(userId);
-                if (contentResult.success) {
-                    userContents[userId] = contentResult.data.map(
-                        convertSupabaseContent,
-                    );
+            try {
+                let result;
+                if (isEdit) {
+                    // Mise à jour
+                    const contentId = document.getElementById("content-id").value;
+                    result = await updateContent(contentId, contentData);
+                } else {
+                    // Création
+                    result = await createContent(contentData);
                 }
 
-                const publishFeedback = buildPublishFeedbackPayload({
-                    userId,
-                    contentData,
-                    isEdit,
-                    arcTitle: selectedArcLabel,
-                });
-                if (!isEdit) {
-                    queueLatestPublishedPostHighlight(userId);
-                }
-
-                // Reload profile view
-                if (document.querySelector("#profile.active")) {
-                    await renderProfileIntoContainer(userId);
-                }
-
-                // Refresh Discover cards (multiple cards can exist per user/arc)
-                if (document.querySelector(".discover-grid")) {
-                    await renderDiscoverGrid();
-                }
-
-                // Refresh Arc details if open
-                if (
-                    document.getElementById("immersive-overlay") &&
-                    document.getElementById("immersive-overlay").style
-                        .display === "block" &&
-                    window.currentArc
-                ) {
-                    if (window.openArcDetails) {
-                        window.openArcDetails(window.currentArc.id);
+                if (result.success) {
+                    const rememberedTags = parsedTags
+                        .filter((tag) => tag !== "annonce")
+                        .slice(0, XERA_CREATE_TAG_LIMIT);
+                    updateCreatePrefs(userId, {
+                        lastArcId: contentData.arcId,
+                        lastState: contentData.state,
+                        lastType: contentData.type,
+                        recentTags: rememberedTags,
+                    });
+                    if (!isEdit) {
+                        recordCreateMetric(
+                            userId,
+                            Math.max(0, Date.now() - createFlowStartedAt),
+                        );
                     }
+                    if (!isEdit && result.data) {
+                        notifyFollowersOfTrace(result.data).catch((e) =>
+                            console.warn("notifyFollowersOfTrace error", e),
+                        );
+                    }
+                    clearPendingCreatePostAfterArc();
+                    // Recharger les données locales et rafraîchir l'interface
+                    const contentResult = await getUserContent(userId);
+                    if (contentResult.success) {
+                        userContents[userId] = contentResult.data.map(
+                            convertSupabaseContent,
+                        );
+                    }
+
+                    const publishFeedback = buildPublishFeedbackPayload({
+                        userId,
+                        contentData,
+                        isEdit,
+                        arcTitle: selectedArcLabel,
+                    });
+                    if (!isEdit) {
+                        queueLatestPublishedPostHighlight(userId);
+                    }
+
+                    // Reload profile view
+                    if (document.querySelector("#profile.active")) {
+                        await renderProfileIntoContainer(userId);
+                    }
+
+                    // Refresh Discover cards (multiple cards can exist per user/arc)
+                    if (document.querySelector(".discover-grid")) {
+                        await renderDiscoverGrid();
+                    }
+
+                    // Refresh Arc details if open
+                    if (
+                        document.getElementById("immersive-overlay") &&
+                        document.getElementById("immersive-overlay").style
+                            .display === "block" &&
+                        window.currentArc
+                    ) {
+                        if (window.openArcDetails) {
+                            window.openArcDetails(window.currentArc.id);
+                        }
+                    }
+
+                    showBackgroundPublishBanner({
+                        state: "success",
+                        title: isEdit
+                            ? "Mise a jour terminee"
+                            : "Publication terminee",
+                        message:
+                            "Votre contenu est maintenant en ligne sur XERA.",
+                        autoHideMs: 3200,
+                    });
+                    requestAnimationFrame(() =>
+                        showPublishFeedbackCard(publishFeedback),
+                    );
+                } else {
+                    showBackgroundPublishBanner({
+                        state: "error",
+                        title: "Publication echouee",
+                        message:
+                            result.error ||
+                            "Une erreur est survenue pendant l'envoi du contenu.",
+                        autoHideMs: 6000,
+                    });
                 }
-
-                closeCreateMenu();
-                requestAnimationFrame(() =>
-                    showPublishFeedbackCard(publishFeedback),
-                );
-            } else {
-                alert("Erreur: " + result.error);
+            } catch (error) {
+                console.error("Erreur soumission create-form:", error);
+                showBackgroundPublishBanner({
+                    state: "error",
+                    title: "Publication echouee",
+                    message:
+                        error?.message ||
+                        "Une erreur inattendue est survenue pendant la publication.",
+                    autoHideMs: 6000,
+                });
+            } finally {
+                btnSave.disabled = false;
+                btnSave.textContent = originalText;
             }
-
-            btnSave.disabled = false;
-            btnSave.textContent = originalText;
         });
 }
 
