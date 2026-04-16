@@ -11465,6 +11465,132 @@ function updateThemeButtons(isLight) {
    RÉGLAGES
    ======================================== */
 
+async function fetchDmRelationshipStatus(otherUserId) {
+    const currentUserId = window.currentUser?.id || window.currentUserId;
+    if (!currentUserId || !otherUserId || otherUserId === currentUserId) {
+        return {
+            blocked_by_me: false,
+            blocked_me: false,
+            can_message: otherUserId !== currentUserId,
+        };
+    }
+
+    const { data, error } = await supabase.rpc("get_dm_relationship_status", {
+        p_other_user_id: otherUserId,
+    });
+    if (error) throw error;
+
+    const row = Array.isArray(data) ? data[0] : data;
+    return {
+        blocked_by_me: row?.blocked_by_me === true,
+        blocked_me: row?.blocked_me === true,
+        can_message: row?.can_message !== false,
+    };
+}
+
+async function hideDmConversation(conversationId) {
+    if (!conversationId) {
+        throw new Error("Conversation invalide.");
+    }
+    const { data, error } = await supabase.rpc("hide_dm_conversation", {
+        p_conversation_id: conversationId,
+    });
+    if (error) throw error;
+    return data === true;
+}
+
+async function blockDmUser(otherUserId) {
+    const currentUserId = window.currentUser?.id || window.currentUserId;
+    if (!currentUserId) throw new Error("Session utilisateur absente.");
+    if (!otherUserId || otherUserId === currentUserId) {
+        throw new Error("Utilisateur invalide.");
+    }
+
+    const { data, error } = await supabase.rpc("block_dm_user", {
+        p_other_user_id: otherUserId,
+    });
+    if (error) throw error;
+    return data === true;
+}
+
+async function unblockDmUser(otherUserId) {
+    const currentUserId = window.currentUser?.id || window.currentUserId;
+    if (!currentUserId) throw new Error("Session utilisateur absente.");
+    if (!otherUserId || otherUserId === currentUserId) {
+        throw new Error("Utilisateur invalide.");
+    }
+
+    const { data, error } = await supabase.rpc("unblock_dm_user", {
+        p_other_user_id: otherUserId,
+    });
+    if (error) throw error;
+    return data === true;
+}
+
+async function fetchBlockedUsersForSettings(userId = window.currentUser?.id) {
+    if (!userId) return [];
+
+    const { data: rows, error } = await supabase
+        .from("user_blocks")
+        .select("blocked_user_id, created_at")
+        .eq("blocker_id", userId)
+        .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const blockedRows = rows || [];
+    const blockedIds = blockedRows.map((row) => row.blocked_user_id).filter(Boolean);
+    const missingIds = blockedIds.filter((id) => !getUser(id));
+
+    let fetchedUsers = [];
+    if (missingIds.length > 0) {
+        const { data: usersData, error: usersError } = await supabase
+            .from("users")
+            .select("id, name, avatar, account_subtype")
+            .in("id", missingIds);
+
+        if (usersError) throw usersError;
+        fetchedUsers = usersData || [];
+    }
+
+    const fetchedById = new Map(fetchedUsers.map((entry) => [entry.id, entry]));
+
+    return blockedRows.map((row) => {
+        const profile =
+            getUser(row.blocked_user_id) || fetchedById.get(row.blocked_user_id) || null;
+        return {
+            id: row.blocked_user_id,
+            blockedAt: row.created_at || null,
+            name: profile?.name || "Utilisateur",
+            avatar: profile?.avatar || "https://placehold.co/80x80?text=%F0%9F%9A%AB",
+        };
+    });
+}
+
+async function handleUnblockUserFromSettings(blockedUserId) {
+    if (!blockedUserId || !window.currentUser?.id) return;
+    try {
+        await unblockDmUser(blockedUserId);
+        if (window.ToastManager) {
+            ToastManager.success(
+                "Utilisateur débloqué",
+                "Vous pouvez de nouveau recevoir et envoyer des messages.",
+            );
+        }
+        if (document.getElementById("settings-modal")?.classList.contains("active")) {
+            openSettings(window.currentUser.id);
+        }
+    } catch (error) {
+        console.error("Unblock user error:", error);
+        if (window.ToastManager) {
+            ToastManager.error(
+                "Déblocage impossible",
+                error?.message || "Impossible de débloquer cet utilisateur.",
+            );
+        }
+    }
+}
+
 function closeSettings() {
     const modal = document.getElementById("settings-modal");
     modal.classList.remove("active");
@@ -11506,6 +11632,12 @@ async function openSettings(userId) {
     const pendingRequests = isVerificationAdmin()
         ? await fetchVerificationRequests()
         : [];
+    const blockedUsers = await fetchBlockedUsersForSettings(userId).catch(
+        (error) => {
+            console.error("Blocked users fetch error:", error);
+            return [];
+        },
+    );
 
     const verificationStatusHtml = isStaffVerified
         ? `<div class="verification-status verified">Entreprise vérifiée</div>`
@@ -11620,6 +11752,48 @@ async function openSettings(userId) {
         : "";
 
     const superAdminHtml = "";
+
+    const blockedUsersHtml = blockedUsers.length
+        ? blockedUsers
+              .map((blockedUser) => {
+                  const nameHtml = renderUsernameWithBadge(
+                      blockedUser.name,
+                      blockedUser.id,
+                  );
+                  const blockedAtLabel = blockedUser.blockedAt
+                      ? safeFormatDate(blockedUser.blockedAt, {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                        })
+                      : "";
+                  return `
+                    <div class="blocked-user-item">
+                        <div class="blocked-user-main">
+                            <img class="blocked-user-avatar" src="${blockedUser.avatar}" alt="${blockedUser.name}">
+                            <div class="blocked-user-meta">
+                                <div class="blocked-user-name">${nameHtml}</div>
+                                <div class="blocked-user-subtitle">
+                                    ${blockedAtLabel ? `Bloqué le ${blockedAtLabel}` : "Utilisateur bloqué"}
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            class="btn-cancel blocked-user-action"
+                            onclick="handleUnblockUserFromSettings('${blockedUser.id}')"
+                        >
+                            Débloquer
+                        </button>
+                    </div>
+                `;
+              })
+              .join("")
+        : `
+            <div class="blocked-users-empty">
+                Aucun utilisateur bloqué pour le moment.
+            </div>
+        `;
 
     // Social links preparation
     const socialLinks = user.social_links || user.socialLinks || {};
@@ -11874,6 +12048,26 @@ async function openSettings(userId) {
                                     <img src="icons/link.svg" alt="Site">
                                     <input type="text" class="form-input" data-social="site" placeholder="https://example.com" value="${socialLinks.site || ""}">
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Utilisateurs bloqués -->
+                <div class="accordion-section">
+                    <button type="button" class="accordion-header">
+                        <div class="accordion-title">
+                            <span>Utilisateurs bloqués</span>
+                            <span class="settings-counter-chip">${blockedUsers.length}</span>
+                        </div>
+                        <div class="accordion-arrow">
+                            <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="accordion-body">
+                            <div class="blocked-users-list">
+                                ${blockedUsersHtml}
                             </div>
                         </div>
                     </div>
@@ -14622,6 +14816,12 @@ window.editContent = editContent;
 window.deleteContent = deleteContent;
 window.openSettings = openSettings;
 window.closeSettings = closeSettings;
+window.fetchDmRelationshipStatus = fetchDmRelationshipStatus;
+window.hideDmConversation = hideDmConversation;
+window.blockDmUser = blockDmUser;
+window.unblockDmUser = unblockDmUser;
+window.fetchBlockedUsersForSettings = fetchBlockedUsersForSettings;
+window.handleUnblockUserFromSettings = handleUnblockUserFromSettings;
 window.openCreateMenu = openCreateMenu;
 window.closeCreateMenu = closeCreateMenu;
 window.setPendingCreatePostAfterArc = setPendingCreatePostAfterArc;

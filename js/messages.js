@@ -6,6 +6,11 @@
     const DM_PAGE_ID = "messages";
     const DM_MESSAGES_LIMIT = 60;
     const DM_BODY_MAX = 4000;
+    const DM_MESSAGE_SELECT =
+        "id, conversation_id, sender_id, body, media_url, media_type, media_name, media_size_bytes, created_at";
+    const DM_MESSAGE_LEGACY_SELECT =
+        "id, conversation_id, sender_id, body, created_at";
+    const DM_ATTACHMENT_ACCEPT = "image/*,video/*";
 
     const state = {
         initializedForUserId: null,
@@ -20,6 +25,9 @@
         refreshTimer: null,
         routeHandled: false,
         realtimeWarned: false,
+        pendingAttachment: null,
+        sendingMessage: false,
+        activeRelationship: null,
     };
 
     function getCurrentUserId() {
@@ -84,6 +92,234 @@
         if (!text) return "";
         if (text.length <= maxLen) return text;
         return `${text.slice(0, maxLen - 1)}…`;
+    }
+
+    function formatBytes(bytes) {
+        const value = Number(bytes);
+        if (!Number.isFinite(value) || value <= 0) return "";
+        if (typeof window.formatFileSize === "function") {
+            try {
+                return window.formatFileSize(value);
+            } catch (error) {
+                // ignore formatter issues and fallback
+            }
+        }
+        const units = ["o", "Ko", "Mo", "Go"];
+        let unitIndex = 0;
+        let size = value;
+        while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex += 1;
+        }
+        const rounded = size >= 10 || unitIndex === 0 ? Math.round(size) : size.toFixed(1);
+        return `${rounded} ${units[unitIndex]}`;
+    }
+
+    function isMissingColumnMessage(message, columnNames) {
+        const normalized = String(message || "").toLowerCase();
+        const mentionsMissing =
+            normalized.includes("does not exist") ||
+            normalized.includes("n'existe pas") ||
+            normalized.includes("could not find") ||
+            normalized.includes("schema cache");
+        if (!mentionsMissing) return false;
+        return columnNames.some((column) =>
+            normalized.includes(String(column || "").toLowerCase()),
+        );
+    }
+
+    function isMissingDmMediaSchemaError(error) {
+        const message = String(error?.message || "");
+        return isMissingColumnMessage(message, [
+            "media_url",
+            "media_type",
+            "media_name",
+            "media_size_bytes",
+        ]);
+    }
+
+    function isLegacyDmMediaConstraintError(error) {
+        const message = String(error?.message || "").toLowerCase();
+        return (
+            message.includes("dm_messages_body_not_empty") ||
+            message.includes("dm_messages_content_required") ||
+            (message.includes("null value") && message.includes("body")) ||
+            (message.includes("violates") && message.includes("body"))
+        );
+    }
+
+    function normalizeMessageRow(row) {
+        if (!row || typeof row !== "object") return row;
+        return {
+            ...row,
+            body: row.body || "",
+            media_url: row.media_url || null,
+            media_type: row.media_type || null,
+            media_name: row.media_name || null,
+            media_size_bytes: row.media_size_bytes || null,
+        };
+    }
+
+    async function runMessageSelect(queryFactory) {
+        let response = await queryFactory(DM_MESSAGE_SELECT);
+        if (response?.error && isMissingDmMediaSchemaError(response.error)) {
+            response = await queryFactory(DM_MESSAGE_LEGACY_SELECT);
+        }
+
+        if (response?.error) {
+            return { data: null, error: response.error };
+        }
+
+        if (Array.isArray(response?.data)) {
+            return {
+                data: response.data.map((row) => normalizeMessageRow(row)),
+                error: null,
+            };
+        }
+
+        return {
+            data: response?.data ? normalizeMessageRow(response.data) : response?.data,
+            error: null,
+        };
+    }
+
+    function getMessageAttachmentLabel(message) {
+        const mediaType = String(message?.media_type || "").toLowerCase();
+        if (mediaType === "video") return "Video";
+        if (mediaType === "image") return "Photo";
+        if (message?.media_url) return "Fichier";
+        return "";
+    }
+
+    function buildMessageSnippet(message, maxLen = 80) {
+        const text = trimSnippet(message?.body || "", maxLen);
+        if (text) return text;
+        const attachmentLabel = getMessageAttachmentLabel(message);
+        return attachmentLabel ? `${attachmentLabel} jointe` : "";
+    }
+
+    function createNeutralRelationshipState(otherUserId = null) {
+        return {
+            otherUserId: otherUserId || null,
+            blockedByMe: false,
+            blockedMe: false,
+            canMessage: Boolean(otherUserId),
+            loading: false,
+        };
+    }
+
+    function normalizeRelationshipState(value, otherUserId = null) {
+        const blockedByMe =
+            value?.blockedByMe === true || value?.blocked_by_me === true;
+        const blockedMe = value?.blockedMe === true || value?.blocked_me === true;
+        const canMessage =
+            value?.canMessage === false || value?.can_message === false
+                ? false
+                : !blockedByMe && !blockedMe;
+        return {
+            otherUserId: otherUserId || value?.otherUserId || null,
+            blockedByMe,
+            blockedMe,
+            canMessage,
+            loading: value?.loading === true,
+        };
+    }
+
+    function getSelectedConversation() {
+        return state.conversationsById.get(state.selectedConversationId) || null;
+    }
+
+    function getSelectedRelationshipState() {
+        const conversation = getSelectedConversation();
+        const otherUserId = conversation?.otherUserId || null;
+        if (!otherUserId) return createNeutralRelationshipState(null);
+        if (state.activeRelationship?.otherUserId === otherUserId) {
+            return state.activeRelationship;
+        }
+        return createNeutralRelationshipState(otherUserId);
+    }
+
+    function getDmBlockedMessage(relationship = getSelectedRelationshipState()) {
+        if (relationship?.blockedByMe) {
+            return "Vous avez bloqué cet utilisateur. Débloquez-le depuis Réglages pour reprendre la discussion.";
+        }
+        if (relationship?.blockedMe) {
+            return "Cet utilisateur vous a bloqué. Vous ne pouvez plus lui envoyer de messages.";
+        }
+        return "Messagerie indisponible pour cette conversation.";
+    }
+
+    function getFriendlyDmErrorMessage(error, fallbackMessage) {
+        const rawMessage = String(error?.message || "").trim();
+        const normalized = rawMessage.toUpperCase();
+        if (normalized.includes("DM_BLOCKED")) {
+            return "Cette conversation est bloquée. Débloquez l'utilisateur depuis Réglages pour reprendre la discussion.";
+        }
+        if (normalized.includes("SELF_CONVERSATION_NOT_ALLOWED")) {
+            return "Vous ne pouvez pas ouvrir une conversation avec vous-même.";
+        }
+        if (normalized.includes("OTHER_USER_REQUIRED")) {
+            return "Utilisateur introuvable.";
+        }
+        if (normalized.includes("NOT_AUTHENTICATED")) {
+            return "Votre session a expiré. Reconnectez-vous puis réessayez.";
+        }
+        return rawMessage || fallbackMessage || "Impossible de poursuivre l'action.";
+    }
+
+    async function fetchRelationshipStatusForUser(otherUserId) {
+        if (!otherUserId) return createNeutralRelationshipState(null);
+
+        if (typeof window.fetchDmRelationshipStatus === "function") {
+            const response = await window.fetchDmRelationshipStatus(otherUserId);
+            return normalizeRelationshipState(response, otherUserId);
+        }
+
+        const { data, error } = await supabase.rpc("get_dm_relationship_status", {
+            p_other_user_id: otherUserId,
+        });
+        if (error) throw error;
+        const row = Array.isArray(data) ? data[0] : data;
+        return normalizeRelationshipState(row, otherUserId);
+    }
+
+    async function refreshActiveRelationshipState(conversationId = state.selectedConversationId) {
+        const conversation = conversationId
+            ? state.conversationsById.get(conversationId) || null
+            : null;
+        const otherUserId = conversation?.otherUserId || null;
+
+        state.activeRelationship = createNeutralRelationshipState(otherUserId);
+        if (!otherUserId) {
+            renderChatHeader();
+            syncComposerState();
+            return state.activeRelationship;
+        }
+
+        state.activeRelationship.loading = true;
+        renderChatHeader();
+        syncComposerState();
+
+        try {
+            const relationship = await fetchRelationshipStatusForUser(otherUserId);
+            if (
+                state.selectedConversationId === conversationId &&
+                relationship.otherUserId === otherUserId
+            ) {
+                state.activeRelationship = relationship;
+                renderChatHeader();
+                syncComposerState();
+            }
+            return relationship;
+        } catch (error) {
+            console.warn("DM relationship status error:", error);
+            if (state.selectedConversationId === conversationId) {
+                state.activeRelationship = createNeutralRelationshipState(otherUserId);
+                renderChatHeader();
+                syncComposerState();
+            }
+            return createNeutralRelationshipState(otherUserId);
+        }
     }
 
     function isMissingAccountSubtypeColumnError(error) {
@@ -261,20 +497,45 @@
                             <div id="chat-header-name">Sélectionnez une conversation</div>
                             <div id="chat-header-sub"></div>
                         </div>
+                        <div class="chat-header-actions" id="chat-header-actions">
+                            <button type="button" class="chat-header-action" id="chat-delete-btn" hidden>
+                                Supprimer
+                            </button>
+                            <button type="button" class="chat-header-action chat-header-action-danger" id="chat-block-btn" hidden>
+                                Bloquer
+                            </button>
+                        </div>
                     </div>
                     <div class="chat-messages" id="chat-messages">
                         <div class="loading-state">Choisissez une conversation pour commencer.</div>
                     </div>
                     <form class="chat-input-row" id="chat-input-form">
                         <input
-                            id="chat-input"
-                            class="form-input"
-                            type="text"
-                            maxlength="${DM_BODY_MAX}"
-                            autocomplete="off"
-                            placeholder="Écrire un message..."
+                            id="chat-media-input"
+                            type="file"
+                            accept="${DM_ATTACHMENT_ACCEPT}"
+                            hidden
                         />
-                        <button type="submit" class="btn-verify" id="chat-send-btn">Envoyer</button>
+                        <div class="chat-composer" id="chat-composer">
+                            <div class="chat-attachment-preview" id="chat-attachment-preview" hidden></div>
+                            <div class="chat-compose-controls">
+                                <button type="button" class="chat-attach-btn" id="chat-attach-btn" aria-label="Joindre une image ou une vidéo" title="Joindre une image ou une vidéo">
+                                    +
+                                </button>
+                                <textarea
+                                    id="chat-input"
+                                    class="form-input chat-input-textarea"
+                                    maxlength="${DM_BODY_MAX}"
+                                    autocomplete="off"
+                                    placeholder="Écrire un message..."
+                                    rows="1"
+                                ></textarea>
+                                <button type="submit" class="btn-verify" id="chat-send-btn">Envoyer</button>
+                            </div>
+                            <div class="chat-compose-hint" id="chat-compose-hint">
+                                Entrée pour envoyer • Maj+Entrée pour une nouvelle ligne
+                            </div>
+                        </div>
                     </form>
                 </section>
             </div>
@@ -319,10 +580,50 @@
             });
         }
 
+        const input = document.getElementById("chat-input");
+        if (input) {
+            input.addEventListener("input", () => {
+                autoResizeChatInput();
+                syncComposerState();
+            });
+            input.addEventListener("keydown", (event) => {
+                if (event.key !== "Enter" || event.shiftKey) return;
+                event.preventDefault();
+                void sendCurrentMessage();
+            });
+        }
+
+        const attachBtn = document.getElementById("chat-attach-btn");
+        const mediaInput = document.getElementById("chat-media-input");
+        if (attachBtn && mediaInput) {
+            attachBtn.addEventListener("click", () => {
+                if (attachBtn.disabled) return;
+                mediaInput.click();
+            });
+            mediaInput.addEventListener("change", async () => {
+                await handleAttachmentInput(mediaInput.files);
+                mediaInput.value = "";
+            });
+        }
+
         const header = document.getElementById("chat-header");
         if (header) {
             header.addEventListener("click", (event) => {
                 handleMessageUserLinkClick(event);
+            });
+        }
+
+        const deleteBtn = document.getElementById("chat-delete-btn");
+        if (deleteBtn) {
+            deleteBtn.addEventListener("click", () => {
+                void handleDeleteConversationAction();
+            });
+        }
+
+        const blockBtn = document.getElementById("chat-block-btn");
+        if (blockBtn) {
+            blockBtn.addEventListener("click", () => {
+                void handleBlockUserAction();
             });
         }
 
@@ -333,7 +634,223 @@
             });
         }
 
+        renderAttachmentPreview();
+        autoResizeChatInput();
+        syncComposerState();
+
         return true;
+    }
+
+    function getChatInput() {
+        return document.getElementById("chat-input");
+    }
+
+    function getChatMediaInput() {
+        return document.getElementById("chat-media-input");
+    }
+
+    function getPendingAttachment() {
+        return state.pendingAttachment || null;
+    }
+
+    function clearPendingAttachment({ revokePreview = true } = {}) {
+        const pending = getPendingAttachment();
+        if (revokePreview && pending?.previewUrl) {
+            try {
+                URL.revokeObjectURL(pending.previewUrl);
+            } catch (error) {
+                // ignore URL cleanup issues
+            }
+        }
+        state.pendingAttachment = null;
+        renderAttachmentPreview();
+        syncComposerState();
+    }
+
+    function setPendingAttachment(file) {
+        clearPendingAttachment();
+        if (!file) return;
+
+        const isVideo =
+            typeof window.isLikelyVideoFile === "function"
+                ? window.isLikelyVideoFile(file)
+                : String(file.type || "").toLowerCase().startsWith("video/");
+
+        state.pendingAttachment = {
+            file,
+            kind: isVideo ? "video" : "image",
+            name: file.name || (isVideo ? "video" : "image"),
+            size: Number(file.size || 0) || 0,
+            previewUrl: URL.createObjectURL(file),
+            uploading: false,
+            progress: 0,
+        };
+        renderAttachmentPreview();
+        syncComposerState();
+    }
+
+    function renderAttachmentPreview() {
+        if (!ensureMessagesShell()) return;
+        const container = document.getElementById("chat-attachment-preview");
+        if (!container) return;
+
+        const pending = getPendingAttachment();
+        if (!pending?.file || !pending.previewUrl) {
+            container.hidden = true;
+            container.innerHTML = "";
+            return;
+        }
+
+        const title = escapeHtml(pending.name || "");
+        const metaParts = [
+            pending.kind === "video" ? "Video" : "Image",
+            formatBytes(pending.size),
+        ].filter(Boolean);
+        const progressLabel =
+            pending.uploading && Number.isFinite(Number(pending.progress))
+                ? `${Math.max(0, Math.min(100, Math.round(Number(pending.progress))))}%`
+                : "";
+        const previewHtml =
+            pending.kind === "video"
+                ? `<video class="chat-attachment-thumb" src="${escapeHtml(pending.previewUrl)}" muted playsinline controls preload="metadata"></video>`
+                : `<img class="chat-attachment-thumb" src="${escapeHtml(pending.previewUrl)}" alt="${title || "Aperçu média"}" loading="lazy" />`;
+
+        container.hidden = false;
+        container.innerHTML = `
+            <div class="chat-attachment-card${pending.uploading ? " is-uploading" : ""}">
+                <div class="chat-attachment-visual">
+                    ${previewHtml}
+                </div>
+                <div class="chat-attachment-meta">
+                    <div class="chat-attachment-title">${title || "Pièce jointe"}</div>
+                    <div class="chat-attachment-subtitle">
+                        ${escapeHtml(metaParts.join(" • ") || "Pièce jointe")}
+                    </div>
+                    ${
+                        pending.uploading
+                            ? `
+                        <div class="chat-upload-progress">
+                            <div class="chat-upload-progress-bar">
+                                <div class="chat-upload-progress-fill" style="width:${Math.max(0, Math.min(100, Number(pending.progress) || 0))}%"></div>
+                            </div>
+                            <span class="chat-upload-progress-label">${escapeHtml(progressLabel || "Upload...")}</span>
+                        </div>
+                    `
+                            : ""
+                    }
+                </div>
+                <button
+                    type="button"
+                    class="chat-attachment-remove"
+                    id="chat-attachment-remove"
+                    aria-label="Retirer la pièce jointe"
+                    ${pending.uploading ? "disabled" : ""}
+                >
+                    ×
+                </button>
+            </div>
+        `;
+
+        const removeBtn = document.getElementById("chat-attachment-remove");
+        if (removeBtn) {
+            removeBtn.addEventListener("click", () => {
+                clearPendingAttachment();
+                const mediaInput = getChatMediaInput();
+                if (mediaInput) mediaInput.value = "";
+            });
+        }
+    }
+
+    function autoResizeChatInput() {
+        const input = getChatInput();
+        if (!input) return;
+        input.style.height = "auto";
+        const nextHeight = Math.min(input.scrollHeight, 160);
+        input.style.height = `${Math.max(44, nextHeight)}px`;
+    }
+
+    function syncComposerState() {
+        const input = getChatInput();
+        const sendBtn = document.getElementById("chat-send-btn");
+        const attachBtn = document.getElementById("chat-attach-btn");
+        const hint = document.getElementById("chat-compose-hint");
+        const pending = getPendingAttachment();
+        const relationship = getSelectedRelationshipState();
+        const isBlocked = relationship.blockedByMe || relationship.blockedMe;
+        const canCompose = Boolean(state.selectedConversationId) && !isBlocked;
+        const hasText = Boolean(String(input?.value || "").trim());
+        const hasAttachment = Boolean(pending?.file);
+        const isBusy = Boolean(state.sendingMessage || pending?.uploading);
+        const canSend = canCompose && !isBusy && (hasText || hasAttachment);
+
+        if (input) input.disabled = !canCompose || isBusy;
+        if (sendBtn) sendBtn.disabled = !canSend;
+        if (attachBtn) attachBtn.disabled = !canCompose || isBusy;
+        if (hint) {
+            if (!canCompose) {
+                if (!state.selectedConversationId) {
+                    hint.textContent = "Sélectionnez une conversation pour commencer.";
+                } else {
+                    hint.textContent = getDmBlockedMessage(relationship);
+                }
+            } else if (pending?.uploading) {
+                hint.textContent = "Upload du média en cours...";
+            } else if (hasAttachment && !hasText) {
+                hint.textContent = "Vous pouvez envoyer le média seul ou ajouter un texte.";
+            } else {
+                hint.textContent =
+                    "Entrée pour envoyer • Maj+Entrée pour une nouvelle ligne";
+            }
+        }
+    }
+
+    async function handleAttachmentInput(fileList) {
+        const file = Array.isArray(fileList) ? fileList[0] : fileList?.[0];
+        if (!file) return;
+
+        let validation = null;
+        if (typeof window.validateFile === "function") {
+            validation = window.validateFile(file);
+        }
+        if (validation && validation.valid === false) {
+            const message = Array.isArray(validation.errors)
+                ? validation.errors[0]
+                : "Fichier non supporté.";
+            if (window.ToastManager?.error) {
+                window.ToastManager.error("Pièce jointe refusée", message);
+            }
+            return;
+        }
+
+        setPendingAttachment(file);
+    }
+
+    function renderMessageMedia(message) {
+        if (!message?.media_url) return "";
+        const mediaUrl = escapeHtml(message.media_url);
+        const mediaName = escapeHtml(message.media_name || getMessageAttachmentLabel(message) || "Média");
+        if (String(message.media_type || "").toLowerCase() === "video") {
+            return `
+                <div class="chat-media-wrap">
+                    <video class="chat-media chat-media-video" src="${mediaUrl}" controls preload="metadata" playsinline></video>
+                </div>
+            `;
+        }
+        return `
+            <a class="chat-media-link" href="${mediaUrl}" target="_blank" rel="noreferrer">
+                <img class="chat-media chat-media-image" src="${mediaUrl}" alt="${mediaName}" loading="lazy" />
+            </a>
+        `;
+    }
+
+    function renderMessageBody(message) {
+        const body = String(message?.body || "").trim();
+        const mediaHtml = renderMessageMedia(message);
+        const bodyHtml = body ? `<div class="chat-body">${escapeHtml(body)}</div>` : "";
+        const attachmentLabel = !body && message?.media_url
+            ? `<div class="chat-media-label">${escapeHtml(getMessageAttachmentLabel(message) || "Pièce jointe")}</div>`
+            : "";
+        return `${bodyHtml}${mediaHtml}${attachmentLabel}`;
     }
 
     function showSchemaMissingState() {
@@ -461,7 +978,8 @@
                 const activeClass =
                     state.selectedConversationId === conversation.id ? " active" : "";
                 const lastMessage = conversation.lastMessage || null;
-                const snippet = trimSnippet(lastMessage?.body || "Commencez la discussion", 56);
+                const snippet =
+                    buildMessageSnippet(lastMessage, 56) || "Commencez la discussion";
                 const timeLabel = formatThreadTime(
                     lastMessage?.created_at ||
                         conversation.lastMessageAt ||
@@ -495,6 +1013,40 @@
             .join("");
     }
 
+    function renderChatHeaderActions() {
+        const deleteBtn = document.getElementById("chat-delete-btn");
+        const blockBtn = document.getElementById("chat-block-btn");
+        const conversation = getSelectedConversation();
+        const profile = conversation ? getConversationDisplayUser(conversation) : null;
+        const relationship = getSelectedRelationshipState();
+
+        if (deleteBtn) {
+            if (!conversation) {
+                deleteBtn.hidden = true;
+                deleteBtn.disabled = true;
+            } else {
+                deleteBtn.hidden = false;
+                deleteBtn.disabled = false;
+                deleteBtn.title = "Masquer cette discussion de votre liste";
+            }
+        }
+
+        if (blockBtn) {
+            if (!conversation || !profile?.id) {
+                blockBtn.hidden = true;
+                blockBtn.disabled = true;
+                blockBtn.textContent = "Bloquer";
+            } else {
+                blockBtn.hidden = false;
+                blockBtn.disabled = relationship.loading || relationship.blockedByMe;
+                blockBtn.textContent = relationship.blockedByMe ? "Bloqué" : "Bloquer";
+                blockBtn.title = relationship.blockedByMe
+                    ? "Débloquez cet utilisateur depuis Réglages"
+                    : `Bloquer ${profile.name}`;
+            }
+        }
+    }
+
     function renderChatHeader() {
         if (!ensureMessagesShell()) return;
         const nameEl = document.getElementById("chat-header-name");
@@ -504,10 +1056,13 @@
         if (!conversation) {
             if (nameEl) nameEl.textContent = "Sélectionnez une conversation";
             if (subEl) subEl.textContent = "";
+            renderChatHeaderActions();
+            syncComposerState();
             return;
         }
 
         const profile = getConversationDisplayUser(conversation);
+        const relationship = getSelectedRelationshipState();
         if (nameEl) {
             if (profile.id) {
                 nameEl.innerHTML = `
@@ -520,10 +1075,18 @@
             }
         }
         if (subEl) {
-            subEl.textContent = conversation.unreadCount
-                ? `${conversation.unreadCount} nouveau(x) message(s)`
-                : "En ligne sur XERA";
+            if (relationship.loading) {
+                subEl.textContent = "Vérification de la conversation...";
+            } else if (relationship.blockedByMe || relationship.blockedMe) {
+                subEl.textContent = getDmBlockedMessage(relationship);
+            } else {
+                subEl.textContent = conversation.unreadCount
+                    ? `${conversation.unreadCount} nouveau(x) message(s)`
+                    : "En ligne sur XERA";
+            }
         }
+        renderChatHeaderActions();
+        syncComposerState();
     }
 
     function renderChatMessages() {
@@ -536,6 +1099,7 @@
         if (!conversationId) {
             panel.classList.add("empty");
             chat.innerHTML = `<div class="loading-state">Choisissez une conversation pour commencer.</div>`;
+            syncComposerState();
             return;
         }
 
@@ -547,6 +1111,7 @@
 
         if (!messages.length) {
             chat.innerHTML = `<div class="loading-state">Aucun message pour l'instant. Lancez la conversation.</div>`;
+            syncComposerState();
             return;
         }
 
@@ -568,7 +1133,7 @@
                 return `
                     <div class="${bubbleClass}" data-message-id="${msg.id}">
                         ${senderHtml}
-                        <div class="chat-body">${escapeHtml(msg.body || "")}</div>
+                        ${renderMessageBody(msg)}
                         <div class="chat-time">${escapeHtml(messageTime)}</div>
                     </div>
                 `;
@@ -576,6 +1141,7 @@
             .join("");
 
         chat.scrollTop = chat.scrollHeight;
+        syncComposerState();
     }
 
     function updateUnreadUi() {
@@ -610,7 +1176,7 @@
         try {
             const { data: myMemberships, error: membershipsError } = await supabase
                 .from("dm_participants")
-                .select("conversation_id, last_read_at")
+                .select("conversation_id, last_read_at, hidden_at")
                 .eq("user_id", currentUserId);
 
             if (membershipsError) throw membershipsError;
@@ -631,9 +1197,11 @@
 
             const conversationIds = memberships.map((row) => row.conversation_id).filter(Boolean);
             const lastReadByConversation = new Map();
+            const hiddenAtByConversation = new Map();
             memberships.forEach((row) => {
                 if (row?.conversation_id) {
                     lastReadByConversation.set(row.conversation_id, row.last_read_at || null);
+                    hiddenAtByConversation.set(row.conversation_id, row.hidden_at || null);
                 }
             });
 
@@ -642,12 +1210,14 @@
                     .from("dm_conversations")
                     .select("id, created_at, updated_at, last_message_at, pair_key")
                     .in("id", conversationIds),
-                supabase
-                    .from("dm_messages")
-                    .select("id, conversation_id, sender_id, body, created_at")
-                    .in("conversation_id", conversationIds)
-                    .order("created_at", { ascending: false })
-                    .limit(Math.max(conversationIds.length * 8, 60)),
+                runMessageSelect((selectColumns) =>
+                    supabase
+                        .from("dm_messages")
+                        .select(selectColumns)
+                        .in("conversation_id", conversationIds)
+                        .order("created_at", { ascending: false })
+                        .limit(Math.max(conversationIds.length * 8, 60)),
+                ),
             ]);
 
             if (conversationsResult.error) throw conversationsResult.error;
@@ -676,6 +1246,24 @@
                 const userProfile = otherUserId ? state.usersById.get(otherUserId) : null;
                 const lastMessage = lastMessageByConversation.get(conv.id) || null;
                 const lastReadAt = lastReadByConversation.get(conv.id) || null;
+                const hiddenAt = hiddenAtByConversation.get(conv.id) || null;
+                const lastActivityAt =
+                    lastMessage?.created_at ||
+                    conv.last_message_at ||
+                    conv.updated_at ||
+                    conv.created_at;
+
+                if (hiddenAt && lastActivityAt) {
+                    const hiddenTime = new Date(hiddenAt).getTime();
+                    const lastActivityTime = new Date(lastActivityAt).getTime();
+                    if (
+                        Number.isFinite(hiddenTime) &&
+                        Number.isFinite(lastActivityTime) &&
+                        lastActivityTime <= hiddenTime
+                    ) {
+                        continue;
+                    }
+                }
 
                 let unreadCount = 0;
                 try {
@@ -695,12 +1283,9 @@
                         userProfile?.avatar ||
                         "https://placehold.co/80x80?text=%F0%9F%92%AC",
                     lastReadAt,
+                    hiddenAt,
                     lastMessage,
-                    lastMessageAt:
-                        lastMessage?.created_at ||
-                        conv.last_message_at ||
-                        conv.updated_at ||
-                        conv.created_at,
+                    lastMessageAt: lastActivityAt,
                     unreadCount,
                 });
             }
@@ -721,6 +1306,7 @@
             renderThreadsList();
             renderChatHeader();
             setNavBadgeCount(getUnreadTotal());
+            void refreshActiveRelationshipState(state.selectedConversationId);
 
             if (state.selectedConversationId) {
                 await loadConversationMessages(state.selectedConversationId, {
@@ -767,12 +1353,14 @@
         }
 
         try {
-            const { data, error } = await supabase
-                .from("dm_messages")
-                .select("id, conversation_id, sender_id, body, created_at")
-                .eq("conversation_id", conversationId)
-                .order("created_at", { ascending: false })
-                .limit(DM_MESSAGES_LIMIT);
+            const { data, error } = await runMessageSelect((selectColumns) =>
+                supabase
+                    .from("dm_messages")
+                    .select(selectColumns)
+                    .eq("conversation_id", conversationId)
+                    .order("created_at", { ascending: false })
+                    .limit(DM_MESSAGES_LIMIT),
+            );
 
             if (error) throw error;
 
@@ -837,6 +1425,7 @@
         renderThreadsList();
         renderChatHeader();
         setMobileThreadOpen(true);
+        void refreshActiveRelationshipState(conversationId);
 
         await loadConversationMessages(conversationId, {
             markRead,
@@ -864,32 +1453,222 @@
         return data;
     }
 
+    async function removeConversationLocally(conversationId) {
+        if (!conversationId) return;
+        const wasSelected = state.selectedConversationId === conversationId;
+
+        state.messagesByConversation.delete(conversationId);
+        state.conversations = state.conversations.filter((item) => item.id !== conversationId);
+        sortAndReindexConversations();
+
+        if (wasSelected) {
+            state.selectedConversationId = state.conversations[0]?.id || null;
+            state.activeRelationship = null;
+        }
+
+        updateUnreadUi();
+
+        if (state.selectedConversationId) {
+            await selectConversation(state.selectedConversationId, {
+                markRead: false,
+                focusInput: false,
+                forceReload: false,
+            });
+        } else {
+            setMobileThreadOpen(false);
+            renderChatHeader();
+            renderChatMessages();
+        }
+    }
+
+    async function handleDeleteConversationAction() {
+        const conversation = getSelectedConversation();
+        if (!conversation) return;
+
+        const profile = getConversationDisplayUser(conversation);
+        const confirmed = window.confirm(
+            `Masquer la discussion avec ${profile.name || "cet utilisateur"} ? Elle reviendra dans votre liste seulement s'il y a un nouveau message.`,
+        );
+        if (!confirmed) return;
+
+        try {
+            if (typeof window.hideDmConversation === "function") {
+                await window.hideDmConversation(conversation.id);
+            } else {
+                const { error } = await supabase.rpc("hide_dm_conversation", {
+                    p_conversation_id: conversation.id,
+                });
+                if (error) throw error;
+            }
+
+            await removeConversationLocally(conversation.id);
+            if (window.ToastManager?.success) {
+                ToastManager.success(
+                    "Discussion supprimée",
+                    "La discussion a été retirée de votre liste.",
+                );
+            }
+        } catch (error) {
+            console.error("Hide conversation error:", error);
+            if (window.ToastManager?.error) {
+                ToastManager.error(
+                    "Suppression impossible",
+                    getFriendlyDmErrorMessage(
+                        error,
+                        "Impossible de supprimer cette discussion.",
+                    ),
+                );
+            }
+        }
+    }
+
+    async function handleBlockUserAction() {
+        const conversation = getSelectedConversation();
+        if (!conversation?.otherUserId) return;
+
+        const relationship = await refreshActiveRelationshipState(conversation.id);
+        if (relationship.blockedByMe) {
+            if (window.ToastManager?.info) {
+                ToastManager.info(
+                    "Utilisateur déjà bloqué",
+                    "Débloquez-le depuis Réglages si vous souhaitez reprendre la discussion.",
+                );
+            }
+            return;
+        }
+
+        const profile = getConversationDisplayUser(conversation);
+        const confirmed = window.confirm(
+            `Bloquer ${profile.name || "cet utilisateur"} ? Vous ne pourrez plus échanger de messages tant qu'il restera bloqué.`,
+        );
+        if (!confirmed) return;
+
+        try {
+            if (typeof window.blockDmUser === "function") {
+                await window.blockDmUser(conversation.otherUserId);
+            } else {
+                const { error } = await supabase.rpc("block_dm_user", {
+                    p_other_user_id: conversation.otherUserId,
+                });
+                if (error) throw error;
+            }
+
+            await removeConversationLocally(conversation.id);
+            if (window.ToastManager?.success) {
+                ToastManager.success(
+                    "Utilisateur bloqué",
+                    "Il a été ajouté à votre liste de blocage.",
+                );
+            }
+        } catch (error) {
+            console.error("Block user error:", error);
+            if (window.ToastManager?.error) {
+                ToastManager.error(
+                    "Blocage impossible",
+                    getFriendlyDmErrorMessage(
+                        error,
+                        "Impossible de bloquer cet utilisateur.",
+                    ),
+                );
+            }
+        }
+    }
+
     async function sendCurrentMessage() {
         const currentUserId = getCurrentUserId();
         const conversationId = state.selectedConversationId;
-        const input = document.getElementById("chat-input");
+        const input = getChatInput();
         const sendBtn = document.getElementById("chat-send-btn");
+        const attachBtn = document.getElementById("chat-attach-btn");
+        const pending = getPendingAttachment();
 
         if (!currentUserId || !conversationId || !input) return;
 
-        const body = String(input.value || "").trim();
-        if (!body) return;
+        const conversation = getSelectedConversation();
+        if (!conversation?.otherUserId) return;
 
-        input.value = "";
+        const relationship = await refreshActiveRelationshipState(conversationId);
+        if (!relationship.canMessage) {
+            if (window.ToastManager?.error) {
+                ToastManager.error("Message non envoyé", getDmBlockedMessage(relationship));
+            }
+            return;
+        }
+
+        const originalValue = String(input.value || "");
+        const body = originalValue.trim();
+        if (!body && !pending?.file) return;
+
+        state.sendingMessage = true;
         if (sendBtn) sendBtn.disabled = true;
+        if (attachBtn) attachBtn.disabled = true;
+        syncComposerState();
+
+        let uploadedMedia = null;
 
         try {
-            const { data, error } = await supabase
-                .from("dm_messages")
-                .insert({
-                    conversation_id: conversationId,
-                    sender_id: currentUserId,
-                    body,
-                })
-                .select("id, conversation_id, sender_id, body, created_at")
-                .single();
+            if (pending?.file) {
+                if (typeof window.uploadFile !== "function" && typeof uploadFile !== "function") {
+                    throw new Error("Upload de média indisponible.");
+                }
 
+                pending.uploading = true;
+                pending.progress = 0;
+                renderAttachmentPreview();
+                syncComposerState();
+
+                const uploader =
+                    typeof window.uploadFile === "function" ? window.uploadFile : uploadFile;
+                uploadedMedia = await uploader(pending.file, "dm", (percent) => {
+                    const currentPending = getPendingAttachment();
+                    if (!currentPending) return;
+                    currentPending.progress = Number(percent) || 0;
+                    currentPending.uploading = true;
+                    renderAttachmentPreview();
+                });
+
+                if (!uploadedMedia?.success || !uploadedMedia?.url) {
+                    throw new Error(
+                        uploadedMedia?.error || "Impossible d'uploader le média.",
+                    );
+                }
+            }
+
+            input.value = "";
+            autoResizeChatInput();
+
+            const insertPayload = {
+                conversation_id: conversationId,
+                sender_id: currentUserId,
+                body: body || null,
+            };
+            if (uploadedMedia?.url) {
+                insertPayload.media_url = uploadedMedia.url;
+                insertPayload.media_type = uploadedMedia.type || pending?.kind || null;
+                insertPayload.media_name = pending?.name || pending?.file?.name || null;
+                insertPayload.media_size_bytes = pending?.size || pending?.file?.size || null;
+            }
+
+            const { data, error } = await runMessageSelect((selectColumns) =>
+                supabase
+                    .from("dm_messages")
+                    .insert(insertPayload)
+                    .select(selectColumns)
+                    .single(),
+            );
+
+            if (
+                error &&
+                uploadedMedia?.url &&
+                (isMissingDmMediaSchemaError(error) ||
+                    isLegacyDmMediaConstraintError(error))
+            ) {
+                throw new Error(
+                    "Messagerie média non configurée. Exécutez sql/discovery-phase2-messaging.sql puis réessayez.",
+                );
+            }
             if (error) throw error;
+
             if (data) {
                 rememberMessageId(data.id);
                 const existing = state.messagesByConversation.get(conversationId) || [];
@@ -913,19 +1692,50 @@
                 const chat = document.getElementById("chat-messages");
                 if (chat) chat.scrollTop = chat.scrollHeight;
             }
+            clearPendingAttachment();
         } catch (error) {
+            if (uploadedMedia?.path && typeof deleteFile === "function") {
+                deleteFile(uploadedMedia.path).catch(() => {});
+            }
+
             console.error("Erreur envoi message:", error);
-            input.value = body;
+            input.value = originalValue;
+            autoResizeChatInput();
+            const currentPending = getPendingAttachment();
+            if (currentPending) {
+                currentPending.uploading = false;
+                currentPending.progress = 0;
+                renderAttachmentPreview();
+            }
             if (window.ToastManager?.error) {
                 ToastManager.error(
                     "Message non envoyé",
-                    error?.message || "Impossible d'envoyer le message.",
+                    getFriendlyDmErrorMessage(
+                        error,
+                        "Impossible d'envoyer le message.",
+                    ),
                 );
             } else {
-                alert(error?.message || "Impossible d'envoyer le message.");
+                alert(
+                    getFriendlyDmErrorMessage(
+                        error,
+                        "Impossible d'envoyer le message.",
+                    ),
+                );
             }
         } finally {
+            const currentPending = getPendingAttachment();
+            if (currentPending) {
+                currentPending.uploading = false;
+                if (!Number.isFinite(Number(currentPending.progress))) {
+                    currentPending.progress = 0;
+                }
+                renderAttachmentPreview();
+            }
+            state.sendingMessage = false;
             if (sendBtn) sendBtn.disabled = false;
+            if (attachBtn) attachBtn.disabled = false;
+            syncComposerState();
             input.focus();
         }
     }
@@ -1000,7 +1810,9 @@
 
         const sender = await resolveUser(messageRow.sender_id);
         const senderName = sender?.name || "Nouveau message";
-        const snippet = trimSnippet(messageRow.body || "", 110) || "Vous avez reçu un nouveau message.";
+        const snippet =
+            buildMessageSnippet(messageRow, 110) ||
+            "Vous avez reçu un nouveau message.";
 
         if (window.ToastManager?.info) {
             ToastManager.info(`Message de ${senderName}`, snippet);
@@ -1046,11 +1858,12 @@
     }
 
     async function handleIncomingMessage(messageRow) {
-        if (!messageRow || !messageRow.id) return;
-        if (state.seenMessageIds.has(messageRow.id)) return;
-        rememberMessageId(messageRow.id);
+        const normalizedMessage = normalizeMessageRow(messageRow);
+        if (!normalizedMessage || !normalizedMessage.id) return;
+        if (state.seenMessageIds.has(normalizedMessage.id)) return;
+        rememberMessageId(normalizedMessage.id);
 
-        const conversationId = messageRow.conversation_id;
+        const conversationId = normalizedMessage.conversation_id;
         if (!conversationId) return;
 
         if (!state.conversationsById.has(conversationId)) {
@@ -1059,10 +1872,10 @@
 
         const conversation = state.conversationsById.get(conversationId);
         if (conversation) {
-            conversation.lastMessage = messageRow;
-            conversation.lastMessageAt = messageRow.created_at;
+            conversation.lastMessage = normalizedMessage;
+            conversation.lastMessageAt = normalizedMessage.created_at;
 
-            if (messageRow.sender_id !== getCurrentUserId()) {
+            if (normalizedMessage.sender_id !== getCurrentUserId()) {
                 const isActiveConversation =
                     state.selectedConversationId === conversationId && isMessagesPageActive();
                 if (!isActiveConversation) {
@@ -1072,9 +1885,9 @@
         }
 
         const existing = state.messagesByConversation.get(conversationId) || [];
-        const alreadyExists = existing.some((msg) => msg.id === messageRow.id);
+        const alreadyExists = existing.some((msg) => msg.id === normalizedMessage.id);
         if (!alreadyExists) {
-            state.messagesByConversation.set(conversationId, [...existing, messageRow]);
+            state.messagesByConversation.set(conversationId, [...existing, normalizedMessage]);
         }
 
         sortAndReindexConversations();
@@ -1087,12 +1900,12 @@
 
         if (shouldAutoRead) {
             renderChatMessages();
-            if (messageRow.sender_id !== getCurrentUserId()) {
+            if (normalizedMessage.sender_id !== getCurrentUserId()) {
                 await markConversationAsRead(conversationId);
             }
         }
 
-        await showIncomingSignal(messageRow);
+        await showIncomingSignal(normalizedMessage);
     }
 
     function subscribeRealtime() {
@@ -1268,10 +2081,18 @@
             if (window.ToastManager?.error) {
                 ToastManager.error(
                     "Messagerie indisponible",
-                    error?.message || "Impossible d'ouvrir la conversation.",
+                    getFriendlyDmErrorMessage(
+                        error,
+                        "Impossible d'ouvrir la conversation.",
+                    ),
                 );
             } else {
-                alert(error?.message || "Impossible d'ouvrir la conversation.");
+                alert(
+                    getFriendlyDmErrorMessage(
+                        error,
+                        "Impossible d'ouvrir la conversation.",
+                    ),
+                );
             }
         }
     }
@@ -1322,6 +2143,7 @@
 
         if (state.initializedForUserId !== currentUserId) {
             cleanupRealtime();
+            clearPendingAttachment();
             state.initializedForUserId = currentUserId;
             state.selectedConversationId = null;
             state.conversations = [];
@@ -1330,6 +2152,8 @@
             state.seenMessageIds = new Set();
             state.routeHandled = false;
             state.realtimeWarned = false;
+            state.sendingMessage = false;
+            state.activeRelationship = null;
 
             if (hasDmPage()) {
                 ensureMessagesShell();
@@ -1349,6 +2173,7 @@
 
     function cleanupMessaging() {
         cleanupRealtime();
+        clearPendingAttachment();
         state.initializedForUserId = null;
         state.selectedConversationId = null;
         state.conversations = [];
@@ -1357,6 +2182,8 @@
         state.usersById = new Map();
         state.seenMessageIds = new Set();
         state.routeHandled = false;
+        state.sendingMessage = false;
+        state.activeRelationship = null;
         setNavBadgeCount(0);
         setNavButtonVisible(false);
     }

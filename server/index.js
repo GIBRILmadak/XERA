@@ -373,10 +373,17 @@ function buildPushPayload(notification) {
 function buildDirectMessagePushPayload(messageRow, senderName) {
   const senderLabel = senderName && String(senderName).trim() ? String(senderName).trim() : 'Nouveau message';
   const bodyRaw = String(messageRow?.body || '').replace(/\s+/g, ' ').trim();
+  const mediaType = String(messageRow?.media_type || '').toLowerCase();
+  const mediaFallback =
+    mediaType === 'image'
+      ? 'Vous avez reçu une image.'
+      : mediaType === 'video'
+        ? 'Vous avez reçu une vidéo.'
+        : 'Vous avez reçu un nouveau message.';
   const body =
     bodyRaw.length > 160
       ? `${bodyRaw.slice(0, 159)}…`
-      : bodyRaw || 'Vous avez reçu un nouveau message.';
+      : bodyRaw || mediaFallback;
   const icon = `${PRIMARY_ORIGIN.replace(/\/$/, '')}/icons/logo.png`;
   const link = `${PRIMARY_ORIGIN.replace(/\/$/, '')}/index.html?messages=1&dm=${encodeURIComponent(messageRow.sender_id)}`;
 
