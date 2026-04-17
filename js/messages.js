@@ -94,7 +94,9 @@
     }
 
     function trimSnippet(value, maxLen = 80) {
-        const text = String(value || "").replace(/\s+/g, " ").trim();
+        const text = String(value || "")
+            .replace(/\s+/g, " ")
+            .trim();
         if (!text) return "";
         if (text.length <= maxLen) return text;
         return `${text.slice(0, maxLen - 1)}…`;
@@ -117,13 +119,16 @@
             size /= 1024;
             unitIndex += 1;
         }
-        const rounded = size >= 10 || unitIndex === 0 ? Math.round(size) : size.toFixed(1);
+        const rounded =
+            size >= 10 || unitIndex === 0 ? Math.round(size) : size.toFixed(1);
         return `${rounded} ${units[unitIndex]}`;
     }
 
     function isMobileDevice() {
         try {
-            const mq = window.matchMedia && window.matchMedia("(max-width: 960px)").matches;
+            const mq =
+                window.matchMedia &&
+                window.matchMedia("(max-width: 960px)").matches;
             const ua = navigator.userAgent || "";
             const mobileUA = /Mobi|Android|iPhone|iPad|iPod|Mobile/i.test(ua);
             return !!(mq || mobileUA);
@@ -195,7 +200,9 @@
         }
 
         return {
-            data: response?.data ? normalizeMessageRow(response.data) : response?.data,
+            data: response?.data
+                ? normalizeMessageRow(response.data)
+                : response?.data,
             error: null,
         };
     }
@@ -228,7 +235,8 @@
     function normalizeRelationshipState(value, otherUserId = null) {
         const blockedByMe =
             value?.blockedByMe === true || value?.blocked_by_me === true;
-        const blockedMe = value?.blockedMe === true || value?.blocked_me === true;
+        const blockedMe =
+            value?.blockedMe === true || value?.blocked_me === true;
         const canMessage =
             value?.canMessage === false || value?.can_message === false
                 ? false
@@ -243,7 +251,9 @@
     }
 
     function getSelectedConversation() {
-        return state.conversationsById.get(state.selectedConversationId) || null;
+        return (
+            state.conversationsById.get(state.selectedConversationId) || null
+        );
     }
 
     function getSelectedRelationshipState() {
@@ -256,7 +266,9 @@
         return createNeutralRelationshipState(otherUserId);
     }
 
-    function getDmBlockedMessage(relationship = getSelectedRelationshipState()) {
+    function getDmBlockedMessage(
+        relationship = getSelectedRelationshipState(),
+    ) {
         if (relationship?.blockedByMe) {
             return "Vous avez bloqué cet utilisateur. Débloquez-le depuis Réglages pour reprendre la discussion.";
         }
@@ -281,26 +293,36 @@
         if (normalized.includes("NOT_AUTHENTICATED")) {
             return "Votre session a expiré. Reconnectez-vous puis réessayez.";
         }
-        return rawMessage || fallbackMessage || "Impossible de poursuivre l'action.";
+        return (
+            rawMessage ||
+            fallbackMessage ||
+            "Impossible de poursuivre l'action."
+        );
     }
 
     async function fetchRelationshipStatusForUser(otherUserId) {
         if (!otherUserId) return createNeutralRelationshipState(null);
 
         if (typeof window.fetchDmRelationshipStatus === "function") {
-            const response = await window.fetchDmRelationshipStatus(otherUserId);
+            const response =
+                await window.fetchDmRelationshipStatus(otherUserId);
             return normalizeRelationshipState(response, otherUserId);
         }
 
-        const { data, error } = await supabase.rpc("get_dm_relationship_status", {
-            p_other_user_id: otherUserId,
-        });
+        const { data, error } = await supabase.rpc(
+            "get_dm_relationship_status",
+            {
+                p_other_user_id: otherUserId,
+            },
+        );
         if (error) throw error;
         const row = Array.isArray(data) ? data[0] : data;
         return normalizeRelationshipState(row, otherUserId);
     }
 
-    async function refreshActiveRelationshipState(conversationId = state.selectedConversationId) {
+    async function refreshActiveRelationshipState(
+        conversationId = state.selectedConversationId,
+    ) {
         const conversation = conversationId
             ? state.conversationsById.get(conversationId) || null
             : null;
@@ -318,7 +340,8 @@
         syncComposerState();
 
         try {
-            const relationship = await fetchRelationshipStatusForUser(otherUserId);
+            const relationship =
+                await fetchRelationshipStatusForUser(otherUserId);
             if (
                 state.selectedConversationId === conversationId &&
                 relationship.otherUserId === otherUserId
@@ -331,7 +354,8 @@
         } catch (error) {
             console.warn("DM relationship status error:", error);
             if (state.selectedConversationId === conversationId) {
-                state.activeRelationship = createNeutralRelationshipState(otherUserId);
+                state.activeRelationship =
+                    createNeutralRelationshipState(otherUserId);
                 renderChatHeader();
                 syncComposerState();
             }
@@ -396,7 +420,8 @@
         if (userId && typeof window.renderUsernameWithBadge === "function") {
             try {
                 verificationHtml =
-                    window.renderUsernameWithBadge(safeName, userId) || verificationHtml;
+                    window.renderUsernameWithBadge(safeName, userId) ||
+                    verificationHtml;
             } catch (error) {
                 verificationHtml = `<span class="username-label">${safeName}</span>`;
             }
@@ -423,10 +448,15 @@
             typeof window.navigateToUserProfile === "function" &&
             document.getElementById("profile")
         ) {
-            Promise.resolve(window.navigateToUserProfile(userId)).catch((error) => {
-                console.error("Navigate profile from messages failed:", error);
-                window.location.href = buildProfileHref(userId);
-            });
+            Promise.resolve(window.navigateToUserProfile(userId)).catch(
+                (error) => {
+                    console.error(
+                        "Navigate profile from messages failed:",
+                        error,
+                    );
+                    window.location.href = buildProfileHref(userId);
+                },
+            );
             return;
         }
         window.location.href = buildProfileHref(userId);
@@ -561,9 +591,11 @@
         const refreshBtn = document.getElementById("messages-refresh-btn");
         if (refreshBtn) {
             refreshBtn.addEventListener("click", () => {
-                refreshConversations({ preserveSelection: true }).catch((error) => {
-                    console.error("Messages refresh error:", error);
-                });
+                refreshConversations({ preserveSelection: true }).catch(
+                    (error) => {
+                        console.error("Messages refresh error:", error);
+                    },
+                );
             });
         }
 
@@ -581,9 +613,14 @@
                 if (handleMessageUserLinkClick(event)) return;
                 const item = event.target.closest(".thread-item");
                 if (!item) return;
-                const conversationId = item.getAttribute("data-conversation-id");
+                const conversationId = item.getAttribute(
+                    "data-conversation-id",
+                );
                 if (!conversationId) return;
-                selectConversation(conversationId, { markRead: true, focusInput: true }).catch((error) => {
+                selectConversation(conversationId, {
+                    markRead: true,
+                    focusInput: true,
+                }).catch((error) => {
                     console.error("Conversation select error:", error);
                 });
             });
@@ -707,7 +744,9 @@
         const isVideo =
             typeof window.isLikelyVideoFile === "function"
                 ? window.isLikelyVideoFile(file)
-                : String(file.type || "").toLowerCase().startsWith("video/");
+                : String(file.type || "")
+                      .toLowerCase()
+                      .startsWith("video/");
 
         state.pendingAttachment = {
             file,
@@ -826,16 +865,19 @@
             if (!mobile) {
                 if (!canCompose) {
                     if (!state.selectedConversationId) {
-                        hint.textContent = "Sélectionnez une conversation pour commencer.";
+                        hint.textContent =
+                            "Sélectionnez une conversation pour commencer.";
                     } else {
                         hint.textContent = getDmBlockedMessage(relationship);
                     }
                 } else if (pending?.uploading) {
                     hint.textContent = "Upload du média en cours...";
                 } else if (hasAttachment && !hasText) {
-                    hint.textContent = "Vous pouvez envoyer le média seul ou ajouter un texte.";
+                    hint.textContent =
+                        "Vous pouvez envoyer le média seul ou ajouter un texte.";
                 } else {
-                    hint.textContent = "Entrée pour envoyer • Maj+Entrée pour une nouvelle ligne";
+                    hint.textContent =
+                        "Entrée pour envoyer • Maj+Entrée pour une nouvelle ligne";
                 }
             }
         }
@@ -865,7 +907,9 @@
     function renderMessageMedia(message) {
         if (!message?.media_url) return "";
         const mediaUrl = escapeHtml(message.media_url);
-        const mediaName = escapeHtml(message.media_name || getMessageAttachmentLabel(message) || "Média");
+        const mediaName = escapeHtml(
+            message.media_name || getMessageAttachmentLabel(message) || "Média",
+        );
         if (String(message.media_type || "").toLowerCase() === "video") {
             return `
                 <div class="chat-media-wrap">
@@ -883,10 +927,13 @@
     function renderMessageBody(message) {
         const body = String(message?.body || "").trim();
         const mediaHtml = renderMessageMedia(message);
-        const bodyHtml = body ? `<div class="chat-body">${escapeHtml(body)}</div>` : "";
-        const attachmentLabel = !body && message?.media_url
-            ? `<div class="chat-media-label">${escapeHtml(getMessageAttachmentLabel(message) || "Pièce jointe")}</div>`
+        const bodyHtml = body
+            ? `<div class="chat-body">${escapeHtml(body)}</div>`
             : "";
+        const attachmentLabel =
+            !body && message?.media_url
+                ? `<div class="chat-media-label">${escapeHtml(getMessageAttachmentLabel(message) || "Pièce jointe")}</div>`
+                : "";
         return `${bodyHtml}${mediaHtml}${attachmentLabel}`;
     }
 
@@ -908,7 +955,8 @@
             (message.includes("does not exist") ||
                 message.includes("n'existe pas") ||
                 message.includes("could not find")) &&
-            (message.includes("dm_") || message.includes("get_or_create_dm_conversation"))
+            (message.includes("dm_") ||
+                message.includes("get_or_create_dm_conversation"))
         );
     }
 
@@ -926,9 +974,9 @@
     }
 
     async function fetchUsers(userIds) {
-        const missing = Array.from(new Set((userIds || []).filter(Boolean))).filter(
-            (id) => !state.usersById.has(id),
-        );
+        const missing = Array.from(
+            new Set((userIds || []).filter(Boolean)),
+        ).filter((id) => !state.usersById.has(id));
         if (missing.length === 0) return;
 
         let { data, error } = await supabase
@@ -979,7 +1027,8 @@
             avatar: "https://placehold.co/80x80?text=%F0%9F%92%AC",
         };
         if (!conversation) return fallback;
-        const user = state.usersById.get(conversation.otherUserId || "") || null;
+        const user =
+            state.usersById.get(conversation.otherUserId || "") || null;
         return {
             id: conversation.otherUserId || user?.id || null,
             name: user?.name || conversation.otherName || "Conversation",
@@ -996,7 +1045,10 @@
     }
 
     function getUnreadTotal() {
-        return state.conversations.reduce((sum, item) => sum + (item.unreadCount || 0), 0);
+        return state.conversations.reduce(
+            (sum, item) => sum + (item.unreadCount || 0),
+            0,
+        );
     }
 
     function renderThreadsList() {
@@ -1013,10 +1065,13 @@
             .map((conversation) => {
                 const profile = getConversationDisplayUser(conversation);
                 const activeClass =
-                    state.selectedConversationId === conversation.id ? " active" : "";
+                    state.selectedConversationId === conversation.id
+                        ? " active"
+                        : "";
                 const lastMessage = conversation.lastMessage || null;
                 const snippet =
-                    buildMessageSnippet(lastMessage, 56) || "Commencez la discussion";
+                    buildMessageSnippet(lastMessage, 56) ||
+                    "Commencez la discussion";
                 const timeLabel = formatThreadTime(
                     lastMessage?.created_at ||
                         conversation.lastMessageAt ||
@@ -1054,7 +1109,9 @@
         const deleteBtn = document.getElementById("chat-delete-btn");
         const blockBtn = document.getElementById("chat-block-btn");
         const conversation = getSelectedConversation();
-        const profile = conversation ? getConversationDisplayUser(conversation) : null;
+        const profile = conversation
+            ? getConversationDisplayUser(conversation)
+            : null;
         const relationship = getSelectedRelationshipState();
 
         if (deleteBtn) {
@@ -1075,8 +1132,11 @@
                 blockBtn.textContent = "Bloquer";
             } else {
                 blockBtn.hidden = false;
-                blockBtn.disabled = relationship.loading || relationship.blockedByMe;
-                blockBtn.textContent = relationship.blockedByMe ? "Bloqué" : "Bloquer";
+                blockBtn.disabled =
+                    relationship.loading || relationship.blockedByMe;
+                blockBtn.textContent = relationship.blockedByMe
+                    ? "Bloqué"
+                    : "Bloquer";
                 blockBtn.title = relationship.blockedByMe
                     ? "Débloquez cet utilisateur depuis Réglages"
                     : `Bloquer ${profile.name}`;
@@ -1088,7 +1148,9 @@
         if (!ensureMessagesShell()) return;
         const nameEl = document.getElementById("chat-header-name");
         const subEl = document.getElementById("chat-header-sub");
-        const conversation = state.conversationsById.get(state.selectedConversationId);
+        const conversation = state.conversationsById.get(
+            state.selectedConversationId,
+        );
 
         if (!conversation) {
             if (nameEl) nameEl.textContent = "Sélectionnez une conversation";
@@ -1134,7 +1196,9 @@
 
         // Floating back button: show when a conversation is open (keeps a high z-index and fixed position)
         try {
-            toggleFloatingBackButton(Boolean(state.selectedConversationId && isMessagesPageActive()));
+            toggleFloatingBackButton(
+                Boolean(state.selectedConversationId && isMessagesPageActive()),
+            );
         } catch (e) {}
     }
 
@@ -1189,8 +1253,11 @@
         panel.classList.remove("empty");
         const messages = state.messagesByConversation.get(conversationId) || [];
         const currentUserId = getCurrentUserId();
-        const conversation = state.conversationsById.get(conversationId) || null;
-        const senderProfile = conversation ? getConversationDisplayUser(conversation) : null;
+        const conversation =
+            state.conversationsById.get(conversationId) || null;
+        const senderProfile = conversation
+            ? getConversationDisplayUser(conversation)
+            : null;
 
         if (!messages.length) {
             chat.innerHTML = `<div class="loading-state">Aucun message pour l'instant. Lancez la conversation.</div>`;
@@ -1235,8 +1302,12 @@
 
     function sortAndReindexConversations() {
         state.conversations.sort((a, b) => {
-            const aDate = new Date(a.lastMessageAt || a.updated_at || a.created_at || 0).getTime();
-            const bDate = new Date(b.lastMessageAt || b.updated_at || b.created_at || 0).getTime();
+            const aDate = new Date(
+                a.lastMessageAt || a.updated_at || a.created_at || 0,
+            ).getTime();
+            const bDate = new Date(
+                b.lastMessageAt || b.updated_at || b.created_at || 0,
+            ).getTime();
             return bDate - aDate;
         });
 
@@ -1257,10 +1328,11 @@
         }
 
         try {
-            const { data: myMemberships, error: membershipsError } = await supabase
-                .from("dm_participants")
-                .select("conversation_id, last_read_at, hidden_at")
-                .eq("user_id", currentUserId);
+            const { data: myMemberships, error: membershipsError } =
+                await supabase
+                    .from("dm_participants")
+                    .select("conversation_id, last_read_at, hidden_at")
+                    .eq("user_id", currentUserId);
 
             if (membershipsError) throw membershipsError;
 
@@ -1270,7 +1342,9 @@
                 state.conversationsById = new Map();
                 if (!preserveSelection) {
                     state.selectedConversationId = null;
-                } else if (!state.conversationsById.has(state.selectedConversationId)) {
+                } else if (
+                    !state.conversationsById.has(state.selectedConversationId)
+                ) {
                     state.selectedConversationId = null;
                 }
                 updateUnreadUi();
@@ -1278,30 +1352,42 @@
                 return;
             }
 
-            const conversationIds = memberships.map((row) => row.conversation_id).filter(Boolean);
+            const conversationIds = memberships
+                .map((row) => row.conversation_id)
+                .filter(Boolean);
             const lastReadByConversation = new Map();
             const hiddenAtByConversation = new Map();
             memberships.forEach((row) => {
                 if (row?.conversation_id) {
-                    lastReadByConversation.set(row.conversation_id, row.last_read_at || null);
-                    hiddenAtByConversation.set(row.conversation_id, row.hidden_at || null);
+                    lastReadByConversation.set(
+                        row.conversation_id,
+                        row.last_read_at || null,
+                    );
+                    hiddenAtByConversation.set(
+                        row.conversation_id,
+                        row.hidden_at || null,
+                    );
                 }
             });
 
-            const [conversationsResult, lastMessagesResult] = await Promise.all([
-                supabase
-                    .from("dm_conversations")
-                    .select("id, created_at, updated_at, last_message_at, pair_key")
-                    .in("id", conversationIds),
-                runMessageSelect((selectColumns) =>
+            const [conversationsResult, lastMessagesResult] = await Promise.all(
+                [
                     supabase
-                        .from("dm_messages")
-                        .select(selectColumns)
-                        .in("conversation_id", conversationIds)
-                        .order("created_at", { ascending: false })
-                        .limit(Math.max(conversationIds.length * 8, 60)),
-                ),
-            ]);
+                        .from("dm_conversations")
+                        .select(
+                            "id, created_at, updated_at, last_message_at, pair_key",
+                        )
+                        .in("id", conversationIds),
+                    runMessageSelect((selectColumns) =>
+                        supabase
+                            .from("dm_messages")
+                            .select(selectColumns)
+                            .in("conversation_id", conversationIds)
+                            .order("created_at", { ascending: false })
+                            .limit(Math.max(conversationIds.length * 8, 60)),
+                    ),
+                ],
+            );
 
             if (conversationsResult.error) throw conversationsResult.error;
             if (lastMessagesResult.error) throw lastMessagesResult.error;
@@ -1310,7 +1396,9 @@
             const lastMessagesRows = lastMessagesResult.data || [];
 
             const otherUserIds = conversationsRows
-                .map((conv) => extractOtherUserIdFromPairKey(conv.pair_key, currentUserId))
+                .map((conv) =>
+                    extractOtherUserIdFromPairKey(conv.pair_key, currentUserId),
+                )
                 .filter(Boolean);
             await fetchUsers(otherUserIds);
 
@@ -1325,9 +1413,15 @@
 
             const conversations = [];
             for (const conv of conversationsRows) {
-                const otherUserId = extractOtherUserIdFromPairKey(conv.pair_key, currentUserId);
-                const userProfile = otherUserId ? state.usersById.get(otherUserId) : null;
-                const lastMessage = lastMessageByConversation.get(conv.id) || null;
+                const otherUserId = extractOtherUserIdFromPairKey(
+                    conv.pair_key,
+                    currentUserId,
+                );
+                const userProfile = otherUserId
+                    ? state.usersById.get(otherUserId)
+                    : null;
+                const lastMessage =
+                    lastMessageByConversation.get(conv.id) || null;
                 const lastReadAt = lastReadByConversation.get(conv.id) || null;
                 const hiddenAt = hiddenAtByConversation.get(conv.id) || null;
                 const lastActivityAt =
@@ -1361,7 +1455,9 @@
                     otherUserId: otherUserId || null,
                     otherName: userProfile?.name || "Conversation",
                     otherAccountSubtype:
-                        userProfile?.account_subtype || userProfile?.accountSubtype || null,
+                        userProfile?.account_subtype ||
+                        userProfile?.accountSubtype ||
+                        null,
                     otherAvatar:
                         userProfile?.avatar ||
                         "https://placehold.co/80x80?text=%F0%9F%92%AC",
@@ -1383,7 +1479,8 @@
             ) {
                 // keep current selection
             } else {
-                state.selectedConversationId = state.conversations[0]?.id || null;
+                state.selectedConversationId =
+                    state.conversations[0]?.id || null;
             }
 
             renderThreadsList();
@@ -1528,9 +1625,12 @@
             throw new Error("Conversation invalide.");
         }
 
-        const { data, error } = await supabase.rpc("get_or_create_dm_conversation", {
-            p_other_user_id: otherUserId,
-        });
+        const { data, error } = await supabase.rpc(
+            "get_or_create_dm_conversation",
+            {
+                p_other_user_id: otherUserId,
+            },
+        );
         if (error) throw error;
         if (!data) throw new Error("Impossible de créer la conversation.");
         return data;
@@ -1541,7 +1641,9 @@
         const wasSelected = state.selectedConversationId === conversationId;
 
         state.messagesByConversation.delete(conversationId);
-        state.conversations = state.conversations.filter((item) => item.id !== conversationId);
+        state.conversations = state.conversations.filter(
+            (item) => item.id !== conversationId,
+        );
         sortAndReindexConversations();
 
         if (wasSelected) {
@@ -1609,7 +1711,9 @@
         const conversation = getSelectedConversation();
         if (!conversation?.otherUserId) return;
 
-        const relationship = await refreshActiveRelationshipState(conversation.id);
+        const relationship = await refreshActiveRelationshipState(
+            conversation.id,
+        );
         if (relationship.blockedByMe) {
             if (window.ToastManager?.info) {
                 ToastManager.info(
@@ -1670,10 +1774,14 @@
         const conversation = getSelectedConversation();
         if (!conversation?.otherUserId) return;
 
-        const relationship = await refreshActiveRelationshipState(conversationId);
+        const relationship =
+            await refreshActiveRelationshipState(conversationId);
         if (!relationship.canMessage) {
             if (window.ToastManager?.error) {
-                ToastManager.error("Message non envoyé", getDmBlockedMessage(relationship));
+                ToastManager.error(
+                    "Message non envoyé",
+                    getDmBlockedMessage(relationship),
+                );
             }
             return;
         }
@@ -1691,7 +1799,10 @@
 
         try {
             if (pending?.file) {
-                if (typeof window.uploadFile !== "function" && typeof uploadFile !== "function") {
+                if (
+                    typeof window.uploadFile !== "function" &&
+                    typeof uploadFile !== "function"
+                ) {
                     throw new Error("Upload de média indisponible.");
                 }
 
@@ -1701,18 +1812,25 @@
                 syncComposerState();
 
                 const uploader =
-                    typeof window.uploadFile === "function" ? window.uploadFile : uploadFile;
-                uploadedMedia = await uploader(pending.file, "dm", (percent) => {
-                    const currentPending = getPendingAttachment();
-                    if (!currentPending) return;
-                    currentPending.progress = Number(percent) || 0;
-                    currentPending.uploading = true;
-                    renderAttachmentPreview();
-                });
+                    typeof window.uploadFile === "function"
+                        ? window.uploadFile
+                        : uploadFile;
+                uploadedMedia = await uploader(
+                    pending.file,
+                    "dm",
+                    (percent) => {
+                        const currentPending = getPendingAttachment();
+                        if (!currentPending) return;
+                        currentPending.progress = Number(percent) || 0;
+                        currentPending.uploading = true;
+                        renderAttachmentPreview();
+                    },
+                );
 
                 if (!uploadedMedia?.success || !uploadedMedia?.url) {
                     throw new Error(
-                        uploadedMedia?.error || "Impossible d'uploader le média.",
+                        uploadedMedia?.error ||
+                            "Impossible d'uploader le média.",
                     );
                 }
             }
@@ -1727,9 +1845,12 @@
             };
             if (uploadedMedia?.url) {
                 insertPayload.media_url = uploadedMedia.url;
-                insertPayload.media_type = uploadedMedia.type || pending?.kind || null;
-                insertPayload.media_name = pending?.name || pending?.file?.name || null;
-                insertPayload.media_size_bytes = pending?.size || pending?.file?.size || null;
+                insertPayload.media_type =
+                    uploadedMedia.type || pending?.kind || null;
+                insertPayload.media_name =
+                    pending?.name || pending?.file?.name || null;
+                insertPayload.media_size_bytes =
+                    pending?.size || pending?.file?.size || null;
             }
 
             const { data, error } = await runMessageSelect((selectColumns) =>
@@ -1754,14 +1875,18 @@
 
             if (data) {
                 rememberMessageId(data.id);
-                const existing = state.messagesByConversation.get(conversationId) || [];
-                const alreadyExists = existing.some((msg) => msg.id === data.id);
+                const existing =
+                    state.messagesByConversation.get(conversationId) || [];
+                const alreadyExists = existing.some(
+                    (msg) => msg.id === data.id,
+                );
                 if (!alreadyExists) {
                     const next = [...existing, data];
                     state.messagesByConversation.set(conversationId, next);
                 }
 
-                const conversation = state.conversationsById.get(conversationId);
+                const conversation =
+                    state.conversationsById.get(conversationId);
                 if (conversation) {
                     conversation.lastMessage = data;
                     conversation.lastMessageAt = data.created_at;
@@ -1778,10 +1903,17 @@
             clearPendingAttachment();
         } catch (error) {
             // If offline or transient network error, queue the message for retry
-            const offlineError = !navigator.onLine || String(error?.message || "").toLowerCase().includes("network") || String(error?.message || "").toLowerCase().includes("offline");
+            const offlineError =
+                !navigator.onLine ||
+                String(error?.message || "")
+                    .toLowerCase()
+                    .includes("network") ||
+                String(error?.message || "")
+                    .toLowerCase()
+                    .includes("offline");
             if (offlineError) {
                 // create a temp id and show the message locally as pending
-                const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+                const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
                 const tempMsg = {
                     id: tempId,
                     conversation_id: conversationId,
@@ -1790,13 +1922,18 @@
                     media_url: uploadedMedia?.url || null,
                     media_type: uploadedMedia?.type || pending?.kind || null,
                     media_name: pending?.name || pending?.file?.name || null,
-                    media_size_bytes: pending?.size || pending?.file?.size || null,
+                    media_size_bytes:
+                        pending?.size || pending?.file?.size || null,
                     created_at: new Date().toISOString(),
                     pending: true,
                 };
 
-                const existing = state.messagesByConversation.get(conversationId) || [];
-                state.messagesByConversation.set(conversationId, [...existing, tempMsg]);
+                const existing =
+                    state.messagesByConversation.get(conversationId) || [];
+                state.messagesByConversation.set(conversationId, [
+                    ...existing,
+                    tempMsg,
+                ]);
                 sortAndReindexConversations();
                 updateUnreadUi();
                 renderChatMessages();
@@ -1867,7 +2004,7 @@
     function enqueueOutbox(payload, tempMessageId) {
         if (!payload || !payload.conversation_id) return;
         const entry = {
-            id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+            id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             payload,
             tempMessageId: tempMessageId || null,
             attempts: 0,
@@ -1876,7 +2013,9 @@
         };
         state.outbox.push(entry);
         // start processing immediately (will no-op if already running)
-        processOutbox().catch((e) => console.error("Outbox processing failed:", e));
+        processOutbox().catch((e) =>
+            console.error("Outbox processing failed:", e),
+        );
     }
 
     async function processOutbox() {
@@ -1891,14 +2030,22 @@
                     continue;
                 }
                 try {
-                    const { data, error } = await runMessageSelect((selectColumns) =>
-                        supabase.from("dm_messages").insert(entry.payload).select(selectColumns).single(),
+                    const { data, error } = await runMessageSelect(
+                        (selectColumns) =>
+                            supabase
+                                .from("dm_messages")
+                                .insert(entry.payload)
+                                .select(selectColumns)
+                                .single(),
                     );
                     if (error) throw error;
                     if (data) {
                         const convId = data.conversation_id;
-                        const msgs = state.messagesByConversation.get(convId) || [];
-                        const idx = msgs.findIndex((m) => m.id === entry.tempMessageId);
+                        const msgs =
+                            state.messagesByConversation.get(convId) || [];
+                        const idx = msgs.findIndex(
+                            (m) => m.id === entry.tempMessageId,
+                        );
                         if (idx !== -1) {
                             msgs[idx] = data;
                         } else {
@@ -1926,7 +2073,10 @@
                         continue;
                     }
                     // exponential backoff before next attempt
-                    const backoff = Math.min(30000, 1000 * Math.pow(2, entry.attempts));
+                    const backoff = Math.min(
+                        30000,
+                        1000 * Math.pow(2, entry.attempts),
+                    );
                     await new Promise((res) => setTimeout(res, backoff));
                     i++;
                 }
@@ -2073,17 +2223,24 @@
 
             if (normalizedMessage.sender_id !== getCurrentUserId()) {
                 const isActiveConversation =
-                    state.selectedConversationId === conversationId && isMessagesPageActive();
+                    state.selectedConversationId === conversationId &&
+                    isMessagesPageActive();
                 if (!isActiveConversation) {
-                    conversation.unreadCount = (conversation.unreadCount || 0) + 1;
+                    conversation.unreadCount =
+                        (conversation.unreadCount || 0) + 1;
                 }
             }
         }
 
         const existing = state.messagesByConversation.get(conversationId) || [];
-        const alreadyExists = existing.some((msg) => msg.id === normalizedMessage.id);
+        const alreadyExists = existing.some(
+            (msg) => msg.id === normalizedMessage.id,
+        );
         if (!alreadyExists) {
-            state.messagesByConversation.set(conversationId, [...existing, normalizedMessage]);
+            state.messagesByConversation.set(conversationId, [
+                ...existing,
+                normalizedMessage,
+            ]);
         }
 
         sortAndReindexConversations();
@@ -2145,9 +2302,14 @@
                 if (status === "SUBSCRIBED") {
                     state.realtimeReconnectAttempts = 0;
                     state.realtimeWarned = false;
-                    refreshConversations({ preserveSelection: true }).catch((error) => {
-                        console.error("DM initial realtime refresh error:", error);
-                    });
+                    refreshConversations({ preserveSelection: true }).catch(
+                        (error) => {
+                            console.error(
+                                "DM initial realtime refresh error:",
+                                error,
+                            );
+                        },
+                    );
                     // Try to flush any queued outbound messages now that realtime is available
                     try {
                         processOutbox();
@@ -2156,7 +2318,10 @@
                 }
 
                 // Warn once about realtime issues and schedule a reconnect with backoff
-                if ((status === "CHANNEL_ERROR" || status === "CLOSED") && !state.realtimeWarned) {
+                if (
+                    (status === "CHANNEL_ERROR" || status === "CLOSED") &&
+                    !state.realtimeWarned
+                ) {
                     state.realtimeWarned = true;
                     console.warn(
                         "DM realtime indisponible. Fallback polling actif (vérifiez la publication realtime des tables DM).",
@@ -2164,8 +2329,12 @@
                 }
 
                 if (status === "CHANNEL_ERROR" || status === "CLOSED") {
-                    state.realtimeReconnectAttempts = (state.realtimeReconnectAttempts || 0) + 1;
-                    const delay = Math.min(30000, 1000 * Math.pow(2, state.realtimeReconnectAttempts));
+                    state.realtimeReconnectAttempts =
+                        (state.realtimeReconnectAttempts || 0) + 1;
+                    const delay = Math.min(
+                        30000,
+                        1000 * Math.pow(2, state.realtimeReconnectAttempts),
+                    );
                     setTimeout(() => {
                         if (!isLoggedIn()) return;
                         try {
@@ -2246,13 +2415,17 @@
         if (typeof window.navigateTo === "function") {
             window.navigateTo(DM_PAGE_ID);
         } else {
-            document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
+            document
+                .querySelectorAll(".page")
+                .forEach((p) => p.classList.remove("active"));
             const target = getDmSection();
             if (target) target.classList.add("active");
             if (typeof window.syncFloatingCreateVisibility === "function") {
                 window.syncFloatingCreateVisibility(DM_PAGE_ID);
             } else {
-                const floatingCreate = document.getElementById("floating-create-container");
+                const floatingCreate = document.getElementById(
+                    "floating-create-container",
+                );
                 if (floatingCreate) floatingCreate.style.display = "none";
             }
         }
@@ -2427,7 +2600,10 @@
         window.addEventListener("online", () => {
             if (!isLoggedIn()) return;
             if (window.ToastManager?.info) {
-                ToastManager.info("Connexion rétablie", "Tentative d'envoi des messages en attente.");
+                ToastManager.info(
+                    "Connexion rétablie",
+                    "Tentative d'envoi des messages en attente.",
+                );
             }
             try {
                 subscribeRealtime();
@@ -2439,7 +2615,10 @@
 
         window.addEventListener("offline", () => {
             if (window.ToastManager?.info) {
-                ToastManager.info("Connexion perdue", "Les nouveaux messages seront mis en file d'attente.");
+                ToastManager.info(
+                    "Connexion perdue",
+                    "Les nouveaux messages seront mis en file d'attente.",
+                );
             }
         });
     } catch (e) {}
