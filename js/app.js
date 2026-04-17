@@ -1,11 +1,10 @@
-
 /* ========================================
    COUCHE LOGIQUE - Utilitaires données
    ======================================== */
 
 // Récupérer l'utilisateur
 function getUser(userId) {
-    return mockUsers.find(u => u.userId === userId);
+    return mockUsers.find((u) => u.userId === userId);
 }
 
 /* ========================================
@@ -22,13 +21,13 @@ function isFollowing(fromUserId, toUserId) {
 function followUser(fromUserId, toUserId) {
     const userFrom = getUser(fromUserId);
     const userTo = getUser(toUserId);
-    
+
     if (!userFrom || !userTo) return;
-    
+
     if (!userFrom.following.includes(toUserId)) {
         userFrom.following.push(toUserId);
     }
-    
+
     if (!userTo.followers.includes(fromUserId)) {
         userTo.followers.push(fromUserId);
     }
@@ -38,24 +37,15 @@ function followUser(fromUserId, toUserId) {
 function unfollowUser(fromUserId, toUserId) {
     const userFrom = getUser(fromUserId);
     const userTo = getUser(toUserId);
-    
+
     if (!userFrom || !userTo) return;
-    
-    userFrom.following = userFrom.following.filter(id => id !== toUserId);
-    userTo.followers = userTo.followers.filter(id => id !== fromUserId);
+
+    userFrom.following = userFrom.following.filter((id) => id !== toUserId);
+    userTo.followers = userTo.followers.filter((id) => id !== fromUserId);
 }
 
-// Compter les followers
-function getFollowerCount(userId) {
-    const user = getUser(userId);
-    return user ? user.followers.length : 0;
-}
-
-// Compter les following
-function getFollowingCount(userId) {
-    const user = getUser(userId);
-    return user ? user.following.length : 0;
-}
+// NOTE: getFollowerCount() et getFollowingCount() sont maintenant définies dans supabase-config.js
+// Les anciennes versions mockées ont été supprimées pour éviter les conflits
 
 /* ========================================
    SYSTÈME DE MODIFICATION DU PROFIL
@@ -65,14 +55,14 @@ function getFollowingCount(userId) {
 function initUserEditData(userId) {
     const user = getUser(userId);
     if (!user) return;
-    
+
     userEditData[userId] = {
         name: user.name,
         title: user.title,
-        bio: user.bio || '',
+        bio: user.bio || "",
         avatar: user.avatar,
         banner: user.banner,
-        socialLinks: JSON.parse(JSON.stringify(user.socialLinks || {}))
+        socialLinks: JSON.parse(JSON.stringify(user.socialLinks || {})),
     };
 }
 
@@ -80,19 +70,21 @@ function initUserEditData(userId) {
 function saveUserChanges(userId) {
     const user = getUser(userId);
     const editData = userEditData[userId];
-    
+
     if (!user || !editData) return false;
-    
+
     // Validation: nom unique
-    const nameExists = mockUsers.some(u => 
-        u.userId !== userId && u.name.toLowerCase() === editData.name.toLowerCase()
+    const nameExists = mockUsers.some(
+        (u) =>
+            u.userId !== userId &&
+            u.name.toLowerCase() === editData.name.toLowerCase(),
     );
-    
+
     if (nameExists) {
-        alert('Ce nom d\'utilisateur est déjà pris.');
+        alert("Ce nom d'utilisateur est déjà pris.");
         return false;
     }
-    
+
     // Appliquer les changements
     user.name = editData.name;
     user.title = editData.title;
@@ -100,14 +92,14 @@ function saveUserChanges(userId) {
     user.avatar = editData.avatar;
     user.banner = editData.banner;
     user.socialLinks = editData.socialLinks;
-    
+
     return true;
 }
 
 // Récupérer le contenu d'un utilisateur, trié par jour décroissant
 function getUserContent(userId) {
     return mockContent
-        .filter(c => c.userId === userId)
+        .filter((c) => c.userId === userId)
         .sort((a, b) => b.dayNumber - a.dayNumber);
 }
 
@@ -120,8 +112,8 @@ function getLatestContent(userId) {
 // Récupérer l'état dominant (succès / failure / pause)
 function getDominantState(userId) {
     const contents = getUserContent(userId);
-    if (contents.length === 0) return 'empty';
-    
+    if (contents.length === 0) return "empty";
+
     const lastContent = contents[0];
     return lastContent.state;
 }
@@ -130,14 +122,14 @@ function getDominantState(userId) {
 function getProfileTimeline(userId) {
     const contents = getUserContent(userId);
     const maxDay = contents.length > 0 ? contents[0].dayNumber : 0;
-    
+
     const timeline = [];
     for (let day = maxDay; day >= 1; day--) {
-        const dayContent = contents.find(c => c.dayNumber === day);
+        const dayContent = contents.find((c) => c.dayNumber === day);
         timeline.push({
             dayNumber: day,
             content: dayContent || null,
-            state: dayContent ? dayContent.state : 'empty'
+            state: dayContent ? dayContent.state : "empty",
         });
     }
     return timeline;
@@ -149,23 +141,32 @@ function getProfileTimeline(userId) {
 
 // SVG inline pour les badges
 const badgeSVGs = {
-    success: '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>',
-    failure: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 8l8 8M16 8l-8 8"/></svg>',
+    success:
+        '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>',
+    failure:
+        '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 8l8 8M16 8l-8 8"/></svg>',
     pause: '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="3" height="16"/><rect x="15" y="4" width="3" height="16"/></svg>',
     empty: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>',
-    
-    consistency7: '<svg viewBox="0 0 24 24"><text x="12" y="16" text-anchor="middle" font-size="18" font-weight="bold">7</text></svg>',
-    consistency30: '<svg viewBox="0 0 24 24"><path d="M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2m0 2c-4.418 0-8 3.582-8 8s3.582 8 8 8 8-3.582 8-8-3.582-8-8-8z"/></svg>',
-    consistency100: '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>',
-    consistency365: '<svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>',
-    
+
+    consistency7:
+        '<svg viewBox="0 0 24 24"><text x="12" y="16" text-anchor="middle" font-size="18" font-weight="bold">7</text></svg>',
+    consistency30:
+        '<svg viewBox="0 0 24 24"><path d="M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2m0 2c-4.418 0-8 3.582-8 8s3.582 8 8 8 8-3.582 8-8-3.582-8-8-8z"/></svg>',
+    consistency100:
+        '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>',
+    consistency365:
+        '<svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>',
+
     solo: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M12 14c-4 0-6 2-6 2v4h12v-4s-2-2-6-2z"/></svg>',
     team: '<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M8 11c-2 0-3 1-3 1v3h10v-3s-1-1-3-1z"/><path d="M16 11c-2 0-3 1-3 1v3h6v-3s-1-1-3-1z"/></svg>',
-    enterprise: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="3" y1="8" x2="21" y2="8"/><line x1="9" y1="3" x2="9" y2="21"/></svg>',
-    creative: '<svg viewBox="0 0 24 24"><circle cx="15.5" cy="9.5" r="1.5"/><path d="M3 17.25V21h4v-3.75L3 17.25z"/><path d="M15 8.75h.01M21 19V9c0-1.1-.9-2-2-2h-4l-4-5-4 5H5c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2z"/></svg>',
+    enterprise:
+        '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="3" y1="8" x2="21" y2="8"/><line x1="9" y1="3" x2="9" y2="21"/></svg>',
+    creative:
+        '<svg viewBox="0 0 24 24"><circle cx="15.5" cy="9.5" r="1.5"/><path d="M3 17.25V21h4v-3.75L3 17.25z"/><path d="M15 8.75h.01M21 19V9c0-1.1-.9-2-2-2h-4l-4-5-4 5H5c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2z"/></svg>',
     tech: '<svg viewBox="0 0 24 24"><path d="M9 5H7.12A2.12 2.12 0 0 0 5 7.12v9.76A2.12 2.12 0 0 0 7.12 19h9.76A2.12 2.12 0 0 0 19 16.88V15m-6-9h6V5h-6v1z"/><path d="M9 9h6v6H9z"/></svg>',
-    
-    transparent: '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>'
+
+    transparent:
+        '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>',
 };
 
 // Calculer la constance (jours consécutifs)
@@ -222,10 +223,10 @@ function calculateConsistency(userId) {
 
     const isFresh = (limitDays) => daysSinceLast <= limitDays;
 
-    if (streak >= 365 && isFresh(7)) return 'consistency365';
-    if (streak >= 100 && isFresh(7)) return 'consistency100';
-    if (streak >= 30 && isFresh(30)) return 'consistency30';
-    if (streak >= 7 && isFresh(7)) return 'consistency7';
+    if (streak >= 365 && isFresh(7)) return "consistency365";
+    if (streak >= 100 && isFresh(7)) return "consistency100";
+    if (streak >= 30 && isFresh(30)) return "consistency30";
+    if (streak >= 7 && isFresh(7)) return "consistency7";
     return null;
 }
 
@@ -233,53 +234,88 @@ function calculateConsistency(userId) {
 function determineTrajectoryType(userId) {
     const user = getUser(userId);
     const contents = getUserContent(userId);
-    
+
     if (contents.length === 0) return null;
 
-    const userTitle = (user.title || '').toLowerCase();
-    const userName = (user.name || '').toLowerCase();
-    const userProjectIds = [...new Set(contents.map(c => c.projectId))].join('');
-    const textContent = (contents.map(c => (c.title + ' ' + c.description).toLowerCase()).join(' ') + ' ' + userTitle).toLowerCase();
-    
+    const userTitle = (user.title || "").toLowerCase();
+    const userName = (user.name || "").toLowerCase();
+    const userProjectIds = [...new Set(contents.map((c) => c.projectId))].join(
+        "",
+    );
+    const textContent = (
+        contents
+            .map((c) => (c.title + " " + c.description).toLowerCase())
+            .join(" ") +
+        " " +
+        userTitle
+    ).toLowerCase();
+
     // Comptes officiels / équipes / entreprises
     if (
-        userTitle.includes('official') ||
-        userTitle.includes('officiel') ||
-        userTitle.includes('team') ||
-        userTitle.includes('équipe') ||
-        userTitle.includes('owner') ||
-        userName === 'rize' ||
-        userName.includes('rize team')
+        userTitle.includes("official") ||
+        userTitle.includes("officiel") ||
+        userTitle.includes("team") ||
+        userTitle.includes("équipe") ||
+        userTitle.includes("owner") ||
+        userName === "rize" ||
+        userName.includes("rize team")
     ) {
-        return 'enterprise';
+        return "enterprise";
     }
-    
+
     // Check pour type de trajectoire
-    if (textContent.includes('unreal') || userTitle.includes('designer') || textContent.includes('motion')) return 'creative';
-    if (textContent.includes('boss') || textContent.includes('game') || textContent.includes('indie')) return 'creative';
-    if (textContent.includes('rize') && userTitle.includes('ceo')) return 'enterprise';
-    if (textContent.includes('refonte') || textContent.includes('ui') || textContent.includes('mobile')) return 'tech';
-    if (textContent.includes('architecture') || textContent.includes('api') || textContent.includes('database')) return 'tech';
-    
-    return 'solo';
+    if (
+        textContent.includes("unreal") ||
+        userTitle.includes("designer") ||
+        textContent.includes("motion")
+    )
+        return "creative";
+    if (
+        textContent.includes("boss") ||
+        textContent.includes("game") ||
+        textContent.includes("indie")
+    )
+        return "creative";
+    if (textContent.includes("rize") && userTitle.includes("ceo"))
+        return "enterprise";
+    if (
+        textContent.includes("refonte") ||
+        textContent.includes("ui") ||
+        textContent.includes("mobile")
+    )
+        return "tech";
+    if (
+        textContent.includes("architecture") ||
+        textContent.includes("api") ||
+        textContent.includes("database")
+    )
+        return "tech";
+
+    return "solo";
 }
 
 // Évaluer la transparence (échecs documentés)
 function evaluateTransparency(userId) {
     const contents = getUserContent(userId);
     if (contents.length === 0) return false;
-    
+
     // Transparence = au moins 30% d'échecs documentés
-    const failureCount = contents.filter(c => c.state === 'failure').length;
+    const failureCount = contents.filter((c) => c.state === "failure").length;
     const ratio = failureCount / contents.length;
-    
+
     return ratio >= 0.3;
 }
 
 // Générer le badge SVG avec étiquette
 function generateBadge(badgeType, label) {
     // For trajectory-type badges use existing SVG files from ./icons as icon-only badges
-    const iconTypes = new Set(['team','enterprise','creative','tech','solo']);
+    const iconTypes = new Set([
+        "team",
+        "enterprise",
+        "creative",
+        "tech",
+        "solo",
+    ]);
     if (iconTypes.has(badgeType)) {
         const iconPath = `./icons/${badgeType}.svg`;
         return `
@@ -290,16 +326,16 @@ function generateBadge(badgeType, label) {
     }
 
     const svg = badgeSVGs[badgeType];
-    if (!svg) return '';
+    if (!svg) return "";
 
-    let cssClass = 'badge';
-    if (badgeType.startsWith('consistency')) cssClass += '';
-    else if (badgeType === 'success') cssClass += ' badge-success badge-filled';
-    else if (badgeType === 'failure') cssClass += ' badge-failure badge-filled';
-    else if (badgeType === 'pause') cssClass += ' badge-pause badge-filled';
-    else if (badgeType === 'empty') cssClass += '';
-    else if (badgeType === 'transparent') cssClass += ' badge-success';
-    else cssClass += '';
+    let cssClass = "badge";
+    if (badgeType.startsWith("consistency")) cssClass += "";
+    else if (badgeType === "success") cssClass += " badge-success badge-filled";
+    else if (badgeType === "failure") cssClass += " badge-failure badge-filled";
+    else if (badgeType === "pause") cssClass += " badge-pause badge-filled";
+    else if (badgeType === "empty") cssClass += "";
+    else if (badgeType === "transparent") cssClass += " badge-success";
+    else cssClass += "";
 
     return `
         <div class="${cssClass}" title="${label}">
@@ -313,35 +349,35 @@ function generateBadge(badgeType, label) {
 function getUserBadges(userId) {
     const badges = [];
     const user = getUser(userId);
-    
+
     // Badge type de trajectoire
     const trajectoryType = determineTrajectoryType(userId);
-    if (trajectoryType && trajectoryType !== 'solo') {
+    if (trajectoryType && trajectoryType !== "solo") {
         const labels = {
-            team: 'Collectif',
-            enterprise: 'Entreprise',
-            creative: 'Créatif',
-            tech: 'Tech'
+            team: "Collectif",
+            enterprise: "Entreprise",
+            creative: "Créatif",
+            tech: "Tech",
         };
         badges.push({ type: trajectoryType, label: labels[trajectoryType] });
     }
 
     // Badge constance
     const consistency = calculateConsistency(userId);
-    const isPersonalAccount = !trajectoryType || trajectoryType === 'solo'; // badges de constance réservés aux comptes perso
+    const isPersonalAccount = !trajectoryType || trajectoryType === "solo"; // badges de constance réservés aux comptes perso
     if (consistency && isPersonalAccount) {
         const labels = {
-            consistency7: '7j consécutifs (hebdo)',
-            consistency30: '30j consécutifs (1 mois)',
-            consistency100: '100j consécutifs',
-            consistency365: '365j consécutifs'
+            consistency7: "7j consécutifs (hebdo)",
+            consistency30: "30j consécutifs (1 mois)",
+            consistency100: "100j consécutifs",
+            consistency365: "365j consécutifs",
         };
         badges.push({ type: consistency, label: labels[consistency] });
     }
 
     // Badge transparence
     if (evaluateTransparency(userId)) {
-        badges.push({ type: 'transparent', label: 'Transparent' });
+        badges.push({ type: "transparent", label: "Transparent" });
     }
 
     return badges;
@@ -350,26 +386,26 @@ function getUserBadges(userId) {
 // Récupérer les badges pour un contenu spécifique
 function getContentBadges(content) {
     const badges = [];
-    
+
     const stateLabels = {
-        success: 'Victoire',
-        failure: 'Bloqué',
-        pause: 'Pause',
-        empty: 'Vide'
+        success: "Victoire",
+        failure: "Bloqué",
+        pause: "Pause",
+        empty: "Vide",
     };
 
     badges.push({ type: content.state, label: stateLabels[content.state] });
-    
+
     return badges;
 }
 
 // Générer HTML pour afficher les badges
 function renderBadges(badgesList) {
-    if (badgesList.length === 0) return '';
-    
+    if (badgesList.length === 0) return "";
+
     return `
         <div class="badge-container">
-            ${badgesList.map(b => generateBadge(b.type, b.label)).join('')}
+            ${badgesList.map((b) => generateBadge(b.type, b.label)).join("")}
         </div>
     `;
 }
@@ -378,34 +414,34 @@ function renderBadges(badgesList) {
 function renderProfileSocialLinks(userId) {
     const user = getUser(userId);
     if (!user.socialLinks || Object.keys(user.socialLinks).length === 0) {
-        return '';
+        return "";
     }
 
     const platformLabels = {
-        email: 'Email',
-        github: 'GitHub',
-        instagram: 'Instagram',
-        snapchat: 'Snapchat',
-        youtube: 'YouTube',
-        twitter: 'X',
-        tiktok: 'TikTok',
-        linkedin: 'LinkedIn',
-        twitch: 'Twitch',
-        spotify: 'Spotify',
-        discord: 'Discord',
-        reddit: 'Reddit',
-        pinterest: 'Pinterest',
-        facebook: 'Facebook',
-        site: 'Site'
+        email: "Email",
+        github: "GitHub",
+        instagram: "Instagram",
+        snapchat: "Snapchat",
+        youtube: "YouTube",
+        twitter: "X",
+        tiktok: "TikTok",
+        linkedin: "LinkedIn",
+        twitch: "Twitch",
+        spotify: "Spotify",
+        discord: "Discord",
+        reddit: "Reddit",
+        pinterest: "Pinterest",
+        facebook: "Facebook",
+        site: "Site",
     };
 
     const socialHtml = Object.entries(user.socialLinks)
         .filter(([_, url]) => url) // Filtrer les liens vides
         .map(([platform, url]) => {
             const label = platformLabels[platform] || platform;
-            if (platform === 'email') {
+            if (platform === "email") {
                 const email = String(url).trim();
-                const safeEmail = email.replace(/"/g, '&quot;');
+                const safeEmail = email.replace(/"/g, "&quot;");
                 return `
                     <button type="button"
                         class="social-badge"
@@ -425,51 +461,58 @@ function renderProfileSocialLinks(userId) {
                 </a>
             `;
         })
-        .join('');
+        .join("");
 
-    return socialHtml ? `<div class="profile-social-badges">${socialHtml}</div>` : '';
+    return socialHtml
+        ? `<div class="profile-social-badges">${socialHtml}</div>`
+        : "";
 }
 
 function handleEmailBadgeClick(email, el) {
     const badge = el;
     if (!badge) return;
-    const span = badge.querySelector('.email-reveal');
+    const span = badge.querySelector(".email-reveal");
     if (!span) return;
 
-    const isVisible = badge.dataset.emailVisible === '1';
+    const isVisible = badge.dataset.emailVisible === "1";
     if (isVisible) {
-        span.style.display = 'none';
-        badge.dataset.emailVisible = '0';
+        span.style.display = "none";
+        badge.dataset.emailVisible = "0";
         return;
     }
 
     if (span.textContent !== email) span.textContent = email;
-    span.style.display = 'inline';
-    badge.dataset.emailVisible = '1';
+    span.style.display = "inline";
+    badge.dataset.emailVisible = "1";
 
     const doToast = (msg) => {
-        if (window.ToastManager && typeof window.ToastManager.success === 'function') {
-            window.ToastManager.success('Email', msg);
+        if (
+            window.ToastManager &&
+            typeof window.ToastManager.success === "function"
+        ) {
+            window.ToastManager.success("Email", msg);
         }
     };
 
     if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(email).then(() => {
-            doToast('Copié dans le presse-papiers');
-        }).catch(() => {});
+        navigator.clipboard
+            .writeText(email)
+            .then(() => {
+                doToast("Copié dans le presse-papiers");
+            })
+            .catch(() => {});
     } else {
-        const textarea = document.createElement('textarea');
+        const textarea = document.createElement("textarea");
         textarea.value = email;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'absolute';
-        textarea.style.left = '-9999px';
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
         document.body.appendChild(textarea);
         textarea.select();
         try {
-            document.execCommand('copy');
-            doToast('Copié dans le presse-papiers');
-        } catch (e) {
-        }
+            document.execCommand("copy");
+            doToast("Copié dans le presse-papiers");
+        } catch (e) {}
         document.body.removeChild(textarea);
     }
 }
@@ -481,48 +524,74 @@ function handleEmailBadgeClick(email, el) {
 // Générer l'interface de réglages avec accordéon
 function renderSettingsModal(userId) {
     const user = getUser(userId);
-    if (!user) return '';
-    
+    if (!user) return "";
+
     const editData = userEditData[userId];
     if (!editData) initUserEditData(userId);
-    
+
     const data = userEditData[userId];
     const socialData = [
-        { platform: 'email', label: 'Email', icon: './icons/email.svg' },
-        { platform: 'github', label: 'GitHub', icon: './icons/github.svg' },
-        { platform: 'instagram', label: 'Instagram', icon: './icons/instagram.svg' },
-        { platform: 'snapchat', label: 'Snapchat', icon: './icons/snapchat.svg' },
-        { platform: 'twitter', label: 'X (Twitter)', icon: './icons/twitter.svg' },
-        { platform: 'youtube', label: 'YouTube', icon: './icons/youtube.svg' },
-        { platform: 'twitch', label: 'Twitch', icon: './icons/twitch.svg' },
-        { platform: 'spotify', label: 'Spotify', icon: './icons/spotify.svg' },
-        { platform: 'tiktok', label: 'TikTok', icon: './icons/tiktok.svg' },
-        { platform: 'discord', label: 'Discord', icon: './icons/discord.svg' },
-        { platform: 'reddit', label: 'Reddit', icon: './icons/reddit.svg' },
-        { platform: 'pinterest', label: 'Pinterest', icon: './icons/pinterest.svg' },
-        { platform: 'linkedin', label: 'LinkedIn', icon: './icons/linkedin.svg' },
-        { platform: 'facebook', label: 'Facebook', icon: './icons/facebook.svg' },
-        { platform: 'site', label: 'Site personnel', icon: './icons/link.svg' }
+        { platform: "email", label: "Email", icon: "./icons/email.svg" },
+        { platform: "github", label: "GitHub", icon: "./icons/github.svg" },
+        {
+            platform: "instagram",
+            label: "Instagram",
+            icon: "./icons/instagram.svg",
+        },
+        {
+            platform: "snapchat",
+            label: "Snapchat",
+            icon: "./icons/snapchat.svg",
+        },
+        {
+            platform: "twitter",
+            label: "X (Twitter)",
+            icon: "./icons/twitter.svg",
+        },
+        { platform: "youtube", label: "YouTube", icon: "./icons/youtube.svg" },
+        { platform: "twitch", label: "Twitch", icon: "./icons/twitch.svg" },
+        { platform: "spotify", label: "Spotify", icon: "./icons/spotify.svg" },
+        { platform: "tiktok", label: "TikTok", icon: "./icons/tiktok.svg" },
+        { platform: "discord", label: "Discord", icon: "./icons/discord.svg" },
+        { platform: "reddit", label: "Reddit", icon: "./icons/reddit.svg" },
+        {
+            platform: "pinterest",
+            label: "Pinterest",
+            icon: "./icons/pinterest.svg",
+        },
+        {
+            platform: "linkedin",
+            label: "LinkedIn",
+            icon: "./icons/linkedin.svg",
+        },
+        {
+            platform: "facebook",
+            label: "Facebook",
+            icon: "./icons/facebook.svg",
+        },
+        { platform: "site", label: "Site personnel", icon: "./icons/link.svg" },
     ];
 
-    let socialLinksHtml = socialData.map(social => {
-        const value = data.socialLinks[social.platform] || '';
-        const isEmail = social.platform === 'email';
-        return `
+    let socialLinksHtml = socialData
+        .map((social) => {
+            const value = data.socialLinks[social.platform] || "";
+            const isEmail = social.platform === "email";
+            return `
             <div class="social-link-item">
                 <img src="${social.icon}" alt="${social.label}" style="opacity: 0.7;">
                 <input 
-                    type="${isEmail ? 'email' : 'url'}" 
+                    type="${isEmail ? "email" : "url"}" 
                     class="form-input"
-                    placeholder="${isEmail ? 'email@exemple.com' : (social.platform === 'site' ? 'https://example.com' : `${social.label.toLowerCase()}.com/username`)}"
+                    placeholder="${isEmail ? "email@exemple.com" : social.platform === "site" ? "https://example.com" : `${social.label.toLowerCase()}.com/username`}"
                     value="${value}"
                     onchange="userEditData['${userId}'].socialLinks['${social.platform}'] = this.value"
                 >
             </div>
         `;
-    }).join('');
+        })
+        .join("");
 
-    const themeButtonText = isLightMode() ? '🌙 Mode Sombre' : '☀️ Mode Clair';
+    const themeButtonText = isLightMode() ? "🌙 Mode Sombre" : "☀️ Mode Clair";
 
     return `
         <div class="settings-header">
@@ -703,20 +772,20 @@ function renderSettingsModal(userId) {
 // Fonction pour basculer l'accordéon
 function toggleAccordion(header) {
     const section = header.parentElement;
-    const content = section.querySelector('.accordion-content');
-    const arrow = header.querySelector('.accordion-arrow');
-    const isOpen = section.classList.contains('active');
-    
+    const content = section.querySelector(".accordion-content");
+    const arrow = header.querySelector(".accordion-arrow");
+    const isOpen = section.classList.contains("active");
+
     if (isOpen) {
         // Fermer la section
-        content.style.maxHeight = '0';
-        content.style.opacity = '0';
-        section.classList.remove('active');
+        content.style.maxHeight = "0";
+        content.style.opacity = "0";
+        section.classList.remove("active");
     } else {
         // Ouvrir la section
-        content.style.maxHeight = content.scrollHeight + 'px';
-        content.style.opacity = '1';
-        section.classList.add('active');
+        content.style.maxHeight = content.scrollHeight + "px";
+        content.style.opacity = "1";
+        section.classList.add("active");
     }
 }
 
@@ -724,7 +793,7 @@ function toggleAccordion(header) {
 function handleImagePreview(input, previewId) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function (e) {
             const preview = document.getElementById(previewId);
             if (preview) {
                 preview.src = e.target.result;
@@ -736,7 +805,7 @@ function handleImagePreview(input, previewId) {
 
 // Mettre à jour le compteur de caractères
 function updateCharCount(textarea) {
-    const display = document.getElementById('char-count-display');
+    const display = document.getElementById("char-count-display");
     if (display) {
         display.textContent = textarea.value.length;
     }
@@ -753,9 +822,9 @@ function handleSettingsSave(userId) {
 }
 
 function ensureSettingsModal() {
-    if (document.getElementById('settings-modal')) return;
-    const modal = document.createElement('div');
-    modal.id = 'settings-modal';
+    if (document.getElementById("settings-modal")) return;
+    const modal = document.createElement("div");
+    modal.id = "settings-modal";
     modal.innerHTML = '<div class="settings-container"></div>';
     document.body.appendChild(modal);
 }
@@ -764,11 +833,11 @@ function ensureSettingsModal() {
 function openSettings(userId) {
     initUserEditData(userId);
     ensureSettingsModal();
-    const modal = document.getElementById('settings-modal');
-    const container = modal.querySelector('.settings-container');
+    const modal = document.getElementById("settings-modal");
+    const container = modal.querySelector(".settings-container");
     container.innerHTML = renderSettingsModal(userId);
-    modal.classList.add('active');
-    document.body.style.overflow = 'hidden';
+    modal.classList.add("active");
+    document.body.style.overflow = "hidden";
     if (window.refreshLanguageControl) {
         window.refreshLanguageControl();
     }
@@ -776,9 +845,9 @@ function openSettings(userId) {
 
 // Fermer la modale de réglages
 function closeSettings() {
-    const modal = document.getElementById('settings-modal');
-    modal.classList.remove('active');
-    document.body.style.overflow = 'auto';
+    const modal = document.getElementById("settings-modal");
+    modal.classList.remove("active");
+    document.body.style.overflow = "auto";
 }
 
 /* ========================================
@@ -790,29 +859,32 @@ function renderUserCard(userId) {
     const user = getUser(userId);
     const latestContent = getLatestContent(userId);
     const dominantState = getDominantState(userId);
-    
-    if (!latestContent) return '';
-    
-    const stateColor = dominantState === 'success' ? '#10b981' 
-                     : dominantState === 'failure' ? '#ef4444'
-                     : '#6366f1';
+
+    if (!latestContent) return "";
+
+    const stateColor =
+        dominantState === "success"
+            ? "#10b981"
+            : dominantState === "failure"
+              ? "#ef4444"
+              : "#6366f1";
 
     const userBadges = getUserBadges(userId);
     const badgesHtml = renderBadges(userBadges);
 
     // media preview: video or image when available
-    let mediaHtml = '';
+    let mediaHtml = "";
     if (latestContent && latestContent.mediaUrl) {
-        if (latestContent.type === 'video') {
+        if (latestContent.type === "video") {
             mediaHtml = `
                 <div class="card-media-wrap">
                     <video id="video-${userId}" class="card-media" src="${latestContent.mediaUrl}" muted playsinline autoplay preload="metadata" tabindex="-1" data-user-id="${userId}" disablePictureInPicture></video>
                 </div>
             `;
-        } else if (latestContent.type === 'image') {
+        } else if (latestContent.type === "image") {
             mediaHtml = `
                 <div class="card-media-wrap">
-                    <img class="card-media" src="${latestContent.mediaUrl}" alt="${latestContent.title || 'Preview'}">
+                    <img class="card-media" src="${latestContent.mediaUrl}" alt="${latestContent.title || "Preview"}">
                 </div>
             `;
         }
@@ -830,46 +902,49 @@ function renderUserCard(userId) {
             </div>
             <div class="card-status" style="border-color: ${stateColor}20; color: ${stateColor};">
                 <span class="status-day">J-${latestContent ? latestContent.dayNumber : 0}</span>
-                ${latestContent ? latestContent.title : ''}
+                ${latestContent ? latestContent.title : ""}
             </div>
             ${badgesHtml}
         </div>
     `;
-
 }
 
 // Construire les posts immersifs
 function renderImmersiveContent(userId) {
     const contents = getUserContent(userId);
-    
-    return contents.map(content => {
-        const stateLabel = content.state === 'success' ? '#Victoire'
-                         : content.state === 'failure' ? '#Bloqué'
-                         : '#Pause';
-        
-        const contentBadges = getContentBadges(content);
-        const badgesHtml = renderBadges(contentBadges);
-        
-        let mediaHtml = '';
-        if (content.mediaUrl) {
-            if (content.type === 'video') {
-                mediaHtml = `
+
+    return contents
+        .map((content) => {
+            const stateLabel =
+                content.state === "success"
+                    ? "#Victoire"
+                    : content.state === "failure"
+                      ? "#Bloqué"
+                      : "#Pause";
+
+            const contentBadges = getContentBadges(content);
+            const badgesHtml = renderBadges(contentBadges);
+
+            let mediaHtml = "";
+            if (content.mediaUrl) {
+                if (content.type === "video") {
+                    mediaHtml = `
                     <div class="immersive-video-wrap">
                         <video class="immersive-video" src="${content.mediaUrl}" muted autoplay loop playsinline preload="metadata"></video>
                     </div>
                 `;
+                } else {
+                    mediaHtml = `<img class="immersive-media" src="${content.mediaUrl}" alt="${content.title || "Media"}">`;
+                }
             } else {
-                mediaHtml = `<img class="immersive-media" src="${content.mediaUrl}" alt="${content.title || 'Media'}">`;
-            }
-        } else {
-            mediaHtml = `
+                mediaHtml = `
                 <div class="immersive-placeholder">
                     Jour ${content.dayNumber}
                 </div>
             `;
-        }
+            }
 
-        return `
+            return `
             <div class="immersive-post">
                 <div class="post-content-wrap">
                     ${mediaHtml}
@@ -885,97 +960,117 @@ function renderImmersiveContent(userId) {
                 </div>
             </div>
         `;
-    }).join('');
+        })
+        .join("");
 }
 
 // Construire la documentation d'un projet (optionnelle)
 function renderProjectDoc(project) {
     const doc = project.doc || {};
-    const values = Object.values(doc).filter(v => v && String(v).trim().length > 0);
-    if (values.length === 0) return '';
+    const values = Object.values(doc).filter(
+        (v) => v && String(v).trim().length > 0,
+    );
+    if (values.length === 0) return "";
 
-    const tag = (label, value) => value ? `<span class="project-tag"><strong>${label}:</strong> ${value}</span>` : '';
-    const section = (label, value) => value ? `
+    const tag = (label, value) =>
+        value
+            ? `<span class="project-tag"><strong>${label}:</strong> ${value}</span>`
+            : "";
+    const section = (label, value) =>
+        value
+            ? `
         <div class="project-doc-section">
             <h5>${label}</h5>
             <p>${value}</p>
         </div>
-    ` : '';
+    `
+            : "";
 
     const links = [
-        doc.demoUrl ? `<a class="project-link" href="${doc.demoUrl}" target="_blank" rel="noopener">Démo</a>` : '',
-        doc.repoUrl ? `<a class="project-link" href="${doc.repoUrl}" target="_blank" rel="noopener">Repo</a>` : ''
-    ].filter(Boolean).join('');
+        doc.demoUrl
+            ? `<a class="project-link" href="${doc.demoUrl}" target="_blank" rel="noopener">Démo</a>`
+            : "",
+        doc.repoUrl
+            ? `<a class="project-link" href="${doc.repoUrl}" target="_blank" rel="noopener">Repo</a>`
+            : "",
+    ]
+        .filter(Boolean)
+        .join("");
 
     return `
         <details class="project-doc">
             <summary>Documentation</summary>
             <div class="project-doc-body">
                 <div class="project-tags">
-                    ${tag('Rôle', doc.role)}
-                    ${tag('Durée', doc.duration)}
-                    ${tag('Stack', doc.stack)}
-                    ${tag('Statut', doc.status)}
+                    ${tag("Rôle", doc.role)}
+                    ${tag("Durée", doc.duration)}
+                    ${tag("Stack", doc.stack)}
+                    ${tag("Statut", doc.status)}
                 </div>
-                ${links ? `<div class="project-links">${links}</div>` : ''}
-                ${section('Problème / Opportunité', doc.problem)}
-                ${section('Solution', doc.solution)}
-                ${section('Choix techniques', doc.decisions)}
-                ${section('Résultats / Preuves', doc.results)}
-                ${section('Apprentissages', doc.learnings)}
-                ${section('Prochaine étape', doc.nextSteps)}
+                ${links ? `<div class="project-links">${links}</div>` : ""}
+                ${section("Problème / Opportunité", doc.problem)}
+                ${section("Solution", doc.solution)}
+                ${section("Choix techniques", doc.decisions)}
+                ${section("Résultats / Preuves", doc.results)}
+                ${section("Apprentissages", doc.learnings)}
+                ${section("Prochaine étape", doc.nextSteps)}
             </div>
         </details>
     `;
 }
 
 // Construire la timeline du profil
-function renderProfileTimeline(userId, viewerId = 'user-1') {
+function renderProfileTimeline(userId, viewerId = "user-1") {
     const user = getUser(userId);
     const viewer = getUser(viewerId);
     const timeline = getProfileTimeline(userId);
     const userBadges = getUserBadges(userId);
     const userBadgesHtml = renderBadges(userBadges);
-    
+
     // Déterminer si c'est le profil de l'utilisateur courant
     const isOwnProfile = userId === viewerId;
     const isFollowingThisUser = !isOwnProfile && isFollowing(viewerId, userId);
-    
-            // Bouton Réglages (visible seulement pour le propriétaire) - rendu comme un badge
-            const settingsButtonHtml = isOwnProfile ? `
+
+    // Bouton Réglages (visible seulement pour le propriétaire) - rendu comme un badge
+    const settingsButtonHtml = isOwnProfile
+        ? `
                 <button class="badge settings-badge" onclick="openSettings('${userId}')" title="Réglages">
                     <div class="badge-icon"><img src="./icons/reglages.svg" alt="Réglages" style="width:100%;height:100%;"></div>
                     <span>Réglages</span>
                 </button>
-            ` : '';
-    
+            `
+        : "";
+
     // Bouton Follow (visible seulement pour les autres profils)
-    const followButtonHtml = !isOwnProfile ? `
+    const followButtonHtml = !isOwnProfile
+        ? `
         <button 
-            class="btn-follow ${isFollowingThisUser ? 'unfollow' : ''}"
+            class="btn-follow ${isFollowingThisUser ? "unfollow" : ""}"
             onclick="toggleFollow('${viewerId}', '${userId}')"
             id="follow-btn-${userId}"
             style="background: transparent; border: none; padding: 0; width: auto;"
         >
-            <img src="${isFollowingThisUser ? 'icons/subscribed.svg' : 'icons/subscribe.svg'}" class="btn-icon" style="width: 24px; height: 24px;">
+            <img src="${isFollowingThisUser ? "icons/subscribed.svg" : "icons/subscribe.svg"}" class="btn-icon" style="width: 24px; height: 24px;">
         </button>
-    ` : '';
-    
+    `
+        : "";
+
     // Stats de followers
     const followerCount = getFollowerCount(userId);
     const followingCount = getFollowingCount(userId);
-    
+
     // Générer les items de timeline
-    const timelineItems = timeline.map(item => {
-        if (item.state === 'empty') {
-            // Générer SVG pour vide
-            const emptyBadgeSvg = `
+    const timelineItems = timeline
+        .map((item) => {
+            if (item.state === "empty") {
+                // Générer SVG pour vide
+                const emptyBadgeSvg = `
                 <div class="timeline-dot-badge">
                     ${badgeSVGs.empty}
                 </div>
             `;
-            
-            return `
+
+                return `
                 <div class="timeline-item item-empty">
                     ${emptyBadgeSvg}
                     <div class="timeline-date">Jour ${item.dayNumber}</div>
@@ -984,26 +1079,26 @@ function renderProfileTimeline(userId, viewerId = 'user-1') {
                     </div>
                 </div>
             `;
-        }
+            }
 
-        const content = item.content;
-        const itemClass = `item-${content.state}`;
-        const dateFormatted = new Intl.DateTimeFormat('fr-FR', { 
-            month: 'long', 
-            day: 'numeric' 
-        }).format(content.createdAt);
+            const content = item.content;
+            const itemClass = `item-${content.state}`;
+            const dateFormatted = new Intl.DateTimeFormat("fr-FR", {
+                month: "long",
+                day: "numeric",
+            }).format(content.createdAt);
 
-        // Générer SVG du badge selon l'état
-        let stateBadgeSvg = '';
-        if (content.state === 'success') {
-            stateBadgeSvg = badgeSVGs.success;
-        } else if (content.state === 'failure') {
-            stateBadgeSvg = badgeSVGs.failure;
-        } else if (content.state === 'pause') {
-            stateBadgeSvg = badgeSVGs.pause;
-        }
+            // Générer SVG du badge selon l'état
+            let stateBadgeSvg = "";
+            if (content.state === "success") {
+                stateBadgeSvg = badgeSVGs.success;
+            } else if (content.state === "failure") {
+                stateBadgeSvg = badgeSVGs.failure;
+            } else if (content.state === "pause") {
+                stateBadgeSvg = badgeSVGs.pause;
+            }
 
-        return `
+            return `
             <div class="timeline-item ${itemClass}">
                 <div class="timeline-dot-badge filled">
                     ${stateBadgeSvg}
@@ -1015,16 +1110,19 @@ function renderProfileTimeline(userId, viewerId = 'user-1') {
                 </div>
             </div>
         `;
-    }).join('');
-    
+        })
+        .join("");
+
     // Afficher seulement le dernier item et un bouton pour expand/collapse
     const latestTimelineItem = timelineItems; // Tous les items par défaut cachés
-    const timelineCollapsedHtml = timeline.length > 0 ? `
+    const timelineCollapsedHtml =
+        timeline.length > 0
+            ? `
         <div class="timeline-latest">
             <div class="timeline-item-latest">
                 ${(() => {
                     const lastItem = timeline[timeline.length - 1];
-                    if (lastItem.state === 'empty') {
+                    if (lastItem.state === "empty") {
                         return `
                             <div class="timeline-dot-badge">
                                 ${badgeSVGs.empty}
@@ -1036,19 +1134,19 @@ function renderProfileTimeline(userId, viewerId = 'user-1') {
                         `;
                     } else {
                         const content = lastItem.content;
-                        let stateBadgeSvg = '';
-                        if (content.state === 'success') {
+                        let stateBadgeSvg = "";
+                        if (content.state === "success") {
                             stateBadgeSvg = badgeSVGs.success;
-                        } else if (content.state === 'failure') {
+                        } else if (content.state === "failure") {
                             stateBadgeSvg = badgeSVGs.failure;
-                        } else if (content.state === 'pause') {
+                        } else if (content.state === "pause") {
                             stateBadgeSvg = badgeSVGs.pause;
                         }
-                        const dateFormatted = new Intl.DateTimeFormat('fr-FR', { 
-                            month: 'long', 
-                            day: 'numeric' 
+                        const dateFormatted = new Intl.DateTimeFormat("fr-FR", {
+                            month: "long",
+                            day: "numeric",
                         }).format(content.createdAt);
-                        
+
                         return `
                             <div class="timeline-dot-badge filled">
                                 ${stateBadgeSvg}
@@ -1072,27 +1170,36 @@ function renderProfileTimeline(userId, viewerId = 'user-1') {
                 ${timelineItems}
             </div>
         </div>
-    ` : '';
-    
+    `
+            : "";
+
     const timelinesHtml = timelineCollapsedHtml;
 
-    const bannerHtml = user.banner ? `<img src="${user.banner}" class="profile-banner" alt="Bannière de ${user.name}">` : '';
+    const bannerHtml = user.banner
+        ? `<img src="${user.banner}" class="profile-banner" alt="Bannière de ${user.name}">`
+        : "";
 
     const projects = user.projects || [];
-    const projectsHtml = projects.length ? `
+    const projectsHtml = projects.length
+        ? `
         <div class="projects-grid">
-            ${projects.map(p => `
+            ${projects
+                .map(
+                    (p) => `
                 <div class="project-card">
                     <img src="${p.cover || user.banner || user.avatar}" class="project-cover" alt="Cover">
                     <div class="project-meta">
                         <h4>${p.name}</h4>
-                        <p>${p.desc || ''}</p>
+                        <p>${p.desc || ""}</p>
                         ${renderProjectDoc(p)}
                     </div>
                 </div>
-            `).join('')}
+            `,
+                )
+                .join("")}
         </div>
-    ` : '';
+    `
+        : "";
 
     const profileHtml = `
         ${bannerHtml}
@@ -1100,12 +1207,14 @@ function renderProfileTimeline(userId, viewerId = 'user-1') {
             <div class="profile-avatar-wrapper">
                 <img src="${user.avatar}" class="profile-avatar-img" alt="Avatar de ${user.name}">
             </div>
-            <h2>${isOwnProfile ? 'Ma Trajectoire' : user.name}</h2>
+            <h2>${isOwnProfile ? "Ma Trajectoire" : user.name}</h2>
             <p style="color: var(--text-secondary);">En train de bâtir <strong>${user.title}</strong></p>
             ${userBadgesHtml}
             ${renderProfileSocialLinks(userId)}
             
-            ${!isOwnProfile ? `
+            ${
+                !isOwnProfile
+                    ? `
                         <div class="follow-section">
                             <div class="follower-stat">
                                 <div class="follower-stat-count">${followerCount}</div>
@@ -1117,7 +1226,8 @@ function renderProfileTimeline(userId, viewerId = 'user-1') {
                             </div>
                         </div>
                         ${followButtonHtml}
-                    ` : `
+                    `
+                    : `
                         <div class="follow-section">
                             <div class="follower-stat">
                                 <div class="follower-stat-count">${followerCount}</div>
@@ -1134,19 +1244,22 @@ function renderProfileTimeline(userId, viewerId = 'user-1') {
                             </button>
                             ${settingsButtonHtml}
                         </div>
-                    `}
+                    `
+            }
         </div>
         ${projectsHtml}
         <div class="timeline">
             ${timelinesHtml}
         </div>
     `;
-    
-            // Ne pas injecter en fixe (le badge est rendu dans le profil)
-            const settingsButtonContainer = document.getElementById('settings-button-container');
-            if (settingsButtonContainer) {
-                settingsButtonContainer.innerHTML = '';
-            }
+
+    // Ne pas injecter en fixe (le badge est rendu dans le profil)
+    const settingsButtonContainer = document.getElementById(
+        "settings-button-container",
+    );
+    if (settingsButtonContainer) {
+        settingsButtonContainer.innerHTML = "";
+    }
 
     return profileHtml;
 }
@@ -1156,15 +1269,16 @@ function renderProfileTimeline(userId, viewerId = 'user-1') {
    ======================================== */
 
 function openCreateMenu(userId) {
-    const modal = document.getElementById('create-modal') || createCreateModal();
+    const modal =
+        document.getElementById("create-modal") || createCreateModal();
     modal.dataset.userId = userId;
-    modal.classList.add('active');
+    modal.classList.add("active");
 }
 
 function createCreateModal() {
-    const modal = document.createElement('div');
-    modal.id = 'create-modal';
-    modal.className = 'modal-overlay';
+    const modal = document.createElement("div");
+    modal.id = "create-modal";
+    modal.className = "modal-overlay";
     modal.innerHTML = `
         <div class="modal-panel">
             <h3>Créer</h3>
@@ -1177,22 +1291,25 @@ function createCreateModal() {
         </div>
     `;
     document.body.appendChild(modal);
-    modal.querySelector('.close').addEventListener('click', () => modal.classList.remove('active'));
-    modal.querySelectorAll('.create-options button').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+    modal
+        .querySelector(".close")
+        .addEventListener("click", () => modal.classList.remove("active"));
+    modal.querySelectorAll(".create-options button").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
             const action = e.currentTarget.dataset.action;
-            modal.classList.remove('active');
-            if (action === 'project') showCreateProjectForm(modal.dataset.userId);
-            if (action === 'post') showCreatePostForm(modal.dataset.userId);
-            if (action === 'lp') window.location.href = 'create-stream.html';
+            modal.classList.remove("active");
+            if (action === "project")
+                showCreateProjectForm(modal.dataset.userId);
+            if (action === "post") showCreatePostForm(modal.dataset.userId);
+            if (action === "lp") window.location.href = "create-stream.html";
         });
     });
     return modal;
 }
 
 function showCreateProjectForm(userId) {
-    const form = document.createElement('div');
-    form.className = 'modal-overlay active';
+    const form = document.createElement("div");
+    form.className = "modal-overlay active";
     form.innerHTML = `
         <div class="modal-panel form-panel">
             <h3>Nouveau projet</h3>
@@ -1226,49 +1343,61 @@ function showCreateProjectForm(userId) {
     document.body.appendChild(form);
     // upgraded: support file upload + url fallback
     // replace cover field with file + url inputs
-    const panel = form.querySelector('.modal-panel');
-    const coverLabel = panel.querySelector('label input#proj-cover')?.closest('label');
-    if (coverLabel) coverLabel.innerHTML = 'Cover (fichier)<input id="proj-cover-file" type="file" accept="image/*" />';
-    const urlLabel = document.createElement('label');
-    urlLabel.innerHTML = 'Ou URL de cover<input id="proj-cover-url" class="form-input" placeholder="https://... (optionnel)" />';
-    panel.insertBefore(urlLabel, panel.querySelector('div'));
+    const panel = form.querySelector(".modal-panel");
+    const coverLabel = panel
+        .querySelector("label input#proj-cover")
+        ?.closest("label");
+    if (coverLabel)
+        coverLabel.innerHTML =
+            'Cover (fichier)<input id="proj-cover-file" type="file" accept="image/*" />';
+    const urlLabel = document.createElement("label");
+    urlLabel.innerHTML =
+        'Ou URL de cover<input id="proj-cover-url" class="form-input" placeholder="https://... (optionnel)" />';
+    panel.insertBefore(urlLabel, panel.querySelector("div"));
 
-    const coverFileInput = form.querySelector('#proj-cover-file');
-    const coverUrlInput = form.querySelector('#proj-cover-url');
+    const coverFileInput = form.querySelector("#proj-cover-file");
+    const coverUrlInput = form.querySelector("#proj-cover-url");
     form._coverData = null;
-    coverFileInput.addEventListener('change', function() {
+    coverFileInput.addEventListener("change", function () {
         const f = this.files && this.files[0];
         if (!f) return;
         const reader = new FileReader();
-        reader.onload = function(ev) { form._coverData = ev.target.result; };
+        reader.onload = function (ev) {
+            form._coverData = ev.target.result;
+        };
         reader.readAsDataURL(f);
     });
 
-    form.querySelector('#proj-cancel').addEventListener('click', () => form.remove());
-    form.querySelector('#proj-create').addEventListener('click', () => {
-        const name = form.querySelector('#proj-name').value.trim();
-        const desc = form.querySelector('#proj-desc').value.trim();
-        const role = form.querySelector('#proj-role').value.trim();
-        const duration = form.querySelector('#proj-duration').value.trim();
-        const stack = form.querySelector('#proj-stack').value.trim();
-        const status = form.querySelector('#proj-status').value;
-        const demoUrl = form.querySelector('#proj-demo').value.trim();
-        const repoUrl = form.querySelector('#proj-repo').value.trim();
-        const problem = form.querySelector('#proj-problem').value.trim();
-        const solution = form.querySelector('#proj-solution').value.trim();
-        const decisions = form.querySelector('#proj-decisions').value.trim();
-        const results = form.querySelector('#proj-results').value.trim();
-        const learnings = form.querySelector('#proj-learnings').value.trim();
-        const nextSteps = form.querySelector('#proj-next').value.trim();
-        const cover = form._coverData || (coverUrlInput.value && coverUrlInput.value.trim()) || null;
-        if (!name) return alert('Donnez un nom au projet');
+    form.querySelector("#proj-cancel").addEventListener("click", () =>
+        form.remove(),
+    );
+    form.querySelector("#proj-create").addEventListener("click", () => {
+        const name = form.querySelector("#proj-name").value.trim();
+        const desc = form.querySelector("#proj-desc").value.trim();
+        const role = form.querySelector("#proj-role").value.trim();
+        const duration = form.querySelector("#proj-duration").value.trim();
+        const stack = form.querySelector("#proj-stack").value.trim();
+        const status = form.querySelector("#proj-status").value;
+        const demoUrl = form.querySelector("#proj-demo").value.trim();
+        const repoUrl = form.querySelector("#proj-repo").value.trim();
+        const problem = form.querySelector("#proj-problem").value.trim();
+        const solution = form.querySelector("#proj-solution").value.trim();
+        const decisions = form.querySelector("#proj-decisions").value.trim();
+        const results = form.querySelector("#proj-results").value.trim();
+        const learnings = form.querySelector("#proj-learnings").value.trim();
+        const nextSteps = form.querySelector("#proj-next").value.trim();
+        const cover =
+            form._coverData ||
+            (coverUrlInput.value && coverUrlInput.value.trim()) ||
+            null;
+        if (!name) return alert("Donnez un nom au projet");
         const user = getUser(userId);
         user.projects = user.projects || [];
-        const project = { 
-            id: 'p_' + Date.now(), 
-            name, 
-            desc, 
-            cover: cover, 
+        const project = {
+            id: "p_" + Date.now(),
+            name,
+            desc,
+            cover: cover,
             contents: [],
             doc: {
                 role,
@@ -1282,18 +1411,20 @@ function showCreateProjectForm(userId) {
                 decisions,
                 results,
                 learnings,
-                nextSteps
-            }
+                nextSteps,
+            },
         };
         user.projects.unshift(project);
         form.remove();
-        if (currentUserId === userId) document.querySelector('.profile-container').innerHTML = renderProfileTimeline(userId, currentViewerId);
+        if (currentUserId === userId)
+            document.querySelector(".profile-container").innerHTML =
+                renderProfileTimeline(userId, currentViewerId);
     });
 }
 
 function showCreatePostForm(userId) {
-    const form = document.createElement('div');
-    form.className = 'modal-overlay active';
+    const form = document.createElement("div");
+    form.className = "modal-overlay active";
     form.innerHTML = `
         <div class="modal-panel form-panel">
             <h3>Nouveau post</h3>
@@ -1305,28 +1436,43 @@ function showCreatePostForm(userId) {
         </div>
     `;
     document.body.appendChild(form);
-    const mediaFileInput = form.querySelector('#post-media-file');
-    const mediaUrlInput = form.querySelector('#post-media-url');
+    const mediaFileInput = form.querySelector("#post-media-file");
+    const mediaUrlInput = form.querySelector("#post-media-url");
     form._mediaData = null;
-    mediaFileInput.addEventListener('change', function() {
+    mediaFileInput.addEventListener("change", function () {
         const f = this.files && this.files[0];
         if (!f) return;
         const reader = new FileReader();
-        reader.onload = function(ev) { form._mediaData = ev.target.result; };
+        reader.onload = function (ev) {
+            form._mediaData = ev.target.result;
+        };
         reader.readAsDataURL(f);
     });
 
-    form.querySelector('#post-cancel').addEventListener('click', () => form.remove());
-    form.querySelector('#post-create').addEventListener('click', () => {
-        const type = form.querySelector('#post-type').value;
-        const body = form.querySelector('#post-body').value.trim();
-        const media = form._mediaData || (mediaUrlInput.value && mediaUrlInput.value.trim()) || null;
+    form.querySelector("#post-cancel").addEventListener("click", () =>
+        form.remove(),
+    );
+    form.querySelector("#post-create").addEventListener("click", () => {
+        const type = form.querySelector("#post-type").value;
+        const body = form.querySelector("#post-body").value.trim();
+        const media =
+            form._mediaData ||
+            (mediaUrlInput.value && mediaUrlInput.value.trim()) ||
+            null;
         const user = getUser(userId);
         user.posts = user.posts || [];
-        const post = { id: 'post_' + Date.now(), type, body: body || null, media: media || null, createdAt: new Date().toISOString() };
+        const post = {
+            id: "post_" + Date.now(),
+            type,
+            body: body || null,
+            media: media || null,
+            createdAt: new Date().toISOString(),
+        };
         user.posts.unshift(post);
         form.remove();
-        if (currentUserId === userId) document.querySelector('.profile-container').innerHTML = renderProfileTimeline(userId, currentViewerId);
+        if (currentUserId === userId)
+            document.querySelector(".profile-container").innerHTML =
+                renderProfileTimeline(userId, currentViewerId);
     });
 }
 
@@ -1335,29 +1481,29 @@ function showCreatePostForm(userId) {
    ======================================== */
 
 function toggleTimelineExpand(button) {
-    const timelineLatest = button.closest('.timeline-latest');
-    const timelineFull = timelineLatest.querySelector('.timeline-full');
-    const toggleText = button.querySelector('.toggle-text');
-    const isExpanded = !timelineFull.classList.contains('hidden');
-    
+    const timelineLatest = button.closest(".timeline-latest");
+    const timelineFull = timelineLatest.querySelector(".timeline-full");
+    const toggleText = button.querySelector(".toggle-text");
+    const isExpanded = !timelineFull.classList.contains("hidden");
+
     if (isExpanded) {
-        timelineFull.classList.add('hidden');
-        toggleText.textContent = 'Afficher l\'historique complet';
-        button.classList.remove('expanded');
+        timelineFull.classList.add("hidden");
+        toggleText.textContent = "Afficher l'historique complet";
+        button.classList.remove("expanded");
     } else {
-        timelineFull.classList.remove('hidden');
-        toggleText.textContent = 'Masquer l\'historique';
-        button.classList.add('expanded');
+        timelineFull.classList.remove("hidden");
+        toggleText.textContent = "Masquer l'historique";
+        button.classList.add("expanded");
     }
 }
 
 // Setup video interactions: hover-play on desktop, autoplay muted on mobile
 function setupDiscoverVideoInteractions() {
-    const isMobile = window.matchMedia('(max-width: 700px)').matches;
-    const cards = document.querySelectorAll('.user-card');
+    const isMobile = window.matchMedia("(max-width: 700px)").matches;
+    const cards = document.querySelectorAll(".user-card");
 
-    cards.forEach(card => {
-        const video = card.querySelector('video.card-media');
+    cards.forEach((card) => {
+        const video = card.querySelector("video.card-media");
         if (!video) return;
 
         // Ensure muted & playsinline for autoplay on mobile
@@ -1369,14 +1515,24 @@ function setupDiscoverVideoInteractions() {
             video.play().catch(() => {});
         } else {
             // desktop: play on hover, pause on leave
-            card.addEventListener('mouseenter', () => {
+            card.addEventListener("mouseenter", () => {
                 video.play().catch(() => {});
             });
-            card.addEventListener('mouseleave', () => {
-                try { video.pause(); video.currentTime = 0; } catch(e) {}
+            card.addEventListener("mouseleave", () => {
+                try {
+                    video.pause();
+                    video.currentTime = 0;
+                } catch (e) {}
             });
-            video.addEventListener('mouseover', () => video.play().catch(() => {}));
-            video.addEventListener('mouseout', () => { try { video.pause(); video.currentTime = 0; } catch(e) {} });
+            video.addEventListener("mouseover", () =>
+                video.play().catch(() => {}),
+            );
+            video.addEventListener("mouseout", () => {
+                try {
+                    video.pause();
+                    video.currentTime = 0;
+                } catch (e) {}
+            });
         }
     });
 }
@@ -1387,21 +1543,20 @@ function setupDiscoverVideoInteractions() {
 
 // Initialiser le thème depuis le localStorage
 function initTheme() {
-    const savedTheme = localStorage.getItem('rize-theme');
-    const initialTheme = savedTheme === 'light' || savedTheme === 'dark'
-        ? savedTheme
-        : 'dark';
+    const savedTheme = localStorage.getItem("rize-theme");
+    const initialTheme =
+        savedTheme === "light" || savedTheme === "dark" ? savedTheme : "dark";
 
     applyTheme(initialTheme, false);
 
     if (!window.__themeSystemListenerAttached && window.matchMedia) {
-        const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
-        mediaQuery.addEventListener('change', (event) => {
+        const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
+        mediaQuery.addEventListener("change", (event) => {
             const hasManualPreference =
-                localStorage.getItem('rize-theme') === 'light' ||
-                localStorage.getItem('rize-theme') === 'dark';
+                localStorage.getItem("rize-theme") === "light" ||
+                localStorage.getItem("rize-theme") === "dark";
             if (!hasManualPreference) {
-                applyTheme(event.matches ? 'light' : 'dark', false);
+                applyTheme(event.matches ? "light" : "dark", false);
             }
         });
         window.__themeSystemListenerAttached = true;
@@ -1410,42 +1565,44 @@ function initTheme() {
 
 // Toggle thème
 function toggleTheme() {
-    applyTheme(isLightMode() ? 'dark' : 'light', true);
+    applyTheme(isLightMode() ? "dark" : "light", true);
 }
 
 // Obtenir l'état du thème
 function isLightMode() {
-    return document.documentElement.classList.contains('light-mode');
+    return document.documentElement.classList.contains("light-mode");
 }
 
 function applyTheme(theme, persist = true) {
-    const isLight = theme === 'light';
-    document.documentElement.classList.toggle('light-mode', isLight);
+    const isLight = theme === "light";
+    document.documentElement.classList.toggle("light-mode", isLight);
 
     if (persist) {
-        localStorage.setItem('rize-theme', isLight ? 'light' : 'dark');
+        localStorage.setItem("rize-theme", isLight ? "light" : "dark");
     }
 
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) {
-        themeMeta.setAttribute('content', isLight ? '#f6f8fc' : '#050505');
+        themeMeta.setAttribute("content", isLight ? "#f6f8fc" : "#050505");
     }
 
     updateThemeButtons(isLight);
 }
 
 function updateThemeButtons(isLight) {
-    const controls = document.querySelectorAll('.btn-theme-toggle, .settings-theme-control');
+    const controls = document.querySelectorAll(
+        ".btn-theme-toggle, .settings-theme-control",
+    );
     controls.forEach((control) => {
-        const isLegacySettingsButton = control.id === 'theme-toggle-btn';
+        const isLegacySettingsButton = control.id === "theme-toggle-btn";
         control.textContent = isLegacySettingsButton
             ? isLight
-              ? '🌙 Passer en mode sombre'
-              : '☀️ Passer en mode clair'
+                ? "🌙 Passer en mode sombre"
+                : "☀️ Passer en mode clair"
             : isLight
-              ? '🌙 Mode Sombre'
-              : '☀️ Mode Clair';
-        control.setAttribute('aria-pressed', isLight ? 'true' : 'false');
+              ? "🌙 Mode Sombre"
+              : "☀️ Mode Clair";
+        control.setAttribute("aria-pressed", isLight ? "true" : "false");
     });
 }
 
@@ -1453,23 +1610,23 @@ function updateThemeButtons(isLight) {
    COUCHE NAVIGATION
    ======================================== */
 
-let currentUserId = 'user-1'; // User par défaut pour le profil
-let currentViewerId = 'user-1'; // Utilisateur qui regarde le profil
+let currentUserId = "user-1"; // User par défaut pour le profil
+let currentViewerId = "user-1"; // Utilisateur qui regarde le profil
 
 function navigateTo(pageId) {
-    const pages = document.querySelectorAll('.page');
-    pages.forEach(p => p.classList.remove('active'));
-    document.getElementById(pageId).classList.add('active');
+    const pages = document.querySelectorAll(".page");
+    pages.forEach((p) => p.classList.remove("active"));
+    document.getElementById(pageId).classList.add("active");
     window.scrollTo(0, 0);
     // ajouter/supprimer une classe sur le body pour cibler le style spécifique
-    document.body.classList.toggle('profile-open', pageId === 'profile');
+    document.body.classList.toggle("profile-open", pageId === "profile");
 }
 
 function navigateToUserProfile(userId) {
     currentUserId = userId;
-    const profileContainer = document.querySelector('.profile-container');
+    const profileContainer = document.querySelector(".profile-container");
     profileContainer.innerHTML = renderProfileTimeline(userId, currentViewerId);
-    navigateTo('profile');
+    navigateTo("profile");
 }
 
 function toggleFollow(viewerId, targetUserId) {
@@ -1478,20 +1635,20 @@ function toggleFollow(viewerId, targetUserId) {
     } else {
         followUser(viewerId, targetUserId);
     }
-    
+
     // Refresh du bouton
     const btn = document.getElementById(`follow-btn-${targetUserId}`);
     if (btn) {
         const isNowFollowing = isFollowing(viewerId, targetUserId);
-        btn.classList.toggle('unfollow', isNowFollowing);
-        btn.innerHTML = `<img src="${isNowFollowing ? 'icons/subscribed.svg' : 'icons/subscribe.svg'}" class="btn-icon" style="width: 24px; height: 24px;">`;
+        btn.classList.toggle("unfollow", isNowFollowing);
+        btn.innerHTML = `<img src="${isNowFollowing ? "icons/subscribed.svg" : "icons/subscribe.svg"}" class="btn-icon" style="width: 24px; height: 24px;">`;
     }
-    
+
     // Mettre à jour les compteurs
     const userCard = document.querySelector(`.profile-hero`);
     if (userCard) {
         const followerCount = getFollowerCount(targetUserId);
-        const followerStats = userCard.querySelectorAll('.follower-stat-count');
+        const followerStats = userCard.querySelectorAll(".follower-stat-count");
         if (followerStats[0]) {
             followerStats[0].textContent = followerCount;
         }
@@ -1500,38 +1657,38 @@ function toggleFollow(viewerId, targetUserId) {
 
 function openImmersive(userId) {
     currentUserId = userId;
-    const overlay = document.getElementById('immersive-overlay');
+    const overlay = document.getElementById("immersive-overlay");
     overlay.innerHTML = `
         <div class="close-immersive" onclick="closeImmersive()">✕</div>
         ${renderImmersiveContent(userId)}
     `;
-    overlay.style.display = 'block';
-    document.body.style.overflow = 'hidden';
+    overlay.style.display = "block";
+    document.body.style.overflow = "hidden";
 }
 
 function closeImmersive() {
-    document.getElementById('immersive-overlay').style.display = 'none';
-    document.body.style.overflow = 'auto';
+    document.getElementById("immersive-overlay").style.display = "none";
+    document.body.style.overflow = "auto";
 }
 
 /* ========================================
    INITIALISATION
    ======================================== */
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener("DOMContentLoaded", function () {
     // Initialiser le thème
     initTheme();
 
     // Remplir la grille Discover
-    const grid = document.querySelector('.discover-grid');
+    const grid = document.querySelector(".discover-grid");
     grid.innerHTML = mockUsers
-        .map(user => renderUserCard(user.userId))
-        .join('');
+        .map((user) => renderUserCard(user.userId))
+        .join("");
 
     // Setup video interactions for discover cards (hover play on desktop, autoplay muted on mobile)
     setupDiscoverVideoInteractions();
 
     // Remplir la section profil
-    const profileContainer = document.querySelector('.profile-container');
-    profileContainer.innerHTML = renderProfileTimeline('user-1');
+    const profileContainer = document.querySelector(".profile-container");
+    profileContainer.innerHTML = renderProfileTimeline("user-1");
 });

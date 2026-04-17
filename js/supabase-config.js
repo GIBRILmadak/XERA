@@ -2,29 +2,35 @@
    CONFIGURATION SUPABASE
    ======================================== */
 
-const SUPABASE_URL = 'https://ssbuagqwjptyhavinkxg.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_o7_j9WXXd96YKXa-fmfs1Q_OEwNTh1M';
+const SUPABASE_URL = "https://ssbuagqwjptyhavinkxg.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_o7_j9WXXd96YKXa-fmfs1Q_OEwNTh1M";
 
 // Initialiser le client Supabase seulement s'il n'existe pas déjà
 if (!window.supabaseClient) {
     try {
         // Détecter si l'utilisateur veut être rappelé
-        const rememberMe = localStorage.getItem('rize-remember-me') === 'true';
-        
+        const rememberMe = localStorage.getItem("rize-remember-me") === "true";
+
         if (window.supabase && window.supabase.createClient) {
-            window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-                auth: {
-                    // Utiliser localStorage si "Se souvenir de moi" est activé, sinon sessionStorage
-                    storage: rememberMe ? window.localStorage : window.sessionStorage,
-                    persistSession: true,
-                    autoRefreshToken: true
-                }
-            });
+            window.supabaseClient = window.supabase.createClient(
+                SUPABASE_URL,
+                SUPABASE_ANON_KEY,
+                {
+                    auth: {
+                        // Utiliser localStorage si "Se souvenir de moi" est activé, sinon sessionStorage
+                        storage: rememberMe
+                            ? window.localStorage
+                            : window.sessionStorage,
+                        persistSession: true,
+                        autoRefreshToken: true,
+                    },
+                },
+            );
         } else {
-            console.error('Supabase library not loaded');
+            console.error("Supabase library not loaded");
         }
     } catch (error) {
-        console.error('Error initializing Supabase:', error);
+        console.error("Error initializing Supabase:", error);
     }
 }
 
@@ -35,18 +41,24 @@ var supabase = window.supabaseClient;
 function updateSessionStorage(rememberMe) {
     // Sauvegarder la session actuelle si elle existe
     const currentSession = supabase.auth.getSession();
-    
+
     // Créer un nouveau client avec le bon stockage
-    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: {
-            storage: rememberMe ? window.localStorage : window.sessionStorage,
-            persistSession: true,
-            autoRefreshToken: true
-        }
-    });
-    
+    window.supabaseClient = window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY,
+        {
+            auth: {
+                storage: rememberMe
+                    ? window.localStorage
+                    : window.sessionStorage,
+                persistSession: true,
+                autoRefreshToken: true,
+            },
+        },
+    );
+
     supabase = window.supabaseClient;
-    
+
     return currentSession;
 }
 
@@ -56,15 +68,18 @@ function updateSessionStorage(rememberMe) {
 
 // Update the checkAuth function to not reassign to global currentUser
 async function checkAuth() {
-    const { data: { session }, error } = await supabase.auth.getSession();
-    
+    const {
+        data: { session },
+        error,
+    } = await supabase.auth.getSession();
+
     if (error) {
-        console.error('Erreur vérification session:', error);
+        console.error("Erreur vérification session:", error);
         window.currentUser = null;
         window.currentUserId = null;
         return null;
     }
-    
+
     if (session) {
         window.currentUser = session.user;
         window.currentUserId = session.user.id;
@@ -80,21 +95,21 @@ async function signIn(email, password) {
     try {
         const { data, error } = await supabase.auth.signInWithPassword({
             email,
-            password
+            password,
         });
-        
+
         if (error) throw error;
-        
+
         // Return the user data instead of assigning to global
         return {
             success: true,
-            data: data.user
+            data: data.user,
         };
     } catch (error) {
-        console.error('Erreur connexion:', error);
+        console.error("Erreur connexion:", error);
         return {
             success: false,
-            error: error.message
+            error: error.message,
         };
     }
 }
@@ -106,22 +121,22 @@ async function signUp(email, password, username) {
             email,
             password,
             options: {
-                data: { username: username }
-            }
+                data: { username: username },
+            },
         });
-        
+
         if (error) throw error;
-        
+
         // Return the user data instead of assigning to global
         return {
             success: true,
-            data: data.user
+            data: data.user,
         };
     } catch (error) {
-        console.error('Erreur inscription:', error);
+        console.error("Erreur inscription:", error);
         return {
             success: false,
-            error: error.message
+            error: error.message,
         };
     }
 }
@@ -130,23 +145,23 @@ async function signUp(email, password, username) {
 async function signOut(clearRememberMe = false) {
     try {
         const { error } = await supabase.auth.signOut();
-        
+
         if (error) throw error;
-        
+
         // Si demandé, nettoyer les préférences "Se souvenir de moi"
         if (clearRememberMe) {
-            localStorage.removeItem('rize-remember-email');
-            localStorage.removeItem('rize-remember-me');
+            localStorage.removeItem("rize-remember-email");
+            localStorage.removeItem("rize-remember-me");
         }
-        
+
         return {
-            success: true
+            success: true,
         };
     } catch (error) {
-        console.error('Erreur déconnexion:', error);
+        console.error("Erreur déconnexion:", error);
         return {
             success: false,
-            error: error.message
+            error: error.message,
         };
     }
 }
@@ -159,16 +174,18 @@ async function signOut(clearRememberMe = false) {
 async function upsertUserProfile(userId, profileData) {
     try {
         // Vérifier que l'utilisateur est authentifié
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+            data: { user },
+        } = await supabase.auth.getUser();
         if (!user || user.id !== userId) {
-            return { 
-                success: false, 
-                error: 'Utilisateur non authentifié ou ID non correspondant' 
+            return {
+                success: false,
+                error: "Utilisateur non authentifié ou ID non correspondant",
             };
         }
-        
+
         const { data, error } = await supabase
-            .from('users')
+            .from("users")
             .upsert({
                 id: userId,
                 name: profileData.name,
@@ -180,28 +197,28 @@ async function upsertUserProfile(userId, profileData) {
                 account_subtype: profileData.account_subtype,
                 badge: profileData.badge,
                 social_links: profileData.socialLinks,
-                updated_at: new Date().toISOString()
+                updated_at: new Date().toISOString(),
             })
             .select()
             .single();
-        
+
         if (error) {
-            console.error('Erreur upsert profil:', error);
-            
+            console.error("Erreur upsert profil:", error);
+
             // Gestion spécifique des erreurs RLS
-            if (error.code === '42501') {
-                return { 
-                    success: false, 
-                    error: 'Permission refusée. Vérifiez que vous êtes connecté.' 
+            if (error.code === "42501") {
+                return {
+                    success: false,
+                    error: "Permission refusée. Vérifiez que vous êtes connecté.",
                 };
             }
-            
+
             return { success: false, error: error.message };
         }
-        
+
         return { success: true, data: data };
     } catch (error) {
-        console.error('Exception upsert profil:', error);
+        console.error("Exception upsert profil:", error);
         return { success: false, error: error.message };
     }
 }
@@ -209,31 +226,31 @@ async function upsertUserProfile(userId, profileData) {
 // Récupérer un profil utilisateur
 async function getUserProfile(userId) {
     const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
+        .from("users")
+        .select("*")
+        .eq("id", userId)
         .single();
-    
+
     if (error) {
-        console.error('Erreur récupération profil:', error);
+        console.error("Erreur récupération profil:", error);
         return { success: false, error: error.message, code: error.code };
     }
-    
+
     return { success: true, data: data };
 }
 
 // Récupérer tous les utilisateurs (pour la page Discover)
 async function getAllUsers() {
     const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false });
-    
+        .from("users")
+        .select("*")
+        .order("created_at", { ascending: false });
+
     if (error) {
-        console.error('Erreur récupération utilisateurs:', error);
+        console.error("Erreur récupération utilisateurs:", error);
         return { success: false, error: error.message };
     }
-    
+
     return { success: true, data: data };
 }
 
@@ -242,42 +259,43 @@ async function getAllUsers() {
    ======================================== */
 
 function getContentWriteErrorMessage(error, contentData = {}) {
-    const rawMessage = String(error?.message || '').trim();
+    const rawMessage = String(error?.message || "").trim();
     const lowerMessage = rawMessage.toLowerCase();
-    const contentType = String(contentData?.type || '').toLowerCase();
+    const contentType = String(contentData?.type || "").toLowerCase();
 
     const isTypeConstraint =
-        lowerMessage.includes('content_type_check') ||
-        (lowerMessage.includes('check constraint') &&
-            lowerMessage.includes('type'));
+        lowerMessage.includes("content_type_check") ||
+        (lowerMessage.includes("check constraint") &&
+            lowerMessage.includes("type"));
 
-    if (isTypeConstraint && contentType === 'live') {
+    if (isTypeConstraint && contentType === "live") {
         return "Le type 'live' n'est pas activé dans la base. Exécutez le script sql/content-live-type-fix.sql dans Supabase SQL Editor.";
     }
 
     const isMissingArcColumn =
-        lowerMessage.includes('arc_id') &&
-        (lowerMessage.includes('column') || lowerMessage.includes('colonne')) &&
-        (lowerMessage.includes('does not exist') || lowerMessage.includes('n\'existe pas'));
+        lowerMessage.includes("arc_id") &&
+        (lowerMessage.includes("column") || lowerMessage.includes("colonne")) &&
+        (lowerMessage.includes("does not exist") ||
+            lowerMessage.includes("n'existe pas"));
 
     if (isMissingArcColumn) {
         return "La colonne 'arc_id' est manquante sur la table content. Exécutez sql/arcs-schema.sql.";
     }
 
-    return rawMessage || 'Erreur inconnue lors de l\'écriture du contenu.';
+    return rawMessage || "Erreur inconnue lors de l'écriture du contenu.";
 }
 
 function isMissingArcMetadataReadError(error) {
-    const lowerMessage = String(error?.message || '').toLowerCase();
+    const lowerMessage = String(error?.message || "").toLowerCase();
     const mentionsMetadataColumn =
-        lowerMessage.includes('stage_level') ||
-        lowerMessage.includes('opportunity_intents');
+        lowerMessage.includes("stage_level") ||
+        lowerMessage.includes("opportunity_intents");
     const mentionsMissingColumn =
-        (lowerMessage.includes('column') || lowerMessage.includes('colonne')) &&
-        (lowerMessage.includes('does not exist') ||
+        (lowerMessage.includes("column") || lowerMessage.includes("colonne")) &&
+        (lowerMessage.includes("does not exist") ||
             lowerMessage.includes("n'existe pas") ||
-            lowerMessage.includes('could not find') ||
-            lowerMessage.includes('schema cache'));
+            lowerMessage.includes("could not find") ||
+            lowerMessage.includes("schema cache"));
 
     return mentionsMetadataColumn && mentionsMissingColumn;
 }
@@ -307,20 +325,20 @@ async function createContent(contentData) {
 
     // Try writing multi-images first; if the column does not exist, fallback to media_url only.
     const attempt = async (payload) =>
-        supabase.from('content').insert(payload).select().single();
+        supabase.from("content").insert(payload).select().single();
 
     let response = await attempt(payloadWithMulti);
     let { data, error } = response;
 
     if (error) {
-        const msg = String(error.message || '').toLowerCase();
+        const msg = String(error.message || "").toLowerCase();
         const mentionsMissingColumn =
-            msg.includes('media_urls') &&
-            (msg.includes('column') || msg.includes('colonne')) &&
-            (msg.includes('does not exist') ||
+            msg.includes("media_urls") &&
+            (msg.includes("column") || msg.includes("colonne")) &&
+            (msg.includes("does not exist") ||
                 msg.includes("n'existe pas") ||
-                msg.includes('could not find') ||
-                msg.includes('schema cache'));
+                msg.includes("could not find") ||
+                msg.includes("schema cache"));
 
         if (mentionsMissingColumn) {
             // Fallback for older schema
@@ -331,7 +349,7 @@ async function createContent(contentData) {
     }
 
     if (error) {
-        console.error('Erreur création contenu:', error);
+        console.error("Erreur création contenu:", error);
         return {
             success: false,
             error: getContentWriteErrorMessage(error, contentData),
@@ -364,10 +382,10 @@ async function updateContent(contentId, contentData) {
 
     const attempt = async (payload) =>
         supabase
-            .from('content')
+            .from("content")
             .update(payload)
-            .eq('id', contentId)
-            .eq('user_id', contentData.userId)
+            .eq("id", contentId)
+            .eq("user_id", contentData.userId)
             .select()
             .single();
 
@@ -375,14 +393,14 @@ async function updateContent(contentId, contentData) {
     let { data, error } = response;
 
     if (error) {
-        const msg = String(error.message || '').toLowerCase();
+        const msg = String(error.message || "").toLowerCase();
         const mentionsMissingColumn =
-            msg.includes('media_urls') &&
-            (msg.includes('column') || msg.includes('colonne')) &&
-            (msg.includes('does not exist') ||
+            msg.includes("media_urls") &&
+            (msg.includes("column") || msg.includes("colonne")) &&
+            (msg.includes("does not exist") ||
                 msg.includes("n'existe pas") ||
-                msg.includes('could not find') ||
-                msg.includes('schema cache'));
+                msg.includes("could not find") ||
+                msg.includes("schema cache"));
 
         if (mentionsMissingColumn) {
             response = await attempt(basePayload);
@@ -392,7 +410,7 @@ async function updateContent(contentId, contentData) {
     }
 
     if (error) {
-        console.error('Erreur mise à jour contenu:', error);
+        console.error("Erreur mise à jour contenu:", error);
         return {
             success: false,
             error: getContentWriteErrorMessage(error, contentData),
@@ -434,26 +452,26 @@ async function getUserContent(userId) {
         `;
 
     let { data, error } = await supabase
-        .from('content')
+        .from("content")
         .select(selectWithArcMetadata)
-        .eq('user_id', userId)
-        .order('day_number', { ascending: false });
+        .eq("user_id", userId)
+        .order("day_number", { ascending: false });
 
     if (error && isMissingArcMetadataReadError(error)) {
         const retry = await supabase
-            .from('content')
+            .from("content")
             .select(selectLegacy)
-            .eq('user_id', userId)
-            .order('day_number', { ascending: false });
+            .eq("user_id", userId)
+            .order("day_number", { ascending: false });
         data = retry.data;
         error = retry.error;
     }
-    
+
     if (error) {
-        console.error('Erreur récupération contenu:', error);
+        console.error("Erreur récupération contenu:", error);
         return { success: false, error: error.message };
     }
-    
+
     return { success: true, data: data };
 }
 
@@ -464,11 +482,11 @@ async function fetchUsersByIds(ids = []) {
     }
     const unique = Array.from(new Set(ids));
     const { data, error } = await supabase
-        .from('users')
-        .select('id, name, avatar')
-        .in('id', unique);
+        .from("users")
+        .select("id, name, avatar")
+        .in("id", unique);
     if (error) {
-        console.error('Erreur fetchUsersByIds:', error);
+        console.error("Erreur fetchUsersByIds:", error);
         return { success: false, error: error.message };
     }
     return { success: true, data };
@@ -498,23 +516,23 @@ async function getUserContentPublic(userId) {
         `;
 
     let { data, error } = await supabase
-        .from('content')
+        .from("content")
         .select(selectWithArcMetadata)
-        .eq('user_id', userId)
-        .order('day_number', { ascending: false });
+        .eq("user_id", userId)
+        .order("day_number", { ascending: false });
 
     if (error && isMissingArcMetadataReadError(error)) {
         const retry = await supabase
-            .from('content')
+            .from("content")
             .select(selectLegacy)
-            .eq('user_id', userId)
-            .order('day_number', { ascending: false });
+            .eq("user_id", userId)
+            .order("day_number", { ascending: false });
         data = retry.data;
         error = retry.error;
     }
 
     if (error) {
-        console.error('Erreur récupération contenu public:', error);
+        console.error("Erreur récupération contenu public:", error);
         return { success: false, error: error.message };
     }
 
@@ -528,52 +546,75 @@ async function getUserContentPublic(userId) {
 // Suivre un utilisateur
 async function followUser(followerId, followingId) {
     const { data, error } = await supabase
-        .from('followers')
+        .from("followers")
         .insert({
             follower_id: followerId,
-            following_id: followingId
+            following_id: followingId,
         })
         .select()
         .single();
-    
+
     if (error) {
-        console.error('Erreur follow:', error);
+        console.error("Erreur follow:", error);
         return { success: false, error: error.message };
     }
-    
+
+    // Update the followers_count in users table
+    try {
+        if (typeof updateFollowersAndMonetization === "function") {
+            const newCount = await getFollowerCount(followingId);
+            await updateFollowersAndMonetization(followingId, newCount);
+        }
+    } catch (updateError) {
+        console.warn("Warning: Could not update followers_count:", updateError);
+        // Don't fail the follow operation if the count update fails
+    }
+
     return { success: true, data: data };
 }
 
 // Ne plus suivre un utilisateur
 async function unfollowUser(followerId, followingId) {
     const { error } = await supabase
-        .from('followers')
+        .from("followers")
         .delete()
-        .eq('follower_id', followerId)
-        .eq('following_id', followingId);
-    
+        .eq("follower_id", followerId)
+        .eq("following_id", followingId);
+
     if (error) {
-        console.error('Erreur unfollow:', error);
+        console.error("Erreur unfollow:", error);
         return { success: false, error: error.message };
     }
-    
+
+    // Update the followers_count in users table
+    try {
+        if (typeof updateFollowersAndMonetization === "function") {
+            const newCount = await getFollowerCount(followingId);
+            await updateFollowersAndMonetization(followingId, newCount);
+        }
+    } catch (updateError) {
+        console.warn("Warning: Could not update followers_count:", updateError);
+        // Don't fail the unfollow operation if the count update fails
+    }
+
     return { success: true };
 }
 
 // Vérifier si un utilisateur suit un autre
 async function isFollowing(followerId, followingId) {
     const { data, error } = await supabase
-        .from('followers')
-        .select('*')
-        .eq('follower_id', followerId)
-        .eq('following_id', followingId)
+        .from("followers")
+        .select("*")
+        .eq("follower_id", followerId)
+        .eq("following_id", followingId)
         .maybeSingle();
-    
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Erreur vérification follow:', error);
+
+    if (error && error.code !== "PGRST116") {
+        // PGRST116 = no rows returned
+        console.error("Erreur vérification follow:", error);
         return false;
     }
-    
+
     return data !== null;
 }
 
@@ -581,46 +622,72 @@ async function isFollowing(followerId, followingId) {
 async function getFollowerIds(userId) {
     try {
         const { data, error } = await supabase
-            .from('followers')
-            .select('follower_id')
-            .eq('following_id', userId);
+            .from("followers")
+            .select("follower_id")
+            .eq("following_id", userId);
 
         if (error) throw error;
         return (data || []).map((row) => row.follower_id).filter(Boolean);
     } catch (error) {
-        console.error('Erreur récupération followers ids:', error);
+        console.error("Erreur récupération followers ids:", error);
         return [];
     }
 }
 
-// Compter les followers
+// Compter les followers - Utilise la colonne followers_count de la table users
 async function getFollowerCount(userId) {
-    const { count, error } = await supabase
-        .from('followers')
-        .select('*', { count: 'exact', head: true })
-        .eq('following_id', userId);
-    
-    if (error) {
-        console.error('Erreur comptage followers:', error);
+    try {
+        // Récupérer directement la colonne followers_count au lieu de recompter
+        const { data, error } = await supabase
+            .from("users")
+            .select("followers_count")
+            .eq("id", userId)
+            .single();
+
+        if (error) {
+            console.error("Erreur récupération followers_count:", error);
+            // Fallback: recompter manuellement si la colonne n'existe pas
+            const { count, countError } = await supabase
+                .from("followers")
+                .select("*", { count: "exact", head: true })
+                .eq("following_id", userId);
+
+            if (countError) {
+                console.error(
+                    "Erreur comptage followers fallback:",
+                    countError,
+                );
+                return 0;
+            }
+            return count || 0;
+        }
+
+        return data?.followers_count || 0;
+    } catch (error) {
+        console.error("Exception in getFollowerCount:", error);
         return 0;
     }
-    
-    return count || 0;
 }
 
-// Compter les following
+// Compter les following (ceux que je suis)
 async function getFollowingCount(userId) {
-    const { count, error } = await supabase
-        .from('followers')
-        .select('*', { count: 'exact', head: true })
-        .eq('follower_id', userId);
-    
-    if (error) {
-        console.error('Erreur comptage following:', error);
+    try {
+        // Compter directement les rows où ce user est le follower
+        const { count, error } = await supabase
+            .from("followers")
+            .select("*", { count: "exact", head: true })
+            .eq("follower_id", userId);
+
+        if (error) {
+            console.error("Erreur comptage following:", error);
+            return 0;
+        }
+
+        return count || 0;
+    } catch (error) {
+        console.error("Exception in getFollowingCount:", error);
         return 0;
     }
-    
-    return count || 0;
 }
 
 // Totaux d'engagements pour un profil
@@ -628,51 +695,69 @@ async function getUserEngagementTotals(userId) {
     const totals = {
         totalViews: 0,
         totalEncouragements: 0,
-        totalStreamViewers: 0
+        totalStreamViewers: 0,
     };
-    
+
     try {
         const { data: contentData, error: contentError } = await supabase
-            .from('content')
-            .select('views, encouragements_count')
-            .eq('user_id', userId);
-        
+            .from("content")
+            .select("views, encouragements_count")
+            .eq("user_id", userId);
+
         if (!contentError && Array.isArray(contentData)) {
-            totals.totalViews = contentData.reduce((sum, row) => sum + (row.views || 0), 0);
-            totals.totalEncouragements = contentData.reduce((sum, row) => sum + (row.encouragements_count || 0), 0);
+            totals.totalViews = contentData.reduce(
+                (sum, row) => sum + (row.views || 0),
+                0,
+            );
+            totals.totalEncouragements = contentData.reduce(
+                (sum, row) => sum + (row.encouragements_count || 0),
+                0,
+            );
         } else if (contentError) {
-            console.error('Erreur récupération vues/encouragements:', contentError);
+            console.error(
+                "Erreur récupération vues/encouragements:",
+                contentError,
+            );
         }
     } catch (error) {
-        console.error('Erreur récupération vues/encouragements:', error);
+        console.error("Erreur récupération vues/encouragements:", error);
     }
-    
+
     try {
         const { data: streamData, error: streamError } = await supabase
-            .from('streaming_sessions')
-            .select('id')
-            .eq('user_id', userId);
-        
-        if (!streamError && Array.isArray(streamData) && streamData.length > 0) {
-            const streamIds = streamData.map(stream => stream.id);
+            .from("streaming_sessions")
+            .select("id")
+            .eq("user_id", userId);
+
+        if (
+            !streamError &&
+            Array.isArray(streamData) &&
+            streamData.length > 0
+        ) {
+            const streamIds = streamData.map((stream) => stream.id);
             const { data: viewerData, error: viewerError } = await supabase
-                .from('stream_viewers')
-                .select('user_id')
-                .in('stream_id', streamIds);
-            
+                .from("stream_viewers")
+                .select("user_id")
+                .in("stream_id", streamIds);
+
             if (!viewerError && Array.isArray(viewerData)) {
-                const uniqueViewers = new Set(viewerData.map(row => row.user_id).filter(Boolean));
+                const uniqueViewers = new Set(
+                    viewerData.map((row) => row.user_id).filter(Boolean),
+                );
                 totals.totalStreamViewers = uniqueViewers.size;
             } else if (viewerError) {
-                console.error('Erreur récupération viewers stream:', viewerError);
+                console.error(
+                    "Erreur récupération viewers stream:",
+                    viewerError,
+                );
             }
         } else if (streamError) {
-            console.error('Erreur récupération streams:', streamError);
+            console.error("Erreur récupération streams:", streamError);
         }
     } catch (error) {
-        console.error('Erreur récupération viewers stream:', error);
+        console.error("Erreur récupération viewers stream:", error);
     }
-    
+
     return totals;
 }
 
@@ -684,21 +769,21 @@ async function getUserEngagementTotals(userId) {
 async function signInWithGoogle() {
     try {
         const { data, error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {}
+            provider: "google",
+            options: {},
         });
-        
+
         if (error) throw error;
-        
+
         return {
             success: true,
-            data: data
+            data: data,
         };
     } catch (error) {
-        console.error('Erreur connexion Google:', error);
+        console.error("Erreur connexion Google:", error);
         return {
             success: false,
-            error: error.message
+            error: error.message,
         };
     }
 }
@@ -706,21 +791,24 @@ async function signInWithGoogle() {
 // Réinitialisation du mot de passe
 async function resetPassword(email) {
     try {
-        const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: window.location.origin + '/login.html?reset=true'
-        });
-        
+        const { data, error } = await supabase.auth.resetPasswordForEmail(
+            email,
+            {
+                redirectTo: window.location.origin + "/login.html?reset=true",
+            },
+        );
+
         if (error) throw error;
-        
+
         return {
             success: true,
-            data: data
+            data: data,
         };
     } catch (error) {
-        console.error('Erreur reset password:', error);
+        console.error("Erreur reset password:", error);
         return {
             success: false,
-            error: error.message
+            error: error.message,
         };
     }
 }
@@ -729,20 +817,20 @@ async function resetPassword(email) {
 async function updatePassword(newPassword) {
     try {
         const { data, error } = await supabase.auth.updateUser({
-            password: newPassword
+            password: newPassword,
         });
-        
+
         if (error) throw error;
-        
+
         return {
             success: true,
-            data: data.user
+            data: data.user,
         };
     } catch (error) {
-        console.error('Erreur update password:', error);
+        console.error("Erreur update password:", error);
         return {
             success: false,
-            error: error.message
+            error: error.message,
         };
     }
 }
@@ -754,36 +842,36 @@ async function updatePassword(newPassword) {
 // Créer un projet
 async function createProject(projectData) {
     const { data, error } = await supabase
-        .from('projects')
+        .from("projects")
         .insert({
             user_id: projectData.userId,
             name: projectData.name,
             description: projectData.description,
-            cover: projectData.cover
+            cover: projectData.cover,
         })
         .select()
         .single();
-    
+
     if (error) {
-        console.error('Erreur création projet:', error);
+        console.error("Erreur création projet:", error);
         return { success: false, error: error.message };
     }
-    
+
     return { success: true, data: data };
 }
 
 // Récupérer les projets d'un utilisateur
 async function getUserProjects(userId) {
     const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-    
+        .from("projects")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
     if (error) {
-        console.error('Erreur récupération projets:', error);
+        console.error("Erreur récupération projets:", error);
         return { success: false, error: error.message };
     }
-    
+
     return { success: true, data: data };
 }

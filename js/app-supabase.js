@@ -45,7 +45,9 @@ function getInitialProfileUserId() {
 function getInitialAppAction() {
     try {
         const params = new URLSearchParams(window.location.search);
-        return String(params.get("action") || "").trim().toLowerCase();
+        return String(params.get("action") || "")
+            .trim()
+            .toLowerCase();
     } catch (error) {
         return "";
     }
@@ -2530,14 +2532,12 @@ function buildSmartCreateDefaults({
         (isArcAvailable(preSelectedArcId) && preSelectedArcId) ||
         (isArcAvailable(window.selectedArcId) && window.selectedArcId) ||
         (isArcAvailable(prefs.lastArcId) && prefs.lastArcId) ||
-        (recentUpdates.find((item) => isArcAvailable(item?.arcId))?.arcId ||
-            null) ||
+        recentUpdates.find((item) => isArcAvailable(item?.arcId))?.arcId ||
+        null ||
         ((arcs || []).length === 1 ? arcs[0].id : null);
 
     const selectedArc = findArcInList(arcs, preferredArcId);
-    const preferredType = ["text", "image", "video"].includes(
-        prefs.lastType,
-    )
+    const preferredType = ["text", "image", "video"].includes(prefs.lastType)
         ? prefs.lastType
         : defaultType;
     const safeType = preferredType || defaultType;
@@ -6233,7 +6233,8 @@ function handleEmailBadgeClick(email, el) {
 }
 
 function getProfileContentTimeValue(content) {
-    const raw = content?.createdAt || content?.created_at || content?.started_at;
+    const raw =
+        content?.createdAt || content?.created_at || content?.started_at;
     const time = new Date(raw || 0).getTime();
     return Number.isFinite(time) ? time : 0;
 }
@@ -6366,7 +6367,9 @@ function renderProfileUpdateCard(
         ? content.tags.map(normalizeTag).filter(Boolean).slice(0, 3)
         : [];
     safeTags.forEach((tag) => {
-        contextItems.push(`<span class="context-tag">#${escapeHtml(tag)}</span>`);
+        contextItems.push(
+            `<span class="context-tag">#${escapeHtml(tag)}</span>`,
+        );
     });
 
     const contextHtml = contextItems.length
@@ -6389,7 +6392,9 @@ function renderProfileUpdateCard(
     const isAnnouncement = isAnnouncementContent(content);
     const replyCount = isAnnouncement ? getReplyCount(content.contentId) : 0;
     const viewerCanEncourage =
-        !!content.contentId && currentUserId && currentUserId !== content.userId;
+        !!content.contentId &&
+        currentUserId &&
+        currentUserId !== content.userId;
     const isEncouraged = encouragedContentIds.has(content.contentId);
     const courageIcon = isEncouraged
         ? "icons/courage-green.svg"
@@ -6497,13 +6502,12 @@ function renderProfileUpdateCard(
 }
 
 function buildProfileContentGroups(contents, allArcs = []) {
-    const arcLookup = new Map(
-        (allArcs || []).map((arc) => [arc.id, arc]),
-    );
+    const arcLookup = new Map((allArcs || []).map((arc) => [arc.id, arc]));
     const groups = new Map();
     const sortedContents = [...(contents || [])].sort(
         (left, right) =>
-            getProfileContentTimeValue(right) - getProfileContentTimeValue(left),
+            getProfileContentTimeValue(right) -
+            getProfileContentTimeValue(left),
     );
 
     sortedContents.forEach((content) => {
@@ -6511,15 +6515,15 @@ function buildProfileContentGroups(contents, allArcs = []) {
         const projectId = content?.projectId || content?.project?.id || null;
         const key = arcId || projectId || "misc";
         if (!groups.has(key)) {
-            const arc = arcId ? content.arc || arcLookup.get(arcId) || null : null;
+            const arc = arcId
+                ? content.arc || arcLookup.get(arcId) || null
+                : null;
             groups.set(key, {
                 key,
                 arcId,
                 arc,
                 title:
-                    arc?.title ||
-                    content?.project?.name ||
-                    "Updates recentes",
+                    arc?.title || content?.project?.name || "Updates recentes",
                 status: arc?.status || "active",
                 contents: [],
             });
@@ -6546,7 +6550,8 @@ function renderProfileOverviewContent(
 ) {
     const safeContents = [...(contents || [])].sort(
         (left, right) =>
-            getProfileContentTimeValue(right) - getProfileContentTimeValue(left),
+            getProfileContentTimeValue(right) -
+            getProfileContentTimeValue(left),
     );
     if (safeContents.length === 0) {
         return `
@@ -6674,13 +6679,21 @@ function renderProfileSelectedArcContent(
         `;
     }
 
-    const uniqueUsers = new Set(safeContents.map((item) => item.userId).filter(Boolean));
-    const sortByDay = uniqueUsers.size <= 1 && safeContents.some((item) => Number(item.dayNumber) > 0);
+    const uniqueUsers = new Set(
+        safeContents.map((item) => item.userId).filter(Boolean),
+    );
+    const sortByDay =
+        uniqueUsers.size <= 1 &&
+        safeContents.some((item) => Number(item.dayNumber) > 0);
     safeContents.sort((left, right) => {
         if (sortByDay) {
-            return (Number(right.dayNumber) || 0) - (Number(left.dayNumber) || 0);
+            return (
+                (Number(right.dayNumber) || 0) - (Number(left.dayNumber) || 0)
+            );
         }
-        return getProfileContentTimeValue(right) - getProfileContentTimeValue(left);
+        return (
+            getProfileContentTimeValue(right) - getProfileContentTimeValue(left)
+        );
     });
 
     const encouragements = safeContents.reduce(
@@ -10289,10 +10302,7 @@ async function renderProfileTimeline(userId) {
                 }
             }
         } catch (error) {
-            console.error(
-                "Erreur chargement encouragements profil:",
-                error,
-            );
+            console.error("Erreur chargement encouragements profil:", error);
         }
     }
 
@@ -10547,10 +10557,6 @@ async function renderProfileTimeline(userId) {
         accountTypeValue === "company";
     const engagementStatsHtml = `
         <div class="follow-section" style="margin-top: 0.5rem;">
-            <div class="follower-stat">
-                <div class="follower-stat-count">${followerCount}</div>
-                <div class="follower-stat-label">Abonnés</div>
-            </div>
             <div class="follower-stat">
                 <div class="follower-stat-count">${engagementTotals.totalViews}</div>
                 <div class="follower-stat-label">Vues totales</div>
@@ -11070,7 +11076,11 @@ function syncFloatingCreateVisibility(pageId) {
 
 function navigateTo(pageId) {
     // Vérifier si l'utilisateur essaie d'accéder à son profil sans être connecté
-    if (pageId === "profile" && !window.currentUser && !window.currentProfileViewed) {
+    if (
+        pageId === "profile" &&
+        !window.currentUser &&
+        !window.currentProfileViewed
+    ) {
         if (window.XeraRouter?.navigate) {
             window.XeraRouter.navigate("login");
         } else {
@@ -11539,7 +11549,9 @@ async function fetchBlockedUsersForSettings(userId = window.currentUser?.id) {
     if (error) throw error;
 
     const blockedRows = rows || [];
-    const blockedIds = blockedRows.map((row) => row.blocked_user_id).filter(Boolean);
+    const blockedIds = blockedRows
+        .map((row) => row.blocked_user_id)
+        .filter(Boolean);
     const missingIds = blockedIds.filter((id) => !getUser(id));
 
     let fetchedUsers = [];
@@ -11557,12 +11569,16 @@ async function fetchBlockedUsersForSettings(userId = window.currentUser?.id) {
 
     return blockedRows.map((row) => {
         const profile =
-            getUser(row.blocked_user_id) || fetchedById.get(row.blocked_user_id) || null;
+            getUser(row.blocked_user_id) ||
+            fetchedById.get(row.blocked_user_id) ||
+            null;
         return {
             id: row.blocked_user_id,
             blockedAt: row.created_at || null,
             name: profile?.name || "Utilisateur",
-            avatar: profile?.avatar || "https://placehold.co/80x80?text=%F0%9F%9A%AB",
+            avatar:
+                profile?.avatar ||
+                "https://placehold.co/80x80?text=%F0%9F%9A%AB",
         };
     });
 }
@@ -11577,7 +11593,11 @@ async function handleUnblockUserFromSettings(blockedUserId) {
                 "Vous pouvez de nouveau recevoir et envoyer des messages.",
             );
         }
-        if (document.getElementById("settings-modal")?.classList.contains("active")) {
+        if (
+            document
+                .getElementById("settings-modal")
+                ?.classList.contains("active")
+        ) {
             openSettings(window.currentUser.id);
         }
     } catch (error) {
@@ -12356,8 +12376,6 @@ async function openSettings(userId) {
             const subtypeToSave = shouldOverwriteSubtype
                 ? normalizeDiscoveryAccountRole(selectedRoleValue)
                 : existingSubtypeRaw;
-
-
 
             const profileData = {
                 name: document.getElementById("setting-name").value,
@@ -13189,8 +13207,12 @@ function maybeApplyLatestPublishedPostHighlight(userId) {
     if (!profileContainer) return;
 
     const targetCard =
-        profileContainer.querySelector(".timeline-item-latest .timeline-card") ||
-        profileContainer.querySelector(".timeline-full .timeline-item .timeline-card");
+        profileContainer.querySelector(
+            ".timeline-item-latest .timeline-card",
+        ) ||
+        profileContainer.querySelector(
+            ".timeline-full .timeline-item .timeline-card",
+        );
 
     if (!targetCard) return;
 
@@ -13241,7 +13263,10 @@ function buildPublishFeedbackPayload({
     const previousGapDays = Number.isFinite(previousPublishedAt)
         ? (Date.now() - previousPublishedAt) / (1000 * 60 * 60 * 24)
         : Number.POSITIVE_INFINITY;
-    const totalPosts = Math.max(0, streakDetails.total || recentContents.length);
+    const totalPosts = Math.max(
+        0,
+        streakDetails.total || recentContents.length,
+    );
     const safeArcTitle = String(arcTitle || "").trim();
     const isProfileOpen =
         !!document.querySelector("#profile.active") &&
@@ -13303,9 +13328,7 @@ function buildPublishFeedbackPayload({
         title,
         message,
         chips: chips.slice(0, 3),
-        primaryLabel: isProfileOpen
-            ? "Voir ma publication"
-            : "Voir mon profil",
+        primaryLabel: isProfileOpen ? "Voir ma publication" : "Voir mon profil",
         secondaryLabel: "Continuer",
         onPrimary: () => focusLatestPublishedPost(userId),
     };
@@ -13366,20 +13389,23 @@ function showPublishFeedbackCard(feedback) {
         }, 240);
     };
 
-    card
-        .querySelector(".publish-feedback-close")
-        ?.addEventListener("click", removeCard);
-    card
-        .querySelector(".publish-feedback-btn-secondary")
-        ?.addEventListener("click", removeCard);
-    card
-        .querySelector(".publish-feedback-btn-primary")
-        ?.addEventListener("click", async () => {
+    card.querySelector(".publish-feedback-close")?.addEventListener(
+        "click",
+        removeCard,
+    );
+    card.querySelector(".publish-feedback-btn-secondary")?.addEventListener(
+        "click",
+        removeCard,
+    );
+    card.querySelector(".publish-feedback-btn-primary")?.addEventListener(
+        "click",
+        async () => {
             removeCard();
             if (typeof feedback.onPrimary === "function") {
                 await feedback.onPrimary();
             }
-        });
+        },
+    );
 
     document.body.appendChild(card);
     requestAnimationFrame(() => card.classList.add("is-visible"));
@@ -13619,9 +13645,7 @@ async function openCreateMenu(
     arcOptions = arcs
         .map((a) => {
             const selected =
-                selectedArcId && a.id === selectedArcId
-                    ? "selected"
-                    : "";
+                selectedArcId && a.id === selectedArcId ? "selected" : "";
             const label =
                 a._collabRole === "collaborator"
                     ? `${a.title} · collaboration`
@@ -14000,7 +14024,10 @@ async function openCreateMenu(
 
     const renderTagSuggestions = () => {
         if (!tagSuggestionsContainer || !tagSuggestionsRow) return;
-        if (currentMode === "announcement" || currentTagSuggestions.length === 0) {
+        if (
+            currentMode === "announcement" ||
+            currentTagSuggestions.length === 0
+        ) {
             tagSuggestionsRow.style.display = "none";
             tagSuggestionsContainer.innerHTML = "";
             return;
@@ -14036,7 +14063,9 @@ async function openCreateMenu(
             "Choisissez un projet pour declencher les suggestions rapides.";
     };
 
-    const refreshSmartSuggestions = ({ fileName = latestSelectedFileName } = {}) => {
+    const refreshSmartSuggestions = ({
+        fileName = latestSelectedFileName,
+    } = {}) => {
         latestSelectedFileName = fileName || "";
         const activeArc = findArcInList(arcs, arcSelect?.value);
         const suggestionType =
@@ -14120,9 +14149,8 @@ async function openCreateMenu(
     const clearMediaSelection = () => {
         mediaUrlInput.value = "";
         mediaUrlsInput.value = "";
-        mediaTypeInput.value = currentMode === "announcement"
-            ? "text"
-            : typeSelect.value;
+        mediaTypeInput.value =
+            currentMode === "announcement" ? "text" : typeSelect.value;
         latestSelectedFileName = "";
         if (fileInput) fileInput.value = "";
         if (videoDurationHint) videoDurationHint.textContent = "";
@@ -14289,7 +14317,8 @@ async function openCreateMenu(
     if (!document.getElementById("spin-style")) {
         const style = document.createElement("style");
         style.id = "spin-style";
-        style.innerHTML = "@keyframes spin { to { transform: rotate(360deg); } }";
+        style.innerHTML =
+            "@keyframes spin { to { transform: rotate(360deg); } }";
         document.head.appendChild(style);
     }
 
@@ -14364,7 +14393,8 @@ async function openCreateMenu(
                 }
 
                 mediaUrlInput.value = successUrls[0];
-                mediaTypeInput.value = successful[0]?.type || mediaTypeInput.value;
+                mediaTypeInput.value =
+                    successful[0]?.type || mediaTypeInput.value;
                 mediaUrlsInput.value = JSON.stringify(successUrls);
                 previewContainer.style.display = "block";
                 placeholder.style.display = "none";
@@ -14383,7 +14413,9 @@ async function openCreateMenu(
                     previewContainer.innerHTML = buildMediaPreviewShell(
                         `<video src="${successUrls[0]}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`,
                     );
-                    refreshSmartSuggestions({ fileName: latestSelectedFileName });
+                    refreshSmartSuggestions({
+                        fileName: latestSelectedFileName,
+                    });
                     return;
                 }
 
@@ -14394,7 +14426,9 @@ async function openCreateMenu(
                     } catch (e) {
                         /* ignore */
                     }
-                    refreshSmartSuggestions({ fileName: latestSelectedFileName });
+                    refreshSmartSuggestions({
+                        fileName: latestSelectedFileName,
+                    });
                     return;
                 }
 
@@ -14509,8 +14543,7 @@ async function openCreateMenu(
             if (mediaUrls.length === 0 && mediaUrl) {
                 mediaUrls = [mediaUrl];
             }
-            const selectedType =
-                mediaTypeInput.value || typeSelect.value;
+            const selectedType = mediaTypeInput.value || typeSelect.value;
             if (selectedType !== "text" && !mediaUrl) {
                 alert('Ajoutez un média ou sélectionnez "Post texte".');
                 return;
@@ -14567,9 +14600,7 @@ async function openCreateMenu(
             closeCreateMenu();
             showBackgroundPublishBanner({
                 state: "loading",
-                title: isEdit
-                    ? "Mise a jour en cours"
-                    : "Publication en cours",
+                title: isEdit ? "Mise a jour en cours" : "Publication en cours",
                 message:
                     "Votre contenu est en train d'etre envoye en arriere-plan.",
             });
@@ -14578,7 +14609,8 @@ async function openCreateMenu(
                 let result;
                 if (isEdit) {
                     // Mise à jour
-                    const contentId = document.getElementById("content-id").value;
+                    const contentId =
+                        document.getElementById("content-id").value;
                     result = await updateContent(contentId, contentData);
                 } else {
                     // Création
@@ -15144,10 +15176,15 @@ observer.observe(document.body, {
 
 // ==================== ADMIN: BROADCAST EMAIL ====================
 async function sendAdminBroadcastEmail() {
-    const subject = document.getElementById("admin-broadcast-subject")?.value?.trim();
+    const subject = document
+        .getElementById("admin-broadcast-subject")
+        ?.value?.trim();
     const body = document.getElementById("admin-broadcast-body")?.value?.trim();
-    const ctaLabel = document.getElementById("admin-broadcast-cta-label")?.value?.trim() || "";
-    const ctaUrl = document.getElementById("admin-broadcast-cta-url")?.value?.trim() || "";
+    const ctaLabel =
+        document.getElementById("admin-broadcast-cta-label")?.value?.trim() ||
+        "";
+    const ctaUrl =
+        document.getElementById("admin-broadcast-cta-url")?.value?.trim() || "";
     const defaultLabel = "Envoyer à tous les utilisateurs";
     const loadingLabel = "Envoi en cours...";
     const successLabel = "Email envoyé";
@@ -15157,7 +15194,10 @@ async function sendAdminBroadcastEmail() {
     const resultLabelMs = 2200;
 
     if (!subject || !body) {
-        window.ToastManager?.error("Erreur", "Le sujet et le contenu sont requis.");
+        window.ToastManager?.error(
+            "Erreur",
+            "Le sujet et le contenu sont requis.",
+        );
         return;
     }
 
@@ -15206,7 +15246,10 @@ async function sendAdminBroadcastEmail() {
             if (submitBtn) {
                 submitBtn.textContent = partialLabel;
             }
-            window.ToastManager?.info("Envoi partiel", summary || "L'envoi est partiellement terminé.");
+            window.ToastManager?.info(
+                "Envoi partiel",
+                summary || "L'envoi est partiellement terminé.",
+            );
         } else {
             if (submitBtn) {
                 submitBtn.textContent = successLabel;
@@ -15215,10 +15258,14 @@ async function sendAdminBroadcastEmail() {
         }
 
         // Clear form
-        if (document.getElementById("admin-broadcast-subject")) document.getElementById("admin-broadcast-subject").value = "";
-        if (document.getElementById("admin-broadcast-body")) document.getElementById("admin-broadcast-body").value = "";
-        if (document.getElementById("admin-broadcast-cta-label")) document.getElementById("admin-broadcast-cta-label").value = "";
-        if (document.getElementById("admin-broadcast-cta-url")) document.getElementById("admin-broadcast-cta-url").value = "";
+        if (document.getElementById("admin-broadcast-subject"))
+            document.getElementById("admin-broadcast-subject").value = "";
+        if (document.getElementById("admin-broadcast-body"))
+            document.getElementById("admin-broadcast-body").value = "";
+        if (document.getElementById("admin-broadcast-cta-label"))
+            document.getElementById("admin-broadcast-cta-label").value = "";
+        if (document.getElementById("admin-broadcast-cta-url"))
+            document.getElementById("admin-broadcast-cta-url").value = "";
         await wait(resultLabelMs);
     } catch (error) {
         await ensureMinimumBusyTime();
@@ -15226,7 +15273,10 @@ async function sendAdminBroadcastEmail() {
             submitBtn.textContent = errorLabel;
         }
         console.error("Broadcast email error:", error);
-        window.ToastManager?.error("Erreur", error.message || "Impossible d'envoyer l'email.");
+        window.ToastManager?.error(
+            "Erreur",
+            error.message || "Impossible d'envoyer l'email.",
+        );
         await wait(resultLabelMs);
     } finally {
         if (submitBtn) {

@@ -1,344 +1,471 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plans d'abonnement - XERA</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/monetization.css">
-    <link rel="stylesheet" href="css/search-notification.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-<body class="plans-page">
-    <div class="app-container">
-        <!-- Navigation -->
-        <nav>
-            <a class="logo" href="index.html">
-                <div class="logo-img">
-                    <img src="icons/logo.png" alt="XERA - Logo" />
-                </div>
-                <span>XΞRA</span>
-            </a>
-            <div class="nav-links">
-                <a href="index.html"><i class="fas fa-home"></i> Accueil</a>
-                <a href="creator-dashboard.html"><i class="fas fa-chart-line"></i> Monétisation</a>
-            </div>
-            <div class="nav-actions">
-                <a
-                    class="notification-button profile-nav-button"
-                    href="profile.html"
-                    title="Profil"
-                    aria-label="Profil"
-                >
-                    <img
-                        id="navAvatar"
-                        class="notification-icon profile-nav-avatar"
-                        src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' rx='20' fill='%231f2937'/><circle cx='20' cy='16' r='6' fill='%23e5e7eb'/><path d='M8%2034c2.5-6%208-9%2012-9s9.5%203%2012%209' fill='%23e5e7eb'/></svg>"
-                        alt="Avatar utilisateur"
-                    />
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Plans d'abonnement - XERA</title>
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        <link rel="stylesheet" href="css/style.css" />
+        <link rel="stylesheet" href="css/monetization.css" />
+        <link rel="stylesheet" href="css/search-notification.css" />
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        />
+    </head>
+    <body class="plans-page">
+        <div class="app-container">
+            <!-- Navigation -->
+            <nav>
+                <a class="logo" href="index.html">
+                    <div class="logo-img">
+                        <img src="icons/logo.png" alt="XERA - Logo" />
+                    </div>
+                    <span>XΞRA</span>
                 </a>
+                <div class="nav-links">
+                    <a href="index.html"><i class="fas fa-home"></i> Accueil</a>
+                    <a href="creator-dashboard.html"
+                        ><i class="fas fa-chart-line"></i> Monétisation</a
+                    >
+                </div>
+                <div class="nav-actions">
+                    <a
+                        class="notification-button profile-nav-button"
+                        href="profile.html"
+                        title="Profil"
+                        aria-label="Profil"
+                    >
+                        <img
+                            id="navAvatar"
+                            class="notification-icon profile-nav-avatar"
+                            src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' rx='20' fill='%231f2937'/><circle cx='20' cy='16' r='6' fill='%23e5e7eb'/><path d='M8%2034c2.5-6%208-9%2012-9s9.5%203%2012%209' fill='%23e5e7eb'/></svg>"
+                            alt="Avatar utilisateur"
+                        />
+                    </a>
+                </div>
+            </nav>
+
+            <!-- Hero Section -->
+            <section class="plans-hero">
+                <div class="plans-hero-inner">
+                    <div class="plans-hero-content">
+                        <span class="hero-eyebrow"
+                            ><i class="fas fa-star"></i> Vérification &
+                            monétisation</span
+                        >
+                        <h1>Fais passer ton profil au niveau pro.</h1>
+                        <p class="hero-lead">
+                            Choisis un plan pour débloquer le badge, la
+                            visibilité et les outils qui accélèrent ta
+                            progression.
+                        </p>
+                        <div
+                            class="billing-toggle"
+                            role="group"
+                            aria-label="Choisir la facturation"
+                        >
+                            <button
+                                class="billing-btn active"
+                                data-cycle="monthly"
+                                type="button"
+                            >
+                                Mensuel
+                            </button>
+                            <button
+                                class="billing-btn"
+                                data-cycle="annual"
+                                type="button"
+                            >
+                                Annuel -20%
+                            </button>
+                        </div>
+                        <p class="billing-note">
+                            Économisez 20% avec la facturation annuelle.
+                        </p>
+                        <div class="hero-trust">
+                            <div>
+                                <i class="fas fa-shield-halved"></i> Paiement
+                                sécurisé
+                            </div>
+                            <div>
+                                <i class="fas fa-file-invoice"></i> Facturation
+                                claire
+                            </div>
+                            <div>
+                                <i class="fas fa-sliders"></i> Gestion depuis
+                                ton profil
+                            </div>
+                        </div>
+                    </div>
+                    <div class="plans-hero-card">
+                        <div class="hero-card-header">
+                            <span>Ce que tu peux débloquer</span>
+                            <span class="hero-card-pill">-20% annuel</span>
+                        </div>
+                        <ul class="hero-card-list">
+                            <li>
+                                <i class="fas fa-circle-check"></i> Badges bleu,
+                                medium ou gold
+                            </li>
+                            <li>
+                                <i class="fas fa-circle-check"></i> Monétisation
+                                et dons communautaires
+                            </li>
+                            <li>
+                                <i class="fas fa-circle-check"></i> Priorité
+                                Discover + analytics
+                            </li>
+                            <li>
+                                <i class="fas fa-circle-check"></i> Lives HD et
+                                lives privés (Pro)
+                            </li>
+                            <li>
+                                <i class="fas fa-circle-check"></i> GIF
+                                avatar/bannière + notifications live
+                            </li>
+                            <li>
+                                <i class="fas fa-star"></i> Stats détaillées et
+                                personnalisation avancée (Medium+)
+                            </li>
+                            <li>
+                                <i class="fas fa-crown"></i> Monétisation vidéo
+                                et accès anticipé (Pro)
+                            </li>
+                        </ul>
+                        <div class="hero-card-foot">
+                            <i class="fas fa-lock"></i> Paiement via MaishaPay
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Plans Container -->
+            <div class="plans-container">
+                <div class="plans-grid">
+                    <!-- Plan Standard -->
+                    <div class="plan-detail-card standard">
+                        <div class="plan-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <h3>Standard</h3>
+                        <div class="price" data-monthly="2.99">
+                            $2.99<span>/mois</span>
+                        </div>
+                        <p class="description">
+                            La base idéale pour obtenir votre badge bleu
+                        </p>
+
+                        <ul class="plan-features-list">
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Badge de vérification bleu
+                            </li>
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Historique complet et public
+                            </li>
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Priorité dans le feed Discover
+                            </li>
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Avatar/Bannière GIF autorisés
+                            </li>
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Notifications automatiques aux followers quand
+                                vous lancez un live
+                            </li>
+                        </ul>
+
+                        <button
+                            class="btn-subscribe"
+                            data-plan="standard"
+                            onclick="selectSubscription('standard')"
+                        >
+                            Choisir Standard
+                        </button>
+                    </div>
+
+                    <!-- Plan Medium -->
+                    <div class="plan-detail-card medium">
+                        <div class="plan-icon">
+                            <i class="fas fa-heart"></i>
+                        </div>
+                        <h3>Medium</h3>
+                        <div class="price" data-monthly="7.99">
+                            $7.99<span>/mois</span>
+                        </div>
+                        <p class="description">
+                            Tous les avantages Standard + monétisation
+                        </p>
+
+                        <ul class="plan-features-list">
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Tous les avantages Standard
+                            </li>
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Badge Medium
+                            </li>
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Fonctionnalités de monétisation
+                            </li>
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Soutiens de la communauté (dons)
+                            </li>
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Avatar/Bannière GIF autorisés
+                            </li>
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Notifications automatiques aux followers quand
+                                vous lancez un live
+                            </li>
+                            <li>
+                                <i class="fas fa-star"></i>
+                                Statistiques détaillées des revenus
+                            </li>
+                            <li>
+                                <i class="fas fa-star"></i>
+                                Personnalisation avancée du profil
+                            </li>
+                            <li>
+                                <i class="fas fa-star"></i>
+                                Badge de créateur vérifié
+                            </li>
+                            <li>
+                                <i class="fas fa-star"></i>
+                                Priorité dans les recommandations
+                            </li>
+                        </ul>
+
+                        <button
+                            class="btn-subscribe"
+                            data-plan="medium"
+                            onclick="selectSubscription('medium')"
+                        >
+                            Choisir Medium
+                        </button>
+                    </div>
+
+                    <!-- Plan Pro -->
+                    <div class="plan-detail-card pro recommended">
+                        <div class="recommended-badge">Populaire</div>
+                        <div class="plan-icon">
+                            <i class="fas fa-crown"></i>
+                        </div>
+                        <h3>Pro</h3>
+                        <div class="price" data-monthly="14.99">
+                            $14.99<span>/mois</span>
+                        </div>
+                        <p class="description">
+                            Le pack complet avec badge Gold et analytics avancés
+                        </p>
+
+                        <ul class="plan-features-list">
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Tous les avantages Medium
+                            </li>
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Badge Gold
+                            </li>
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Analytics avancés
+                            </li>
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Qualité de lives en HD
+                            </li>
+                            <li>
+                                <i class="fas fa-check"></i>
+                                Lives privés réservés aux followers
+                            </li>
+                            <li>
+                                <i class="fas fa-crown"></i>
+                                Monétisation vidéo ($0.40 par 1000 vues)
+                            </li>
+                            <li>
+                                <i class="fas fa-crown"></i>
+                                Outils de collaboration avancés
+                            </li>
+                            <li>
+                                <i class="fas fa-crown"></i>
+                                Accès anticipé aux nouvelles fonctionnalités
+                            </li>
+                            <li>
+                                <i class="fas fa-crown"></i>
+                                Personnalisation complète de la page profil
+                            </li>
+                            <li>
+                                <i class="fas fa-crown"></i>
+                                Statistiques en temps réel
+                            </li>
+                            <li>
+                                <i class="fas fa-crown"></i>
+                                Export des données et rapports détaillés
+                            </li>
+                            <li>
+                                <i class="fas fa-crown"></i>
+                                Visibilité maximale dans Discover
+                            </li>
+                        </ul>
+
+                        <button
+                            class="btn-subscribe"
+                            data-plan="pro"
+                            onclick="selectSubscription('pro')"
+                        >
+                            Choisir Pro
+                        </button>
+                    </div>
+                </div>
             </div>
-        </nav>
 
-        <!-- Hero Section -->
-        <section class="plans-hero">
-            <div class="plans-hero-inner">
-                <div class="plans-hero-content">
-                    <span class="hero-eyebrow"><i class="fas fa-star"></i> Vérification & monétisation</span>
-                    <h1>Fais passer ton profil au niveau pro.</h1>
-                    <p class="hero-lead">Choisis un plan pour débloquer le badge, la visibilité et les outils qui accélèrent ta progression.</p>
-                    <div class="billing-toggle" role="group" aria-label="Choisir la facturation">
-                        <button class="billing-btn active" data-cycle="monthly" type="button">Mensuel</button>
-                        <button class="billing-btn" data-cycle="annual" type="button">Annuel -20%</button>
-                    </div>
-                    <p class="billing-note">Économisez 20% avec la facturation annuelle.</p>
-                    <div class="hero-trust">
-                        <div><i class="fas fa-shield-halved"></i> Paiement sécurisé</div>
-                        <div><i class="fas fa-file-invoice"></i> Facturation claire</div>
-                        <div><i class="fas fa-sliders"></i> Gestion depuis ton profil</div>
-                    </div>
-                </div>
-                <div class="plans-hero-card">
-                    <div class="hero-card-header">
-                        <span>Ce que tu peux débloquer</span>
-                        <span class="hero-card-pill">-20% annuel</span>
-                    </div>
-                    <ul class="hero-card-list">
-                        <li><i class="fas fa-circle-check"></i> Badges bleu, medium ou gold</li>
-                        <li><i class="fas fa-circle-check"></i> Monétisation et dons communautaires</li>
-                        <li><i class="fas fa-circle-check"></i> Priorité Discover + analytics</li>
-                        <li><i class="fas fa-circle-check"></i> Lives HD et lives privés (Pro)</li>
-                        <li><i class="fas fa-circle-check"></i> GIF avatar/bannière + notifications live</li>
-                        <li><i class="fas fa-star"></i> Stats détaillées et personnalisation avancée (Medium+)</li>
-                        <li><i class="fas fa-crown"></i> Monétisation vidéo et accès anticipé (Pro)</li>
-                    </ul>
-                    <div class="hero-card-foot">
-                        <i class="fas fa-lock"></i> Paiement via MaishaPay
-                    </div>
-                </div>
-            </div>
-        </section>
+            <!-- FAQ Section -->
+            <section class="faq-section">
+                <h2>Questions fréquentes</h2>
 
-        <!-- Plans Container -->
-        <div class="plans-container">
-            <div class="plans-grid">
-                <!-- Plan Standard -->
-                <div class="plan-detail-card standard">
-                    <div class="plan-icon">
-                        <i class="fas fa-check-circle"></i>
-                    </div>
-                    <h3>Standard</h3>
-                    <div class="price" data-monthly="2.99">$2.99<span>/mois</span></div>
-                    <p class="description">La base idéale pour obtenir votre badge bleu</p>
-                    
-                    <ul class="plan-features-list">
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Badge de vérification bleu
-                        </li>
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Historique complet et public
-                        </li>
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Priorité dans le feed Discover
-                        </li>
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Avatar/Bannière GIF autorisés
-                        </li>
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Notifications automatiques aux followers quand vous lancez un live
-                        </li>
-                    </ul>
-                    
-                    <button class="btn-subscribe" data-plan="standard" onclick="selectSubscription('standard')">
-                        Choisir Standard
+                <div class="faq-item">
+                    <button class="faq-question" onclick="toggleFaq(this)">
+                        Comment fonctionne la monétisation ?
+                        <i class="fas fa-chevron-down"></i>
                     </button>
+                    <div class="faq-answer">
+                        <p>
+                            Pour activer la monétisation, vous devez avoir un
+                            abonnement Medium ou Pro actif ET au moins 1000
+                            abonnés. Une fois activée, vous pouvez recevoir des
+                            soutiens financiers de votre communauté sur votre
+                            profil, vos lives et vos contenus.
+                        </p>
+                    </div>
                 </div>
 
-                <!-- Plan Medium -->
-                <div class="plan-detail-card medium">
-                    <div class="plan-icon">
-                        <i class="fas fa-heart"></i>
-                    </div>
-                    <h3>Medium</h3>
-                    <div class="price" data-monthly="7.99">$7.99<span>/mois</span></div>
-                    <p class="description">Tous les avantages Standard + monétisation</p>
-                    
-                    <ul class="plan-features-list">
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Tous les avantages Standard
-                        </li>
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Badge Medium
-                        </li>
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Fonctionnalités de monétisation
-                        </li>
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Soutiens de la communauté (dons)
-                        </li>
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Avatar/Bannière GIF autorisés
-                        </li>
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Notifications automatiques aux followers quand vous lancez un live
-                        </li>
-                        <li>
-                            <i class="fas fa-star"></i>
-                            Statistiques détaillées des revenus
-                        </li>
-                        <li>
-                            <i class="fas fa-star"></i>
-                            Personnalisation avancée du profil
-                        </li>
-                        <li>
-                            <i class="fas fa-star"></i>
-                            Badge de créateur vérifié
-                        </li>
-                        <li>
-                            <i class="fas fa-star"></i>
-                            Priorité dans les recommandations
-                        </li>
-                    </ul>
-                    
-                    <button class="btn-subscribe" data-plan="medium" onclick="selectSubscription('medium')">
-                        Choisir Medium
+                <div class="faq-item">
+                    <button class="faq-question" onclick="toggleFaq(this)">
+                        Quelle commission prend XERA ?
+                        <i class="fas fa-chevron-down"></i>
                     </button>
+                    <div class="faq-answer">
+                        <p>
+                            XERA prélève une commission de 20% sur chaque
+                            transaction. Cela signifie que vous recevez 80% du
+                            montant des soutiens. Par exemple, pour un soutien
+                            de $10, vous recevez $8 net.
+                        </p>
+                    </div>
                 </div>
 
-                <!-- Plan Pro -->
-                <div class="plan-detail-card pro recommended">
-                    <div class="recommended-badge">Populaire</div>
-                    <div class="plan-icon">
-                        <i class="fas fa-crown"></i>
-                    </div>
-                    <h3>Pro</h3>
-                    <div class="price" data-monthly="14.99">$14.99<span>/mois</span></div>
-                    <p class="description">Le pack complet avec badge Gold et analytics avancés</p>
-                    
-                    <ul class="plan-features-list">
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Tous les avantages Medium
-                        </li>
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Badge Gold
-                        </li>
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Analytics avancés
-                        </li>
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Qualité de lives en HD
-                        </li>
-                        <li>
-                            <i class="fas fa-check"></i>
-                            Lives privés réservés aux followers
-                        </li>
-                        <li>
-                            <i class="fas fa-crown"></i>
-                            Monétisation vidéo ($0.40 par 1000 vues)
-                        </li>
-                        <li>
-                            <i class="fas fa-crown"></i>
-                            Outils de collaboration avancés
-                        </li>
-                        <li>
-                            <i class="fas fa-crown"></i>
-                            Accès anticipé aux nouvelles fonctionnalités
-                        </li>
-                        <li>
-                            <i class="fas fa-crown"></i>
-                            Personnalisation complète de la page profil
-                        </li>
-                        <li>
-                            <i class="fas fa-crown"></i>
-                            Statistiques en temps réel
-                        </li>
-                        <li>
-                            <i class="fas fa-crown"></i>
-                            Export des données et rapports détaillés
-                        </li>
-                        <li>
-                            <i class="fas fa-crown"></i>
-                            Visibilité maximale dans Discover
-                        </li>
-                    </ul>
-                    
-                    <button class="btn-subscribe" data-plan="pro" onclick="selectSubscription('pro')">
-                        Choisir Pro
+                <div class="faq-item">
+                    <button class="faq-question" onclick="toggleFaq(this)">
+                        Comment fonctionne la monétisation vidéo ?
+                        <i class="fas fa-chevron-down"></i>
                     </button>
+                    <div class="faq-answer">
+                        <p>
+                            Avec le plan Pro, vous gagnez $0.40 pour chaque 1000
+                            vues sur vos vidéos de plus de 60 secondes. Les
+                            revenus sont calculés mensuellement et versés sur
+                            votre compte MaishaPay, moins la commission de 20%
+                            de XERA.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-question" onclick="toggleFaq(this)">
+                        Puis-je changer de plan à tout moment ?
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="faq-answer">
+                        <p>
+                            Oui, vous pouvez upgrader ou downgrader votre plan à
+                            tout moment. Si vous passez à un plan supérieur,
+                            vous serez facturé au prorata. Si vous downgradez,
+                            le changement prendra effet à la fin de votre
+                            période de facturation actuelle.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-question" onclick="toggleFaq(this)">
+                        Comment sont payés les revenus ?
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="faq-answer">
+                        <p>
+                            Les revenus sont versés via MaishaPay. Vous devez
+                            avoir un compte MaishaPay vérifié (KYC) pour
+                            recevoir les paiements. Les revenus des soutiens
+                            sont disponibles immédiatement, tandis que les
+                            revenus vidéo sont calculés et payés mensuellement.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-question" onclick="toggleFaq(this)">
+                        Que se passe-t-il si je descends en dessous de 1000
+                        abonnés ?
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="faq-answer">
+                        <p>
+                            Si vous descendez en dessous de 1000 abonnés, votre
+                            statut de monétisation sera temporairement
+                            désactivé. Vous ne pourrez plus recevoir de nouveaux
+                            soutiens tant que vous n'aurez pas retrouvé 1000
+                            abonnés. Vos revenus précédents restent à vous.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Modal de confirmation -->
+            <div class="modal" id="confirmModal">
+                <div class="modal-content support-modal-content">
+                    <div class="modal-header">
+                        <h2>Confirmer l'abonnement</h2>
+                        <button class="close-btn" onclick="closeConfirmModal()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="confirm-plan" id="confirmPlanDetails">
+                            <!-- Dynamique -->
+                        </div>
+                        <p class="confirm-note">
+                            <i class="fas fa-info-circle"></i>
+                            Vous serez redirigé vers MaishaPay pour finaliser le
+                            paiement sécurisé.
+                        </p>
+                        <button
+                            class="btn-primary btn-full"
+                            onclick="processSubscription()"
+                        >
+                            <i class="fas fa-lock"></i> Procéder au paiement
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- FAQ Section -->
-        <section class="faq-section">
-            <h2>Questions fréquentes</h2>
-            
-            <div class="faq-item">
-                <button class="faq-question" onclick="toggleFaq(this)">
-                    Comment fonctionne la monétisation ?
-                    <i class="fas fa-chevron-down"></i>
-                </button>
-                <div class="faq-answer">
-                    <p>Pour activer la monétisation, vous devez avoir un abonnement Medium ou Pro actif ET au moins 1000 abonnés. Une fois activée, vous pouvez recevoir des soutiens financiers de votre communauté sur votre profil, vos lives et vos contenus.</p>
-                </div>
-            </div>
-            
-            <div class="faq-item">
-                <button class="faq-question" onclick="toggleFaq(this)">
-                    Quelle commission prend XERA ?
-                    <i class="fas fa-chevron-down"></i>
-                </button>
-                <div class="faq-answer">
-                    <p>XERA prélève une commission de 20% sur chaque transaction. Cela signifie que vous recevez 80% du montant des soutiens. Par exemple, pour un soutien de $10, vous recevez $8 net.</p>
-                </div>
-            </div>
-            
-            <div class="faq-item">
-                <button class="faq-question" onclick="toggleFaq(this)">
-                    Comment fonctionne la monétisation vidéo ?
-                    <i class="fas fa-chevron-down"></i>
-                </button>
-                <div class="faq-answer">
-                    <p>Avec le plan Pro, vous gagnez $0.40 pour chaque 1000 vues sur vos vidéos de plus de 60 secondes. Les revenus sont calculés mensuellement et versés sur votre compte MaishaPay, moins la commission de 20% de XERA.</p>
-                </div>
-            </div>
-            
-            <div class="faq-item">
-                <button class="faq-question" onclick="toggleFaq(this)">
-                    Puis-je changer de plan à tout moment ?
-                    <i class="fas fa-chevron-down"></i>
-                </button>
-                <div class="faq-answer">
-                    <p>Oui, vous pouvez upgrader ou downgrader votre plan à tout moment. Si vous passez à un plan supérieur, vous serez facturé au prorata. Si vous downgradez, le changement prendra effet à la fin de votre période de facturation actuelle.</p>
-                </div>
-            </div>
-            
-            <div class="faq-item">
-                <button class="faq-question" onclick="toggleFaq(this)">
-                    Comment sont payés les revenus ?
-                    <i class="fas fa-chevron-down"></i>
-                </button>
-                <div class="faq-answer">
-                    <p>Les revenus sont versés via MaishaPay. Vous devez avoir un compte MaishaPay vérifié (KYC) pour recevoir les paiements. Les revenus des soutiens sont disponibles immédiatement, tandis que les revenus vidéo sont calculés et payés mensuellement.</p>
-                </div>
-            </div>
-            
-            <div class="faq-item">
-                <button class="faq-question" onclick="toggleFaq(this)">
-                    Que se passe-t-il si je descends en dessous de 1000 abonnés ?
-                    <i class="fas fa-chevron-down"></i>
-                </button>
-                <div class="faq-answer">
-                    <p>Si vous descendez en dessous de 1000 abonnés, votre statut de monétisation sera temporairement désactivé. Vous ne pourrez plus recevoir de nouveaux soutiens tant que vous n'aurez pas retrouvé 1000 abonnés. Vos revenus précédents restent à vous.</p>
-                </div>
-            </div>
-        </section>
-
-        <!-- Modal de confirmation -->
-        <div class="modal" id="confirmModal">
-            <div class="modal-content support-modal-content">
-                <div class="modal-header">
-                    <h2>Confirmer l'abonnement</h2>
-                    <button class="close-btn" onclick="closeConfirmModal()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <div class="confirm-plan" id="confirmPlanDetails">
-                        <!-- Dynamique -->
-                    </div>
-                    <p class="confirm-note">
-                        <i class="fas fa-info-circle"></i>
-                        Vous serez redirigé vers MaishaPay pour finaliser le paiement sécurisé.
-                    </p>
-                    <button class="btn-primary btn-full" onclick="processSubscription()">
-                        <i class="fas fa-lock"></i> Procéder au paiement
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Scripts -->
-    <script src="js/router.js"></script>
-    <script src="js/supabase-config.js"></script>
-    <script src="js/monetization.js?v=20260318-6"></script>
-    <script src="js/subscription-plans.js?v=20260318-1"></script>
-</body>
+        <!-- Scripts -->
+        <script src="js/router.js"></script>
+        <script src="js/supabase-config.js"></script>
+        <script src="js/monetization-utils.js"></script>
+        <script src="js/monetization.js?v=20260318-6"></script>
+        <script src="js/subscription-plans.js?v=20260318-1"></script>
+    </body>
 </html>

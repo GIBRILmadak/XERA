@@ -24,10 +24,10 @@ let notificationsRealtimeWarned = false;
 // Initialiser les notifications
 async function initializeNotifications() {
     if (!currentUser) return;
-    
+
     // Charger les notifications existantes
     await loadNotifications();
-    
+
     // S'abonner aux nouvelles notifications en temps réel
     subscribeToNotifications();
 
@@ -40,7 +40,10 @@ async function initializeNotifications() {
     // Enregistrer le service worker / push uniquement si déjà autorisé
     setupPushNotifications();
     startNotificationsPollingFallback();
-    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+    if (
+        typeof Notification !== "undefined" &&
+        Notification.permission === "granted"
+    ) {
         scheduleReturnReminder();
     }
 }
@@ -86,7 +89,8 @@ async function setupPushNotifications() {
         if (Notification.permission !== "granted") return;
 
         pushSubscription =
-            pushSubscription || (await swRegistration.pushManager.getSubscription());
+            pushSubscription ||
+            (await swRegistration.pushManager.getSubscription());
 
         if (!pushSubscription) {
             const appServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
@@ -105,12 +109,15 @@ async function setupPushNotifications() {
 
         // Écoute les resubscriptions envoyées par le SW
         if (!pushMessageListenerBound) {
-            navigator.serviceWorker.addEventListener("message", async (event) => {
-                if (event.data?.type === "PUSH_SUBSCRIPTION_REFRESH") {
-                    pushSubscription = event.data.subscription;
-                    await sendSubscriptionToServer(pushSubscription);
-                }
-            });
+            navigator.serviceWorker.addEventListener(
+                "message",
+                async (event) => {
+                    if (event.data?.type === "PUSH_SUBSCRIPTION_REFRESH") {
+                        pushSubscription = event.data.subscription;
+                        await sendSubscriptionToServer(pushSubscription);
+                    }
+                },
+            );
             pushMessageListenerBound = true;
         }
     } catch (error) {
@@ -122,20 +129,19 @@ async function setupPushNotifications() {
 async function loadNotifications() {
     try {
         const { data, error } = await supabase
-            .from('notifications')
-            .select('*')
-            .eq('user_id', currentUser.id)
-            .order('created_at', { ascending: false })
+            .from("notifications")
+            .select("*")
+            .eq("user_id", currentUser.id)
+            .order("created_at", { ascending: false })
             .limit(50);
-        
+
         if (error) throw error;
-        
+
         notifications = normalizeNotifications(data || []);
         await hydrateNotificationMetadata(notifications);
         updateNotificationBadge();
-        
     } catch (error) {
-        console.error('Erreur chargement notifications:', error);
+        console.error("Erreur chargement notifications:", error);
     }
 }
 
@@ -147,21 +153,21 @@ function subscribeToNotifications() {
         supabase.removeChannel(notificationChannel);
         notificationChannel = null;
     }
-    
+
     // Créer un canal de notifications
     notificationChannel = supabase
         .channel(`notifications-${currentUser.id}-${Date.now()}`)
         .on(
-            'postgres_changes',
+            "postgres_changes",
             {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'notifications',
-                filter: `user_id=eq.${currentUser.id}`
+                event: "INSERT",
+                schema: "public",
+                table: "notifications",
+                filter: `user_id=eq.${currentUser.id}`,
             },
             (payload) => {
                 handleNewNotification(payload.new);
-            }
+            },
         )
         .subscribe((status) => {
             if (status === "CHANNEL_ERROR" && !notificationsRealtimeWarned) {
@@ -178,24 +184,24 @@ function handleNewNotification(notification) {
     const normalized = normalizeNotification(notification);
     notifications.unshift(normalized);
     hydrateNotificationMetadata([normalized]).catch(() => {});
-    
+
     // Afficher une notification toast
     showNotificationToast(normalized);
 
     // Afficher une notification navigateur si permis
     showBrowserNotification(normalized);
-    
+
     // Mettre à jour le badge
     updateNotificationBadge();
-    
+
     // Jouer un son (optionnel)
     playNotificationSound(normalized.type);
 }
 
 // Afficher un toast de notification
 function showNotificationToast(notification) {
-    const toast = document.createElement('div');
-    toast.className = 'notification-toast';
+    const toast = document.createElement("div");
+    toast.className = "notification-toast";
     toast.innerHTML = `
         <div class="notification-toast-content">
             <div class="notification-toast-icon">${getNotificationIcon(notification.type)}</div>
@@ -205,21 +211,21 @@ function showNotificationToast(notification) {
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(toast);
-    
+
     // Animation d'entrée
-    setTimeout(() => toast.classList.add('show'), 100);
-    
+    setTimeout(() => toast.classList.add("show"), 100);
+
     // Retirer après 5 secondes
     setTimeout(() => {
-        toast.classList.remove('show');
+        toast.classList.remove("show");
         setTimeout(() => toast.remove(), 300);
     }, 5000);
-    
+
     // Cliquer pour fermer
-    toast.addEventListener('click', () => {
-        toast.classList.remove('show');
+    toast.addEventListener("click", () => {
+        toast.classList.remove("show");
         setTimeout(() => toast.remove(), 300);
     });
 }
@@ -227,39 +233,41 @@ function showNotificationToast(notification) {
 // Obtenir l'icône selon le type de notification
 function getNotificationIcon(type) {
     const icons = {
-        support: '💖',
-        follow: '👤',
-        new_update: '📝',
-        new_arc: '📈',
-        stream: '🔴',
-        live_start: '🔴',
-        encouragement: '✨',
-        collaboration: '🤝',
-        like: '❤️',
-        comment: '💬',
-        mention: '@',
-        achievement: '🏆'
+        support: "💖",
+        follow: "👤",
+        arc_follow: "📌",
+        new_update: "📝",
+        new_arc: "📈",
+        stream: "🔴",
+        live_start: "🔴",
+        encouragement: "✨",
+        collaboration: "🤝",
+        like: "❤️",
+        comment: "💬",
+        mention: "@",
+        achievement: "🏆",
     };
-    return icons[type] || '🔔';
+    return icons[type] || "🔔";
 }
 
 // Obtenir le titre de la notification
 function getNotificationTitle(notification) {
     const titles = {
-        support: 'Nouveau soutien',
-        follow: 'Nouvel abonné',
-        new_update: 'Nouvelle mise à jour',
-        new_arc: 'Nouveau projet',
-        stream: 'Live en cours',
-        live_start: 'Live en cours',
-        encouragement: 'Nouvel encouragement',
-        collaboration: 'Demande de collaboration',
-        like: 'Nouveau like',
-        comment: 'Nouveau commentaire',
-        mention: 'Mention',
-        achievement: 'Succès débloqué'
+        support: "Nouveau soutien",
+        follow: "Nouvel abonné",
+        arc_follow: "Nouveau follower de projet",
+        new_update: "Nouvelle mise à jour",
+        new_arc: "Nouveau projet",
+        stream: "Live en cours",
+        live_start: "Live en cours",
+        encouragement: "Nouvel encouragement",
+        collaboration: "Demande de collaboration",
+        like: "Nouveau like",
+        comment: "Nouveau commentaire",
+        mention: "Mention",
+        achievement: "Succès débloqué",
     };
-    return titles[notification.type] || 'Notification';
+    return titles[notification.type] || "Notification";
 }
 
 // Demander la permission de notifications navigateur (non bloquant)
@@ -290,7 +298,10 @@ function renderNotificationPermissionCTA() {
     if (typeof window === "undefined" || typeof Notification === "undefined")
         return;
     const alreadyAsked = localStorage.getItem(NOTIF_PERMISSION_KEY) === "1";
-    if (Notification.permission === "granted" || Notification.permission === "denied")
+    if (
+        Notification.permission === "granted" ||
+        Notification.permission === "denied"
+    )
         return;
     if (alreadyAsked) return;
 
@@ -445,7 +456,10 @@ function loadReminderSlots() {
 
 function saveReminderSlots(slots) {
     try {
-        localStorage.setItem(RETURN_REMINDER_SLOTS_KEY, JSON.stringify(slots || {}));
+        localStorage.setItem(
+            RETURN_REMINDER_SLOTS_KEY,
+            JSON.stringify(slots || {}),
+        );
     } catch (e) {
         // ignore storage failures
     }
@@ -468,22 +482,21 @@ function getReminderSlotKey(date) {
 
 function getNextReminderDate(fromDate = new Date()) {
     const now = new Date(fromDate);
-    const candidates = RETURN_REMINDER_HOURS
-        .map((hour) => {
-            const candidate = new Date(now);
-            candidate.setHours(hour, 0, 0, 0);
-            if (candidate <= now) {
-                candidate.setDate(candidate.getDate() + 1);
-            }
-            return candidate;
-        })
-        .sort((a, b) => a.getTime() - b.getTime());
+    const candidates = RETURN_REMINDER_HOURS.map((hour) => {
+        const candidate = new Date(now);
+        candidate.setHours(hour, 0, 0, 0);
+        if (candidate <= now) {
+            candidate.setDate(candidate.getDate() + 1);
+        }
+        return candidate;
+    }).sort((a, b) => a.getTime() - b.getTime());
     return candidates[0] || null;
 }
 
 // Rappel quotidien pour revenir sur XERA (10h et 18h locale)
 function scheduleReturnReminder() {
-    if (typeof window === "undefined" || typeof Notification === "undefined") return;
+    if (typeof window === "undefined" || typeof Notification === "undefined")
+        return;
     if (Notification.permission !== "granted") return;
 
     if (returnReminderTimer) {
@@ -523,9 +536,7 @@ function scheduleReturnReminder() {
 async function showReturnReminderNotification(reminderDate = new Date()) {
     const hour = reminderDate.getHours();
     const isMorning = hour < 14;
-    const title = isMorning
-        ? "Rappel XERA • 10h"
-        : "Rappel XERA • 18h";
+    const title = isMorning ? "Rappel XERA • 10h" : "Rappel XERA • 18h";
     const body = isMorning
         ? "Prends 2 minutes pour documenter ta progression ce matin."
         : "Pense à documenter ta progression de la journée sur XERA.";
@@ -545,39 +556,39 @@ async function showReturnReminderNotification(reminderDate = new Date()) {
 
 // Mettre à jour le badge de notifications
 function updateNotificationBadge() {
-    const badge = document.getElementById('notification-badge');
+    const badge = document.getElementById("notification-badge");
     if (!badge) return;
-    
-    const unreadCount = notifications.filter(n => !n.read).length;
-    
+
+    const unreadCount = notifications.filter((n) => !n.read).length;
+
     if (unreadCount > 0) {
-        badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
-        badge.style.display = 'flex';
+        badge.textContent = unreadCount > 99 ? "99+" : unreadCount;
+        badge.style.display = "flex";
     } else {
-        badge.style.display = 'none';
+        badge.style.display = "none";
     }
 }
 
 // Afficher le panneau de notifications
 function toggleNotificationPanel() {
-    const panel = document.getElementById('notification-panel');
+    const panel = document.getElementById("notification-panel");
     if (!panel) return;
-    
-    const isVisible = panel.classList.contains('show');
-    
+
+    const isVisible = panel.classList.contains("show");
+
     if (isVisible) {
-        panel.classList.remove('show');
+        panel.classList.remove("show");
     } else {
-        panel.classList.add('show');
+        panel.classList.add("show");
         renderNotifications();
     }
 }
 
 // Rendre les notifications dans le panneau
 function renderNotifications() {
-    const container = document.getElementById('notification-list');
+    const container = document.getElementById("notification-list");
     if (!container) return;
-    
+
     if (notifications.length === 0) {
         container.innerHTML = `
             <div class="notification-empty">
@@ -586,17 +597,21 @@ function renderNotifications() {
         `;
         return;
     }
-    
-    container.innerHTML = notifications.map(notif => {
-        const avatar = notif.actor?.avatar;
-        const icon = getNotificationIcon(notif.type);
-        const displayName = notif.actor?.name || getNotificationTitle(notif);
-        return `
-        <div class="notification-item ${notif.read ? '' : 'unread'}" onclick="handleNotificationClick('${notif.id}')" style="display:flex;gap:12px;align-items:flex-start;">
+
+    container.innerHTML = notifications
+        .map((notif) => {
+            const avatar = notif.actor?.avatar;
+            const icon = getNotificationIcon(notif.type);
+            const displayName =
+                notif.actor?.name || getNotificationTitle(notif);
+            return `
+        <div class="notification-item ${notif.read ? "" : "unread"}" onclick="handleNotificationClick('${notif.id}')" style="display:flex;gap:12px;align-items:flex-start;">
             <div class="notification-leading" style="width:42px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-                ${avatar
-                    ? `<img class="notification-avatar" src="${avatar}" alt="${displayName}" loading="lazy" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--border-color, rgba(255,255,255,0.12));" />`
-                    : `<div class="notification-icon" style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--surface-alt, #1f2937);font-size:18px;">${icon}</div>`}
+                ${
+                    avatar
+                        ? `<img class="notification-avatar" src="${avatar}" alt="${displayName}" loading="lazy" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--border-color, rgba(255,255,255,0.12));" />`
+                        : `<div class="notification-icon" style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--surface-alt, #1f2937);font-size:18px;">${icon}</div>`
+                }
             </div>
             <div class="notification-content" style="flex:1;min-width:0;">
                 <div class="notification-title" style="font-weight:700;">${getNotificationTitle(notif)}</div>
@@ -607,7 +622,9 @@ function renderNotifications() {
                 </div>
             </div>
         </div>
-    `}).join('');
+    `;
+        })
+        .join("");
 }
 
 // Gérer le clic sur une notification
@@ -615,29 +632,28 @@ async function handleNotificationClick(notificationId) {
     try {
         // Marquer comme lue
         await supabase
-            .from('notifications')
+            .from("notifications")
             .update({ read: true })
-            .eq('id', notificationId);
-        
+            .eq("id", notificationId);
+
         // Mettre à jour localement
-        const notif = notifications.find(n => n.id === notificationId);
+        const notif = notifications.find((n) => n.id === notificationId);
         if (notif) {
             notif.read = true;
             updateNotificationBadge();
             renderNotifications();
         }
-        
+
         // Fermer le panneau
         toggleNotificationPanel();
-        
+
         // Naviguer vers la ressource liée (optionnel)
         const targetLink = notif ? normalizeNotificationLink(notif) : null;
         if (targetLink) {
             window.location.href = targetLink;
         }
-        
     } catch (error) {
-        console.error('Erreur marquage notification:', error);
+        console.error("Erreur marquage notification:", error);
     }
 }
 
@@ -645,17 +661,16 @@ async function handleNotificationClick(notificationId) {
 async function markAllNotificationsAsRead() {
     try {
         await supabase
-            .from('notifications')
+            .from("notifications")
             .update({ read: true })
-            .eq('user_id', currentUser.id)
-            .eq('read', false);
-        
-        notifications.forEach(n => n.read = true);
+            .eq("user_id", currentUser.id)
+            .eq("read", false);
+
+        notifications.forEach((n) => (n.read = true));
         updateNotificationBadge();
         renderNotifications();
-        
     } catch (error) {
-        console.error('Erreur marquage notifications:', error);
+        console.error("Erreur marquage notifications:", error);
     }
 }
 
@@ -664,17 +679,17 @@ function formatNotificationTime(timestamp) {
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
-    
+
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
-    
-    if (minutes < 1) return 'À l\'instant';
+
+    if (minutes < 1) return "À l'instant";
     if (minutes < 60) return `Il y a ${minutes} min`;
     if (hours < 24) return `Il y a ${hours}h`;
     if (days < 7) return `Il y a ${days}j`;
-    
-    return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+
+    return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
 // Jouer un son de notification
@@ -683,10 +698,7 @@ function playNotificationSound(type = "default") {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
         const audioContext = new AudioCtx();
-        const pattern =
-            type === "encouragement"
-                ? [920, 1240]
-                : [760];
+        const pattern = type === "encouragement" ? [920, 1240] : [760];
         const now = audioContext.currentTime;
 
         pattern.forEach((frequency, index) => {
@@ -721,23 +733,22 @@ function playNotificationSound(type = "default") {
 async function createNotification(userId, type, message, link = null) {
     try {
         const { data, error } = await supabase
-            .from('notifications')
+            .from("notifications")
             .insert({
                 user_id: userId,
                 type: type,
                 message: message,
                 link: link,
-                read: false
+                read: false,
             })
             .select()
             .single();
-        
+
         if (error) throw error;
-        
+
         return { success: true, data: data };
-        
     } catch (error) {
-        console.error('Erreur création notification:', error);
+        console.error("Erreur création notification:", error);
         return { success: false, error: error.message };
     }
 }
@@ -858,7 +869,9 @@ function normalizeNotificationLink(notif) {
     if (profileMatch) {
         return `profile.html?user=${profileMatch[1]}`;
     }
-    const profileHtmlMatch = link.match(/profile\\.html\\?user=([a-f0-9-]{8,})/i);
+    const profileHtmlMatch = link.match(
+        /profile\\.html\\?user=([a-f0-9-]{8,})/i,
+    );
     if (profileHtmlMatch) {
         return `profile.html?user=${profileHtmlMatch[1]}`;
     }
@@ -899,7 +912,9 @@ async function hydrateNotificationMetadata(list) {
 
     let streamMap = {};
     if (streamIds.size > 0) {
-        const missing = [...streamIds].filter((id) => !notifStreamCache.has(id));
+        const missing = [...streamIds].filter(
+            (id) => !notifStreamCache.has(id),
+        );
         if (missing.length > 0) {
             const { data, error } = await supabase
                 .from("streaming_sessions")
@@ -941,7 +956,9 @@ async function hydrateNotificationMetadata(list) {
         }
         if (stream && stream.user_id) {
             // Enrichir le lien pour inclure l'hôte, utile pour le lecteur
-            const hostPart = n.link.includes("host=") ? "" : `&host=${stream.user_id}`;
+            const hostPart = n.link.includes("host=")
+                ? ""
+                : `&host=${stream.user_id}`;
             if (n.link.includes("stream.html")) {
                 n.link = `${n.link}${hostPart}`;
             } else {

@@ -1,180 +1,193 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analytics Dashboard | XERA</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="icons/logo.png">
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/search-notification.css">
-    <link rel="stylesheet" href="css/streaming-analytics.css">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-</head>
-<body class="has-mobile-nav">
-    <nav>
-        <a
-            class="logo"
-            onclick="navigateTo('discover')"
-            style="cursor: pointer"
-        >
-            <div class="logo-img">
-                <img src="icons/logo.png" alt="XERA - Logo" />
-            </div>
-            <span>XΞRA</span>
-        </a>
-        <div class="nav-links">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Analytics Dashboard | XERA</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="icon" type="image/svg+xml" href="icons/logo.png" />
+        <link rel="stylesheet" href="css/style.css" />
+        <link rel="stylesheet" href="css/search-notification.css" />
+        <link rel="stylesheet" href="css/streaming-analytics.css" />
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    </head>
+    <body class="has-mobile-nav">
+        <nav>
             <a
-                id="nav-discover"
-                class="notification-button nav-discover-btn"
+                class="logo"
                 onclick="navigateTo('discover')"
-                title="Discover"
-                aria-label="Discover"
+                style="cursor: pointer"
             >
-                <svg
-                    class="notification-icon nav-discover-icon"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
-                    <path d="M3 10.5L12 3l9 7.5"></path>
-                    <path d="M5 10v10h14V10"></path>
-                    <path d="M9 20v-6h6v6"></path>
-                </svg>
+                <div class="logo-img">
+                    <img src="icons/logo.png" alt="XERA - Logo" />
+                </div>
+                <span>XΞRA</span>
             </a>
-            <div
-                class="notification-button profile-nav-button"
-                onclick="handleProfileNavigation()"
-                id="nav-profile"
-                title="My Trajectory"
-                aria-label="My Trajectory"
-                role="button"
-            >
-                <img
-                    id="nav-profile-avatar"
-                    class="notification-icon profile-nav-avatar"
-                    src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' rx='20' fill='%231f2937'/><circle cx='20' cy='16' r='6' fill='%23e5e7eb'/><path d='M8%2034c2.5-6%208-9%2012-9s9.5%203%2012%209' fill='%23e5e7eb'/></svg>"
-                    alt="Avatar utilisateur"
-                />
-            </div>
-            <div
-                class="notification-button messages-nav-button"
-                onclick="openMessagesPage()"
-                style="display: none"
-                id="messages-nav-btn"
-                title="Messages"
-            >
-                <img
-                    src="icons/message.svg"
-                    alt="Messages"
-                    class="notification-icon"
-                />
-                <span
-                    id="messages-nav-badge"
-                    class="notification-badge"
-                ></span>
-            </div>
-            <!-- Bouton Notifications -->
-            <div
-                class="notification-button"
-                onclick="toggleNotificationPanel()"
-                style="display: none"
-                id="notification-btn"
-            >
-                <svg
-                    class="notification-icon"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
+            <div class="nav-links">
+                <a
+                    id="nav-discover"
+                    class="notification-button nav-discover-btn"
+                    onclick="navigateTo('discover')"
+                    title="Discover"
+                    aria-label="Discover"
                 >
-                    <path
-                        d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
-                    ></path>
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                </svg>
-                <span
-                    id="notification-badge"
-                    class="notification-badge"
-                ></span>
+                    <svg
+                        class="notification-icon nav-discover-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+                        <path d="M3 10.5L12 3l9 7.5"></path>
+                        <path d="M5 10v10h14V10"></path>
+                        <path d="M9 20v-6h6v6"></path>
+                    </svg>
+                </a>
+                <div
+                    class="notification-button profile-nav-button"
+                    onclick="handleProfileNavigation()"
+                    id="nav-profile"
+                    title="My Trajectory"
+                    aria-label="My Trajectory"
+                    role="button"
+                >
+                    <img
+                        id="nav-profile-avatar"
+                        class="notification-icon profile-nav-avatar"
+                        src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' rx='20' fill='%231f2937'/><circle cx='20' cy='16' r='6' fill='%23e5e7eb'/><path d='M8%2034c2.5-6%208-9%2012-9s9.5%203%2012%209' fill='%23e5e7eb'/></svg>"
+                        alt="Avatar utilisateur"
+                    />
+                </div>
+                <div
+                    class="notification-button messages-nav-button"
+                    onclick="openMessagesPage()"
+                    style="display: none"
+                    id="messages-nav-btn"
+                    title="Messages"
+                >
+                    <img
+                        src="icons/message.svg"
+                        alt="Messages"
+                        class="notification-icon"
+                    />
+                    <span
+                        id="messages-nav-badge"
+                        class="notification-badge"
+                    ></span>
+                </div>
+                <!-- Bouton Notifications -->
+                <div
+                    class="notification-button"
+                    onclick="toggleNotificationPanel()"
+                    style="display: none"
+                    id="notification-btn"
+                >
+                    <svg
+                        class="notification-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <path
+                            d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+                        ></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    <span
+                        id="notification-badge"
+                        class="notification-badge"
+                    ></span>
+                </div>
+
+                <a href="login.html" id="nav-auth" data-i18n="navAuth"
+                    >Login / Register</a
+                >
             </div>
+        </nav>
 
-            <a href="login.html" id="nav-auth" data-i18n="navAuth">Login / Register</a>
+        <div id="analytics-dashboard" class="analytics-dashboard">
+            <!-- Contenu injecté dynamiquement -->
         </div>
-    </nav>
 
-    <div id="analytics-dashboard" class="analytics-dashboard">
-        <!-- Contenu injecté dynamiquement -->
-    </div>
+        <script src="js/router.js"></script>
+        <script src="js/supabase-config.js"></script>
+        <script src="js/monetization-utils.js"></script>
+        <script src="js/analytics.js"></script>
+        <script>
+            document.addEventListener("DOMContentLoaded", async () => {
+                const user = await checkAuth();
 
-    <script src="js/router.js"></script>
-    <script src="js/supabase-config.js"></script>
-    <script src="js/analytics.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            const user = await checkAuth();
-            
-            const navAuth = document.getElementById('nav-auth');
-            const navProfile = document.getElementById('nav-profile');
-            if (!user) {
-                if (navAuth) navAuth.style.display = 'block';
-                if (navProfile) navProfile.style.display = 'none';
-            } else {
-                if (navAuth) navAuth.style.display = 'none';
-                if (navProfile) {
-                    navProfile.style.display = navProfile.classList.contains('notification-button')
-                        ? 'flex'
-                        : 'block';
+                const navAuth = document.getElementById("nav-auth");
+                const navProfile = document.getElementById("nav-profile");
+                if (!user) {
+                    if (navAuth) navAuth.style.display = "block";
+                    if (navProfile) navProfile.style.display = "none";
+                } else {
+                    if (navAuth) navAuth.style.display = "none";
+                    if (navProfile) {
+                        navProfile.style.display =
+                            navProfile.classList.contains("notification-button")
+                                ? "flex"
+                                : "block";
+                    }
                 }
-            }
-            
-            // Récupérer l'ID utilisateur depuis l'URL ou utiliser l'utilisateur courant
-            const urlParams = new URLSearchParams(window.location.search);
-            const userId = urlParams.get('user') || (user ? user.id : null);
-            
-            // Nettoyer les ressources avant de quitter la page
-            window.addEventListener('beforeunload', () => {
-                if (window.cleanupAnalytics) {
-                    window.cleanupAnalytics();
-                }
-            });
-            
-            if (!userId) {
-                const dashboard = document.getElementById('analytics-dashboard');
-                if (dashboard) {
-                    dashboard.innerHTML = `
+
+                // Récupérer l'ID utilisateur depuis l'URL ou utiliser l'utilisateur courant
+                const urlParams = new URLSearchParams(window.location.search);
+                const userId = urlParams.get("user") || (user ? user.id : null);
+
+                // Nettoyer les ressources avant de quitter la page
+                window.addEventListener("beforeunload", () => {
+                    if (window.cleanupAnalytics) {
+                        window.cleanupAnalytics();
+                    }
+                });
+
+                if (!userId) {
+                    const dashboard = document.getElementById(
+                        "analytics-dashboard",
+                    );
+                    if (dashboard) {
+                        dashboard.innerHTML = `
                         <div style="text-align:center; padding:3rem; color: var(--text-secondary);">
                             Sélectionnez un profil pour voir ses analytics.
                         </div>
                     `;
+                    }
+                    return;
                 }
-                return;
-            }
-            
-            let dashboardUser = user;
-            if (!dashboardUser || dashboardUser.id !== userId) {
-                const profileResult = await getUserProfile(userId);
-                if (!profileResult.success) {
-                    const dashboard = document.getElementById('analytics-dashboard');
-                    if (dashboard) {
-                        dashboard.innerHTML = `
+
+                let dashboardUser = user;
+                if (!dashboardUser || dashboardUser.id !== userId) {
+                    const profileResult = await getUserProfile(userId);
+                    if (!profileResult.success) {
+                        const dashboard = document.getElementById(
+                            "analytics-dashboard",
+                        );
+                        if (dashboard) {
+                            dashboard.innerHTML = `
                             <div style="text-align:center; padding:3rem; color: var(--text-secondary);">
                                 Impossible de charger ce profil.
                             </div>
                         `;
+                        }
+                        return;
                     }
-                    return;
+                    dashboardUser = profileResult.data;
                 }
-                dashboardUser = profileResult.data;
-            }
-            
-            // Rendre le dashboard
-            await renderAnalyticsDashboard(dashboardUser, { containerId: 'analytics-dashboard' });
-        });
-    </script>
-</body>
+
+                // Rendre le dashboard
+                await renderAnalyticsDashboard(dashboardUser, {
+                    containerId: "analytics-dashboard",
+                });
+            });
+        </script>
+    </body>
 </html>

@@ -54,7 +54,11 @@ function normalizeArcOpportunityIntents(value) {
           : [];
 
     const mapped = asArray
-        .map((item) => String(item || "").trim().toLowerCase())
+        .map((item) =>
+            String(item || "")
+                .trim()
+                .toLowerCase(),
+        )
         .map((item) => {
             if (item === "cherche_collab" || item === "collab")
                 return "cherche_collab";
@@ -96,42 +100,44 @@ function isMissingArcMetadataColumnError(error) {
 
 // --- INITIALIZATION ---
 
-
 function renderArcCreationForm(arcToEdit = null) {
-    const createContainer = document.querySelector('#create-modal .create-container');
+    const createContainer = document.querySelector(
+        "#create-modal .create-container",
+    );
     if (!createContainer) return;
 
     const isEdit = !!arcToEdit;
-    const title = isEdit ? 'Modifier votre projet' : 'Démarrez votre projet';
-    const btnText = isEdit ? 'Mettre à jour' : 'Lancer le projet';
+    const title = isEdit ? "Modifier votre projet" : "Démarrez votre projet";
+    const btnText = isEdit ? "Mettre à jour" : "Lancer le projet";
     const defaultStageLevel = normalizeArcStageLevel(
         isEdit ? arcToEdit.stage_level : "idee",
     );
     const selectedOpportunityIntents = normalizeArcOpportunityIntents(
         isEdit ? arcToEdit.opportunity_intents : [],
     );
-    
+
     // Default dates
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split("T")[0];
     let defaultStartDate = today;
     let defaultEndDate = "";
 
     if (isEdit) {
-        if (arcToEdit.start_date) defaultStartDate = arcToEdit.start_date.split('T')[0];
+        if (arcToEdit.start_date)
+            defaultStartDate = arcToEdit.start_date.split("T")[0];
         // Calculate end date based on duration
         if (arcToEdit.start_date && arcToEdit.duration_days) {
             const start = new Date(arcToEdit.start_date);
             const end = new Date(start);
             end.setDate(start.getDate() + arcToEdit.duration_days);
-            defaultEndDate = end.toISOString().split('T')[0];
+            defaultEndDate = end.toISOString().split("T")[0];
         }
     } else {
         // Default end date +30 days
         const end = new Date();
         end.setDate(end.getDate() + 30);
-        defaultEndDate = end.toISOString().split('T')[0];
+        defaultEndDate = end.toISOString().split("T")[0];
     }
-    
+
     createContainer.innerHTML = `
         <div class="arc-creation-header">
             <h2>${title}</h2>
@@ -139,16 +145,16 @@ function renderArcCreationForm(arcToEdit = null) {
         </div>
 
         <form id="create-arc-form" class="arc-form">
-            ${isEdit ? `<input type="hidden" name="arc_id" value="${arcToEdit.id}">` : ''}
+            ${isEdit ? `<input type="hidden" name="arc_id" value="${arcToEdit.id}">` : ""}
             
             <div class="form-group">
                 <label for="arc-title">Titre de votre projet *</label>
-                <input type="text" id="arc-title" name="title" placeholder="Ex: 30 jours pour..." required class="form-input large-input" value="${isEdit ? escapeHtml(arcToEdit.title) : ''}">
+                <input type="text" id="arc-title" name="title" placeholder="Ex: 30 jours pour..." required class="form-input large-input" value="${isEdit ? escapeHtml(arcToEdit.title) : ""}">
             </div>
 
             <div class="form-group">
                 <label for="arc-goal">Objectif final *</label>
-                <textarea id="arc-goal" name="goal" placeholder="Ex: Site en ligne le 1er mars" rows="2" class="form-input" required>${isEdit ? escapeHtml(arcToEdit.goal || '') : ''}</textarea>
+                <textarea id="arc-goal" name="goal" placeholder="Ex: Site en ligne le 1er mars" rows="2" class="form-input" required>${isEdit ? escapeHtml(arcToEdit.goal || "") : ""}</textarea>
             </div>
 
             <div class="form-group">
@@ -161,7 +167,8 @@ function renderArcCreationForm(arcToEdit = null) {
             <div class="form-group">
                 <label>Matching opportunité (optionnel)</label>
                 <div class="arc-intent-grid">
-                    ${ARC_OPPORTUNITY_OPTIONS.map((item) => `
+                    ${ARC_OPPORTUNITY_OPTIONS.map(
+                        (item) => `
                         <label class="arc-intent-item">
                             <input
                                 type="checkbox"
@@ -171,7 +178,8 @@ function renderArcCreationForm(arcToEdit = null) {
                             >
                             <span>${item.label}</span>
                         </label>
-                    `).join("")}
+                    `,
+                    ).join("")}
                 </div>
                 <p class="form-hint">Laissez vide pour un partage public sans ciblage spécifique.</p>
             </div>
@@ -189,15 +197,15 @@ function renderArcCreationForm(arcToEdit = null) {
 
             <div class="form-group">
                 <label for="arc-description">Description (Optionnel)</label>
-                <textarea id="arc-description" name="description" placeholder="Détails supplémentaires..." rows="3" class="form-input">${isEdit ? escapeHtml(arcToEdit.description || '') : ''}</textarea>
+                <textarea id="arc-description" name="description" placeholder="Détails supplémentaires..." rows="3" class="form-input">${isEdit ? escapeHtml(arcToEdit.description || "") : ""}</textarea>
             </div>
 
             <div class="form-group">
                 <label>Couverture du projet (Image ou Vidéo)</label>
                 <div id="arc-cover-upload-container">
                     <div class="upload-zone" id="arc-cover-dropzone" style="border: 2px dashed var(--border-color); padding: 2rem; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.3s ease; background: rgba(255,255,255,0.02);">
-                        <div id="arc-cover-preview-container" style="${isEdit && arcToEdit.media_url ? 'display: block;' : 'display: none;'} margin-bottom: 1rem;">
-                            ${isEdit && arcToEdit.media_url ? (arcToEdit.media_type === 'video' ? `<video src="${arcToEdit.media_url}" controls style="max-width: 100%; max-height: 200px; border-radius: 8px;"></video>` : `<img src="${arcToEdit.media_url}" style="max-width: 100%; max-height: 200px; border-radius: 8px;">`) : ''}
+                        <div id="arc-cover-preview-container" style="${isEdit && arcToEdit.media_url ? "display: block;" : "display: none;"} margin-bottom: 1rem;">
+                            ${isEdit && arcToEdit.media_url ? (arcToEdit.media_type === "video" ? `<video src="${arcToEdit.media_url}" controls style="max-width: 100%; max-height: 200px; border-radius: 8px;"></video>` : `<img src="${arcToEdit.media_url}" style="max-width: 100%; max-height: 200px; border-radius: 8px;">`) : ""}
                         </div>
 	                        <div id="arc-cover-loader" style="display: none; margin-bottom: 1rem;">
 	                            <div class="loading-spinner" style="display:inline-block;"></div>
@@ -207,7 +215,7 @@ function renderArcCreationForm(arcToEdit = null) {
 	                            </div>
 	                            <div id="arc-cover-progress-label" class="xera-upload-progress-label"></div>
 	                        </div>
-                        <div id="arc-cover-placeholder" style="${isEdit && arcToEdit.media_url ? 'display: none;' : ''}">
+                        <div id="arc-cover-placeholder" style="${isEdit && arcToEdit.media_url ? "display: none;" : ""}">
                             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-secondary); margin-bottom: 0.5rem;">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                 <polyline points="17 8 12 3 7 8"></polyline>
@@ -218,8 +226,8 @@ function renderArcCreationForm(arcToEdit = null) {
                         </div>
                     </div>
                     <input type="file" id="arc-cover-file" accept="image/*,video/*" style="display: none;">
-                    <input type="hidden" name="media_url" id="arc-media-url" value="${isEdit && arcToEdit.media_url ? arcToEdit.media_url : ''}">
-                    <input type="hidden" name="media_type" id="arc-media-type" value="${isEdit && arcToEdit.media_type ? arcToEdit.media_type : ''}">
+                    <input type="hidden" name="media_url" id="arc-media-url" value="${isEdit && arcToEdit.media_url ? arcToEdit.media_url : ""}">
+                    <input type="hidden" name="media_type" id="arc-media-type" value="${isEdit && arcToEdit.media_type ? arcToEdit.media_type : ""}">
                 </div>
             </div>
 
@@ -229,90 +237,101 @@ function renderArcCreationForm(arcToEdit = null) {
             </div>
         </form>
     `;
-    
+
     // Attach event listener
-    document.getElementById('create-arc-form').addEventListener('submit', handleCreateArc);
+    document
+        .getElementById("create-arc-form")
+        .addEventListener("submit", handleCreateArc);
 
     // Initialize file upload
-    if (typeof initializeFileInput === 'function') {
-        const dropZone = document.getElementById('arc-cover-dropzone');
-        const fileInput = document.getElementById('arc-cover-file');
-	        const previewContainer = document.getElementById('arc-cover-preview-container');
-	        const placeholder = document.getElementById('arc-cover-placeholder');
-	        const loader = document.getElementById('arc-cover-loader');
-	        const progressBar = document.getElementById('arc-cover-progress-bar');
-	        const progressLabel = document.getElementById('arc-cover-progress-label');
+    if (typeof initializeFileInput === "function") {
+        const dropZone = document.getElementById("arc-cover-dropzone");
+        const fileInput = document.getElementById("arc-cover-file");
+        const previewContainer = document.getElementById(
+            "arc-cover-preview-container",
+        );
+        const placeholder = document.getElementById("arc-cover-placeholder");
+        const loader = document.getElementById("arc-cover-loader");
+        const progressBar = document.getElementById("arc-cover-progress-bar");
+        const progressLabel = document.getElementById(
+            "arc-cover-progress-label",
+        );
 
-	        const setUploadProgressIndeterminate = () => {
-	            if (progressBar) {
-	                progressBar.classList.add('is-indeterminate');
-	                progressBar.style.width = '';
-	            }
-	            if (progressLabel) progressLabel.textContent = '';
-	        };
+        const setUploadProgressIndeterminate = () => {
+            if (progressBar) {
+                progressBar.classList.add("is-indeterminate");
+                progressBar.style.width = "";
+            }
+            if (progressLabel) progressLabel.textContent = "";
+        };
 
-	        const setUploadProgress = (percent) => {
-	            if (!progressBar) return;
-	            const safePercent =
-	                typeof percent === 'number' && Number.isFinite(percent)
-	                    ? Math.max(0, Math.min(100, Math.round(percent)))
-	                    : 0;
-	            progressBar.classList.remove('is-indeterminate');
-	            progressBar.style.width = `${safePercent}%`;
-	            if (progressLabel) progressLabel.textContent = `${safePercent}%`;
-	        };
-	        
-	        if (dropZone && fileInput) {
-	            // Handle click
-	            dropZone.addEventListener('click', (e) => {
-	                if (e.target.tagName !== 'IMG' && e.target.tagName !== 'VIDEO') {
+        const setUploadProgress = (percent) => {
+            if (!progressBar) return;
+            const safePercent =
+                typeof percent === "number" && Number.isFinite(percent)
+                    ? Math.max(0, Math.min(100, Math.round(percent)))
+                    : 0;
+            progressBar.classList.remove("is-indeterminate");
+            progressBar.style.width = `${safePercent}%`;
+            if (progressLabel) progressLabel.textContent = `${safePercent}%`;
+        };
+
+        if (dropZone && fileInput) {
+            // Handle click
+            dropZone.addEventListener("click", (e) => {
+                if (
+                    e.target.tagName !== "IMG" &&
+                    e.target.tagName !== "VIDEO"
+                ) {
                     fileInput.click();
                 }
             });
 
-	            // Loader handler
-	            fileInput.addEventListener('change', () => {
-	                 if (fileInput.files.length > 0) {
-	                     placeholder.style.display = 'none';
-	                     previewContainer.style.display = 'none';
-	                     loader.style.display = 'block';
-	                     setUploadProgress(0);
-	                 }
-	            });
+            // Loader handler
+            fileInput.addEventListener("change", () => {
+                if (fileInput.files.length > 0) {
+                    placeholder.style.display = "none";
+                    previewContainer.style.display = "none";
+                    loader.style.display = "block";
+                    setUploadProgress(0);
+                }
+            });
 
-	            initializeFileInput('arc-cover-file', {
-	                dropZone: dropZone,
-	                compress: true,
-	                onBeforeUpload: () => {
-	                    placeholder.style.display = 'none';
-	                    previewContainer.style.display = 'none';
-	                    loader.style.display = 'block';
-	                    setUploadProgress(0);
-	                },
-	                onProgress: (percent) => setUploadProgress(percent),
-	                onUpload: (result) => {
-	                    loader.style.display = 'none';
-	                    if (result && result.success) {
-	                        setUploadProgress(100);
-	                    }
-	                    setUploadProgressIndeterminate();
-	                    
-	                    if (result.success) {
-	                        document.getElementById('arc-media-url').value = result.url;
-	                        document.getElementById('arc-media-type').value = result.type;
-                        
+            initializeFileInput("arc-cover-file", {
+                dropZone: dropZone,
+                compress: true,
+                onBeforeUpload: () => {
+                    placeholder.style.display = "none";
+                    previewContainer.style.display = "none";
+                    loader.style.display = "block";
+                    setUploadProgress(0);
+                },
+                onProgress: (percent) => setUploadProgress(percent),
+                onUpload: (result) => {
+                    loader.style.display = "none";
+                    if (result && result.success) {
+                        setUploadProgress(100);
+                    }
+                    setUploadProgressIndeterminate();
+
+                    if (result.success) {
+                        document.getElementById("arc-media-url").value =
+                            result.url;
+                        document.getElementById("arc-media-type").value =
+                            result.type;
+
                         // Preview
-                        previewContainer.style.display = 'block';
-                        if (result.type === 'image') {
+                        previewContainer.style.display = "block";
+                        if (result.type === "image") {
                             previewContainer.innerHTML = `<img src="${result.url}" style="max-width: 100%; max-height: 200px; border-radius: 8px;">`;
                         } else {
                             previewContainer.innerHTML = `<video src="${result.url}" controls style="max-width: 100%; max-height: 200px; border-radius: 8px;"></video>`;
                         }
                     } else {
-                        placeholder.style.display = 'block';
-                        alert('Erreur upload: ' + result.error);
+                        placeholder.style.display = "block";
+                        alert("Erreur upload: " + result.error);
                     }
-                }
+                },
             });
         }
     }
@@ -326,33 +345,33 @@ function initArcs() {
 // --- HOOKS ANIMATION ---
 
 function startHookAnimation() {
-    const scroller = document.getElementById('hook-scroller');
+    const scroller = document.getElementById("hook-scroller");
     if (!scroller) return;
 
     // Clear existing
-    scroller.innerHTML = '';
-    
+    scroller.innerHTML = "";
+
     let currentIndex = 0;
-    
+
     // Shuffle hooks slightly or just pick random start
     const shuffledHooks = [...ARC_HOOKS].sort(() => 0.5 - Math.random());
 
     function showNextHook() {
         const text = shuffledHooks[currentIndex];
-        const el = document.createElement('div');
-        el.className = 'hook-item';
+        const el = document.createElement("div");
+        el.className = "hook-item";
         el.textContent = `"${text}"`;
         scroller.appendChild(el);
 
         // Trigger enter animation
         requestAnimationFrame(() => {
-            el.classList.add('active');
+            el.classList.add("active");
         });
 
         // Schedule exit
         setTimeout(() => {
-            el.classList.remove('active');
-            el.classList.add('exit');
+            el.classList.remove("active");
+            el.classList.add("exit");
             setTimeout(() => el.remove(), 500); // Remove after transition
         }, 3000);
 
@@ -375,10 +394,10 @@ function stopHookAnimation() {
 function openCreateModal() {
     // Ensure form is rendered (reset to create mode)
     renderArcCreationForm();
-    
-    const modal = document.getElementById('create-modal');
+
+    const modal = document.getElementById("create-modal");
     if (modal) {
-        modal.classList.add('active');
+        modal.classList.add("active");
         startHookAnimation();
     }
 }
@@ -392,9 +411,9 @@ function openEditArcModal(arc) {
         return;
     }
     renderArcCreationForm(arc);
-    const modal = document.getElementById('create-modal');
+    const modal = document.getElementById("create-modal");
     if (modal) {
-        modal.classList.add('active');
+        modal.classList.add("active");
         // No hooks animation for edit
     }
 }
@@ -420,20 +439,19 @@ function openArcEditFromDetails() {
 }
 
 function closeCreateModal() {
-    const modal = document.getElementById('create-modal');
+    const modal = document.getElementById("create-modal");
     if (modal) {
-        modal.classList.remove('active');
+        modal.classList.remove("active");
         stopHookAnimation();
     }
 }
 
 // Close modal when clicking outside
-document.getElementById('create-modal')?.addEventListener('click', (e) => {
-    if (e.target.id === 'create-modal') {
+document.getElementById("create-modal")?.addEventListener("click", (e) => {
+    if (e.target.id === "create-modal") {
         closeCreateModal();
     }
 });
-
 
 // --- SUPABASE ACTIONS ---
 
@@ -453,30 +471,33 @@ async function getArcAuthUser() {
 }
 
 function buildArcLaunchTracePayload(arcData, authUserId, arcId) {
-    const safeTitle = (arcData?.title || '').trim() || 'Nouvel ARC';
-    const goal = (arcData?.goal || '').trim();
-    const details = (arcData?.description || '').trim();
+    const safeTitle = (arcData?.title || "").trim() || "Nouvel ARC";
+    const goal = (arcData?.goal || "").trim();
+    const details = (arcData?.description || "").trim();
     const descriptionParts = [];
     if (goal) descriptionParts.push(`Objectif: ${goal}`);
     if (details) descriptionParts.push(details);
-    const baseDescription = descriptionParts.join('\n\n').trim() || "Début d'un nouveau projet.";
+    const baseDescription =
+        descriptionParts.join("\n\n").trim() || "Début d'un nouveau projet.";
 
     const hasMedia = !!arcData?.media_url;
-    const mediaType = String(arcData?.media_type || '').toLowerCase();
+    const mediaType = String(arcData?.media_type || "").toLowerCase();
     const contentType = hasMedia
-        ? (mediaType === 'video' ? 'video' : 'image')
-        : 'text';
+        ? mediaType === "video"
+            ? "video"
+            : "image"
+        : "text";
 
     return {
         userId: authUserId,
         arcId: arcId,
         dayNumber: 0,
         type: contentType,
-        state: 'pause',
+        state: "pause",
         title: `NOUVEAU PROJET: ${safeTitle}`,
         description: baseDescription,
         mediaUrl: hasMedia ? arcData.media_url : null,
-        mediaUrls: hasMedia ? [arcData.media_url] : []
+        mediaUrls: hasMedia ? [arcData.media_url] : [],
     };
 }
 
@@ -484,10 +505,10 @@ async function createArcLaunchTrace(arcRow, arcData, authUser) {
     if (!arcRow?.id || !authUser?.id) return null;
     const payload = buildArcLaunchTracePayload(arcData, authUser.id, arcRow.id);
     try {
-        if (typeof createContent === 'function') {
+        if (typeof createContent === "function") {
             const result = await createContent(payload);
             if (!result?.success) {
-                throw new Error(result?.error || 'createContent failed');
+                throw new Error(result?.error || "createContent failed");
             }
             return result?.data || null;
         }
@@ -500,18 +521,18 @@ async function createArcLaunchTrace(arcRow, arcData, authUser) {
             state: payload.state,
             title: payload.title,
             description: payload.description,
-            media_url: payload.mediaUrl
+            media_url: payload.mediaUrl,
         };
 
         const { data, error } = await supabase
-            .from('content')
+            .from("content")
             .insert(insertPayload)
             .select()
             .single();
         if (error) throw error;
         return data || null;
     } catch (error) {
-        console.warn('ARC launch update creation failed:', error);
+        console.warn("ARC launch update creation failed:", error);
         return null;
     }
 }
@@ -522,8 +543,8 @@ async function refreshArcConsistencyViews(userId, options = {}) {
 
     try {
         if (
-            typeof getUserContent === 'function' &&
-            typeof convertSupabaseContent === 'function'
+            typeof getUserContent === "function" &&
+            typeof convertSupabaseContent === "function"
         ) {
             const contentResult = await getUserContent(userId);
             if (contentResult?.success && Array.isArray(contentResult.data)) {
@@ -534,12 +555,15 @@ async function refreshArcConsistencyViews(userId, options = {}) {
             }
         }
     } catch (error) {
-        console.warn('Failed to refresh local content cache after ARC save:', error);
+        console.warn(
+            "Failed to refresh local content cache after ARC save:",
+            error,
+        );
     }
 
-    const profileSection = document.getElementById('profile');
+    const profileSection = document.getElementById("profile");
     const isProfileActive =
-        !!profileSection && profileSection.classList.contains('active');
+        !!profileSection && profileSection.classList.contains("active");
     const isViewedProfile = window.currentProfileViewed === userId;
 
     if (selectArcId && (isProfileActive || isViewedProfile)) {
@@ -548,26 +572,32 @@ async function refreshArcConsistencyViews(userId, options = {}) {
 
     if (
         (isProfileActive || isViewedProfile) &&
-        typeof window.renderProfileIntoContainer === 'function'
+        typeof window.renderProfileIntoContainer === "function"
     ) {
         try {
             await window.renderProfileIntoContainer(userId);
         } catch (error) {
-            console.warn('Failed to refresh profile timeline after ARC save:', error);
+            console.warn(
+                "Failed to refresh profile timeline after ARC save:",
+                error,
+            );
         }
-    } else if (isProfileActive && typeof window.loadUserArcs === 'function') {
+    } else if (isProfileActive && typeof window.loadUserArcs === "function") {
         try {
             await window.loadUserArcs(userId);
         } catch (error) {
-            console.warn('Failed to refresh ARC list after ARC save:', error);
+            console.warn("Failed to refresh ARC list after ARC save:", error);
         }
     }
 
-    if (typeof window.renderDiscoverGrid === 'function') {
+    if (typeof window.renderDiscoverGrid === "function") {
         try {
             await window.renderDiscoverGrid();
         } catch (error) {
-            console.warn('Failed to refresh discover feed after ARC save:', error);
+            console.warn(
+                "Failed to refresh discover feed after ARC save:",
+                error,
+            );
         }
     }
 }
@@ -598,11 +628,11 @@ async function handleCreateArc(e) {
     btn.innerHTML = '<span class="loading-spinner"></span> Traitement...';
 
     const formData = new FormData(e.target);
-    const arcId = formData.get('arc_id'); // If editing
-    
+    const arcId = formData.get("arc_id"); // If editing
+
     // Calculate duration from dates
-    const startDateVal = formData.get('start_date');
-    const endDateVal = formData.get('end_date');
+    const startDateVal = formData.get("start_date");
+    const endDateVal = formData.get("end_date");
     let durationDays = 30; // Default
 
     if (startDateVal && endDateVal) {
@@ -618,9 +648,9 @@ async function handleCreateArc(e) {
     );
 
     const arcData = {
-        title: formData.get('title'),
-        goal: formData.get('goal'),
-        description: formData.get('description'),
+        title: formData.get("title"),
+        goal: formData.get("goal"),
+        description: formData.get("description"),
         stage_level: normalizeArcStageLevel(formData.get("stage_level")),
         opportunity_intents:
             selectedOpportunityIntents.length > 0
@@ -628,14 +658,14 @@ async function handleCreateArc(e) {
                 : [],
         duration_days: durationDays,
         start_date: startDateVal || new Date().toISOString(),
-        media_url: formData.get('media_url') || null,
-        media_type: formData.get('media_type') || null
+        media_url: formData.get("media_url") || null,
+        media_type: formData.get("media_type") || null,
     };
-    
+
     // Only set user_id and status on creation
     if (!arcId) {
         arcData.user_id = authUser.id;
-        arcData.status = 'in_progress';
+        arcData.status = "in_progress";
     }
 
     try {
@@ -694,16 +724,16 @@ async function handleCreateArc(e) {
             pendingPayload.userId === authUser.id &&
             pendingIsFresh;
 
-        if (pendingCreatePost && typeof window.openCreateMenu === 'function') {
-            if (typeof window.clearPendingCreatePostAfterArc === 'function') {
+        if (pendingCreatePost && typeof window.openCreateMenu === "function") {
+            if (typeof window.clearPendingCreatePostAfterArc === "function") {
                 window.clearPendingCreatePostAfterArc();
             } else {
                 window.pendingCreatePostAfterArc = null;
             }
             refreshArcConsistencyViews(authUser.id, {
-                selectArcId: createdArc.id
+                selectArcId: createdArc.id,
             }).catch((err) =>
-                console.warn('refreshArcConsistencyViews error', err),
+                console.warn("refreshArcConsistencyViews error", err),
             );
             closeCreateModal();
             e.target.reset();
@@ -713,7 +743,12 @@ async function handleCreateArc(e) {
             return;
         }
 
-        if (!arcId && createdArc && createdArc.id && typeof notifyFollowersOfArcStart === "function") {
+        if (
+            !arcId &&
+            createdArc &&
+            createdArc.id &&
+            typeof notifyFollowersOfArcStart === "function"
+        ) {
             notifyFollowersOfArcStart({
                 id: createdArc.id,
                 user_id: authUser.id,
@@ -721,21 +756,28 @@ async function handleCreateArc(e) {
             }).catch((e) => console.warn("notifyFollowersOfArcStart error", e));
         }
 
-        alert(arcId ? "Projet mis à jour avec succès !" : "Projet créé avec succès !");
+        alert(
+            arcId
+                ? "Projet mis à jour avec succès !"
+                : "Projet créé avec succès !",
+        );
         closeCreateModal();
         e.target.reset();
 
         await refreshArcConsistencyViews(authUser.id, {
-            selectArcId: !arcId && createdArc?.id ? createdArc.id : null
+            selectArcId: !arcId && createdArc?.id ? createdArc.id : null,
         });
-        
+
         // If we were viewing details of this arc, reload them
-        if (arcId && document.getElementById('immersive-overlay').style.display === 'block') {
+        if (
+            arcId &&
+            document.getElementById("immersive-overlay").style.display ===
+                "block"
+        ) {
             openArcDetails(arcId);
         }
-
     } catch (error) {
-        console.error('Error saving ARC:', error);
+        console.error("Error saving ARC:", error);
         const msg = error?.message || String(error || "");
         const code = error?.code ? ` (${error.code})` : "";
         alert(`Erreur lors de l'enregistrement du projet${code}: ${msg}`);
@@ -745,19 +787,18 @@ async function handleCreateArc(e) {
     }
 }
 
-
 async function loadUserArcs(userId) {
-    const container = document.querySelector('.profile-container');
+    const container = document.querySelector(".profile-container");
     if (!container) return;
 
     // Check if arcs section already exists
-    let arcsSection = document.getElementById('user-arcs-section');
+    let arcsSection = document.getElementById("user-arcs-section");
     if (!arcsSection) {
-        arcsSection = document.createElement('div');
-        arcsSection.id = 'user-arcs-section';
-        arcsSection.className = 'arcs-section';
+        arcsSection = document.createElement("div");
+        arcsSection.id = "user-arcs-section";
+        arcsSection.className = "arcs-section";
         // Insert after profile hero (banner/avatar) but before timeline
-        const timeline = document.querySelector('.timeline');
+        const timeline = document.querySelector(".timeline");
         if (timeline) {
             container.insertBefore(arcsSection, timeline);
         } else {
@@ -767,42 +808,48 @@ async function loadUserArcs(userId) {
 
     try {
         const { data: ownedArcs, error } = await supabase
-            .from('arcs')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false });
+            .from("arcs")
+            .select("*")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false });
 
         if (error) throw error;
 
         let collaboratorArcs = [];
         try {
-            if (typeof window.fetchCollaboratorArcs === 'function') {
+            if (typeof window.fetchCollaboratorArcs === "function") {
                 collaboratorArcs = await window.fetchCollaboratorArcs(userId);
             } else {
                 const { data: collabRows } = await supabase
-                    .from('arc_collaborations')
-                    .select('arc_id')
-                    .eq('collaborator_id', userId)
-                    .eq('status', 'accepted');
-                const collabArcIds = Array.from(new Set((collabRows || []).map(r => r.arc_id).filter(Boolean)));
+                    .from("arc_collaborations")
+                    .select("arc_id")
+                    .eq("collaborator_id", userId)
+                    .eq("status", "accepted");
+                const collabArcIds = Array.from(
+                    new Set(
+                        (collabRows || []).map((r) => r.arc_id).filter(Boolean),
+                    ),
+                );
                 if (collabArcIds.length > 0) {
                     const { data: collabArcsData } = await supabase
-                        .from('arcs')
-                        .select('*')
-                        .in('id', collabArcIds)
-                        .order('created_at', { ascending: false });
+                        .from("arcs")
+                        .select("*")
+                        .in("id", collabArcIds)
+                        .order("created_at", { ascending: false });
                     collaboratorArcs = collabArcsData || [];
                 }
             }
         } catch (collabError) {
-            console.error('Error loading collaborative ARCs:', collabError);
+            console.error("Error loading collaborative ARCs:", collabError);
         }
 
         const arcMap = new Map();
-        (ownedArcs || []).forEach(arc => arcMap.set(arc.id, { ...arc, _collabRole: 'owner' }));
-        (collaboratorArcs || []).forEach(arc => {
+        (ownedArcs || []).forEach((arc) =>
+            arcMap.set(arc.id, { ...arc, _collabRole: "owner" }),
+        );
+        (collaboratorArcs || []).forEach((arc) => {
             if (!arcMap.has(arc.id)) {
-                arcMap.set(arc.id, { ...arc, _collabRole: 'collaborator' });
+                arcMap.set(arc.id, { ...arc, _collabRole: "collaborator" });
             }
         });
         const arcs = Array.from(arcMap.values());
@@ -811,40 +858,57 @@ async function loadUserArcs(userId) {
         try {
             const viewerId = window.currentUser?.id;
             if (viewerId && arcs.length > 0) {
-                if (typeof window.fetchArcCollabStatusMap === 'function') {
-                    viewerStatusMap = await window.fetchArcCollabStatusMap(arcs.map(a => a.id), viewerId);
+                if (typeof window.fetchArcCollabStatusMap === "function") {
+                    viewerStatusMap = await window.fetchArcCollabStatusMap(
+                        arcs.map((a) => a.id),
+                        viewerId,
+                    );
                 } else {
                     const { data: statusRows } = await supabase
-                        .from('arc_collaborations')
-                        .select('arc_id, status')
-                        .eq('collaborator_id', viewerId)
-                        .in('arc_id', arcs.map(a => a.id));
-                    (statusRows || []).forEach(row => {
-                        if (row?.arc_id) viewerStatusMap.set(row.arc_id, row.status);
+                        .from("arc_collaborations")
+                        .select("arc_id, status")
+                        .eq("collaborator_id", viewerId)
+                        .in(
+                            "arc_id",
+                            arcs.map((a) => a.id),
+                        );
+                    (statusRows || []).forEach((row) => {
+                        if (row?.arc_id)
+                            viewerStatusMap.set(row.arc_id, row.status);
                     });
                 }
             }
         } catch (statusError) {
-            console.error('Error loading ARC collaboration status:', statusError);
+            console.error(
+                "Error loading ARC collaboration status:",
+                statusError,
+            );
         }
 
         let progressMap = new Map();
         try {
-            const arcIds = arcs.map(a => a.id).filter(Boolean);
+            const arcIds = arcs.map((a) => a.id).filter(Boolean);
             if (arcIds.length > 0) {
-                const { data: contentRows, error: contentError } = await supabase
-                    .from('content')
-                    .select('arc_id, day_number, is_deleted')
-                    .in('arc_id', arcIds);
+                const { data: contentRows, error: contentError } =
+                    await supabase
+                        .from("content")
+                        .select("arc_id, day_number, is_deleted")
+                        .in("arc_id", arcIds);
                 if (contentError) throw contentError;
-                const isSuper = typeof window.isSuperAdmin === 'function' ? window.isSuperAdmin() : false;
+                const isSuper =
+                    typeof window.isSuperAdmin === "function"
+                        ? window.isSuperAdmin()
+                        : false;
                 const daysByArc = new Map();
-                (contentRows || []).forEach(row => {
+                (contentRows || []).forEach((row) => {
                     if (!row?.arc_id) return;
                     if (!isSuper && row.is_deleted) return;
                     const key = row.arc_id;
                     if (!daysByArc.has(key)) daysByArc.set(key, new Set());
-                    if (row.day_number !== null && row.day_number !== undefined) {
+                    if (
+                        row.day_number !== null &&
+                        row.day_number !== undefined
+                    ) {
                         daysByArc.get(key).add(row.day_number);
                     }
                 });
@@ -853,7 +917,7 @@ async function loadUserArcs(userId) {
                 });
             }
         } catch (progressError) {
-            console.error('Error computing ARC progress:', progressError);
+            console.error("Error computing ARC progress:", progressError);
         }
 
         if (arcs && arcs.length > 0) {
@@ -865,64 +929,74 @@ async function loadUserArcs(userId) {
                     Projets en cours
                 </h3>
                 <div class="arcs-grid">
-                    ${arcs.map(arc => {
-                        const progressDays = progressMap.get(arc.id) || 0;
-                        return createArcCard({ ...arc, _progressDays: progressDays }, { viewerStatus: viewerStatusMap.get(arc.id), completedDays: progressDays });
-                    }).join('')}
+                    ${arcs
+                        .map((arc) => {
+                            const progressDays = progressMap.get(arc.id) || 0;
+                            return createArcCard(
+                                { ...arc, _progressDays: progressDays },
+                                {
+                                    viewerStatus: viewerStatusMap.get(arc.id),
+                                    completedDays: progressDays,
+                                },
+                            );
+                        })
+                        .join("")}
                 </div>
             `;
         } else {
-            arcsSection.innerHTML = ''; // Hide if no arcs
+            arcsSection.innerHTML = ""; // Hide if no arcs
         }
-
     } catch (error) {
-        console.error('Error loading ARCs:', error);
+        console.error("Error loading ARCs:", error);
     }
 }
 
 function createArcCard(arc, options = {}) {
-    const progress = calculateArcProgress(arc, { completedDays: options.completedDays });
+    const progress = calculateArcProgress(arc, {
+        completedDays: options.completedDays,
+    });
     const statusLabels = {
-        'in_progress': 'En cours',
-        'completed': 'Terminé',
-        'abandoned': 'Abandonné'
+        in_progress: "En cours",
+        completed: "Terminé",
+        abandoned: "Abandonné",
     };
     const stageLabel = getArcStageLabel(arc.stage_level);
     const opportunityIntents = normalizeArcOpportunityIntents(
         arc.opportunity_intents,
     );
     const opportunitySummary = opportunityIntents.length
-        ? opportunityIntents
-              .slice(0, 2)
-              .map(getArcOpportunityLabel)
-              .join(" • ")
+        ? opportunityIntents.slice(0, 2).map(getArcOpportunityLabel).join(" • ")
         : "Public";
     const opportunityOverflow =
-        opportunityIntents.length > 2 ? ` +${opportunityIntents.length - 2}` : "";
-    
+        opportunityIntents.length > 2
+            ? ` +${opportunityIntents.length - 2}`
+            : "";
+
     // Custom style for cover
-    let styleAttr = '';
-    let overlayClass = '';
-    
-    if (arc.media_url && arc.media_type === 'image') {
+    let styleAttr = "";
+    let overlayClass = "";
+
+    if (arc.media_url && arc.media_type === "image") {
         styleAttr = `style="background-image: url('${arc.media_url}'); background-size: cover; background-position: center;"`;
-        overlayClass = 'arc-card-has-cover';
+        overlayClass = "arc-card-has-cover";
     }
 
     const viewerId = window.currentUser?.id;
     const viewerStatus = options.viewerStatus;
     const canCollaborate = viewerId && viewerId !== arc.user_id;
-    const collabBadgeHtml = arc._collabRole === 'collaborator'
-        ? `<div style="margin-top:0.4rem; font-size:0.75rem; color: var(--text-secondary);">Collaboration</div>`
-        : '';
-    const ownerLabelHtml = arc._collabRole === 'collaborator' && arc.users?.name
-        ? `<div style="margin-top:0.25rem; font-size:0.75rem; color: var(--text-secondary);">Par ${escapeHtml(arc.users.name)}</div>`
-        : '';
-    let collabActionHtml = '';
+    const collabBadgeHtml =
+        arc._collabRole === "collaborator"
+            ? `<div style="margin-top:0.4rem; font-size:0.75rem; color: var(--text-secondary);">Collaboration</div>`
+            : "";
+    const ownerLabelHtml =
+        arc._collabRole === "collaborator" && arc.users?.name
+            ? `<div style="margin-top:0.25rem; font-size:0.75rem; color: var(--text-secondary);">Par ${escapeHtml(arc.users.name)}</div>`
+            : "";
+    let collabActionHtml = "";
     if (canCollaborate) {
-        if (viewerStatus === 'pending') {
+        if (viewerStatus === "pending") {
             collabActionHtml = `<div style="margin-top:0.75rem; font-size:0.75rem; color: var(--text-secondary);">Demande envoyée</div>`;
-        } else if (viewerStatus === 'accepted') {
+        } else if (viewerStatus === "accepted") {
             collabActionHtml = `
                 <button onclick="event.stopPropagation(); window.leaveArcCollaboration ? window.leaveArcCollaboration('${arc.id}') : alert('Action indisponible');" class="btn btn-ghost" style="margin-top:0.75rem; width:100%; color: var(--failure); border-color: var(--failure);">
                     Quitter la collaboration
@@ -945,7 +1019,7 @@ function createArcCard(arc, options = {}) {
                     ${statusLabels[arc.status] || arc.status}
                 </div>
                 <h4 class="arc-title" style="text-shadow: 0 2px 4px rgba(0,0,0,0.5);">${escapeHtml(arc.title)}</h4>
-                <p class="arc-goal" style="text-shadow: 0 1px 2px rgba(0,0,0,0.5);">${escapeHtml(arc.goal || '')}</p>
+                <p class="arc-goal" style="text-shadow: 0 1px 2px rgba(0,0,0,0.5);">${escapeHtml(arc.goal || "")}</p>
                 <div class="arc-classification">
                     <span class="arc-chip arc-chip-level">${stageLabel}</span>
                     <span class="arc-chip arc-chip-opportunity">${escapeHtml(opportunitySummary)}${opportunityOverflow}</span>
@@ -958,7 +1032,7 @@ function createArcCard(arc, options = {}) {
                         <div class="arc-progress-fill" style="width: ${progress}%"></div>
                     </div>
                     <div class="arc-meta" style="text-shadow: 0 1px 2px rgba(0,0,0,0.5);">
-                        <span>J${calculateDaysSince(arc.start_date)} / ${arc.duration_days || '?'}</span>
+                        <span>J${calculateDaysSince(arc.start_date)} / ${arc.duration_days || "?"}</span>
                         <span>${progress}%</span>
                     </div>
                 </div>
@@ -974,94 +1048,102 @@ function calculateDaysSince(startDate) {
     const now = new Date();
     if (now < start) return 0;
     const diffTime = Math.abs(now - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
 }
 
 function calculateArcProgress(arc, options = {}) {
     if (!arc || !arc.duration_days) return 0;
-    const completedDays = typeof options.completedDays === 'number'
-        ? options.completedDays
-        : (typeof arc._progressDays === 'number' ? arc._progressDays : 0);
+    const completedDays =
+        typeof options.completedDays === "number"
+            ? options.completedDays
+            : typeof arc._progressDays === "number"
+              ? arc._progressDays
+              : 0;
     const safeCompleted = Math.max(0, completedDays);
-    const progress = Math.min(100, Math.round((safeCompleted / arc.duration_days) * 100));
+    const progress = Math.min(
+        100,
+        Math.round((safeCompleted / arc.duration_days) * 100),
+    );
     return progress;
 }
 
 function escapeHtml(text) {
-    if (!text) return '';
+    if (!text) return "";
     return text
-        .replace(/&/g, '&')
-        .replace(/</g, '<')
-        .replace(/>/g, '>')
+        .replace(/&/g, "&")
+        .replace(/</g, "<")
+        .replace(/>/g, ">")
         .replace(/"/g, '"')
-        .replace(/'/g, '&#039;');
+        .replace(/'/g, "&#039;");
 }
-
 
 // --- ARC DETAILS & INTERACTION ---
 
 async function openArcDetails(arcId) {
     // Show loading state or overlay immediately
-    const overlay = document.getElementById('immersive-overlay');
-    overlay.style.display = 'block';
-    overlay.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;">Chargement...</div>';
-    document.body.style.overflow = 'hidden';
+    const overlay = document.getElementById("immersive-overlay");
+    overlay.style.display = "block";
+    overlay.innerHTML =
+        '<div style="display:flex;justify-content:center;align-items:center;height:100vh;">Chargement...</div>';
+    document.body.style.overflow = "hidden";
 
     try {
         // 1. Fetch Arc Details
         const { data: arc, error: arcError } = await supabase
-            .from('arcs')
-            .select('*, users(name, avatar)')
-            .eq('id', arcId)
+            .from("arcs")
+            .select("*, users(name, avatar)")
+            .eq("id", arcId)
             .single();
 
         if (arcError) throw arcError;
 
         // 2. Fetch Arc Stats (Followers)
         const { count: followersCount } = await supabase
-            .from('arc_followers')
-            .select('*', { count: 'exact', head: true })
-            .eq('arc_id', arcId);
+            .from("arc_followers")
+            .select("*", { count: "exact", head: true })
+            .eq("arc_id", arcId);
 
         // 3. Check if current user is following
         let isFollowing = false;
         if (currentUser) {
             const { data: followData } = await supabase
-                .from('arc_followers')
-                .select('*')
-                .eq('arc_id', arcId)
-                .eq('user_id', currentUser.id)
+                .from("arc_followers")
+                .select("*")
+                .eq("arc_id", arcId)
+                .eq("user_id", currentUser.id)
                 .single();
             isFollowing = !!followData;
         }
 
         // 4. Fetch Associated Content
         const { data: content, error: contentError } = await supabase
-            .from('content')
-            .select('*')
-            .eq('arc_id', arcId)
-            .order('created_at', { ascending: false });
+            .from("content")
+            .select("*")
+            .eq("arc_id", arcId)
+            .order("created_at", { ascending: false });
 
         if (contentError) throw contentError;
 
         const progressDaysSet = new Set(
-            (content || []).map(c => c.day_number).filter(v => v !== null && v !== undefined)
+            (content || [])
+                .map((c) => c.day_number)
+                .filter((v) => v !== null && v !== undefined),
         );
         arc._progressDays = progressDaysSet.size;
 
         // 5. Render
         renderArcDetails(arc, followersCount, isFollowing, content);
-
     } catch (error) {
         console.error("Error opening arc details:", error);
-        overlay.innerHTML = '<div style="padding:2rem;text-align:center;">Erreur lors du chargement de l\'ARC. <br><button onclick="closeImmersive()">Fermer</button></div>';
+        overlay.innerHTML =
+            '<div style="padding:2rem;text-align:center;">Erreur lors du chargement de l\'ARC. <br><button onclick="closeImmersive()">Fermer</button></div>';
     }
 }
 
 function renderArcDetails(arc, followersCount, isFollowing, content) {
     window.currentArc = arc;
-    const overlay = document.getElementById('immersive-overlay');
+    const overlay = document.getElementById("immersive-overlay");
     const isOwner = currentUser && currentUser.id === arc.user_id;
     const progress = calculateArcProgress(arc);
     const daysSince = calculateDaysSince(arc.start_date);
@@ -1073,15 +1155,15 @@ function renderArcDetails(arc, followersCount, isFollowing, content) {
         ? opportunityIntents.map(getArcOpportunityLabel).join(" • ")
         : "Public (sans ciblage spécifique)";
 
-    const coverHtml = arc.media_url 
-        ? (arc.media_type === 'video' 
+    const coverHtml = arc.media_url
+        ? arc.media_type === "video"
             ? `<div class="arc-cover" style="width:100%; max-height:300px; overflow:hidden; border-radius:12px; margin-bottom:1.5rem;"><video src="${arc.media_url}" controls style="width:100%; height:100%; object-fit:cover;"></video></div>`
-            : `<div class="arc-cover" style="width:100%; height:250px; background-image:url('${arc.media_url}'); background-size:cover; background-position:center; border-radius:12px; margin-bottom:1.5rem;"></div>`)
-        : '';
+            : `<div class="arc-cover" style="width:100%; height:250px; background-image:url('${arc.media_url}'); background-size:cover; background-position:center; border-radius:12px; margin-bottom:1.5rem;"></div>`
+        : "";
 
-    let actionButtons = '';
+    let actionButtons = "";
     if (isOwner) {
-        if (arc.status === 'in_progress') {
+        if (arc.status === "in_progress") {
             actionButtons = `
                 <button class="btn btn-primary" onclick="window.openCreateMenu('${currentUser.id}', '${arc.id}'); closeImmersive();" style="width:100%; margin-bottom:1rem;">Poster une mise à jour</button>
                 <div style="display:flex; gap:0.5rem; justify-content:center; flex-wrap:wrap;">
@@ -1097,15 +1179,16 @@ function renderArcDetails(arc, followersCount, isFollowing, content) {
         `;
     } else if (currentUser) {
         actionButtons = `
-            <button class="btn ${isFollowing ? 'btn-ghost' : 'btn-primary'}" onclick="toggleFollowArc('${arc.id}')">
-                ${isFollowing ? 'Ne plus suivre' : 'Suivre ce projet'}
+            <button class="btn ${isFollowing ? "btn-ghost" : "btn-primary"}" onclick="toggleFollowArc('${arc.id}')">
+                ${isFollowing ? "Ne plus suivre" : "Suivre ce projet"}
             </button>
         `;
     }
 
-    const contentHtml = content && content.length > 0 
-        ? `<div class="arc-content-grid">${content.map(c => createContentCardSimple(c, isOwner)).join('')}</div>`
-        : `<p style="text-align:center; opacity:0.6; margin-top:2rem;">Aucune mise à jour pour le moment.</p>`;
+    const contentHtml =
+        content && content.length > 0
+            ? `<div class="arc-content-grid">${content.map((c) => createContentCardSimple(c, isOwner)).join("")}</div>`
+            : `<p style="text-align:center; opacity:0.6; margin-top:2rem;">Aucune mise à jour pour le moment.</p>`;
 
     overlay.innerHTML = `
         <div class="arc-details-container" style="max-width: 800px; margin: 0 auto; padding: 2rem; padding-bottom: 100px;">
@@ -1114,14 +1197,14 @@ function renderArcDetails(arc, followersCount, isFollowing, content) {
             <div class="arc-details-hero">
                 ${coverHtml}
                 <div class="arc-status-badge arc-status-${arc.status}" style="display:inline-block; margin-bottom:1rem; position:static;">
-                    ${arc.status === 'in_progress' ? 'En cours' : arc.status === 'completed' ? 'Terminé' : 'Abandonné'}
+                    ${arc.status === "in_progress" ? "En cours" : arc.status === "completed" ? "Terminé" : "Abandonné"}
                 </div>
                 <h1 class="arc-details-title">${escapeHtml(arc.title)}</h1>
                 <p style="font-size:1.2rem; color:var(--text-secondary); max-width:600px; margin:0 auto 2rem;">${escapeHtml(arc.goal)}</p>
                 
                 <div class="arc-details-stats">
                     <div class="stat-item">
-                        <span class="stat-value">${daysSince}/${arc.duration_days || '?'}</span>
+                        <span class="stat-value">${daysSince}/${arc.duration_days || "?"}</span>
                         <span class="stat-label">Jours</span>
                     </div>
                     <div class="stat-item">
@@ -1147,7 +1230,7 @@ function renderArcDetails(arc, followersCount, isFollowing, content) {
                     <span class="arc-chip arc-chip-opportunity">${escapeHtml(opportunitiesLabel)}</span>
                 </div>
                 <div style="margin-top:1rem; font-size:0.9rem; opacity:0.7; border-top:1px solid var(--border-color); padding-top:1rem;">
-                    Lancé le ${new Date(arc.start_date).toLocaleDateString()} par <strong>${escapeHtml(arc.users?.name || 'Inconnu')}</strong>
+                    Lancé le ${new Date(arc.start_date).toLocaleDateString()} par <strong>${escapeHtml(arc.users?.name || "Inconnu")}</strong>
                 </div>
             </div>
 
@@ -1160,13 +1243,13 @@ function renderArcDetails(arc, followersCount, isFollowing, content) {
 function createContentCardSimple(content, isOwner) {
     // Simplified version of content card for the list
     const date = new Date(content.created_at).toLocaleDateString();
-    
-    let stateClass = '';
-    if (content.state === 'success') stateClass = 'item-success';
-    else if (content.state === 'failure') stateClass = 'item-failure';
-    else if (content.state === 'pause') stateClass = 'item-pause';
-    
-    let actions = '';
+
+    let stateClass = "";
+    if (content.state === "success") stateClass = "item-success";
+    else if (content.state === "failure") stateClass = "item-failure";
+    else if (content.state === "pause") stateClass = "item-pause";
+
+    let actions = "";
     if (isOwner) {
         actions = `
             <div class="timeline-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.5rem;">
@@ -1182,7 +1265,7 @@ function createContentCardSimple(content, isOwner) {
             <div class="timeline-card">
                 <h4>${escapeHtml(content.title)}</h4>
                 <p>${escapeHtml(content.description)}</p>
-                ${content.media_url ? `<div style="margin-top:1rem;"><a href="${content.media_url}" target="_blank" style="color:var(--accent-color); text-decoration:underline;">Voir le média</a></div>` : ''}
+                ${content.media_url ? `<div style="margin-top:1rem;"><a href="${content.media_url}" target="_blank" style="color:var(--accent-color); text-decoration:underline;">Voir le média</a></div>` : ""}
                 ${actions}
             </div>
         </div>
@@ -1198,50 +1281,99 @@ async function toggleFollowArc(arcId) {
     try {
         // Check current status
         const { data: existing } = await supabase
-            .from('arc_followers')
-            .select('id')
-            .eq('arc_id', arcId)
-            .eq('user_id', currentUser.id)
+            .from("arc_followers")
+            .select("id")
+            .eq("arc_id", arcId)
+            .eq("user_id", currentUser.id)
             .single();
 
         if (existing) {
             // Unfollow
-            await supabase.from('arc_followers').delete().eq('id', existing.id);
+            await supabase.from("arc_followers").delete().eq("id", existing.id);
         } else {
             // Follow
-            await supabase.from('arc_followers').insert([{
-                arc_id: arcId,
-                user_id: currentUser.id
-            }]);
+            await supabase.from("arc_followers").insert([
+                {
+                    arc_id: arcId,
+                    user_id: currentUser.id,
+                },
+            ]);
+
+            // Notifier le propriétaire de l'ARC (si ce n'est pas soi-même)
+            try {
+                const { data: arcRow, error: arcErr } = await supabase
+                    .from("arcs")
+                    .select("id, user_id, title")
+                    .eq("id", arcId)
+                    .maybeSingle();
+                if (
+                    !arcErr &&
+                    arcRow &&
+                    arcRow.user_id &&
+                    arcRow.user_id !== currentUser.id
+                ) {
+                    const actorName =
+                        typeof getCurrentUserDisplayName === "function"
+                            ? getCurrentUserDisplayName()
+                            : (currentUser &&
+                                  (currentUser.name || currentUser.email)) ||
+                              "Un membre";
+                    const message = `${actorName} a commencé à suivre votre projet "${arcRow.title || "votre projet"}"`;
+                    const link =
+                        typeof safeProfileLink === "function"
+                            ? safeProfileLink(currentUser.id)
+                            : `profile.html?user=${currentUser.id}`;
+                    if (typeof createNotification === "function") {
+                        try {
+                            await createNotification(
+                                arcRow.user_id,
+                                "arc_follow",
+                                message,
+                                link,
+                            );
+                        } catch (e) {
+                            console.warn(
+                                "notifyArcFollow createNotification error",
+                                e,
+                            );
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn("notifyArcFollow error", e);
+            }
         }
-        
+
         // Refresh view (lazy way: reload details)
         openArcDetails(arcId);
-
     } catch (error) {
         console.error("Error toggling follow:", error);
     }
 }
 
 async function updateArcStatus(arcId, newStatus) {
-    if (!confirm(`Êtes-vous sûr de vouloir marquer ce projet comme ${newStatus} ?`)) return;
+    if (
+        !confirm(
+            `Êtes-vous sûr de vouloir marquer ce projet comme ${newStatus} ?`,
+        )
+    )
+        return;
 
     try {
         const { error } = await supabase
-            .from('arcs')
+            .from("arcs")
             .update({ status: newStatus })
-            .eq('id', arcId);
+            .eq("id", arcId);
 
         if (error) throw error;
-        
+
         // Refresh view
         openArcDetails(arcId);
-        
+
         // Also refresh profile list if open
-        if (document.getElementById('profile').classList.contains('active')) {
+        if (document.getElementById("profile").classList.contains("active")) {
             loadUserArcs(currentUser.id);
         }
-
     } catch (error) {
         console.error("Error updating status:", error);
         alert("Erreur lors de la mise à jour.");
@@ -1249,21 +1381,23 @@ async function updateArcStatus(arcId, newStatus) {
 }
 
 async function deleteArc(arcId) {
-    if (!confirm("Attention : Cette action est irréversible. Voulez-vous vraiment supprimer ce projet et tout son historique ?")) return;
-    
+    if (
+        !confirm(
+            "Attention : Cette action est irréversible. Voulez-vous vraiment supprimer ce projet et tout son historique ?",
+        )
+    )
+        return;
+
     try {
-        const { error } = await supabase
-            .from('arcs')
-            .delete()
-            .eq('id', arcId);
+        const { error } = await supabase.from("arcs").delete().eq("id", arcId);
 
         if (error) throw error;
 
         alert("Projet supprimé.");
         closeImmersive();
-        
+
         // Refresh profile if open
-        if (document.getElementById('profile').classList.contains('active')) {
+        if (document.getElementById("profile").classList.contains("active")) {
             loadUserArcs(currentUser.id);
         }
     } catch (error) {
@@ -1274,10 +1408,10 @@ async function deleteArc(arcId) {
 
 // Ensure closeImmersive is available globally or reuse the one in app-supabase.js
 if (!window.closeImmersive) {
-    window.closeImmersive = function() {
-        document.getElementById('immersive-overlay').style.display = 'none';
-        document.body.style.overflow = 'auto';
-    }
+    window.closeImmersive = function () {
+        document.getElementById("immersive-overlay").style.display = "none";
+        document.body.style.overflow = "auto";
+    };
 }
 
 // --- EXPORT ---
@@ -1294,4 +1428,4 @@ window.updateArcStatus = updateArcStatus;
 window.deleteArc = deleteArc;
 
 // Auto-init when DOM loaded
-document.addEventListener('DOMContentLoaded', initArcs);
+document.addEventListener("DOMContentLoaded", initArcs);

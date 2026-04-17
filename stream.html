@@ -88,7 +88,10 @@
                         id="unmute-overlay"
                         type="button"
                         class="unmute-overlay"
-                        onclick="window.enableStreamAudio && window.enableStreamAudio()"
+                        onclick="
+                            window.enableStreamAudio &&
+                                window.enableStreamAudio()
+                        "
                         aria-label="Activer le son"
                     >
                         🔊 Activer le son
@@ -96,7 +99,7 @@
                     <div
                         class="support-overlay support-overlay--stream"
                         id="stream-support-overlay"
-                        style="display:none;"
+                        style="display: none"
                     >
                         <button
                             class="support-btn support-btn-active support-btn-profile large"
@@ -104,7 +107,11 @@
                             title="Soutenir"
                             aria-label="Soutenir"
                         >
-                            <img src="icons/soutien.svg" class="support-icon-img" alt="Soutenir">
+                            <img
+                                src="icons/soutien.svg"
+                                class="support-icon-img"
+                                alt="Soutenir"
+                            />
                             <span class="support-btn-label">Soutenir</span>
                         </button>
                     </div>
@@ -159,7 +166,12 @@
                 </div>
 
                 <div class="stream-info">
-                    <button class="stream-viewers stream-viewers-info" id="viewer-list-btn" type="button" title="Voir les viewers">
+                    <button
+                        class="stream-viewers stream-viewers-info"
+                        id="viewer-list-btn"
+                        type="button"
+                        title="Voir les viewers"
+                    >
                         <svg
                             width="16"
                             height="16"
@@ -197,17 +209,40 @@
 
                     <!-- Actions du stream -->
                     <div class="stream-actions">
-                        <div class="stream-host-controls" id="stream-host-controls">
-                            <button class="stream-action-btn btn stream-action-danger" id="end-stream-btn" type="button" title="Arrêter le live">
+                        <div
+                            class="stream-host-controls"
+                            id="stream-host-controls"
+                        >
+                            <button
+                                class="stream-action-btn btn stream-action-danger"
+                                id="end-stream-btn"
+                                type="button"
+                                title="Arrêter le live"
+                            >
                                 <span class="btn-text">Arrêter</span>
                             </button>
-                            <button class="stream-action-btn btn" id="switch-camera-btn" type="button" title="Changer de caméra">
+                            <button
+                                class="stream-action-btn btn"
+                                id="switch-camera-btn"
+                                type="button"
+                                title="Changer de caméra"
+                            >
                                 <span class="btn-text">Caméra</span>
                             </button>
-                            <button class="stream-action-btn btn" id="mute-mic-btn" type="button" title="Couper le micro">
+                            <button
+                                class="stream-action-btn btn"
+                                id="mute-mic-btn"
+                                type="button"
+                                title="Couper le micro"
+                            >
                                 <span class="btn-text">Muet</span>
                             </button>
-                            <button class="stream-action-btn btn" id="share-screen-btn" type="button" title="Partager l'écran">
+                            <button
+                                class="stream-action-btn btn"
+                                id="share-screen-btn"
+                                type="button"
+                                title="Partager l'écran"
+                            >
                                 <span class="btn-text">Écran</span>
                             </button>
                         </div>
@@ -254,8 +289,18 @@
                             </svg>
                             <span class="btn-text">Partager</span>
                         </button>
-                        <button class="stream-action-btn btn" id="stream-support-btn" title="Soutenir" aria-label="Soutenir" style="display:none;">
-                            <img src="icons/soutien.svg" class="stream-action-icon" alt="Soutenir">
+                        <button
+                            class="stream-action-btn btn"
+                            id="stream-support-btn"
+                            title="Soutenir"
+                            aria-label="Soutenir"
+                            style="display: none"
+                        >
+                            <img
+                                src="icons/soutien.svg"
+                                class="stream-action-icon"
+                                alt="Soutenir"
+                            />
                         </button>
                     </div>
                 </div>
@@ -300,11 +345,25 @@
             </div>
         </div>
 
-        <div class="viewer-list-modal" id="viewer-list-modal" aria-hidden="true">
-            <div class="viewer-list-panel" role="dialog" aria-modal="true" aria-labelledby="viewer-list-title">
+        <div
+            class="viewer-list-modal"
+            id="viewer-list-modal"
+            aria-hidden="true"
+        >
+            <div
+                class="viewer-list-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="viewer-list-title"
+            >
                 <div class="viewer-list-header">
                     <h3 id="viewer-list-title">Viewers du stream</h3>
-                    <button class="viewer-list-close" id="viewer-list-close" type="button" aria-label="Fermer">
+                    <button
+                        class="viewer-list-close"
+                        id="viewer-list-close"
+                        type="button"
+                        aria-label="Fermer"
+                    >
                         ✕
                     </button>
                 </div>
@@ -316,6 +375,7 @@
 
         <script src="js/router.js"></script>
         <script src="js/supabase-config.js"></script>
+        <script src="js/monetization-utils.js"></script>
         <script src="js/app-supabase.js?v=20260318-4"></script>
         <script src="js/monetization.js?v=20260319-1"></script>
         <script src="js/monetization-ui.js?v=20260319-1"></script>

@@ -106,7 +106,9 @@
                     ></span>
                 </div>
 
-                <a href="login.html" id="nav-auth" data-i18n="navAuth">Login / Register</a>
+                <a href="login.html" id="nav-auth" data-i18n="navAuth"
+                    >Login / Register</a
+                >
             </div>
         </nav>
 
@@ -114,6 +116,7 @@
 
         <script src="js/router.js"></script>
         <script src="js/supabase-config.js"></script>
+        <script src="js/monetization-utils.js"></script>
         <script src="js/app-supabase.js?v=20260318-4"></script>
         <script>
             document.addEventListener("DOMContentLoaded", async () => {
@@ -126,9 +129,10 @@
                 } else {
                     if (navAuth) navAuth.style.display = "none";
                     if (navProfile) {
-                        navProfile.style.display = navProfile.classList.contains("notification-button")
-                            ? "flex"
-                            : "block";
+                        navProfile.style.display =
+                            navProfile.classList.contains("notification-button")
+                                ? "flex"
+                                : "block";
                     }
                 }
 
