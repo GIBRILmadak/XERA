@@ -13485,6 +13485,80 @@ function hideBackgroundPublishBanner() {
     }
 }
 
+// Remove floating 'Feedback' tab/buttons added by site or third-party scripts.
+// This will attempt to remove common selectors and any small fixed-position
+// element whose text content is exactly 'Feedback' (case-insensitive).
+(function () {
+    function removeFloatingFeedbackTabs() {
+        try {
+            const selectors = [
+                "#feedback",
+                ".feedback",
+                ".feedback-tab",
+                ".feedback-button",
+                ".feedback-toggle",
+                "[data-feedback]",
+                ".feedback-cta",
+                "#feedback-tab",
+                ".feedback-panel",
+                ".feedback-stub",
+                ".feedback-bar",
+            ];
+
+            selectors.forEach((sel) => {
+                try {
+                    document.querySelectorAll(sel).forEach((el) => {
+                        if (el && el.parentNode) el.parentNode.removeChild(el);
+                    });
+                } catch (e) {}
+            });
+
+            // Remove elements that render the literal word "Feedback" and are fixed/small
+            const nodes = document.querySelectorAll("body *");
+            for (const node of nodes) {
+                try {
+                    const txt = String(node.textContent || "").trim();
+                    if (!txt) continue;
+                    if (!/^feedback$/i.test(txt)) continue;
+                    const st = window.getComputedStyle(node);
+                    if (
+                        st.position === "fixed" ||
+                        st.position === "absolute" ||
+                        st.position === "sticky"
+                    ) {
+                        const r = node.getBoundingClientRect();
+                        if (
+                            (r.width > 0 && r.width <= 180 && r.height >= 20) ||
+                            r.height > r.width
+                        ) {
+                            node.remove();
+                        }
+                    }
+                } catch (e) {
+                    // ignore per-node errors
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    try {
+        // initial cleanup
+        removeFloatingFeedbackTabs();
+        // observe DOM for dynamically inserted feedback controls
+        const observer = new MutationObserver(() =>
+            removeFloatingFeedbackTabs(),
+        );
+        observer.observe(document.documentElement || document.body, {
+            childList: true,
+            subtree: true,
+        });
+        // expose for debugging if needed
+        window._removeFloatingFeedbackTabs = removeFloatingFeedbackTabs;
+    } catch (e) {}
+})();
+
 async function openCreateMenu(
     userId,
     preSelectedArcId = null,

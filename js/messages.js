@@ -1174,21 +1174,15 @@
             }
         }
         if (subEl) {
-            // default to visible; we'll hide if empty
-            subEl.hidden = false;
-            if (relationship.loading) {
-                subEl.textContent = "Vérification de la conversation...";
-            } else if (relationship.blockedByMe || relationship.blockedMe) {
+            // By default keep the sub element hidden unless there's meaningful info to show
+            subEl.hidden = true;
+            subEl.textContent = "";
+            if (relationship.blockedByMe || relationship.blockedMe) {
                 subEl.textContent = getDmBlockedMessage(relationship);
-            } else {
-                if (conversation.unreadCount) {
-                    subEl.textContent = `${conversation.unreadCount} nouveau(x) message(s)`;
-                    subEl.hidden = false;
-                } else {
-                    // remove the persistent "En ligne" indicator to reduce visual clutter
-                    subEl.textContent = "";
-                    subEl.hidden = true;
-                }
+                subEl.hidden = false;
+            } else if (conversation.unreadCount) {
+                subEl.textContent = `${conversation.unreadCount} nouveau(x) message(s)`;
+                subEl.hidden = false;
             }
         }
         renderChatHeaderActions();
@@ -1222,14 +1216,81 @@
                 } catch (e) {}
             });
             document.body.appendChild(btn);
+            // position the button below the top navigation/menu if present
+            try {
+                positionFloatingBackButton(btn);
+            } catch (e) {}
+            // reposition on resize/orientation change
+            try {
+                window.addEventListener("resize", () =>
+                    positionFloatingBackButton(btn),
+                );
+                window.addEventListener("orientationchange", () =>
+                    positionFloatingBackButton(btn),
+                );
+            } catch (e) {}
         }
         return btn;
+    }
+
+    function positionFloatingBackButton(btn) {
+        if (!btn) btn = document.getElementById("messages-floating-back-btn");
+        if (!btn) return;
+        try {
+            const selectors = [
+                "header",
+                ".site-header",
+                ".topbar",
+                ".top-nav",
+                ".main-header",
+                "#header",
+                ".navbar",
+                ".app-header",
+                ".global-header",
+            ];
+            let navEl = null;
+            for (const s of selectors) {
+                const el = document.querySelector(s);
+                if (el) {
+                    navEl = el;
+                    break;
+                }
+            }
+            let topPx;
+            if (navEl) {
+                const rect = navEl.getBoundingClientRect();
+                topPx = Math.max(
+                    rect.bottom + 8,
+                    (parseInt(
+                        getComputedStyle(
+                            document.documentElement,
+                        ).getPropertyValue("--safe-area-inset-top"),
+                    ) || 0) + 8,
+                );
+            } else {
+                // fallback to a sensible offset under the status bar
+                topPx =
+                    (window.innerWidth <= 960 ? 56 : 12) +
+                    (window.visualViewport?.offsetTop || 0) +
+                    8;
+            }
+            btn.style.top = `${Math.round(topPx)}px`;
+            btn.style.left = `12px`;
+            btn.style.bottom = `auto`;
+        } catch (e) {
+            btn.style.top = `calc(env(safe-area-inset-top, 12px) + 12px)`;
+            btn.style.left = `12px`;
+            btn.style.bottom = `auto`;
+        }
     }
 
     function toggleFloatingBackButton(show) {
         const btn = ensureFloatingBackButton();
         if (!btn) return;
         if (show) {
+            try {
+                positionFloatingBackButton(btn);
+            } catch (e) {}
             btn.classList.add("show");
         } else {
             btn.classList.remove("show");
