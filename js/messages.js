@@ -25,6 +25,12 @@
         refreshTimer: null,
         routeHandled: false,
         realtimeWarned: false,
+        // Outbox holds messages that failed to send and will be retried
+        outbox: [],
+        // Count reconnect attempts for realtime with exponential backoff
+        realtimeReconnectAttempts: 0,
+        // Flag to avoid concurrent outbox processing
+        processingOutbox: false,
         pendingAttachment: null,
         sendingMessage: false,
         activeRelationship: null,
@@ -113,6 +119,17 @@
         }
         const rounded = size >= 10 || unitIndex === 0 ? Math.round(size) : size.toFixed(1);
         return `${rounded} ${units[unitIndex]}`;
+    }
+
+    function isMobileDevice() {
+        try {
+            const mq = window.matchMedia && window.matchMedia("(max-width: 960px)").matches;
+            const ua = navigator.userAgent || "";
+            const mobileUA = /Mobi|Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+            return !!(mq || mobileUA);
+        } catch (e) {
+            return false;
+        }
     }
 
     function isMissingColumnMessage(message, columnNames) {
@@ -638,6 +655,22 @@
         autoResizeChatInput();
         syncComposerState();
 
+        // Keep composer hint responsive to viewport changes (e.g., rotate/resize)
+        try {
+            window.addEventListener("resize", () => {
+                try {
+                    syncComposerState();
+                } catch (e) {}
+            });
+            window.addEventListener("orientationchange", () => {
+                try {
+                    syncComposerState();
+                } catch (e) {}
+            });
+        } catch (e) {
+            // ignore environments that don't support these events
+        }
+
         return true;
     }
 
@@ -787,19 +820,23 @@
         if (sendBtn) sendBtn.disabled = !canSend;
         if (attachBtn) attachBtn.disabled = !canCompose || isBusy;
         if (hint) {
-            if (!canCompose) {
-                if (!state.selectedConversationId) {
-                    hint.textContent = "Sélectionnez une conversation pour commencer.";
+            const mobile = isMobileDevice();
+            // Hide the helper hint on mobile to maximize vertical space
+            hint.hidden = mobile;
+            if (!mobile) {
+                if (!canCompose) {
+                    if (!state.selectedConversationId) {
+                        hint.textContent = "Sélectionnez une conversation pour commencer.";
+                    } else {
+                        hint.textContent = getDmBlockedMessage(relationship);
+                    }
+                } else if (pending?.uploading) {
+                    hint.textContent = "Upload du média en cours...";
+                } else if (hasAttachment && !hasText) {
+                    hint.textContent = "Vous pouvez envoyer le média seul ou ajouter un texte.";
                 } else {
-                    hint.textContent = getDmBlockedMessage(relationship);
+                    hint.textContent = "Entrée pour envoyer • Maj+Entrée pour une nouvelle ligne";
                 }
-            } else if (pending?.uploading) {
-                hint.textContent = "Upload du média en cours...";
-            } else if (hasAttachment && !hasText) {
-                hint.textContent = "Vous pouvez envoyer le média seul ou ajouter un texte.";
-            } else {
-                hint.textContent =
-                    "Entrée pour envoyer • Maj+Entrée pour une nouvelle ligne";
             }
         }
     }
@@ -1075,18 +1112,64 @@
             }
         }
         if (subEl) {
+            // default to visible; we'll hide if empty
+            subEl.hidden = false;
             if (relationship.loading) {
                 subEl.textContent = "Vérification de la conversation...";
             } else if (relationship.blockedByMe || relationship.blockedMe) {
                 subEl.textContent = getDmBlockedMessage(relationship);
             } else {
-                subEl.textContent = conversation.unreadCount
-                    ? `${conversation.unreadCount} nouveau(x) message(s)`
-                    : "En ligne sur XERA";
+                if (conversation.unreadCount) {
+                    subEl.textContent = `${conversation.unreadCount} nouveau(x) message(s)`;
+                    subEl.hidden = false;
+                } else {
+                    // remove the persistent "En ligne" indicator to reduce visual clutter
+                    subEl.textContent = "";
+                    subEl.hidden = true;
+                }
             }
         }
         renderChatHeaderActions();
         syncComposerState();
+
+        // Floating back button: show when a conversation is open (keeps a high z-index and fixed position)
+        try {
+            toggleFloatingBackButton(Boolean(state.selectedConversationId && isMessagesPageActive()));
+        } catch (e) {}
+    }
+
+    function ensureFloatingBackButton() {
+        let btn = document.getElementById("messages-floating-back-btn");
+        if (!btn) {
+            btn = document.createElement("button");
+            btn.id = "messages-floating-back-btn";
+            btn.className = "floating-back-btn";
+            btn.setAttribute("aria-label", "Retour");
+            btn.title = "Retour";
+            btn.innerHTML = "←";
+            btn.addEventListener("click", () => {
+                const shell = document.getElementById("messages-shell");
+                if (shell) shell.classList.remove("mobile-thread-open");
+                state.selectedConversationId = null;
+                renderChatMessages();
+                updateUnreadUi();
+                try {
+                    toggleFloatingBackButton(false);
+                } catch (e) {}
+            });
+            document.body.appendChild(btn);
+        }
+        return btn;
+    }
+
+    function toggleFloatingBackButton(show) {
+        const btn = ensureFloatingBackButton();
+        if (!btn) return;
+        if (show) {
+            btn.classList.add("show");
+        } else {
+            btn.classList.remove("show");
+        }
     }
 
     function renderChatMessages() {
@@ -1694,34 +1777,75 @@
             }
             clearPendingAttachment();
         } catch (error) {
-            if (uploadedMedia?.path && typeof deleteFile === "function") {
-                deleteFile(uploadedMedia.path).catch(() => {});
-            }
+            // If offline or transient network error, queue the message for retry
+            const offlineError = !navigator.onLine || String(error?.message || "").toLowerCase().includes("network") || String(error?.message || "").toLowerCase().includes("offline");
+            if (offlineError) {
+                // create a temp id and show the message locally as pending
+                const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+                const tempMsg = {
+                    id: tempId,
+                    conversation_id: conversationId,
+                    sender_id: currentUserId,
+                    body: body || null,
+                    media_url: uploadedMedia?.url || null,
+                    media_type: uploadedMedia?.type || pending?.kind || null,
+                    media_name: pending?.name || pending?.file?.name || null,
+                    media_size_bytes: pending?.size || pending?.file?.size || null,
+                    created_at: new Date().toISOString(),
+                    pending: true,
+                };
 
-            console.error("Erreur envoi message:", error);
-            input.value = originalValue;
-            autoResizeChatInput();
-            const currentPending = getPendingAttachment();
-            if (currentPending) {
-                currentPending.uploading = false;
-                currentPending.progress = 0;
-                renderAttachmentPreview();
-            }
-            if (window.ToastManager?.error) {
-                ToastManager.error(
-                    "Message non envoyé",
-                    getFriendlyDmErrorMessage(
-                        error,
-                        "Impossible d'envoyer le message.",
-                    ),
-                );
+                const existing = state.messagesByConversation.get(conversationId) || [];
+                state.messagesByConversation.set(conversationId, [...existing, tempMsg]);
+                sortAndReindexConversations();
+                updateUnreadUi();
+                renderChatMessages();
+
+                // enqueue the DB payload for retry
+                try {
+                    enqueueOutbox(insertPayload, tempId);
+                    if (window.ToastManager?.info) {
+                        ToastManager.info(
+                            "Message mis en file d'attente",
+                            "Le message sera renvoyé automatiquement lorsque la connexion reviendra.",
+                        );
+                    }
+                    clearPendingAttachment();
+                    input.value = "";
+                    autoResizeChatInput();
+                } catch (e) {
+                    console.error("Enqueue outbox failed:", e);
+                }
             } else {
-                alert(
-                    getFriendlyDmErrorMessage(
-                        error,
-                        "Impossible d'envoyer le message.",
-                    ),
-                );
+                if (uploadedMedia?.path && typeof deleteFile === "function") {
+                    deleteFile(uploadedMedia.path).catch(() => {});
+                }
+
+                console.error("Erreur envoi message:", error);
+                input.value = originalValue;
+                autoResizeChatInput();
+                const currentPending = getPendingAttachment();
+                if (currentPending) {
+                    currentPending.uploading = false;
+                    currentPending.progress = 0;
+                    renderAttachmentPreview();
+                }
+                if (window.ToastManager?.error) {
+                    ToastManager.error(
+                        "Message non envoyé",
+                        getFriendlyDmErrorMessage(
+                            error,
+                            "Impossible d'envoyer le message.",
+                        ),
+                    );
+                } else {
+                    alert(
+                        getFriendlyDmErrorMessage(
+                            error,
+                            "Impossible d'envoyer le message.",
+                        ),
+                    );
+                }
             }
         } finally {
             const currentPending = getPendingAttachment();
@@ -1737,6 +1861,78 @@
             if (attachBtn) attachBtn.disabled = false;
             syncComposerState();
             input.focus();
+        }
+    }
+
+    function enqueueOutbox(payload, tempMessageId) {
+        if (!payload || !payload.conversation_id) return;
+        const entry = {
+            id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+            payload,
+            tempMessageId: tempMessageId || null,
+            attempts: 0,
+            createdAt: new Date().toISOString(),
+            lastError: null,
+        };
+        state.outbox.push(entry);
+        // start processing immediately (will no-op if already running)
+        processOutbox().catch((e) => console.error("Outbox processing failed:", e));
+    }
+
+    async function processOutbox() {
+        if (!state.outbox || !state.outbox.length) return;
+        if (state.processingOutbox) return;
+        state.processingOutbox = true;
+        try {
+            for (let i = 0; i < state.outbox.length; ) {
+                const entry = state.outbox[i];
+                if (!entry) {
+                    i++;
+                    continue;
+                }
+                try {
+                    const { data, error } = await runMessageSelect((selectColumns) =>
+                        supabase.from("dm_messages").insert(entry.payload).select(selectColumns).single(),
+                    );
+                    if (error) throw error;
+                    if (data) {
+                        const convId = data.conversation_id;
+                        const msgs = state.messagesByConversation.get(convId) || [];
+                        const idx = msgs.findIndex((m) => m.id === entry.tempMessageId);
+                        if (idx !== -1) {
+                            msgs[idx] = data;
+                        } else {
+                            msgs.push(data);
+                        }
+                        state.messagesByConversation.set(convId, msgs);
+                        rememberMessageId(data.id);
+                        state.outbox.splice(i, 1);
+                        sortAndReindexConversations();
+                        updateUnreadUi();
+                        renderChatMessages();
+                        continue; // don't increment i because array mutated
+                    }
+                } catch (err) {
+                    entry.attempts = (entry.attempts || 0) + 1;
+                    entry.lastError = String(err?.message || err || "");
+                    if (entry.attempts >= 5) {
+                        if (window.ToastManager?.error) {
+                            ToastManager.error(
+                                "Échec envoi message",
+                                "Un message en file d'attente a échoué après plusieurs tentatives.",
+                            );
+                        }
+                        state.outbox.splice(i, 1);
+                        continue;
+                    }
+                    // exponential backoff before next attempt
+                    const backoff = Math.min(30000, 1000 * Math.pow(2, entry.attempts));
+                    await new Promise((res) => setTimeout(res, backoff));
+                    i++;
+                }
+            }
+        } finally {
+            state.processingOutbox = false;
         }
     }
 
@@ -1945,18 +2141,39 @@
                 },
             )
             .subscribe((status) => {
+                // On success, reset reconnect attempts and ensure UI is fresh
                 if (status === "SUBSCRIBED") {
+                    state.realtimeReconnectAttempts = 0;
+                    state.realtimeWarned = false;
                     refreshConversations({ preserveSelection: true }).catch((error) => {
                         console.error("DM initial realtime refresh error:", error);
                     });
+                    // Try to flush any queued outbound messages now that realtime is available
+                    try {
+                        processOutbox();
+                    } catch (e) {}
                     return;
                 }
 
-                if (status === "CHANNEL_ERROR" && !state.realtimeWarned) {
+                // Warn once about realtime issues and schedule a reconnect with backoff
+                if ((status === "CHANNEL_ERROR" || status === "CLOSED") && !state.realtimeWarned) {
                     state.realtimeWarned = true;
                     console.warn(
                         "DM realtime indisponible. Fallback polling actif (vérifiez la publication realtime des tables DM).",
                     );
+                }
+
+                if (status === "CHANNEL_ERROR" || status === "CLOSED") {
+                    state.realtimeReconnectAttempts = (state.realtimeReconnectAttempts || 0) + 1;
+                    const delay = Math.min(30000, 1000 * Math.pow(2, state.realtimeReconnectAttempts));
+                    setTimeout(() => {
+                        if (!isLoggedIn()) return;
+                        try {
+                            subscribeRealtime();
+                        } catch (e) {
+                            console.error("Realtime resubscribe failed:", e);
+                        }
+                    }, delay);
                 }
             });
 
@@ -2184,6 +2401,10 @@
         state.routeHandled = false;
         state.sendingMessage = false;
         state.activeRelationship = null;
+        // clear any queued outbound messages when user logs out or messaging is cleaned up
+        state.outbox = [];
+        state.processingOutbox = false;
+        state.realtimeReconnectAttempts = 0;
         setNavBadgeCount(0);
         setNavButtonVisible(false);
     }
@@ -2200,4 +2421,26 @@
             console.error("DM visibility refresh error:", error);
         });
     });
+
+    // Network connectivity hooks: try to recover realtime and flush outbox on reconnect
+    try {
+        window.addEventListener("online", () => {
+            if (!isLoggedIn()) return;
+            if (window.ToastManager?.info) {
+                ToastManager.info("Connexion rétablie", "Tentative d'envoi des messages en attente.");
+            }
+            try {
+                subscribeRealtime();
+            } catch (e) {}
+            try {
+                processOutbox();
+            } catch (e) {}
+        });
+
+        window.addEventListener("offline", () => {
+            if (window.ToastManager?.info) {
+                ToastManager.info("Connexion perdue", "Les nouveaux messages seront mis en file d'attente.");
+            }
+        });
+    } catch (e) {}
 })();

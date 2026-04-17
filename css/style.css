@@ -3535,6 +3535,47 @@ nav {
     color: var(--text-secondary);
 }
 
+/* Stabilize chat layout to reduce layout shifts */
+.chat-header {
+    min-height: 64px;
+}
+
+.chat-input-row {
+    min-height: 72px;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.6rem);
+}
+
+.chat-media,
+.chat-attachment-thumb {
+    aspect-ratio: 16/9;
+    min-height: 80px;
+    object-fit: cover;
+}
+
+/* Floating back button for mobile: hidden by default, shown when .show is added */
+.floating-back-btn {
+    position: fixed;
+    left: 12px;
+    bottom: 84px;
+    z-index: 9999;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-color);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    cursor: pointer;
+    font-size: 1.05rem;
+}
+
+.floating-back-btn.show {
+    display: inline-flex;
+}
+
 .chat-attachment-preview[hidden] {
     display: none !important;
 }
@@ -3691,6 +3732,10 @@ nav {
         margin-left: 0;
         justify-content: flex-start;
         padding-left: 2.05rem;
+    }
+    /* Hide the helper hint on mobile to free vertical space */
+    .chat-compose-hint {
+        display: none;
     }
 }
 
