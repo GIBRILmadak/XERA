@@ -27,6 +27,12 @@ async function initializeNotifications() {
 
     // Charger les notifications existantes
     await loadNotifications();
+    // Synchroniser et remettre à zéro le badge côté serveur lorsque l'utilisateur ouvre l'application
+    try {
+        await resetServerBadge();
+    } catch (e) {
+        // ignore
+    }
 
     // S'abonner aux nouvelles notifications en temps réel
     subscribeToNotifications();
@@ -107,14 +113,59 @@ async function setupPushNotifications() {
         // Planifier les rappels quotidiens à 10h et 18h (heure locale)
         scheduleReturnReminder();
 
-        // Écoute les resubscriptions envoyées par le SW
+        // Écoute les messages envoyés par le SW (resubscribe + badge updates)
         if (!pushMessageListenerBound) {
             navigator.serviceWorker.addEventListener(
                 "message",
                 async (event) => {
-                    if (event.data?.type === "PUSH_SUBSCRIPTION_REFRESH") {
-                        pushSubscription = event.data.subscription;
-                        await sendSubscriptionToServer(pushSubscription);
+                    try {
+                        if (event.data?.type === "PUSH_SUBSCRIPTION_REFRESH") {
+                            pushSubscription = event.data.subscription;
+                            await sendSubscriptionToServer(pushSubscription);
+                            return;
+                        }
+                        if (event.data?.type === "PUSH_BADGE") {
+                            const badgeVal = event.data.badge;
+                            try {
+                                const n = Number(badgeVal);
+                                // Update app-level badge via Badging API when supported
+                                if (typeof navigator !== "undefined") {
+                                    if (
+                                        Number.isFinite(n) &&
+                                        n > 0 &&
+                                        "setAppBadge" in navigator
+                                    ) {
+                                        try {
+                                            await navigator.setAppBadge(n);
+                                        } catch (e) {}
+                                    } else if ("clearAppBadge" in navigator) {
+                                        try {
+                                            await navigator.clearAppBadge();
+                                        } catch (e) {}
+                                    }
+                                }
+
+                                // Update DOM badge as fallback
+                                const badgeEl =
+                                    document.getElementById(
+                                        "notification-badge",
+                                    );
+                                if (badgeEl) {
+                                    if (Number.isFinite(n) && n > 0) {
+                                        badgeEl.textContent =
+                                            n > 99 ? "99+" : String(n);
+                                        badgeEl.style.display = "flex";
+                                    } else {
+                                        badgeEl.style.display = "none";
+                                    }
+                                }
+                            } catch (e) {
+                                // ignore
+                            }
+                            return;
+                        }
+                    } catch (e) {
+                        // ignore handler errors
                     }
                 },
             );
@@ -567,6 +618,49 @@ function updateNotificationBadge() {
     } else {
         badge.style.display = "none";
     }
+
+    // Try to update the native app badge (Badging API) when supported
+    try {
+        if (typeof navigator !== "undefined") {
+            if (unreadCount > 0 && "setAppBadge" in navigator) {
+                navigator.setAppBadge(unreadCount).catch(() => {});
+            } else if ("clearAppBadge" in navigator) {
+                navigator.clearAppBadge && navigator.clearAppBadge();
+            }
+        }
+    } catch (e) {
+        // ignore
+    }
+}
+
+// Appel au serveur pour remettre à zéro le compteur de badge
+async function resetServerBadge() {
+    try {
+        const { data: { session } = {} } = await supabase.auth.getSession();
+        const token = session?.access_token || null;
+        if (!token) return;
+        await fetch("/api/notifications/badge-reset", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            credentials: "include",
+        });
+
+        // Clear the native badge locally as well
+        try {
+            if ("clearAppBadge" in navigator) {
+                await navigator.clearAppBadge();
+            } else if ("setAppBadge" in navigator) {
+                await navigator.setAppBadge(0);
+            }
+        } catch (e) {
+            // ignore
+        }
+    } catch (e) {
+        // ignore
+    }
 }
 
 // Afficher le panneau de notifications
@@ -851,6 +945,10 @@ document.addEventListener("visibilitychange", () => {
     loadNotifications().catch((error) => {
         console.warn("Notifications visibility refresh failed:", error);
     });
+    // Remettre à zéro le badge côté serveur lorsque l'utilisateur revient au premier plan
+    try {
+        resetServerBadge().catch(() => {});
+    } catch (e) {}
 });
 
 function normalizeNotificationLink(notif) {

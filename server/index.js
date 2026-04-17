@@ -29,11 +29,20 @@ if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
         "Warning: Missing VAPID keys. Push notifications will not be sent.",
     );
 } else {
-    webpush.setVapidDetails(
-        PUSH_CONTACT_EMAIL,
-        VAPID_PUBLIC_KEY,
-        VAPID_PRIVATE_KEY,
-    );
+    // Normalize subject: accept plain email in env and prefix mailto: if missing
+    let vapidSubject = String(PUSH_CONTACT_EMAIL || "").trim();
+    if (vapidSubject && !/^(mailto:|https?:)/i.test(vapidSubject)) {
+        vapidSubject = `mailto:${vapidSubject}`;
+    }
+    try {
+        webpush.setVapidDetails(
+            vapidSubject,
+            VAPID_PUBLIC_KEY,
+            VAPID_PRIVATE_KEY,
+        );
+    } catch (err) {
+        console.warn("Invalid VAPID configuration:", err?.message || err);
+    }
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);

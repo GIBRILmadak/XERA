@@ -31,9 +31,7 @@ const {
 
     MAISHAPAY_PUBLIC_KEY = "MP-LIVEPK-Gl4b.T27YY9$ydZA$1uQq0jVo1D8lRhPJ7Vw0Z5vssuO1NU3n$$0OPOdzPf52qU01u3s0dS9VK2FB7z8IbqkbYO1r6PZblygvafZFQFyMOG$JBDq$zTfy/3C",
 
-
     MAISHAPAY_SECRET_KEY = "MP-LIVESK-4PWp0AU4S0sfMqQ$E1Qpkl1jcq$zxCD3wy7jNYbGFCodo8qyX$vk$gU$quKhJrwtMwXuq363rvWAcNfeU6Z2GYLB5lNrvR4GNo/$NB10Kt/1oMyKQAAOJ2sY",
-
 
     MAISHAPAY_GATEWAY_MODE = "1",
     MAISHAPAY_CHECKOUT_URL = "https://marchand.maishapay.online/payment/vers1.0/merchant/checkout",
@@ -51,11 +49,52 @@ if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
         "Warning: Missing VAPID keys. Push notifications will not be sent.",
     );
 } else {
-    webpush.setVapidDetails(
-        PUSH_CONTACT_EMAIL,
-        VAPID_PUBLIC_KEY,
-        VAPID_PRIVATE_KEY,
-    );
+    // Normalize subject: allow plain email addresses in .env
+    let vapidSubject = String(PUSH_CONTACT_EMAIL || "").trim();
+    if (vapidSubject && !/^(mailto:|https?:)/i.test(vapidSubject)) {
+        vapidSubject = `mailto:${vapidSubject}`;
+    }
+    try {
+        webpush.setVapidDetails(
+            vapidSubject,
+            VAPID_PUBLIC_KEY,
+            VAPID_PRIVATE_KEY,
+        );
+    } catch (err) {
+        console.warn("Invalid VAPID configuration:", err?.message || err);
+    }
+}
+
+// Firebase Admin (FCM / APNs via FCM)
+let firebaseAdminInitialized = false;
+let firebaseAdmin = null;
+try {
+    firebaseAdmin = require("firebase-admin");
+    const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } =
+        process.env;
+
+    if (FIREBASE_PROJECT_ID && FIREBASE_CLIENT_EMAIL && FIREBASE_PRIVATE_KEY) {
+        try {
+            firebaseAdmin.initializeApp({
+                credential: firebaseAdmin.credential.cert({
+                    projectId: FIREBASE_PROJECT_ID,
+                    clientEmail: FIREBASE_CLIENT_EMAIL,
+                    privateKey: FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+                }),
+            });
+            firebaseAdminInitialized = true;
+            console.log("Firebase admin initialized for native push");
+        } catch (err) {
+            console.warn(
+                "Failed to initialize Firebase admin:",
+                err?.message || err,
+            );
+        }
+    } else {
+        console.info("Firebase admin not configured; native push disabled.");
+    }
+} catch (err) {
+    console.info("firebase-admin not installed; native push disabled.");
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -121,7 +160,9 @@ function hasPublicCallbackBaseUrl(value) {
 }
 
 function stripTrailingSlash(value) {
-    return String(value || "").trim().replace(/\/+$/, "");
+    return String(value || "")
+        .trim()
+        .replace(/\/+$/, "");
 }
 
 function resolveCallbackOrigin(callbackBaseUrl, primaryOrigin) {
@@ -204,8 +245,14 @@ function escapeHtmlAttr(value) {
 const PRIMARY_ORIGIN = stripTrailingSlash(
     allowedOrigins[0] || APP_BASE_URL.split(",")[0] || "http://localhost:3000",
 );
-const CALLBACK_ORIGIN = resolveCallbackOrigin(CALLBACK_BASE_URL, PRIMARY_ORIGIN);
-const MAISHAPAY_CALLBACK_ALLOWED = parseBooleanEnv(MAISHAPAY_USE_CALLBACK, true);
+const CALLBACK_ORIGIN = resolveCallbackOrigin(
+    CALLBACK_BASE_URL,
+    PRIMARY_ORIGIN,
+);
+const MAISHAPAY_CALLBACK_ALLOWED = parseBooleanEnv(
+    MAISHAPAY_USE_CALLBACK,
+    true,
+);
 const MAISHAPAY_CALLBACK_ENABLED =
     MAISHAPAY_CALLBACK_ALLOWED && Boolean(CALLBACK_ORIGIN);
 
@@ -240,7 +287,9 @@ function sanitizeReturnPath(value, fallbackPath = "/") {
     if (!raw) return fallback;
 
     try {
-        const baseUrl = new URL(PRIMARY_ORIGIN || APP_BASE_URL || "http://localhost:3000");
+        const baseUrl = new URL(
+            PRIMARY_ORIGIN || APP_BASE_URL || "http://localhost:3000",
+        );
         const url = new URL(raw, baseUrl);
         if (url.origin !== baseUrl.origin) {
             return fallback;
@@ -267,9 +316,7 @@ const REMINDER_EMAIL_ENABLED = parseBooleanEnv(
     RETURN_REMINDER_EMAIL_ENABLED,
     true,
 );
-const REMINDER_EMAIL_PROVIDER = String(
-    RETURN_REMINDER_EMAIL_PROVIDER || "none",
-)
+const REMINDER_EMAIL_PROVIDER = String(RETURN_REMINDER_EMAIL_PROVIDER || "none")
     .trim()
     .toLowerCase();
 const REMINDER_EMAIL_FROM = String(RETURN_REMINDER_EMAIL_FROM || "").trim();
@@ -399,7 +446,10 @@ function computeSupportCheckoutAmount(amountUsd, currency) {
     }
 
     if (String(currency).toUpperCase() === "CDF") {
-        return Math.max(1, Math.round(normalizedAmount * USD_TO_CDF_RATE_VALUE));
+        return Math.max(
+            1,
+            Math.round(normalizedAmount * USD_TO_CDF_RATE_VALUE),
+        );
     }
 
     return Math.ceil(normalizedAmount);
@@ -736,11 +786,7 @@ async function createPendingSupportPayment({
     };
 }
 
-function renderMaishaPayCheckoutPage({
-    amount,
-    currency,
-    callbackUrl,
-}) {
+function renderMaishaPayCheckoutPage({ amount, currency, callbackUrl }) {
     const callbackInput = callbackUrl
         ? `\n          <input type="hidden" name="callbackUrl" value="${escapeHtmlAttr(callbackUrl)}">`
         : "";
@@ -808,7 +854,9 @@ function extractSubscriptionPaymentDetails(row) {
             Number(row.amount_gross) > 0
                 ? Number(row.amount_gross)
                 : Number(metadata.amount || 0),
-        currency: String(row?.currency || metadata.currency || "USD").toUpperCase(),
+        currency: String(
+            row?.currency || metadata.currency || "USD",
+        ).toUpperCase(),
         status: String(row?.status || "").toLowerCase(),
         plan: String(metadata.plan || "").toLowerCase(),
         billingCycle: String(metadata.billing_cycle || "monthly").toLowerCase(),
@@ -874,9 +922,7 @@ function normalizeMobileMoneyProvider(value) {
         .trim()
         .toLowerCase()
         .replace(/[\s-]+/g, "_");
-    return SUPPORTED_MOBILE_MONEY_PROVIDERS.has(normalized)
-        ? normalized
-        : null;
+    return SUPPORTED_MOBILE_MONEY_PROVIDERS.has(normalized) ? normalized : null;
 }
 
 function sanitizeWalletNumber(value) {
@@ -887,7 +933,9 @@ function sanitizeWalletNumber(value) {
 }
 
 function sanitizePayoutText(value, maxLength = 160) {
-    return String(value || "").trim().slice(0, maxLength);
+    return String(value || "")
+        .trim()
+        .slice(0, maxLength);
 }
 
 function isMissingRelationError(error) {
@@ -995,7 +1043,8 @@ function extractPayoutSettings(row) {
         channel: row.channel || "mobile_money",
         provider,
         providerLabel:
-            MOBILE_MONEY_PROVIDER_LABELS[provider] || MOBILE_MONEY_PROVIDER_LABELS.other,
+            MOBILE_MONEY_PROVIDER_LABELS[provider] ||
+            MOBILE_MONEY_PROVIDER_LABELS.other,
         accountName: row.account_name || "",
         walletNumber: row.wallet_number || "",
         countryCode: row.country_code || "CD",
@@ -1015,11 +1064,14 @@ function extractWithdrawalRequest(row) {
         payoutSettingId: row.payout_setting_id || null,
         amountUsd: roundMoney(row.amount_usd),
         requestedAmount: roundMoney(row.requested_amount),
-        requestedCurrency: String(row.requested_currency || "USD").toUpperCase(),
+        requestedCurrency: String(
+            row.requested_currency || "USD",
+        ).toUpperCase(),
         channel: row.channel || "mobile_money",
         provider,
         providerLabel:
-            MOBILE_MONEY_PROVIDER_LABELS[provider] || MOBILE_MONEY_PROVIDER_LABELS.other,
+            MOBILE_MONEY_PROVIDER_LABELS[provider] ||
+            MOBILE_MONEY_PROVIDER_LABELS.other,
         walletNumber: row.wallet_number || "",
         accountName: row.account_name || "",
         note: row.note || "",
@@ -1179,8 +1231,8 @@ async function buildCreatorWalletOverview(userId) {
                 Boolean(
                     payoutSettings?.status === "active" &&
                     payoutSettings?.walletNumber &&
-                        payoutSettings?.provider &&
-                        payoutSettings?.accountName,
+                    payoutSettings?.provider &&
+                    payoutSettings?.accountName,
                 ),
         },
     };
@@ -1411,12 +1463,12 @@ async function activateSubscription({
     const { data: insertedSubscription, error: insertSubError } = await supabase
         .from("subscriptions")
         .insert({
-        user_id: userId,
-        plan,
-        status: "active",
-        current_period_start: nowIso,
-        current_period_end: periodEndIso,
-    })
+            user_id: userId,
+            plan,
+            status: "active",
+            current_period_start: nowIso,
+            current_period_end: periodEndIso,
+        })
         .select("id")
         .single();
     if (insertSubError) throw insertSubError;
@@ -1440,7 +1492,8 @@ async function activateSubscription({
     if (updateUserError) throw updateUserError;
 
     const mergedMetadata = {
-        ...(pendingPayment?.metadata && typeof pendingPayment.metadata === "object"
+        ...(pendingPayment?.metadata &&
+        typeof pendingPayment.metadata === "object"
             ? pendingPayment.metadata
             : {}),
         payment_provider: "maishapay",
@@ -1533,8 +1586,7 @@ function canUserReceiveSupport(user) {
     if (!isPlanActiveForUser(user)) return false;
     if (isGiftedProUser(user)) return true;
     return (
-        user.is_monetized === true ||
-        Number(user.followers_count || 0) >= 1000
+        user.is_monetized === true || Number(user.followers_count || 0) >= 1000
     );
 }
 
@@ -1565,7 +1617,11 @@ async function createNotificationRecord({
     if (metadata && typeof metadata === "object") payload.metadata = metadata;
 
     try {
-        let query = supabase.from("notifications").insert(payload).select("*").single();
+        let query = supabase
+            .from("notifications")
+            .insert(payload)
+            .select("*")
+            .single();
         let { data, error } = await query;
 
         if (error && isMissingColumnError(error)) {
@@ -1586,7 +1642,10 @@ async function createNotificationRecord({
         if (error) throw error;
         return data || null;
     } catch (error) {
-        console.warn("Support notification insert error:", error?.message || error);
+        console.warn(
+            "Support notification insert error:",
+            error?.message || error,
+        );
         return null;
     }
 }
@@ -1594,9 +1653,15 @@ async function createNotificationRecord({
 async function purgeStalePushSubscription(endpoint) {
     if (!endpoint) return;
     try {
-        await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+        await supabase
+            .from("push_subscriptions")
+            .delete()
+            .eq("endpoint", endpoint);
     } catch (error) {
-        console.warn("Failed to purge stale push subscription:", error?.message || error);
+        console.warn(
+            "Failed to purge stale push subscription:",
+            error?.message || error,
+        );
     }
 }
 
@@ -1632,37 +1697,131 @@ function buildNotificationPushPayload(notification) {
 }
 
 async function sendPushToUser(userId, payload) {
-    if (!supportsPush() || !userId || !payload) return;
+    if (!userId || !payload) return;
 
     try {
-        const { data: subs, error } = await supabase
-            .from("push_subscriptions")
-            .select("endpoint, keys")
-            .eq("user_id", userId);
-        if (error) throw error;
-        if (!subs || subs.length === 0) return;
+        // Compute unread count for badge synchronization
+        let unreadCount = 0;
+        try {
+            const { count, error: countErr } = await supabase
+                .from("notifications")
+                .select("*", { head: true, count: "exact" })
+                .eq("user_id", userId)
+                .eq("read", false);
+            if (!countErr) unreadCount = Number(count || 0);
+        } catch (e) {
+            // ignore counting errors
+        }
 
-        const payloadString = JSON.stringify(payload);
-        for (const sub of subs) {
-            if (!sub?.endpoint || !sub?.keys) continue;
+        const payloadWithBadge = { ...(payload || {}), badge: unreadCount };
+
+        // 1) Web Push (existing subscriptions)
+        if (supportsPush()) {
             try {
-                await webpush.sendNotification(
-                    {
-                        endpoint: sub.endpoint,
-                        keys: sub.keys,
-                    },
-                    payloadString,
-                );
-            } catch (error) {
-                if (error?.statusCode === 404 || error?.statusCode === 410) {
-                    await purgeStalePushSubscription(sub.endpoint);
-                    continue;
+                const { data: subs, error } = await supabase
+                    .from("push_subscriptions")
+                    .select("endpoint, keys")
+                    .eq("user_id", userId);
+                if (error) throw error;
+                if (Array.isArray(subs)) {
+                    const payloadString = JSON.stringify(payloadWithBadge);
+                    for (const sub of subs) {
+                        if (!sub?.endpoint || !sub?.keys) continue;
+                        try {
+                            await webpush.sendNotification(
+                                {
+                                    endpoint: sub.endpoint,
+                                    keys: sub.keys,
+                                },
+                                payloadString,
+                            );
+                        } catch (err) {
+                            if (
+                                err?.statusCode === 404 ||
+                                err?.statusCode === 410
+                            ) {
+                                await purgeStalePushSubscription(sub.endpoint);
+                                continue;
+                            }
+                            console.warn(
+                                "Support push error:",
+                                err?.message || err,
+                            );
+                        }
+                    }
                 }
-                console.warn("Support push error:", error?.message || error);
+            } catch (error) {
+                console.warn(
+                    "Support push lookup error:",
+                    error?.message || error,
+                );
+            }
+        }
+
+        // 2) Native mobile tokens via Firebase Admin (FCM -> Android / APNs)
+        if (firebaseAdminInitialized && firebaseAdmin) {
+            try {
+                const { data: tokensRows, error: tokensErr } = await supabase
+                    .from("device_push_tokens")
+                    .select("token, platform")
+                    .eq("user_id", userId);
+                if (
+                    !tokensErr &&
+                    Array.isArray(tokensRows) &&
+                    tokensRows.length > 0
+                ) {
+                    const tokens = tokensRows
+                        .map((r) => String(r.token || ""))
+                        .filter(Boolean);
+                    if (tokens.length > 0) {
+                        const message = {
+                            tokens,
+                            notification: {
+                                title: String(payloadWithBadge.title || "XERA"),
+                                body: String(payloadWithBadge.body || ""),
+                                image: String(payloadWithBadge.icon || ""),
+                            },
+                            data: {
+                                link: String(payloadWithBadge.link || ""),
+                                tag: String(payloadWithBadge.tag || ""),
+                            },
+                            android: {
+                                priority: "high",
+                                notification: {
+                                    sound: "default",
+                                },
+                            },
+                            apns: {
+                                payload: {
+                                    aps: {
+                                        badge: unreadCount || 0,
+                                        sound: "default",
+                                    },
+                                },
+                            },
+                        };
+
+                        try {
+                            await firebaseAdmin
+                                .messaging()
+                                .sendMulticast(message);
+                        } catch (fcmErr) {
+                            console.error(
+                                "FCM send error:",
+                                fcmErr?.message || fcmErr,
+                            );
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn(
+                    "Device tokens lookup/send error:",
+                    err?.message || err,
+                );
             }
         }
     } catch (error) {
-        console.warn("Support push lookup error:", error?.message || error);
+        console.warn("sendPushToUser error:", error?.message || error);
     }
 }
 
@@ -1694,13 +1853,9 @@ async function failPendingTransaction({
             ? existing.metadata
             : {}),
         transaction_ref_id:
-            transactionRefId ||
-            existing.metadata?.transaction_ref_id ||
-            null,
+            transactionRefId || existing.metadata?.transaction_ref_id || null,
         operator_ref_id:
-            operatorRefId ||
-            existing.metadata?.operator_ref_id ||
-            null,
+            operatorRefId || existing.metadata?.operator_ref_id || null,
         failure_reason: reason || null,
         failed_at: nowIso,
         confirmation_source: confirmationSource,
@@ -1785,8 +1940,16 @@ async function confirmSupportPayment({
     }
 
     const [senderResult, recipientResult] = await Promise.all([
-        supabase.from("users").select("id, name, avatar").eq("id", fromUserId).maybeSingle(),
-        supabase.from("users").select("id, name, avatar").eq("id", toUserId).maybeSingle(),
+        supabase
+            .from("users")
+            .select("id, name, avatar")
+            .eq("id", fromUserId)
+            .maybeSingle(),
+        supabase
+            .from("users")
+            .select("id, name, avatar")
+            .eq("id", toUserId)
+            .maybeSingle(),
     ]);
     if (senderResult.error) throw senderResult.error;
     if (recipientResult.error) throw recipientResult.error;
@@ -1799,14 +1962,17 @@ async function confirmSupportPayment({
 
     const nowIso = new Date().toISOString();
     const mergedMetadata = {
-        ...(pendingPayment?.metadata && typeof pendingPayment.metadata === "object"
+        ...(pendingPayment?.metadata &&
+        typeof pendingPayment.metadata === "object"
             ? pendingPayment.metadata
             : {}),
         payment_provider: "maishapay",
         payment_ref: paymentId,
         transaction_ref_id: transactionRefId || null,
         operator_ref_id: operatorRefId || null,
-        method: String(method || pendingPayment?.metadata?.method || "card").toLowerCase(),
+        method: String(
+            method || pendingPayment?.metadata?.method || "card",
+        ).toLowerCase(),
         provider: provider || pendingPayment?.metadata?.provider || null,
         wallet_id: walletId || pendingPayment?.metadata?.wallet_id || null,
         support_kind: "direct",
@@ -1823,12 +1989,11 @@ async function confirmSupportPayment({
             checkoutAmount ||
             pendingPayment?.metadata?.checkout_amount ||
             breakdown.gross,
-        checkout_currency:
-            String(
-                checkoutCurrency ||
-                    pendingPayment?.metadata?.checkout_currency ||
-                    "USD",
-            ).toUpperCase(),
+        checkout_currency: String(
+            checkoutCurrency ||
+                pendingPayment?.metadata?.checkout_currency ||
+                "USD",
+        ).toUpperCase(),
         confirmed_at: nowIso,
         confirmation_source: confirmationSource,
         commission_rate: SUPPORT_COMMISSION_RATE,
@@ -1878,9 +2043,7 @@ async function confirmSupportPayment({
     }
 
     const senderName =
-        senderProfile?.name ||
-        mergedMetadata.sender_name ||
-        "Un utilisateur";
+        senderProfile?.name || mergedMetadata.sender_name || "Un utilisateur";
     const notification = await createNotificationRecord({
         userId: toUserId,
         type: "support",
@@ -2161,7 +2324,8 @@ function buildDailyPostReminderCampaign(user, context, slot) {
         variants,
     );
     const layout = buildReminderEmailLayout({
-        eyebrow: slot.hour < 14 ? "Un petit rappel" : "Avant de finir la journee",
+        eyebrow:
+            slot.hour < 14 ? "Un petit rappel" : "Avant de finir la journee",
         greeting,
         headline: variant.headline,
         bodyLines: variant.bodyLines,
@@ -2190,9 +2354,7 @@ function buildInactiveReengagementCampaign(user, context, now) {
     ) {
         return null;
     }
-    if (
-        isSentRecently(user.last_inactive_reminder_sent_at, 7 * DAY_MS, now)
-    ) {
+    if (isSentRecently(user.last_inactive_reminder_sent_at, 7 * DAY_MS, now)) {
         return null;
     }
 
@@ -2269,16 +2431,16 @@ function buildSocialProgressCampaign(user, context, now) {
         return null;
     }
     if (!context.socialSignal) return null;
-    if (
-        isSentRecently(user.last_social_progress_email_sent_at, DAY_MS, now)
-    ) {
+    if (isSentRecently(user.last_social_progress_email_sent_at, DAY_MS, now)) {
         return null;
     }
 
-    const authorName = String(context.socialSignal.authorName || "")
-        .trim() || "Quelqu'un que tu suis";
-    const activityTitle = String(context.socialSignal.title || "")
-        .trim() || "une nouvelle avancee";
+    const authorName =
+        String(context.socialSignal.authorName || "").trim() ||
+        "Quelqu'un que tu suis";
+    const activityTitle =
+        String(context.socialSignal.title || "").trim() ||
+        "une nouvelle avancee";
     const activityCount = Math.max(1, Number(context.socialSignal.count || 1));
     const ctaUrl = buildDiscoverReminderUrl();
     const greeting = user.name ? `Bonjour ${user.name},` : "Bonjour,";
@@ -2293,7 +2455,8 @@ function buildSocialProgressCampaign(user, context, now) {
             ctaLabel: "Voir ce qu'il y a de neuf",
         },
         {
-            subject: "XERA - Pendant ton absence, quelques updates sont tombees",
+            subject:
+                "XERA - Pendant ton absence, quelques updates sont tombees",
             headline: "Tu as peut-etre manque deux ou trois choses.",
             bodyLines: [
                 `${activityCount} update${activityCount > 1 ? "s" : ""} recente${activityCount > 1 ? "s" : ""} viennent d'apparaitre chez les comptes que tu suis.`,
@@ -2348,8 +2511,12 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
     );
     if (userIds.length === 0) return new Map();
 
-    const recentOwnActivityIso = new Date(now.getTime() - 8 * DAY_MS).toISOString();
-    const recentSocialActivityIso = new Date(now.getTime() - 3 * DAY_MS).toISOString();
+    const recentOwnActivityIso = new Date(
+        now.getTime() - 8 * DAY_MS,
+    ).toISOString();
+    const recentSocialActivityIso = new Date(
+        now.getTime() - 3 * DAY_MS,
+    ).toISOString();
 
     const [arcsResult, ownContentResult, followRowsResult] = await Promise.all([
         supabase
@@ -2397,7 +2564,11 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
     });
 
     const followedUserIds = Array.from(
-        new Set((followRowsResult.data || []).map((row) => row.following_id).filter(Boolean)),
+        new Set(
+            (followRowsResult.data || [])
+                .map((row) => row.following_id)
+                .filter(Boolean),
+        ),
     );
 
     let recentSocialRows = [];
@@ -2410,10 +2581,7 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
                 .in("user_id", followedUserIds)
                 .gte("created_at", recentSocialActivityIso)
                 .order("created_at", { ascending: false }),
-            supabase
-                .from("users")
-                .select("id, name")
-                .in("id", followedUserIds),
+            supabase.from("users").select("id, name").in("id", followedUserIds),
         ]);
 
         if (socialContentResult.error) throw socialContentResult.error;
@@ -2435,23 +2603,28 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
 
     const contexts = new Map();
     users.forEach((user) => {
-        const timeZone = sanitizeTimeZone(user.email_reminder_timezone || "UTC");
+        const timeZone = sanitizeTimeZone(
+            user.email_reminder_timezone || "UTC",
+        );
         const slot = resolveReminderSlot(now, timeZone);
         const dateKey = getTimePartsInZone(now, timeZone).dateKey;
         const activeArcs = activeArcsByUser.get(user.id) || [];
         const lastOwnContent = latestOwnContentByUser.get(user.id) || null;
-        const oldestActiveArc = activeArcs
-            .slice()
-            .sort(
-                (left, right) =>
-                    Date.parse(left.created_at || 0) -
-                    Date.parse(right.created_at || 0),
-            )[0] || null;
+        const oldestActiveArc =
+            activeArcs
+                .slice()
+                .sort(
+                    (left, right) =>
+                        Date.parse(left.created_at || 0) -
+                        Date.parse(right.created_at || 0),
+                )[0] || null;
         const lastOwnDateKey = lastOwnContent?.created_at
             ? getTimePartsInZone(new Date(lastOwnContent.created_at), timeZone)
                   .dateKey
             : "";
-        const hasPostedToday = Boolean(lastOwnDateKey && lastOwnDateKey === dateKey);
+        const hasPostedToday = Boolean(
+            lastOwnDateKey && lastOwnDateKey === dateKey,
+        );
         const inactivityDays = getDaysSince(lastOwnContent?.created_at, now);
         const projectAgeDays = oldestActiveArc?.created_at
             ? getDaysSince(oldestActiveArc.created_at, now)
@@ -2466,7 +2639,8 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
                 return rows.slice(0, 1).map((row) => ({
                     ...row,
                     authorName:
-                        followedUsersById.get(followedId)?.name || "Un createur",
+                        followedUsersById.get(followedId)?.name ||
+                        "Un createur",
                 }));
             })
             .sort(
@@ -2489,7 +2663,9 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
                     ? {
                           count: socialCandidates.length,
                           authorName: socialCandidates[0].authorName,
-                          title: socialCandidates[0].title || "une nouvelle avancee",
+                          title:
+                              socialCandidates[0].title ||
+                              "une nouvelle avancee",
                           createdAt: socialCandidates[0].created_at || null,
                       }
                     : null,
@@ -2513,7 +2689,8 @@ async function resolveReminderEmailAddress(userId) {
     if (!safeUserId) return "";
 
     try {
-        const { data, error } = await supabase.auth.admin.getUserById(safeUserId);
+        const { data, error } =
+            await supabase.auth.admin.getUserById(safeUserId);
         if (error) throw error;
         return String(data?.user?.email || "")
             .trim()
@@ -2642,8 +2819,7 @@ async function sweepReturnReminderEmails(now = new Date()) {
             updatePayload.last_email_reminder_slot = campaign.slotKey;
         }
         if (campaign.type === "inactive_week") {
-            updatePayload.last_inactive_reminder_sent_at =
-                now.toISOString();
+            updatePayload.last_inactive_reminder_sent_at = now.toISOString();
         }
         if (campaign.type === "social_progress") {
             updatePayload.last_social_progress_email_sent_at =
@@ -2816,11 +2992,7 @@ async function handleMaishaPaySubscriptionCheckout(req, res) {
         );
     } catch (error) {
         console.error("MaishaPay checkout error:", error);
-        return sendCheckoutErrorResponse(
-            res,
-            error,
-            "Erreur MaishaPay",
-        );
+        return sendCheckoutErrorResponse(res, error, "Erreur MaishaPay");
     }
 }
 
@@ -2881,9 +3053,11 @@ async function handleMaishaPaySupportCheckout(req, res) {
             amountUsd < SUPPORT_MIN_USD ||
             amountUsd > SUPPORT_MAX_USD
         ) {
-            return res.status(400).send(
-                `Le soutien doit etre entre ${SUPPORT_MIN_USD} et ${SUPPORT_MAX_USD} USD`,
-            );
+            return res
+                .status(400)
+                .send(
+                    `Le soutien doit etre entre ${SUPPORT_MIN_USD} et ${SUPPORT_MAX_USD} USD`,
+                );
         }
         if (!Number.isInteger(amountUsd)) {
             return res
@@ -2918,7 +3092,9 @@ async function handleMaishaPaySupportCheckout(req, res) {
         if (!senderProfile) {
             return res
                 .status(400)
-                .send("Profil expediteur introuvable. Rechargez votre session.");
+                .send(
+                    "Profil expediteur introuvable. Rechargez votre session.",
+                );
         }
         if (!recipientProfile) {
             return res.status(404).send("Createur introuvable");
@@ -2929,7 +3105,10 @@ async function handleMaishaPaySupportCheckout(req, res) {
                 .send("Ce createur n'est pas eligible aux soutiens.");
         }
 
-        const checkoutAmount = computeSupportCheckoutAmount(amountUsd, currency);
+        const checkoutAmount = computeSupportCheckoutAmount(
+            amountUsd,
+            currency,
+        );
         if (!checkoutAmount) {
             return res.status(400).send("Montant invalide");
         }
@@ -2997,11 +3176,7 @@ async function handleMaishaPaySupportCheckout(req, res) {
         );
     } catch (error) {
         console.error("MaishaPay support checkout error:", error);
-        return sendCheckoutErrorResponse(
-            res,
-            error,
-            "Erreur MaishaPay",
-        );
+        return sendCheckoutErrorResponse(res, error, "Erreur MaishaPay");
     }
 }
 
@@ -3051,7 +3226,10 @@ async function handleMaishaPayCallback(req, res) {
                 ? callbackTransaction.metadata
                 : {};
         const paymentKind = String(
-            payload.k || payload.payment_kind || callbackTransaction.type || "subscription",
+            payload.k ||
+                payload.payment_kind ||
+                callbackTransaction.type ||
+                "subscription",
         ).toLowerCase();
         const isSuccess =
             String(status) === "202" ||
@@ -3105,13 +3283,16 @@ async function handleMaishaPayCallback(req, res) {
                 pendingTransactionId: callbackTransaction.id,
                 transactionRefId,
                 operatorRefId,
-                reason: description || String(status || "Paiement non confirme"),
+                reason:
+                    description || String(status || "Paiement non confirme"),
                 confirmationSource: "maishapay_callback",
             });
         }
 
         const successTitle =
-            paymentKind === "support" ? "Soutien confirmé" : "Paiement confirmé";
+            paymentKind === "support"
+                ? "Soutien confirmé"
+                : "Paiement confirmé";
         const successDescription =
             paymentKind === "support"
                 ? "Le soutien a bien ete confirme et sera visible dans le dashboard du createur."
@@ -3188,7 +3369,9 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
 
         const { subject, body, ctaLabel, ctaUrl } = req.body || {};
         if (!subject || !body) {
-            return res.status(400).json({ error: "Sujet ou contenu manquant." });
+            return res
+                .status(400)
+                .json({ error: "Sujet ou contenu manquant." });
         }
         const emailDeliveryIssue = getEmailDeliveryIssue();
         if (emailDeliveryIssue) {
@@ -3390,7 +3573,11 @@ app.get("/api/admin/subscription-payments", async (req, res) => {
 
         const requestedStatuses = String(req.query.status || "pending")
             .split(",")
-            .map((value) => String(value || "").trim().toLowerCase())
+            .map((value) =>
+                String(value || "")
+                    .trim()
+                    .toLowerCase(),
+            )
             .filter(Boolean);
         const allowedStatuses = new Set([
             "pending",
@@ -3717,14 +3904,16 @@ app.get("/api/monetization/overview", async (req, res) => {
             wallet: overview.wallet,
             payoutSettings: overview.payoutSettings,
             withdrawals: overview.withdrawals,
-            supportedProviders: Object.entries(MOBILE_MONEY_PROVIDER_LABELS).map(
-                ([value, label]) => ({ value, label }),
-            ),
+            supportedProviders: Object.entries(
+                MOBILE_MONEY_PROVIDER_LABELS,
+            ).map(([value, label]) => ({ value, label })),
         });
     } catch (error) {
         console.error("Monetization overview error:", error);
         if (isMissingRelationError(error)) {
-            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+            return res
+                .status(503)
+                .json({ error: getWalletSchemaErrorMessage() });
         }
         return res
             .status(500)
@@ -3768,20 +3957,22 @@ app.post("/api/monetization/support", async (req, res) => {
             });
         }
 
-        const [senderProfileResult, recipientProfileResult] = await Promise.all([
-            supabase
-                .from("users")
-                .select("id, name, avatar")
-                .eq("id", fromUserId)
-                .maybeSingle(),
-            supabase
-                .from("users")
-                .select(
-                    "id, name, avatar, followers_count, plan, plan_status, plan_ends_at, is_monetized",
-                )
-                .eq("id", toUserId)
-                .maybeSingle(),
-        ]);
+        const [senderProfileResult, recipientProfileResult] = await Promise.all(
+            [
+                supabase
+                    .from("users")
+                    .select("id, name, avatar")
+                    .eq("id", fromUserId)
+                    .maybeSingle(),
+                supabase
+                    .from("users")
+                    .select(
+                        "id, name, avatar, followers_count, plan, plan_status, plan_ends_at, is_monetized",
+                    )
+                    .eq("id", toUserId)
+                    .maybeSingle(),
+            ],
+        );
 
         if (senderProfileResult.error) throw senderProfileResult.error;
         if (recipientProfileResult.error) throw recipientProfileResult.error;
@@ -3799,12 +3990,15 @@ app.post("/api/monetization/support", async (req, res) => {
             });
         }
 
-        const description = String(rawDescription || "").trim().slice(0, 160);
+        const description = String(rawDescription || "")
+            .trim()
+            .slice(0, 160);
         const breakdown = computeSupportRevenueBreakdown(amount);
         const metadata = {
             payment_provider: "internal_support",
             support_kind: "direct",
-            sender_name: senderProfile?.name || authResult.user.email || "Utilisateur",
+            sender_name:
+                senderProfile?.name || authResult.user.email || "Utilisateur",
             created_via: "support_api",
             commission_rate: SUPPORT_COMMISSION_RATE,
             amount_net_creator: breakdown.netCreator,
@@ -3833,7 +4027,9 @@ app.post("/api/monetization/support", async (req, res) => {
         if (txError) throw txError;
 
         const senderName =
-            senderProfile?.name || authResult.user.user_metadata?.username || "Un utilisateur";
+            senderProfile?.name ||
+            authResult.user.user_metadata?.username ||
+            "Un utilisateur";
         const notification = await createNotificationRecord({
             userId: toUserId,
             type: "support",
@@ -3888,14 +4084,22 @@ app.get("/api/monetization/withdrawals", async (req, res) => {
                 .json({ error: authResult.error.message });
         }
 
-        const withdrawals = await fetchCreatorWithdrawalRequests(authResult.user.id, {
-            limit: Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 30)),
-        });
+        const withdrawals = await fetchCreatorWithdrawalRequests(
+            authResult.user.id,
+            {
+                limit: Math.min(
+                    100,
+                    Math.max(1, parseInt(req.query.limit, 10) || 30),
+                ),
+            },
+        );
         return res.json({ success: true, withdrawals });
     } catch (error) {
         console.error("Monetization withdrawals list error:", error);
         if (isMissingRelationError(error)) {
-            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+            return res
+                .status(503)
+                .json({ error: getWalletSchemaErrorMessage() });
         }
         return res
             .status(500)
@@ -3916,8 +4120,10 @@ app.post("/api/monetization/payout-settings", async (req, res) => {
         const walletNumber = sanitizeWalletNumber(req.body?.wallet_number);
         const accountName = sanitizePayoutText(req.body?.account_name, 80);
         const notes = sanitizePayoutText(req.body?.notes, 280);
-        const countryCode = sanitizePayoutText(req.body?.country_code || "CD", 8)
-            .toUpperCase();
+        const countryCode = sanitizePayoutText(
+            req.body?.country_code || "CD",
+            8,
+        ).toUpperCase();
 
         if (!provider) {
             return res.status(400).json({
@@ -3961,7 +4167,9 @@ app.post("/api/monetization/payout-settings", async (req, res) => {
     } catch (error) {
         console.error("Monetization payout settings error:", error);
         if (isMissingRelationError(error) || isMissingColumnError(error)) {
-            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+            return res
+                .status(503)
+                .json({ error: getWalletSchemaErrorMessage() });
         }
         return res.status(500).json({
             error: "Impossible d'enregistrer la methode de retrait.",
@@ -4036,7 +4244,9 @@ app.post("/api/monetization/withdrawals", async (req, res) => {
     } catch (error) {
         console.error("Monetization withdrawal request error:", error);
         if (isMissingRelationError(error) || isMissingColumnError(error)) {
-            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+            return res
+                .status(503)
+                .json({ error: getWalletSchemaErrorMessage() });
         }
         return res
             .status(500)
@@ -4053,9 +4263,15 @@ app.get("/api/admin/withdrawal-requests", async (req, res) => {
                 .json({ error: authResult.error.message });
         }
 
-        const requestedStatuses = String(req.query.status || "pending,processing")
+        const requestedStatuses = String(
+            req.query.status || "pending,processing",
+        )
             .split(",")
-            .map((value) => String(value || "").trim().toLowerCase())
+            .map((value) =>
+                String(value || "")
+                    .trim()
+                    .toLowerCase(),
+            )
             .filter(Boolean);
         const allowedStatuses = new Set([
             "pending",
@@ -4113,7 +4329,9 @@ app.get("/api/admin/withdrawal-requests", async (req, res) => {
     } catch (error) {
         console.error("Admin withdrawal requests list error:", error);
         if (isMissingRelationError(error)) {
-            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+            return res
+                .status(503)
+                .json({ error: getWalletSchemaErrorMessage() });
         }
         return res
             .status(500)
@@ -4131,16 +4349,25 @@ app.post("/api/admin/withdrawal-requests/status", async (req, res) => {
         }
 
         const requestId = String(req.body?.request_id || "").trim();
-        const status = String(req.body?.status || "").trim().toLowerCase();
-        const operatorRefId = sanitizePayoutText(req.body?.operator_ref_id, 120);
+        const status = String(req.body?.status || "")
+            .trim()
+            .toLowerCase();
+        const operatorRefId = sanitizePayoutText(
+            req.body?.operator_ref_id,
+            120,
+        );
         const adminNote = sanitizePayoutText(req.body?.note, 280);
         const allowedStatuses = new Set(["processing", "paid", "rejected"]);
 
         if (!requestId) {
-            return res.status(400).json({ error: "Demande de retrait manquante." });
+            return res
+                .status(400)
+                .json({ error: "Demande de retrait manquante." });
         }
         if (!allowedStatuses.has(status)) {
-            return res.status(400).json({ error: "Statut de retrait invalide." });
+            return res
+                .status(400)
+                .json({ error: "Statut de retrait invalide." });
         }
 
         const { data: existing, error: existingError } = await supabase
@@ -4189,7 +4416,9 @@ app.post("/api/admin/withdrawal-requests/status", async (req, res) => {
     } catch (error) {
         console.error("Admin withdrawal request update error:", error);
         if (isMissingRelationError(error) || isMissingColumnError(error)) {
-            return res.status(503).json({ error: getWalletSchemaErrorMessage() });
+            return res
+                .status(503)
+                .json({ error: getWalletSchemaErrorMessage() });
         }
         return res.status(500).json({
             error: "Impossible de mettre a jour cette demande de retrait.",
@@ -4253,8 +4482,7 @@ app.post("/api/reminders/email/preferences", async (req, res) => {
         if (error) {
             if (isMissingColumnError(error)) {
                 return res.status(503).json({
-                    error:
-                        "Colonnes de rappel email manquantes. Executez sql/email-reminders.sql.",
+                    error: "Colonnes de rappel email manquantes. Executez sql/email-reminders.sql.",
                 });
             }
             throw error;
@@ -4344,6 +4572,152 @@ function handlePublicConfig(req, res) {
 }
 
 app.get("/api/config", handlePublicConfig);
+
+// Enregistrer / mettre à jour un abonnement Web Push (navigateur)
+app.post("/api/push/subscribe", async (req, res) => {
+    try {
+        const {
+            userId,
+            subscription,
+            timezone,
+            reminderEnabled = true,
+        } = req.body;
+        if (!userId || !subscription || !subscription.endpoint) {
+            return res
+                .status(400)
+                .json({ error: "Invalid subscription payload" });
+        }
+
+        const safeTimezone = sanitizeTimeZone(timezone);
+        const basePayload = {
+            user_id: userId,
+            endpoint: subscription.endpoint,
+            keys: subscription.keys || null,
+        };
+        const extendedPayload = {
+            ...basePayload,
+            reminder_timezone: safeTimezone,
+            reminder_enabled: reminderEnabled !== false,
+        };
+
+        let { error } = await supabase
+            .from("push_subscriptions")
+            .upsert(extendedPayload, { onConflict: "endpoint" });
+
+        // Compatibilité: si la migration reminder n'est pas encore appliquée, retomber sur le schéma minimal.
+        if (error && isMissingColumnError(error)) {
+            ({ error } = await supabase
+                .from("push_subscriptions")
+                .upsert(basePayload, { onConflict: "endpoint" }));
+        }
+
+        if (error) throw error;
+        res.json({ ok: true, timezone: safeTimezone });
+    } catch (err) {
+        console.error("push subscribe error", err);
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// Enregistrer un token de device mobile (FCM / APNs)
+app.post("/api/push/register-device", async (req, res) => {
+    try {
+        const { userId, token, platform = "other" } = req.body;
+        if (!userId || !token) {
+            return res.status(400).json({ error: "Missing userId or token" });
+        }
+        const safePlatform = ["android", "ios"].includes(
+            String(platform || "").toLowerCase(),
+        )
+            ? String(platform).toLowerCase()
+            : "other";
+
+        const { error } = await supabase
+            .from("device_push_tokens")
+            .upsert(
+                {
+                    token: String(token),
+                    user_id: userId,
+                    platform: safePlatform,
+                },
+                { onConflict: "token" },
+            );
+
+        if (error) throw error;
+        res.json({ ok: true });
+    } catch (err) {
+        console.error("register device token error", err);
+        res.status(400).json({ error: err.message || "failed" });
+    }
+});
+
+// Obtenir le compteur de badge (notifications non lues) pour l'utilisateur authentifié
+app.get("/api/notifications/badge", async (req, res) => {
+    try {
+        const authHeader =
+            req.headers.authorization || req.headers.Authorization || "";
+        const token = authHeader.startsWith("Bearer ")
+            ? authHeader.slice("Bearer ".length).trim()
+            : "";
+        if (!token)
+            return res
+                .status(401)
+                .json({ error: "Missing authorization token" });
+
+        const { data: authData, error: authError } =
+            await supabase.auth.getUser(token);
+        if (authError || !authData?.user?.id) {
+            return res.status(401).json({ error: "Invalid session token" });
+        }
+        const userId = authData.user.id;
+
+        const { count, error } = await supabase
+            .from("notifications")
+            .select("*", { head: true, count: "exact" })
+            .eq("user_id", userId)
+            .eq("read", false);
+
+        if (error) throw error;
+        return res.json({ unreadCount: Number(count || 0) });
+    } catch (err) {
+        console.error("badge count error", err);
+        return res.status(500).json({ error: err.message || "failed" });
+    }
+});
+
+// Remise à zéro du badge / marquer toutes les notifications comme lues pour l'utilisateur authentifié
+app.post("/api/notifications/badge-reset", async (req, res) => {
+    try {
+        const authHeader =
+            req.headers.authorization || req.headers.Authorization || "";
+        const token = authHeader.startsWith("Bearer ")
+            ? authHeader.slice("Bearer ".length).trim()
+            : "";
+        if (!token)
+            return res
+                .status(401)
+                .json({ error: "Missing authorization token" });
+
+        const { data: authData, error: authError } =
+            await supabase.auth.getUser(token);
+        if (authError || !authData?.user?.id) {
+            return res.status(401).json({ error: "Invalid session token" });
+        }
+        const userId = authData.user.id;
+
+        const { error } = await supabase
+            .from("notifications")
+            .update({ read: true })
+            .eq("user_id", userId)
+            .eq("read", false);
+
+        if (error) throw error;
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error("badge reset error", err);
+        return res.status(500).json({ error: err.message || "failed" });
+    }
+});
 
 // ... (le reste du code existant pour les rappels, etc.)
 

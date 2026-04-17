@@ -1,20 +1,21 @@
 {
-  "name": "rize-main",
-  "version": "1.0.0",
-  "description": "## Avant (Monolithique)",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "api": "node server/monetization-server.js"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@supabase/supabase-js": "^2.91.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.19.2",
-    "web-push": "^3.6.7"
-  }
+    "name": "rize-main",
+    "version": "1.0.0",
+    "description": "## Avant (Monolithique)",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "api": "node server/monetization-server.js"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "@supabase/supabase-js": "^2.91.0",
+        "cors": "^2.8.5",
+        "dotenv": "^16.4.7",
+        "express": "^4.19.2",
+        "firebase-admin": "^13.8.0",
+        "web-push": "^3.6.7"
+    }
 }

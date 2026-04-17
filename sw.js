@@ -126,16 +126,55 @@ self.addEventListener("push", (event) => {
     const badge = payload.badge || icon;
     const link = payload.link || "/profile.html";
 
+    // Show the notification and try to update the app badge + notify open clients
     event.waitUntil(
-        self.registration.showNotification(title, {
-            body,
-            icon,
-            badge,
-            data: { link },
-            tag: payload.tag || undefined,
-            renotify: payload.renotify || false,
-            silent: payload.silent || false,
-        }),
+        (async () => {
+            await self.registration.showNotification(title, {
+                body,
+                icon,
+                badge,
+                data: { link },
+                tag: payload.tag || undefined,
+                renotify: payload.renotify || false,
+                silent: payload.silent || false,
+            });
+
+            // If the platform supports registration.setAppBadge (Chrome PWA), try to set it.
+            try {
+                const badgeNumber = payload.badge || null;
+                if (
+                    badgeNumber !== null &&
+                    typeof self.registration.setAppBadge === "function"
+                ) {
+                    // Some payloads set badge as a number; coerce safely
+                    const n = Number(badgeNumber);
+                    if (Number.isFinite(n)) {
+                        await self.registration.setAppBadge(n);
+                    }
+                }
+            } catch (e) {
+                // Not critical
+            }
+
+            // Notify all open clients to update their UI badges (client will decide how to apply)
+            try {
+                const clientList = await clients.matchAll({
+                    includeUncontrolled: true,
+                    type: "window",
+                });
+                const badgeNumber = payload.badge || null;
+                clientList.forEach((client) => {
+                    try {
+                        client.postMessage({
+                            type: "PUSH_BADGE",
+                            badge: badgeNumber,
+                        });
+                    } catch (e) {}
+                });
+            } catch (e) {
+                // ignore
+            }
+        })(),
     );
 });
 
