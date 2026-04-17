@@ -4632,16 +4632,14 @@ app.post("/api/push/register-device", async (req, res) => {
             ? String(platform).toLowerCase()
             : "other";
 
-        const { error } = await supabase
-            .from("device_push_tokens")
-            .upsert(
-                {
-                    token: String(token),
-                    user_id: userId,
-                    platform: safePlatform,
-                },
-                { onConflict: "token" },
-            );
+        const { error } = await supabase.from("device_push_tokens").upsert(
+            {
+                token: String(token),
+                user_id: userId,
+                platform: safePlatform,
+            },
+            { onConflict: "token" },
+        );
 
         if (error) throw error;
         res.json({ ok: true });
