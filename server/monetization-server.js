@@ -4538,6 +4538,27 @@ app.get("/api/cron/sweep-subscriptions", async (req, res) => {
     });
 });
 
+// Cron: evaluate & apply 'tech' badge based on 7-day continuous posting streak
+app.get("/api/cron/evaluate-tech-badges", async (req, res) => {
+    const auth = authorizeCronRequest(req);
+    if (!auth.ok) {
+        return res.status(auth.status || 401).json({
+            error: auth.message || "Unauthorized cron request.",
+        });
+    }
+
+    try {
+        const result = await evaluateTechBadges();
+        return res.status(200).json({
+            message: "Tech badge evaluation completed.",
+            result,
+        });
+    } catch (error) {
+        console.error("evaluate-tech-badges error:", error);
+        return res.status(500).json({ error: error?.message || "failed" });
+    }
+});
+
 // Health check
 app.get("/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -4719,6 +4740,176 @@ app.post("/api/notifications/badge-reset", async (req, res) => {
 
 // ... (le reste du code existant pour les rappels, etc.)
 
+async function evaluateTechBadges(options = {}) {
+    const safeTZ = sanitizeTimeZone(process.env.BADGE_TIMEZONE || "UTC");
+    const lookbackDays = Number.isFinite(
+        Number(process.env.BADGE_LOOKBACK_DAYS),
+    )
+        ? Math.max(7, parseInt(process.env.BADGE_LOOKBACK_DAYS, 10))
+        : 14;
+    const now = options.now || new Date();
+    const nowIso = now.toISOString();
+    const startDate = new Date(now.getTime() - lookbackDays * DAY_MS);
+    const startIso = startDate.toISOString();
+
+    // Fetch recent content for the lookback window
+    const { data: rows, error: rowsError } = await supabase
+        .from("content")
+        .select("user_id, created_at")
+        .gte("created_at", startIso);
+
+    if (rowsError) {
+        throw rowsError;
+    }
+
+    // Build per-user date sets and last post timestamp
+    const map = new Map();
+    (rows || []).forEach((r) => {
+        const uid = String(r.user_id || "").trim();
+        if (!uid) return;
+        const createdAt = r.created_at;
+        if (!createdAt) return;
+
+        const parts = getTimePartsInZone(new Date(createdAt), safeTZ);
+        const dateKey = parts.dateKey;
+
+        let entry = map.get(uid);
+        if (!entry) {
+            entry = { dateSet: new Set(), lastCreatedAt: createdAt };
+            map.set(uid, entry);
+        }
+        entry.dateSet.add(dateKey);
+        if (
+            !entry.lastCreatedAt ||
+            new Date(createdAt) > new Date(entry.lastCreatedAt)
+        ) {
+            entry.lastCreatedAt = createdAt;
+        }
+    });
+
+    const awarded = [];
+    // Award badge when user has a 7-day streak (including today)
+    for (const [uid, entry] of map.entries()) {
+        let streak = 0;
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(now.getTime() - i * DAY_MS);
+            const key = getTimePartsInZone(d, safeTZ).dateKey;
+            if (entry.dateSet.has(key)) streak++;
+            else break;
+        }
+
+        if (streak >= 7) {
+            try {
+                const { data: profile, error: pErr } = await supabase
+                    .from("users")
+                    .select("id, badge")
+                    .eq("id", uid)
+                    .maybeSingle();
+                if (pErr) {
+                    console.warn(
+                        "evaluateTechBadges: failed to read user",
+                        uid,
+                        pErr,
+                    );
+                    continue;
+                }
+                const currentBadge = String(profile?.badge || "").toLowerCase();
+                if (currentBadge !== "tech") {
+                    const { error: upErr } = await supabase
+                        .from("users")
+                        .update({ badge: "tech", updated_at: nowIso })
+                        .eq("id", uid);
+                    if (upErr) {
+                        console.warn(
+                            "evaluateTechBadges: failed to award badge to",
+                            uid,
+                            upErr.message || upErr,
+                        );
+                    } else {
+                        awarded.push(uid);
+                    }
+                }
+            } catch (e) {
+                console.warn(
+                    "evaluateTechBadges: exception awarding badge",
+                    uid,
+                    e,
+                );
+            }
+        }
+    }
+
+    // Revoke badge when the user's last post was >= 3 days ago
+    const { data: techUsers, error: techUsersErr } = await supabase
+        .from("users")
+        .select("id")
+        .eq("badge", "tech");
+    if (techUsersErr) {
+        throw techUsersErr;
+    }
+
+    const revoked = [];
+    for (const u of techUsers || []) {
+        const uid = u.id;
+        let lastCreatedAt = map.get(uid)?.lastCreatedAt || null;
+        if (!lastCreatedAt) {
+            // Fetch last post if not in the recent window
+            try {
+                const { data: lastRow, error: lastErr } = await supabase
+                    .from("content")
+                    .select("created_at")
+                    .eq("user_id", uid)
+                    .order("created_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (!lastErr && lastRow)
+                    lastCreatedAt = lastRow.created_at || null;
+            } catch (e) {
+                console.warn(
+                    "evaluateTechBadges: failed to fetch last post for",
+                    uid,
+                    e,
+                );
+            }
+        }
+
+        const daysSinceLast = lastCreatedAt
+            ? getDaysSince(lastCreatedAt, now)
+            : Infinity;
+        if (daysSinceLast >= 3) {
+            try {
+                const { error: upErr } = await supabase
+                    .from("users")
+                    .update({ badge: null, updated_at: nowIso })
+                    .eq("id", uid);
+                if (upErr) {
+                    console.warn(
+                        "evaluateTechBadges: failed to revoke badge for",
+                        uid,
+                        upErr.message || upErr,
+                    );
+                } else {
+                    revoked.push(uid);
+                }
+            } catch (e) {
+                console.warn(
+                    "evaluateTechBadges: exception revoking badge",
+                    uid,
+                    e,
+                );
+            }
+        }
+    }
+
+    return {
+        evaluatedAt: nowIso,
+        timezone: safeTZ,
+        lookbackDays,
+        awarded,
+        revoked,
+    };
+}
+
 const isDirectRun = require.main === module;
 
 if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {
@@ -4764,3 +4955,4 @@ module.exports.handleMaishaPaySubscriptionCheckout =
 module.exports.handleMaishaPaySupportCheckout = handleMaishaPaySupportCheckout;
 module.exports.handleMaishaPayCallback = handleMaishaPayCallback;
 module.exports.handlePublicConfig = handlePublicConfig;
+module.exports.evaluateTechBadges = evaluateTechBadges;
