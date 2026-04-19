@@ -75,32 +75,166 @@ async function postAsBot(bot) {
             bot.user_id + "-" + dayKey + "-" + uniq,
         )}/1200/800`;
 
-        const adjectives = [
-            "Petit",
-            "Grand",
-            "Nouveau",
-            "Simple",
-            "Rapide",
-            "Beau",
-        ];
-        const nouns = [
-            "progrès",
-            "instant",
-            "moment",
-            "capture",
-            "éclair",
-            "point",
-        ];
-        const verbs = [
-            "du jour",
-            "du matin",
-            "du soir",
-            "du week-end",
-            "d'aujourd'hui",
-        ];
+        const meta =
+            bot.meta && typeof bot.meta === "object"
+                ? bot.meta
+                : bot.meta
+                  ? JSON.parse(bot.meta)
+                  : {};
+        const topic =
+            meta.topic ||
+            (Array.isArray(meta.topics) && meta.topics[0]) ||
+            "general";
 
-        const title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
-        const description = `Partage quotidien — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
+        let title;
+        let description;
+        if (
+            topic &&
+            [
+                "robotics",
+                "ai",
+                "diy",
+                "coding",
+                "entrepreneurship",
+                "mechanics",
+            ].includes(topic)
+        ) {
+            const tplMap = {
+                robotics: {
+                    prefixes: [
+                        "Prototype",
+                        "Module",
+                        "Capteur",
+                        "Contrôleur",
+                        "Bras robotique",
+                        "Moteur",
+                    ],
+                    actions: [
+                        "en test",
+                        "v1.0",
+                        "au labo",
+                        "en montage",
+                        "intégration Arduino",
+                        "optimisé",
+                    ],
+                },
+                ai: {
+                    prefixes: [
+                        "Modèle",
+                        "Expérience",
+                        "Réseau",
+                        "Pipeline",
+                        "Fine-tune",
+                        "Prototype",
+                    ],
+                    actions: [
+                        "pour vision",
+                        "NLP",
+                        "en entraînement",
+                        "avec PyTorch",
+                        "optimisé",
+                        "en production",
+                    ],
+                },
+                diy: {
+                    prefixes: [
+                        "Tuto",
+                        "Astuce",
+                        "Montage",
+                        "Projet DIY",
+                        "Guide",
+                        "Hack",
+                    ],
+                    actions: [
+                        "étape par étape",
+                        "facile",
+                        "avec pièces récupérées",
+                        "low-cost",
+                        "rapide",
+                    ],
+                },
+                coding: {
+                    prefixes: [
+                        "Snippet",
+                        "Pattern",
+                        "Refactor",
+                        "Truc",
+                        "Astuce dev",
+                        "Bricolage code",
+                    ],
+                    actions: [
+                        "JS/Node",
+                        "Python",
+                        "best-practices",
+                        "optimisation",
+                        "débogage",
+                    ],
+                },
+                entrepreneurship: {
+                    prefixes: [
+                        "Business",
+                        "MVP",
+                        "Pitch",
+                        "Growth",
+                        "Leçon",
+                        "Astuce",
+                    ],
+                    actions: [
+                        "lean",
+                        "croissance",
+                        "marketing",
+                        "monétisation",
+                        "expérience client",
+                    ],
+                },
+                mechanics: {
+                    prefixes: [
+                        "Réglage",
+                        "Mécanique",
+                        "Diagnostic",
+                        "Atelier",
+                        "Maintenance",
+                        "Assemblage",
+                    ],
+                    actions: [
+                        "pignon",
+                        "roulement",
+                        "couple",
+                        "soudure",
+                        "usinage",
+                    ],
+                },
+            };
+            const tpl = tplMap[topic] || tplMap.coding;
+            title = `${pickRandom(tpl.prefixes)} ${pickRandom(tpl.actions)} • ${uniq}`;
+            description = `Partage technique (${topic}) — ${pickRandom(["Petit retour d'expérience", "Astuce pratique", "Étapes clés", "Code & schéma"])} (${uniq})`;
+        } else {
+            const adjectives = [
+                "Petit",
+                "Grand",
+                "Nouveau",
+                "Simple",
+                "Rapide",
+                "Beau",
+            ];
+            const nouns = [
+                "progrès",
+                "instant",
+                "moment",
+                "capture",
+                "éclair",
+                "point",
+            ];
+            const verbs = [
+                "du jour",
+                "du matin",
+                "du soir",
+                "du week-end",
+                "d'aujourd'hui",
+            ];
+            title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
+            description = `Partage quotidien — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
+        }
 
         // Compute next day_number for this user's content (incremental per-user)
         let nextDayNumber = 1;
@@ -127,7 +261,7 @@ async function postAsBot(bot) {
             user_id: bot.user_id,
             day_number: nextDayNumber,
             type: "image",
-            state: "published",
+            state: "success",
             title,
             description,
             media_url: mediaUrl,
@@ -159,16 +293,36 @@ async function postAsBot(bot) {
 
 async function encourageAsBot(bot) {
     try {
-        // Choisir un contenu récent qui n'appartient pas au bot
+        // Fetch recent content candidates
         const { data: candidates, error } = await supabase
             .from("content")
-            .select("id, user_id")
+            .select("id, user_id, created_at")
             .neq("user_id", bot.user_id)
             .order("created_at", { ascending: false })
-            .limit(200);
+            .limit(500);
         if (error) throw error;
         if (!candidates || candidates.length === 0) return null;
-        const target = pickRandom(candidates);
+
+        // Prioritize content from real users (is_bot = false)
+        const userIds = Array.from(
+            new Set(candidates.map((c) => c.user_id).filter(Boolean)),
+        );
+        let usersMap = {};
+        if (userIds.length > 0) {
+            const { data: users } = await supabase
+                .from("users")
+                .select("id, is_bot")
+                .in("id", userIds);
+            if (users && users.length) {
+                users.forEach((u) => {
+                    usersMap[u.id] = !!u.is_bot;
+                });
+            }
+        }
+
+        const prioritized = candidates.filter((c) => !usersMap[c.user_id]);
+        const pickFrom = prioritized.length > 0 ? prioritized : candidates;
+        const target = pickRandom(pickFrom);
         if (!target) return null;
 
         // Utiliser la RPC server-side existante toggle_courage
@@ -224,13 +378,20 @@ async function followAsBot(bot, maxToFollow = 1) {
         const followingIds = new Set(await getFollowingIds(bot.user_id));
         const { data: candidates, error } = await supabase
             .from("users")
-            .select("id, name")
-            .is("is_bot", false)
+            .select("id, name, is_bot, followers_count")
             .neq("id", bot.user_id)
             .order("followers_count", { ascending: false })
-            .limit(200);
+            .limit(400);
         if (error) throw error;
         if (!candidates || candidates.length === 0) return 0;
+
+        // Prioritize real users first, then bots
+        candidates.sort((a, b) => {
+            const aBot = a && a.is_bot ? 1 : 0;
+            const bBot = b && b.is_bot ? 1 : 0;
+            if (aBot !== bBot) return aBot - bBot; // real users first
+            return (b.followers_count || 0) - (a.followers_count || 0);
+        });
 
         let followed = 0;
         for (const cand of candidates) {
@@ -255,7 +416,7 @@ async function followAsBot(bot, maxToFollow = 1) {
                 followingIds.add(cand.id);
                 followed += 1;
                 // small delay between follow actions
-                await sleep(200 + Math.random() * 600);
+                await sleep(150 + Math.random() * 500);
             } catch (e) {
                 console.warn("followAsBot insert error", e?.message || e);
             }
