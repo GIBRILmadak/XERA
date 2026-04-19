@@ -9273,6 +9273,8 @@ async function openImmersive(startUserId, startContentId = null) {
     `;
     overlay.style.display = "block";
     document.body.style.overflow = "hidden";
+    // Marquer l'immersif comme ouvert pour éviter les rafraîchissements indésirables
+    window.__immersiveOpen = true;
     handleLoginPromptContext();
 
     try {
@@ -9326,8 +9328,22 @@ async function openImmersive(startUserId, startContentId = null) {
             startContentId || "(latest)",
         );
 
-        // Render all content
-        const contentHtml = await renderImmersiveFeed(allContents);
+        // Pagination: ne charger qu'un nombre limité d'items au départ
+        const IMMERSIVE_PAGE_SIZE = 200;
+        let immersiveCurrentPage = 0;
+        const immersiveTotalPages = Math.max(
+            1,
+            Math.ceil(allContents.length / IMMERSIVE_PAGE_SIZE),
+        );
+        const renderImmersivePage = async (pageIndex) => {
+            const start = pageIndex * IMMERSIVE_PAGE_SIZE;
+            const slice = allContents.slice(start, start + IMMERSIVE_PAGE_SIZE);
+            if (!slice || slice.length === 0) return "";
+            return await renderImmersiveFeed(slice);
+        };
+
+        // Initial page
+        const initialContentHtml = await renderImmersivePage(0);
 
         // Initial header for the starting user
         const user = getUser(startUserId);
@@ -9419,7 +9435,8 @@ async function openImmersive(startUserId, startContentId = null) {
                 ${headerHtml}
             </div>
             <div id="immersive-content-container">
-                ${contentHtml}
+                ${initialContentHtml}
+                <div id="immersive-load-sentinel" style="width:100%;height:4px"></div>
             </div>
             <div class="immersive-nav-arrows" id="immersive-nav-arrows">
                 <button class="immersive-arrow" id="immersive-arrow-up" aria-label="Post précédent">
@@ -9437,7 +9454,7 @@ async function openImmersive(startUserId, startContentId = null) {
             /* ignore */
         }
 
-        // Scroll to the starting content
+        // Scroll to the starting content (si présent dans la première page)
         if (startIndex >= 0) {
             setTimeout(() => {
                 const startElement = document.querySelector(
@@ -9452,10 +9469,7 @@ async function openImmersive(startUserId, startContentId = null) {
             }, 100);
         }
 
-        // Setup immersive interactions
-        // setupImmersiveInteractions(); // Commenté pour l'instant
-
-        // Setup video play/pause on scroll
+        // Setup immersive interactions and lazy-load pour la première page
         setTimeout(() => {
             setupImmersiveLazyLoad();
             setupImmersiveObserver();
@@ -9463,6 +9477,76 @@ async function openImmersive(startUserId, startContentId = null) {
             setupImmersiveSnapNav();
             setupImmersiveKeyboardNav();
             setupImmersiveArrowNav();
+
+            // Sentinel pour charger les pages suivantes lorsque l'utilisateur scroll
+            const overlayEl = document.getElementById("immersive-overlay");
+            const container = document.getElementById(
+                "immersive-content-container",
+            );
+            const sentinel = document.getElementById("immersive-load-sentinel");
+            if (sentinel && container && overlayEl) {
+                const loadNextPage = async () => {
+                    if (immersiveCurrentPage + 1 >= immersiveTotalPages) {
+                        // Plus rien à charger
+                        if (window.__immersiveSentinelObserver) {
+                            try {
+                                window.__immersiveSentinelObserver.disconnect();
+                            } catch (e) {}
+                            window.__immersiveSentinelObserver = null;
+                        }
+                        if (sentinel && sentinel.parentNode)
+                            sentinel.parentNode.removeChild(sentinel);
+                        return;
+                    }
+                    immersiveCurrentPage += 1;
+                    try {
+                        const pageHtml =
+                            await renderImmersivePage(immersiveCurrentPage);
+                        container.insertAdjacentHTML("beforeend", pageHtml);
+                        // réinitialiser les observers / UI pour les nouveaux éléments
+                        setupImmersiveLazyLoad();
+                        setupImmersiveObserver();
+                        setupImmersiveVideoUI();
+                        setupImmersiveSnapNav();
+                        setupImmersiveArrowNav();
+                    } catch (e) {
+                        console.error("Erreur chargement page immersive:", e);
+                    }
+                };
+
+                // Déconnecter l'ancien observer si présent
+                if (window.__immersiveSentinelObserver) {
+                    try {
+                        window.__immersiveSentinelObserver.disconnect();
+                    } catch (e) {}
+                    window.__immersiveSentinelObserver = null;
+                }
+
+                window.__immersiveSentinelObserver = new IntersectionObserver(
+                    (entries) => {
+                        entries.forEach((entry) => {
+                            if (entry.isIntersecting) {
+                                loadNextPage().catch(console.error);
+                            }
+                        });
+                    },
+                    {
+                        root:
+                            document.getElementById("immersive-overlay") ||
+                            null,
+                        rootMargin: "600px 0px",
+                        threshold: 0.1,
+                    },
+                );
+
+                try {
+                    window.__immersiveSentinelObserver.observe(sentinel);
+                } catch (e) {
+                    // fallback: remove sentinel
+                    if (sentinel && sentinel.parentNode)
+                        sentinel.parentNode.removeChild(sentinel);
+                }
+            }
         }, 100);
     } catch (error) {
         console.error("Error opening immersive:", error);
@@ -9484,6 +9568,31 @@ function closeImmersive() {
     document.body.style.overflow = "auto";
     loginPromptImmersiveViews = 0;
     handleLoginPromptContext();
+    // Nettoyage des états liés à l'immersif
+    try {
+        window.__immersiveOpen = false;
+        if (window.__immersiveSentinelObserver) {
+            window.__immersiveSentinelObserver.disconnect();
+            window.__immersiveSentinelObserver = null;
+        }
+        if (window.__immersiveObserver) {
+            try {
+                window.__immersiveObserver.disconnect();
+            } catch (e) {}
+            window.__immersiveObserver = null;
+        }
+        if (window.__immersiveLazyObserver) {
+            try {
+                window.__immersiveLazyObserver.disconnect();
+            } catch (e) {}
+            window.__immersiveLazyObserver = null;
+        }
+        const sentinel = document.getElementById("immersive-load-sentinel");
+        if (sentinel && sentinel.parentNode)
+            sentinel.parentNode.removeChild(sentinel);
+    } catch (e) {
+        // ignore cleanup errors
+    }
 }
 
 let currentImmersiveUser = null;
@@ -9539,65 +9648,77 @@ function ensureImmersiveVideoLoaded(video, autoplay = false) {
 
 function setupImmersiveObserver() {
     const posts = document.querySelectorAll(".immersive-post");
-    const headerContainer = document.getElementById(
-        "immersive-header-container",
-    );
+    if (!posts.length || typeof IntersectionObserver === "undefined") return;
 
-    const observer = new IntersectionObserver(
-        (entries) => {
-            entries.forEach((entry) => {
-                const video = entry.target.querySelector(
-                    "video.immersive-video",
-                );
+    // Créer un observer global réutilisable pour éviter les doublons
+    if (!window.__immersiveObserver) {
+        window.__immersiveObserver = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    const video = entry.target.querySelector(
+                        "video.immersive-video",
+                    );
 
-                if (entry.isIntersecting) {
-                    // La vidéo est visible - la jouer
-                    if (video) {
-                        ensureImmersiveVideoLoaded(video, true);
-                        muteOtherImmersiveVideos(video);
-                        video.muted = !window.__immersiveSoundUnlocked;
-                        video.play().catch((error) => {
-                            console.log(
-                                "Autoplay bloqué, attente interaction:",
-                                error,
+                    if (entry.isIntersecting) {
+                        // La vidéo est visible - la jouer
+                        if (video) {
+                            ensureImmersiveVideoLoaded(video, true);
+                            muteOtherImmersiveVideos(video);
+                            video.muted = !window.__immersiveSoundUnlocked;
+                            video.play().catch((error) => {
+                                console.log(
+                                    "Autoplay bloqué, attente interaction:",
+                                    error,
+                                );
+                            });
+                        }
+
+                        const contentId = entry.target.dataset.contentId;
+                        const userId = entry.target.dataset.userId;
+
+                        if (
+                            contentId &&
+                            entry.target.dataset.viewed !== "true"
+                        ) {
+                            scheduleImmersiveViewCount(entry.target, video);
+                        }
+
+                        // Update Header si nécessaire
+                        if (userId && userId !== currentImmersiveUser) {
+                            currentImmersiveUser = userId;
+                            const user = getUser(userId);
+                            const headerContainer = document.getElementById(
+                                "immersive-header-container",
                             );
-                        });
+                            renderImmersiveHeader(user).then((html) => {
+                                if (headerContainer)
+                                    headerContainer.innerHTML = html;
+                            });
+                        }
+                    } else {
+                        if (video) {
+                            video.pause();
+                            video.muted = true;
+                        }
+                        clearImmersiveViewTracker(entry.target);
                     }
+                });
+            },
+            {
+                threshold: 0.5,
+            },
+        );
+    }
 
-                    const contentId = entry.target.dataset.contentId;
-                    const userId = entry.target.dataset.userId;
-
-                    // View counting with dwell thresholds:
-                    // video => 4s of effective playback, image/text => 2s visible
-                    if (contentId && entry.target.dataset.viewed !== "true") {
-                        scheduleImmersiveViewCount(entry.target, video);
-                    }
-
-                    // Update Header if user changed
-                    if (userId && userId !== currentImmersiveUser) {
-                        currentImmersiveUser = userId;
-                        const user = getUser(userId);
-                        renderImmersiveHeader(user).then((html) => {
-                            if (headerContainer)
-                                headerContainer.innerHTML = html;
-                        });
-                    }
-                } else {
-                    // La vidéo n'est plus visible - l'arrêter
-                    if (video) {
-                        video.pause();
-                        video.muted = true;
-                    }
-                    clearImmersiveViewTracker(entry.target);
-                }
-            });
-        },
-        {
-            threshold: 0.5, // Trigger when 50% visible
-        },
-    );
-
-    posts.forEach((post) => observer.observe(post));
+    posts.forEach((post) => {
+        if (post.dataset.immersiveObserved === "1") return;
+        try {
+            window.__immersiveObserver.observe(post);
+            post.dataset.immersiveObserved = "1";
+        } catch (e) {
+            // ignore observation errors
+        }
+    });
 }
 
 function setupImmersiveVideoUI() {
@@ -9606,10 +9727,12 @@ function setupImmersiveVideoUI() {
 
     const wraps = container.querySelectorAll(".immersive-video-wrap");
     wraps.forEach((wrap) => {
+        if (wrap.dataset.immersiveUiBound === "1") return;
         const video = wrap.querySelector("video.immersive-video");
         const playIcon = wrap.querySelector(".immersive-video-play");
         const spinner = wrap.querySelector(".video-buffering-spinner");
         if (!video || !playIcon) return;
+        wrap.dataset.immersiveUiBound = "1";
         video.loop = true;
 
         const updateOverlay = () => {
@@ -9706,15 +9829,21 @@ function setupImmersiveLazyLoad() {
     const videos = document.querySelectorAll("video.immersive-video");
     if (!videos.length || typeof IntersectionObserver === "undefined") return;
 
+    // Mettre à jour les index pour tous les videos
     videos.forEach((video, idx) => {
         video.dataset.index = idx;
-        // si première vidéo, charger immédiatement pour une première frame rapide
-        if (idx === 0) {
-            ensureImmersiveVideoLoaded(video, false);
-        }
+        if (idx === 0) ensureImmersiveVideoLoaded(video, false);
     });
 
-    const observer = new IntersectionObserver(
+    // Déconnecter l'ancien observer si présent
+    if (window.__immersiveLazyObserver) {
+        try {
+            window.__immersiveLazyObserver.disconnect();
+        } catch (e) {}
+        window.__immersiveLazyObserver = null;
+    }
+
+    window.__immersiveLazyObserver = new IntersectionObserver(
         (entries) => {
             entries.forEach((entry) => {
                 const video = entry.target;
@@ -9728,18 +9857,22 @@ function setupImmersiveLazyLoad() {
                     );
                     if (next) ensureImmersiveVideoLoaded(next, false);
 
-                    observer.unobserve(video);
+                    window.__immersiveLazyObserver.unobserve(video);
                 }
             });
         },
         {
             root: null,
-            rootMargin: "280px 0px", // charger avant d'entrer à l'écran
+            rootMargin: "280px 0px",
             threshold: 0.2,
         },
     );
 
-    videos.forEach((video) => observer.observe(video));
+    videos.forEach((video) => {
+        try {
+            window.__immersiveLazyObserver.observe(video);
+        } catch (e) {}
+    });
 }
 
 // Activation globale du son pour toutes les vidéos
@@ -15044,7 +15177,14 @@ function subscribeToRealtime() {
                         // Si on affiche le profil de cet utilisateur, rafraîchir
                         if (window.currentProfileViewed === userId) {
                             console.log("Mise à jour automatique du profil...");
-                            await renderProfileIntoContainer(userId);
+                            // Si l'immersif est ouvert, éviter de rafraîchir automatiquement
+                            if (!window.__immersiveOpen) {
+                                await renderProfileIntoContainer(userId);
+                            } else {
+                                console.log(
+                                    "Immersive open: skip profile auto-refresh",
+                                );
+                            }
                         }
 
                         // Refresh Discover cards (multiple cards can exist per user/arc)

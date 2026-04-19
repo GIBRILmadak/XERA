@@ -1,0 +1,23 @@
+name: Bots run-now (hourly)
+
+on:
+    schedule:
+        - cron: "0 * * * *" # every hour
+
+jobs:
+    run:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Call run-now
+              env:
+                  RUN_URL: ${{ secrets.BOTS_RUN_URL }}
+                  CRON_SECRET: ${{ secrets.CRON_SECRET }}
+              run: |
+                  if [ -z "$RUN_URL" ]; then
+                    echo "RUN_URL not set. Set repository secret BOTS_RUN_URL to https://your-app.vercel.app/api/admin/bots/run-now"
+                    exit 1
+                  fi
+                  echo "Calling $RUN_URL"
+                  HTTP_STATUS=$(curl -sS -o /tmp/bots-run.json -w "%{http_code}" -X POST "$RUN_URL" -H "x-cron-secret: $CRON_SECRET" -d '{}' || true)
+                  echo "HTTP status: $HTTP_STATUS"
+                  cat /tmp/bots-run.json || true

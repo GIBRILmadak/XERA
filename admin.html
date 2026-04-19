@@ -119,6 +119,21 @@
         <script src="js/monetization-utils.js"></script>
         <script src="js/app-supabase.js?v=20260318-4"></script>
         <script>
+            // If the frontend is served locally (live-server), point API calls
+            // to the local backend by default for development.
+            (function () {
+                try {
+                    const host = window.location.hostname;
+                    if (host === "127.0.0.1" || host === "localhost") {
+                        // Backend dev port used by server/monetization-server.js
+                        window.API_BASE_URL =
+                            window.API_BASE_URL || "http://localhost:5050";
+                    }
+                } catch (e) {}
+            })();
+        </script>
+        <script src="js/admin-bots.js"></script>
+        <script>
             document.addEventListener("DOMContentLoaded", async () => {
                 const user = await checkAuth();
                 const navAuth = document.getElementById("nav-auth");

@@ -4912,6 +4912,455 @@ async function evaluateTechBadges(options = {}) {
 
 const isDirectRun = require.main === module;
 
+/* ========================================
+   ADMIN - BOTS CONTROL ENDPOINTS
+   ======================================== */
+
+app.get("/api/admin/bots/status", async (req, res) => {
+    const authResult = await authenticateSuperAdmin(req);
+    if (authResult.error) {
+        return res
+            .status(authResult.error.status)
+            .send(authResult.error.message);
+    }
+    try {
+        const { count: totalBots, error: countErr } = await supabase
+            .from("bots")
+            .select("id", { count: "exact", head: true });
+        if (countErr) console.warn("bots count error", countErr);
+
+        const { data: control } = await supabase
+            .from("bot_control")
+            .select("value")
+            .eq("key", "bots.active_count")
+            .maybeSingle();
+
+        const activeCount =
+            (control && control.value && control.value.count) || 0;
+
+        const { data: sampleData, error: sampleErr } = await supabase
+            .from("bots")
+            .select(
+                "user_id, display_name, avatar_url, active, schedule_hour, encourage_days",
+            )
+            .limit(20);
+        if (sampleErr) console.warn("bots sample error", sampleErr);
+
+        return res.json({
+            totalBots: Number(totalBots) || 0,
+            activeCount: Number(activeCount) || 0,
+            sample: sampleData || [],
+        });
+    } catch (e) {
+        console.error("/api/admin/bots/status error", e?.message || e);
+        return res.status(500).send("Erreur interne");
+    }
+});
+
+app.post("/api/admin/bots/set-active-count", async (req, res) => {
+    const authResult = await authenticateSuperAdmin(req);
+    if (authResult.error) {
+        return res
+            .status(authResult.error.status)
+            .send(authResult.error.message);
+    }
+
+    const rawCount =
+        req.body && req.body.count !== undefined
+            ? req.body.count
+            : req.query.count;
+    const parsed = Number(rawCount);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+        return res.status(400).send("Paramètre count invalide");
+    }
+    const count = Math.max(0, Math.min(400, parseInt(parsed, 10)));
+
+    try {
+        // Upsert control
+        const { error: upErr } = await supabase.from("bot_control").upsert(
+            {
+                key: "bots.active_count",
+                value: { count },
+                updated_at: new Date().toISOString(),
+            },
+            { onConflict: "key" },
+        );
+        if (upErr) throw upErr;
+
+        // Apply activation flags (simple strategy: reset all then enable first N by last_action_at)
+        if (count <= 0) {
+            await supabase.from("bots").update({ active: false });
+        } else {
+            const { data: selected } = await supabase
+                .from("bots")
+                .select("user_id")
+                .order("last_action_at", { ascending: true })
+                .limit(count);
+            const ids = (selected || []).map((r) => r.user_id).filter(Boolean);
+
+            // Deactivate all
+            await supabase.from("bots").update({ active: false });
+
+            if (ids.length) {
+                await supabase
+                    .from("bots")
+                    .update({ active: true })
+                    .in("user_id", ids);
+            }
+        }
+
+        return res.json({ success: true, activeCount: count });
+    } catch (e) {
+        console.error(
+            "/api/admin/bots/set-active-count error",
+            e?.message || e,
+        );
+        return res.status(500).send("Erreur interne");
+    }
+});
+
+// Toggle single bot active state
+app.post("/api/admin/bots/toggle-active", async (req, res) => {
+    const authResult = await authenticateSuperAdmin(req);
+    if (authResult.error) {
+        return res
+            .status(authResult.error.status)
+            .send(authResult.error.message);
+    }
+
+    const { user_id: userId, active } = req.body || {};
+    if (!userId) return res.status(400).send("user_id missing");
+    const isActive = !!active;
+    try {
+        const { error } = await supabase
+            .from("bots")
+            .update({
+                active: isActive,
+                last_action_at: new Date().toISOString(),
+            })
+            .eq("user_id", userId);
+        if (error) throw error;
+        return res.json({ success: true, user_id: userId, active: isActive });
+    } catch (e) {
+        console.error("/api/admin/bots/toggle-active error", e?.message || e);
+        return res.status(500).send("Erreur interne");
+    }
+});
+
+// Run-once runner for bots - intended for serverless environments (Vercel cron)
+app.post("/api/admin/bots/run-now", async (req, res) => {
+    // Authorize cron invocation (uses CRON_SECRET or Bearer token / x-cron-secret)
+    const cronAuth = authorizeCronRequest(req);
+    // Allow either a valid cron secret OR an authenticated super-admin session
+    let authorized = cronAuth.ok === true;
+    if (!authorized) {
+        const adminAuth = await authenticateSuperAdmin(req);
+        if (!adminAuth.error) authorized = true;
+    }
+    if (!authorized) {
+        return res.status(401).send("Unauthorized cron request.");
+    }
+
+    const limit = Number(
+        req.body?.limit ??
+            req.query?.limit ??
+            process.env.BOT_RUN_ONCE_BATCH ??
+            20,
+    );
+    // Par défaut suivre 3 utilisateurs par bot et par jour
+    const FOLLOW_DAILY_LIMIT = Number(process.env.BOT_FOLLOW_DAILY_LIMIT) || 3;
+    const MAX_POSTS_PER_RUN = Number(process.env.BOT_MAX_POSTS_PER_RUN) || 50;
+    const MAX_ENCOURAGES_PER_RUN =
+        Number(process.env.BOT_MAX_ENCOURAGES_PER_RUN) || 200;
+
+    function pickRandom(arr) {
+        if (!arr || arr.length === 0) return null;
+        return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    function isSameDayUTC(a, b) {
+        if (!a || !b) return false;
+        const da = new Date(a);
+        const db = new Date(b);
+        return (
+            da.getUTCFullYear() === db.getUTCFullYear() &&
+            da.getUTCMonth() === db.getUTCMonth() &&
+            da.getUTCDate() === db.getUTCDate()
+        );
+    }
+
+    async function postAsBot(bot) {
+        try {
+            const dayKey = new Date().toISOString().slice(0, 10);
+            const uniq = require("crypto")
+                .createHash("sha1")
+                .update(`${bot.user_id}:${dayKey}`)
+                .digest("hex")
+                .slice(0, 6);
+            const mediaUrl = `https://picsum.photos/seed/${encodeURIComponent(bot.user_id + "-" + dayKey + "-" + uniq)}/1200/800`;
+            const adjectives = [
+                "Petit",
+                "Grand",
+                "Nouveau",
+                "Simple",
+                "Rapide",
+                "Beau",
+            ];
+            const nouns = [
+                "progrès",
+                "instant",
+                "moment",
+                "capture",
+                "éclair",
+                "point",
+            ];
+            const verbs = [
+                "du jour",
+                "du matin",
+                "du soir",
+                "du week-end",
+                "d'aujourd'hui",
+            ];
+            const title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
+            const description = `Partage quotidien — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
+
+            const payload = {
+                user_id: bot.user_id,
+                type: "image",
+                state: "published",
+                title,
+                description,
+                media_url: mediaUrl,
+                created_at: new Date().toISOString(),
+            };
+
+            const { data, error } = await supabase
+                .from("content")
+                .insert(payload)
+                .select()
+                .single();
+            if (error) throw error;
+            await supabase
+                .from("bots")
+                .update({
+                    last_posted_at: new Date().toISOString(),
+                    last_action_at: new Date().toISOString(),
+                })
+                .eq("user_id", bot.user_id);
+            return data;
+        } catch (e) {
+            console.warn(
+                `postAsBot error for ${bot.user_id}:`,
+                e?.message || e,
+            );
+            return null;
+        }
+    }
+
+    async function encourageAsBot(bot) {
+        try {
+            const { data: candidates, error } = await supabase
+                .from("content")
+                .select("id, user_id")
+                .neq("user_id", bot.user_id)
+                .order("created_at", { ascending: false })
+                .limit(200);
+            if (error) throw error;
+            if (!candidates || candidates.length === 0) return null;
+            const target = pickRandom(candidates);
+            if (!target) return null;
+            const { data: rpcData, error: rpcErr } = await supabase.rpc(
+                "toggle_courage",
+                { row_id: target.id, user_id_param: bot.user_id },
+            );
+            if (rpcErr) throw rpcErr;
+            await supabase
+                .from("bots")
+                .update({
+                    last_encouraged_at: new Date().toISOString(),
+                    last_action_at: new Date().toISOString(),
+                })
+                .eq("user_id", bot.user_id);
+            return rpcData;
+        } catch (e) {
+            console.warn(
+                `encourageAsBot error for ${bot.user_id}:`,
+                e?.message || e,
+            );
+            return null;
+        }
+    }
+
+    async function getFollowingIds(botUserId) {
+        try {
+            const { data, error } = await supabase
+                .from("followers")
+                .select("following_id")
+                .eq("follower_id", botUserId);
+            if (error) throw error;
+            return (data || []).map((r) => r.following_id).filter(Boolean);
+        } catch (e) {
+            console.warn("getFollowingIds error", e?.message || e);
+            return [];
+        }
+    }
+
+    async function followAsBot(bot, maxToFollow = 1) {
+        try {
+            const now = new Date();
+            const todayStr = now.toISOString().slice(0, 10);
+            const meta =
+                bot.meta && typeof bot.meta === "object"
+                    ? bot.meta
+                    : bot.meta
+                      ? JSON.parse(bot.meta)
+                      : {};
+            if (meta.last_followed_date === todayStr) return 0;
+
+            const followingIds = new Set(await getFollowingIds(bot.user_id));
+            const { data: candidates, error } = await supabase
+                .from("users")
+                .select("id, name")
+                .is("is_bot", false)
+                .neq("id", bot.user_id)
+                .order("followers_count", { ascending: false })
+                .limit(200);
+            if (error) throw error;
+            if (!candidates || candidates.length === 0) return 0;
+
+            let followed = 0;
+            for (const cand of candidates) {
+                if (followed >= maxToFollow) break;
+                if (!cand || !cand.id) continue;
+                if (followingIds.has(cand.id)) continue;
+                try {
+                    const { error: insErr } = await supabase
+                        .from("followers")
+                        .insert({
+                            follower_id: bot.user_id,
+                            following_id: cand.id,
+                        });
+                    if (insErr) {
+                        console.warn(
+                            "follow insert err",
+                            insErr?.message || insErr,
+                        );
+                        continue;
+                    }
+                    followingIds.add(cand.id);
+                    followed += 1;
+                } catch (e) {
+                    console.warn("followAsBot insert error", e?.message || e);
+                }
+            }
+
+            meta.follow_total = (Number(meta.follow_total) || 0) + followed;
+            meta.last_followed_date = todayStr;
+            await supabase
+                .from("bots")
+                .update({
+                    meta: meta,
+                    last_action_at: new Date().toISOString(),
+                })
+                .eq("user_id", bot.user_id);
+            return followed;
+        } catch (e) {
+            console.warn(
+                `followAsBot error for ${bot.user_id}:`,
+                e?.message || e,
+            );
+            return 0;
+        }
+    }
+
+    try {
+        const { data: control } = await supabase
+            .from("bot_control")
+            .select("value")
+            .eq("key", "bots.active_count")
+            .maybeSingle();
+        const activeCount =
+            (control && control.value && Number(control.value.count)) || 0;
+
+        const q = supabase
+            .from("bots")
+            .select("*")
+            .eq("active", true)
+            .order("last_action_at", { ascending: true });
+        if (limit && Number.isFinite(limit) && limit > 0) q.limit(limit);
+        const { data: bots, error: botsErr } = await q;
+        if (botsErr) throw botsErr;
+
+        const now = new Date();
+        const currentHour = now.getUTCHours();
+        const dayOfWeek = now.getUTCDay();
+
+        let posts = 0;
+        let encourages = 0;
+        let follows = 0;
+
+        for (const bot of bots || []) {
+            // Post
+            if (posts < MAX_POSTS_PER_RUN) {
+                if (Number(bot.schedule_hour) === currentHour) {
+                    const todayStart = new Date(
+                        Date.UTC(
+                            now.getUTCFullYear(),
+                            now.getUTCMonth(),
+                            now.getUTCDate(),
+                        ),
+                    );
+                    if (
+                        !bot.last_posted_at ||
+                        new Date(bot.last_posted_at) < todayStart
+                    ) {
+                        const d = await postAsBot(bot);
+                        if (d) posts += 1;
+                    }
+                }
+            }
+
+            // Encourage
+            if (encourages < MAX_ENCOURAGES_PER_RUN) {
+                try {
+                    const days = Array.isArray(bot.encourage_days)
+                        ? bot.encourage_days.map(Number)
+                        : [];
+                    const notDoneToday =
+                        !bot.last_encouraged_at ||
+                        !isSameDayUTC(bot.last_encouraged_at, now);
+                    if (days.includes(dayOfWeek) && notDoneToday) {
+                        const e = await encourageAsBot(bot);
+                        if (e) encourages += 1;
+                    }
+                } catch (e) {
+                    // ignore per-bot parse errors
+                }
+            }
+
+            // Follows (small daily quota)
+            try {
+                const f = await followAsBot(bot, FOLLOW_DAILY_LIMIT);
+                if (f) follows += f;
+            } catch (e) {
+                // ignore follow errors
+            }
+        }
+
+        return res.json({
+            success: true,
+            processed: (bots || []).length,
+            posts,
+            encourages,
+            follows,
+            activeCount,
+        });
+    } catch (e) {
+        console.error("/api/admin/bots/run-now error", e?.message || e);
+        return res.status(500).send("Erreur interne");
+    }
+});
+
 if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {
     sweepExpiredSubscriptions();
     setInterval(sweepExpiredSubscriptions, SUBSCRIPTION_SWEEP_MS);
