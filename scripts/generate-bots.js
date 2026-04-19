@@ -30,7 +30,7 @@ if (SUPABASE_URL && SUPABASE_KEY) {
     });
 }
 
-const { getName } = require("./names");
+const { getName, combos } = require("./names");
 const SEED_POSTS_PER_BOT = Number(process.env.SEED_POSTS_PER_BOT || 0);
 
 function randomDaysOfWeek(count = 3) {
@@ -107,10 +107,34 @@ async function createPostForUser(userId, index = 0) {
     const title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
     const description = `Post initial — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
 
+    // Compute next day_number for this user's content (incremental per-user)
+    let nextDayNumber = 1;
+    if (supabase) {
+        try {
+            const { data: lastRow, error: lastErr } = await supabase
+                .from("content")
+                .select("day_number")
+                .eq("user_id", userId)
+                .order("day_number", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            if (
+                !lastErr &&
+                lastRow &&
+                Number.isFinite(Number(lastRow.day_number))
+            ) {
+                nextDayNumber = Number(lastRow.day_number) + 1;
+            }
+        } catch (e) {
+            // ignore and fallback to 1
+        }
+    }
+
     const payload = {
         user_id: userId,
-        type: Math.random() < 0.6 ? "image" : "text",
-        state: "published",
+        day_number: nextDayNumber,
+        type: "image",
+        state: "success",
         title,
         description,
         media_url: mediaUrl,
@@ -134,7 +158,9 @@ async function createPostForUser(userId, index = 0) {
 }
 
 async function createBot(i) {
-    const baseName = getName(i);
+    // Use a random name index for bots to make names non-deterministic
+    const randIdx = Math.floor(Math.random() * (Number(combos) || 1000)) + 1;
+    const baseName = getName(randIdx);
     // Ensure deterministic avatar seed
     const name = `${baseName}`;
     const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`;

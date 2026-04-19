@@ -102,8 +102,30 @@ async function postAsBot(bot) {
         const title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
         const description = `Partage quotidien — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
 
+        // Compute next day_number for this user's content (incremental per-user)
+        let nextDayNumber = 1;
+        try {
+            const { data: lastRow, error: lastErr } = await supabase
+                .from("content")
+                .select("day_number")
+                .eq("user_id", bot.user_id)
+                .order("day_number", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            if (
+                !lastErr &&
+                lastRow &&
+                Number.isFinite(Number(lastRow.day_number))
+            ) {
+                nextDayNumber = Number(lastRow.day_number) + 1;
+            }
+        } catch (e) {
+            // ignore and fallback to 1
+        }
+
         const payload = {
             user_id: bot.user_id,
+            day_number: nextDayNumber,
             type: "image",
             state: "published",
             title,
