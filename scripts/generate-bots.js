@@ -31,6 +31,14 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 }
 
 const { getName, combos } = require("./names");
+const TECH_TOPICS = [
+    "robotics",
+    "ai",
+    "diy",
+    "coding",
+    "entrepreneurship",
+    "mechanics",
+];
 const SEED_POSTS_PER_BOT = Number(process.env.SEED_POSTS_PER_BOT || 0);
 
 function randomDaysOfWeek(count = 3) {
@@ -68,7 +76,7 @@ function pickRandom(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
 
-async function createPostForUser(userId, index = 0) {
+async function createPostForUser(userId, index = 0, topic = "general") {
     const dayKey = new Date().toISOString().slice(0, 10);
     const uniq = crypto
         .createHash("sha1")
@@ -80,32 +88,146 @@ async function createPostForUser(userId, index = 0) {
         userId + "-" + dayKey + "-" + uniq,
     )}/1200/800`;
 
-    const adjectives = [
-        "Petit",
-        "Grand",
-        "Nouveau",
-        "Simple",
-        "Rapide",
-        "Beau",
-    ];
-    const nouns = [
-        "progrès",
-        "instant",
-        "moment",
-        "capture",
-        "éclair",
-        "point",
-    ];
-    const verbs = [
-        "du jour",
-        "du matin",
-        "du soir",
-        "du week-end",
-        "d'aujourd'hui",
-    ];
+    // Topic-specific templates
+    let title;
+    let description;
+    if (topic && TECH_TOPICS.includes(topic)) {
+        const tpl = {
+            robotics: {
+                prefixes: [
+                    "Prototype",
+                    "Module",
+                    "Capteur",
+                    "Contrôleur",
+                    "Bras robotique",
+                    "Moteur",
+                ],
+                actions: [
+                    "en test",
+                    "v1.0",
+                    "au labo",
+                    "en montage",
+                    "intégration Arduino",
+                    "optimisé",
+                ],
+            },
+            ai: {
+                prefixes: [
+                    "Modèle",
+                    "Expérience",
+                    "Réseau",
+                    "Pipeline",
+                    "Fine-tune",
+                    "Prototype",
+                ],
+                actions: [
+                    "pour vision",
+                    "NLP",
+                    "en entraînement",
+                    "avec PyTorch",
+                    "optimisé",
+                    "en production",
+                ],
+            },
+            diy: {
+                prefixes: [
+                    "Tuto",
+                    "Astuce",
+                    "Montage",
+                    "Projet DIY",
+                    "Guide",
+                    "Hack",
+                ],
+                actions: [
+                    "étape par étape",
+                    "facile",
+                    "avec pièces récupérées",
+                    "low-cost",
+                    "rapide",
+                ],
+            },
+            coding: {
+                prefixes: [
+                    "Snippet",
+                    "Pattern",
+                    "Refactor",
+                    "Truc",
+                    "Astuce dev",
+                    "Bricolage code",
+                ],
+                actions: [
+                    "JS/Node",
+                    "Python",
+                    "best-practices",
+                    "optimisation",
+                    "débogage",
+                ],
+            },
+            entrepreneurship: {
+                prefixes: [
+                    "Business",
+                    "MVP",
+                    "Pitch",
+                    "Growth",
+                    "Leçon",
+                    "Astuce",
+                ],
+                actions: [
+                    "lean",
+                    "croissance",
+                    "marketing",
+                    "monétisation",
+                    "expérience client",
+                ],
+            },
+            mechanics: {
+                prefixes: [
+                    "Réglage",
+                    "Mécanique",
+                    "Diagnostic",
+                    "Atelier",
+                    "Maintenance",
+                    "Assemblage",
+                ],
+                actions: [
+                    "pignon",
+                    "roulement",
+                    "couple",
+                    "soudure",
+                    "usinage",
+                ],
+            },
+        }[topic];
 
-    const title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
-    const description = `Post initial — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
+        title = `${pickRandom(tpl.prefixes)} ${pickRandom(tpl.actions)} • ${uniq}`;
+        description = `Partage technique (${topic}) — ${pickRandom(["Petit retour d'expérience", "Astuce pratique", "Étapes clés", "Code & schéma"])} (${uniq})`;
+    } else {
+        const adjectives = [
+            "Petit",
+            "Grand",
+            "Nouveau",
+            "Simple",
+            "Rapide",
+            "Beau",
+        ];
+        const nouns = [
+            "progrès",
+            "instant",
+            "moment",
+            "capture",
+            "éclair",
+            "point",
+        ];
+        const verbs = [
+            "du jour",
+            "du matin",
+            "du soir",
+            "du week-end",
+            "d'aujourd'hui",
+        ];
+        title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
+        description = `Post initial — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
+    }
 
     // Compute next day_number for this user's content (incremental per-user)
     let nextDayNumber = 1;
@@ -168,6 +290,8 @@ async function createBot(i) {
     const encourageDays = randomDaysOfWeek(3);
 
     const dryRun = isDryRun;
+    // assign topic for this bot (40% technical, otherwise general)
+    const topic = Math.random() < 0.4 ? pickRandom(TECH_TOPICS) : "general";
     const emailDomain = process.env.BOT_EMAIL_DOMAIN || "example.com";
     const email = `bot+${Date.now()}-${i}@${emailDomain}`;
     const password = crypto.randomBytes(12).toString("hex");
@@ -221,9 +345,7 @@ async function createBot(i) {
                 if (authErr) throw authErr;
                 authUserId = authData?.user?.id || authData?.id || null;
             }
-        }
 
-        if (!dryRun) {
             // Upsert public.users row for the auth user (do NOT assume an 'email' column exists)
             const upsertPayload = {
                 id: authUserId,
@@ -248,7 +370,7 @@ async function createBot(i) {
                         active: false,
                         schedule_hour: scheduleHour,
                         encourage_days: encourageDays,
-                        meta: { seeded: true },
+                        meta: { seeded: true, topic },
                     }),
                 { retries: 2, baseDelay: 500 },
             );
@@ -257,7 +379,7 @@ async function createBot(i) {
             // Optional: seed initial posts for this bot
             const seedCount = Number(SEED_POSTS_PER_BOT || 0);
             for (let p = 0; p < seedCount; p++) {
-                await createPostForUser(authUserId, p);
+                await createPostForUser(authUserId, p, topic);
                 await new Promise((r) => setTimeout(r, 120));
             }
         }
