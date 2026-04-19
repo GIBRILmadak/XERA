@@ -125,34 +125,51 @@ function formatDays(days) {
 async function renderSuperAdminPage() {
     const container = document.getElementById("admin-dashboard");
     if (!container) return;
+    // Two-column admin layout: left column for existing admin widgets (announcements, feedback), right for Bots Manager
     container.innerHTML = `
-        <div class="settings-section">
-            <h2>Bots Manager</h2>
-            <div id="bots-stats" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
-                <div>Total bots: <strong id="bots-total">—</strong></div>
-                <div>Active: <strong id="bots-active-count">—</strong></div>
-                <div>
-                    <label>Set active count: <input id="bots-active-input" type="number" min="0" max="400" style="width:6rem;margin-left:.5rem"></label>
-                    <button id="bots-active-set-btn">Apply</button>
-                    <button id="bots-refresh-btn">Refresh</button>
-                    <button id="bots-run-now-btn" style="margin-left:.5rem">Run now</button>
-                    <span id="bots-run-result" style="margin-left:0.75rem;color:var(--text-secondary)"></span>
+        <div class="settings-form-layout" style="display:grid;grid-template-columns:1fr 520px;gap:1.5rem;align-items:start;">
+            <div>
+                <div id="announcements-container" class="settings-section"></div>
+
+                <div class="settings-section">
+                    <h3>Feedback utilisateurs</h3>
+                    <div style="display:flex;gap:1rem;align-items:center;">
+                        <button class="btn-verify" type="button" onclick="fetchFeedbackInbox()">Rafraîchir</button>
+                    </div>
+                    <div id="admin-feedback-list" class="admin-feedback-list" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.75rem;"></div>
                 </div>
             </div>
-            <div style="margin-top:1rem;">
-                <table id="bots-sample-table" style="width:100%;border-collapse:collapse;">
-                    <thead>
-                        <tr>
-                            <th style="text-align:left">Avatar</th>
-                            <th style="text-align:left">Name</th>
-                            <th>Hour</th>
-                            <th>Encourage</th>
-                            <th>Active</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="bots-sample-body"></tbody>
-                </table>
+
+            <div>
+                <div class="settings-section">
+                    <h2>Bots Manager</h2>
+                    <div id="bots-stats" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+                        <div>Total bots: <strong id="bots-total">—</strong></div>
+                        <div>Active: <strong id="bots-active-count">—</strong></div>
+                        <div>
+                            <label>Set active count: <input id="bots-active-input" type="number" min="0" max="400" style="width:6rem;margin-left:.5rem"></label>
+                            <button id="bots-active-set-btn">Apply</button>
+                            <button id="bots-refresh-btn">Refresh</button>
+                            <button id="bots-run-now-btn" style="margin-left:.5rem">Run now</button>
+                            <span id="bots-run-result" style="margin-left:0.75rem;color:var(--text-secondary)"></span>
+                        </div>
+                    </div>
+                    <div style="margin-top:1rem;overflow:auto;max-height:60vh;">
+                        <table id="bots-sample-table" style="width:100%;border-collapse:collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align:left">Avatar</th>
+                                    <th style="text-align:left">Name</th>
+                                    <th>Hour</th>
+                                    <th>Encourage</th>
+                                    <th>Active</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bots-sample-body"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     `;
