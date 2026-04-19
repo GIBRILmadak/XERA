@@ -160,10 +160,10 @@ async function renderSuperAdminPage() {
         `;
     }
 
-    // Two-column admin layout: left column for existing admin widgets, right for Bots Manager
+    // Stacked admin layout: main content on top, Bots Manager at bottom
     container.innerHTML = `
         ${adminHeader}
-        <div class="settings-form-layout" style="display:grid;grid-template-columns:1fr 520px;gap:1.5rem;align-items:start;">
+        <div class="settings-form-layout" style="display:grid;grid-template-columns:1fr;grid-template-rows:auto auto;gap:1.5rem;">
             <div id="admin-main-column">
                 ${adminContent}
             </div>
@@ -325,6 +325,8 @@ async function renderSuperAdminPage() {
     // Auto refresh every 60s
     setInterval(refresh, 60 * 1000);
 }
+
+window.renderSuperAdminPage = renderSuperAdminPage;
 
 window.AdminBots = {
     fetchBotStatus,
