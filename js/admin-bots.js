@@ -125,12 +125,30 @@ function formatDays(days) {
 async function renderSuperAdminPage() {
     const container = document.getElementById("admin-dashboard");
     if (!container) return;
-    // Two-column admin layout: left column for existing admin widgets (announcements, feedback), right for Bots Manager
-    container.innerHTML = `
-        <div class="settings-form-layout" style="display:grid;grid-template-columns:1fr 520px;gap:1.5rem;align-items:start;">
+
+    // Preserve original admin content if available
+    let adminHeader = "";
+    let adminContent = "";
+    
+    if (typeof getSuperAdminPanelHtml === "function") {
+        adminHeader = `
+            <div class="settings-section">
+                <div class="settings-header" style="border:none; margin-bottom:1rem; padding-bottom:0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap: 1rem; flex-wrap: wrap;">
+                        <div style="display:flex; align-items:center; gap: 0.75rem;">
+                            <h2>Administration</h2>
+                            <span class="admin-badge">Super admin</span>
+                        </div>
+                    </div>
+                    <p>Gestion complète du compte, des paiements et des bots.</p>
+                </div>
+            </div>
+        `;
+        adminContent = getSuperAdminPanelHtml();
+    } else {
+        adminContent = `
             <div>
                 <div id="announcements-container" class="settings-section"></div>
-
                 <div class="settings-section">
                     <h3>Feedback utilisateurs</h3>
                     <div style="display:flex;gap:1rem;align-items:center;">
@@ -139,8 +157,18 @@ async function renderSuperAdminPage() {
                     <div id="admin-feedback-list" class="admin-feedback-list" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.75rem;"></div>
                 </div>
             </div>
+        `;
+    }
 
-            <div>
+    // Two-column admin layout: left column for existing admin widgets, right for Bots Manager
+    container.innerHTML = `
+        ${adminHeader}
+        <div class="settings-form-layout" style="display:grid;grid-template-columns:1fr 520px;gap:1.5rem;align-items:start;">
+            <div id="admin-main-column">
+                ${adminContent}
+            </div>
+
+            <div id="admin-bots-column">
                 <div class="settings-section">
                     <h2>Bots Manager</h2>
                     <div id="bots-stats" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
@@ -174,6 +202,13 @@ async function renderSuperAdminPage() {
         </div>
     `;
 
+    // Trigger original data fetches if they exist
+    if (typeof refreshAppPulse === "function") setTimeout(refreshAppPulse, 150);
+    if (typeof fetchAdminSubscriptionPayments === "function") setTimeout(fetchAdminSubscriptionPayments, 150);
+    if (typeof fetchAdminWithdrawalRequests === "function") setTimeout(fetchAdminWithdrawalRequests, 150);
+    if (typeof fetchAdminAnnouncements === "function") setTimeout(fetchAdminAnnouncements, 150);
+    if (typeof fetchFeedbackInbox === "function") setTimeout(fetchFeedbackInbox, 150);
+
     const input = document.getElementById("bots-active-input");
     const setBtn = document.getElementById("bots-active-set-btn");
     const refreshBtn = document.getElementById("bots-refresh-btn");
@@ -181,25 +216,30 @@ async function renderSuperAdminPage() {
     async function refresh() {
         try {
             const status = await fetchBotStatus();
-            document.getElementById("bots-total").textContent =
-                status.totalBots || 0;
+            const totalBots = status.totalBots || 0;
+            document.getElementById("bots-total").textContent = totalBots;
             document.getElementById("bots-active-count").textContent =
                 status.activeCount || 0;
             input.value = status.activeCount || 0;
             const body = document.getElementById("bots-sample-body");
             body.innerHTML = "";
-            (status.sample || []).forEach((b) => {
-                const tr = document.createElement("tr");
-                tr.innerHTML = `
-                    <td style="padding:6px"><img src="${b.avatar_url || "https://placehold.co/48"}" width="40" height="40" style="border-radius:50%"/></td>
-                    <td style="padding:6px">${escapeHtml(b.display_name || b.user_id || "—")}</td>
-                    <td style="text-align:center">${b.schedule_hour ?? "—"}</td>
-                    <td style="text-align:center">${formatDays(b.encourage_days)}</td>
-                    <td style="text-align:center">${b.active ? "Yes" : "No"}</td>
-                    <td style="text-align:center"><button data-user-id="${b.user_id}" class="bot-toggle-btn">${b.active ? "Disable" : "Enable"}</button></td>
-                `;
-                body.appendChild(tr);
-            });
+
+            if (totalBots === 0) {
+                body.innerHTML = `<tr><td colspan="6" style="padding:1rem;text-align:center;color:var(--text-secondary)">Aucun bot trouvé. Lancez <code>scripts/generate-bots.js</code> pour en créer.</td></tr>`;
+            } else {
+                (status.sample || []).forEach((b) => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td style="padding:6px"><img src="${b.avatar_url || "https://placehold.co/48"}" width="40" height="40" style="border-radius:50%"/></td>
+                        <td style="padding:6px">${escapeHtml(b.display_name || b.user_id || "—")}</td>
+                        <td style="text-align:center">${b.schedule_hour ?? "—"}</td>
+                        <td style="text-align:center">${formatDays(b.encourage_days)}</td>
+                        <td style="text-align:center">${b.active ? "Yes" : "No"}</td>
+                        <td style="text-align:center"><button data-user-id="${b.user_id}" class="bot-toggle-btn">${b.active ? "Disable" : "Enable"}</button></td>
+                    `;
+                    body.appendChild(tr);
+                });
+            }
 
             // Attach handlers
             Array.from(document.querySelectorAll(".bot-toggle-btn")).forEach(
@@ -261,7 +301,7 @@ async function renderSuperAdminPage() {
                     Authorization: token ? `Bearer ${token}` : "",
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({}),
+                body: JSON.stringify({ force: true }),
             });
             if (!res.ok) {
                 const body = await res.text().catch(() => "");

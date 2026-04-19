@@ -5061,6 +5061,7 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         return res.status(401).send("Unauthorized cron request.");
     }
 
+    const force = req.body?.force === true;
     const limit = Number(
         req.body?.limit ??
             req.query?.limit ??
@@ -5279,7 +5280,7 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             .select("value")
             .eq("key", "bots.active_count")
             .maybeSingle();
-        const activeCount =
+        const activeCountValue =
             (control && control.value && Number(control.value.count)) || 0;
 
         const q = supabase
@@ -5302,7 +5303,8 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         for (const bot of bots || []) {
             // Post
             if (posts < MAX_POSTS_PER_RUN) {
-                if (Number(bot.schedule_hour) === currentHour) {
+                // Ignore hour check if force is true
+                if (force || Number(bot.schedule_hour) === currentHour) {
                     const todayStart = new Date(
                         Date.UTC(
                             now.getUTCFullYear(),
@@ -5329,7 +5331,9 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                     const notDoneToday =
                         !bot.last_encouraged_at ||
                         !isSameDayUTC(bot.last_encouraged_at, now);
-                    if (days.includes(dayOfWeek) && notDoneToday) {
+                    
+                    // Ignore day check if force is true
+                    if (force || (days.includes(dayOfWeek) && notDoneToday)) {
                         const e = await encourageAsBot(bot);
                         if (e) encourages += 1;
                     }
