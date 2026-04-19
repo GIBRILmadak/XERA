@@ -30,6 +30,9 @@ if (SUPABASE_URL && SUPABASE_KEY) {
     });
 }
 
+const { getName } = require("./names");
+const SEED_POSTS_PER_BOT = Number(process.env.SEED_POSTS_PER_BOT || 0);
+
 function randomDaysOfWeek(count = 3) {
     const s = new Set();
     while (s.size < count) s.add(Math.floor(Math.random() * 7));
@@ -60,8 +63,80 @@ async function withRetries(fn, opts = {}) {
     }
 }
 
+function pickRandom(arr) {
+    if (!arr || arr.length === 0) return null;
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
+async function createPostForUser(userId, index = 0) {
+    const dayKey = new Date().toISOString().slice(0, 10);
+    const uniq = crypto
+        .createHash("sha1")
+        .update(`${userId}:${dayKey}:${index}`)
+        .digest("hex")
+        .slice(0, 6);
+
+    const mediaUrl = `https://picsum.photos/seed/${encodeURIComponent(
+        userId + "-" + dayKey + "-" + uniq,
+    )}/1200/800`;
+
+    const adjectives = [
+        "Petit",
+        "Grand",
+        "Nouveau",
+        "Simple",
+        "Rapide",
+        "Beau",
+    ];
+    const nouns = [
+        "progrès",
+        "instant",
+        "moment",
+        "capture",
+        "éclair",
+        "point",
+    ];
+    const verbs = [
+        "du jour",
+        "du matin",
+        "du soir",
+        "du week-end",
+        "d'aujourd'hui",
+    ];
+
+    const title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
+    const description = `Post initial — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
+
+    const payload = {
+        user_id: userId,
+        type: Math.random() < 0.6 ? "image" : "text",
+        state: "published",
+        title,
+        description,
+        media_url: mediaUrl,
+        created_at: new Date().toISOString(),
+    };
+
+    if (!isDryRun) {
+        const { data, error } = await withRetries(
+            () => supabase.from("content").insert(payload).select().single(),
+            { retries: 2, baseDelay: 500 },
+        );
+        if (error) {
+            console.warn("createPostForUser error:", error?.message || error);
+            return null;
+        }
+        return data;
+    } else {
+        console.log(`[dry-run] would create post for ${userId}: ${title}`);
+        return { id: `dry-${userId}-${uniq}` };
+    }
+}
+
 async function createBot(i) {
-    const name = `Bot XERA ${i}`;
+    const baseName = getName(i);
+    // Ensure deterministic avatar seed
+    const name = `${baseName}`;
     const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`;
     const scheduleHour = i % 24;
     const encourageDays = randomDaysOfWeek(3);
@@ -152,6 +227,13 @@ async function createBot(i) {
                 { retries: 2, baseDelay: 500 },
             );
             if (botErr) throw botErr;
+
+            // Optional: seed initial posts for this bot
+            const seedCount = Number(SEED_POSTS_PER_BOT || 0);
+            for (let p = 0; p < seedCount; p++) {
+                await createPostForUser(authUserId, p);
+                await new Promise((r) => setTimeout(r, 120));
+            }
         }
 
         console.log(
@@ -180,3 +262,4 @@ main().catch((e) => {
     console.error(e);
     process.exit(1);
 });
+
