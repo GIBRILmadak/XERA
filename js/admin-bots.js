@@ -129,7 +129,7 @@ async function renderSuperAdminPage() {
     // Preserve original admin content if available
     let adminHeader = "";
     let adminContent = "";
-    
+
     if (typeof getSuperAdminPanelHtml === "function") {
         adminHeader = `
             <div class="settings-section">
@@ -179,6 +179,8 @@ async function renderSuperAdminPage() {
                             <button id="bots-active-set-btn">Apply</button>
                             <button id="bots-refresh-btn">Refresh</button>
                             <button id="bots-run-now-btn" style="margin-left:.5rem">Run now</button>
+                            <label style="margin-left:1rem;display:inline-flex;align-items:center;gap:.5rem">Auto-force posts: <input id="bots-force-posts-checkbox" type="checkbox" style="margin-left:.25rem"></label>
+                            <button id="bots-force-posts-set-btn" style="margin-left:.25rem">Save</button>
                             <span id="bots-run-result" style="margin-left:0.75rem;color:var(--text-secondary)"></span>
                         </div>
                     </div>
@@ -204,10 +206,14 @@ async function renderSuperAdminPage() {
 
     // Trigger original data fetches if they exist
     if (typeof refreshAppPulse === "function") setTimeout(refreshAppPulse, 150);
-    if (typeof fetchAdminSubscriptionPayments === "function") setTimeout(fetchAdminSubscriptionPayments, 150);
-    if (typeof fetchAdminWithdrawalRequests === "function") setTimeout(fetchAdminWithdrawalRequests, 150);
-    if (typeof fetchAdminAnnouncements === "function") setTimeout(fetchAdminAnnouncements, 150);
-    if (typeof fetchFeedbackInbox === "function") setTimeout(fetchFeedbackInbox, 150);
+    if (typeof fetchAdminSubscriptionPayments === "function")
+        setTimeout(fetchAdminSubscriptionPayments, 150);
+    if (typeof fetchAdminWithdrawalRequests === "function")
+        setTimeout(fetchAdminWithdrawalRequests, 150);
+    if (typeof fetchAdminAnnouncements === "function")
+        setTimeout(fetchAdminAnnouncements, 150);
+    if (typeof fetchFeedbackInbox === "function")
+        setTimeout(fetchFeedbackInbox, 150);
 
     const input = document.getElementById("bots-active-input");
     const setBtn = document.getElementById("bots-active-set-btn");
@@ -239,6 +245,14 @@ async function renderSuperAdminPage() {
                     `;
                     body.appendChild(tr);
                 });
+            }
+
+            // Set auto-force posts checkbox state if available
+            try {
+                const cb = document.getElementById("bots-force-posts-checkbox");
+                if (cb) cb.checked = !!status.forcePosts;
+            } catch (e) {
+                // ignore
             }
 
             // Attach handlers
@@ -280,6 +294,40 @@ async function renderSuperAdminPage() {
             setBtn.disabled = false;
         }
     });
+
+    // Handler to save auto-force posts setting
+    const forceCheckbox = document.getElementById("bots-force-posts-checkbox");
+    const forceSetBtn = document.getElementById("bots-force-posts-set-btn");
+    if (forceSetBtn) {
+        forceSetBtn.addEventListener("click", async () => {
+            try {
+                forceSetBtn.disabled = true;
+                const {
+                    data: { session },
+                } = await supabase.auth.getSession();
+                const token = session?.access_token;
+                const enabled = !!(forceCheckbox && forceCheckbox.checked);
+                const res = await apiFetch("/api/admin/bots/set-force-posts", {
+                    method: "POST",
+                    headers: {
+                        Authorization: token ? `Bearer ${token}` : "",
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ enabled }),
+                });
+                if (!res.ok) {
+                    const body = await res.text().catch(() => "");
+                    throw new Error(body || `HTTP ${res.status}`);
+                }
+                await refresh();
+            } catch (e) {
+                console.error("set-force-posts error", e);
+                alert("Erreur sauvegarde paramètre");
+            } finally {
+                forceSetBtn.disabled = false;
+            }
+        });
+    }
 
     refreshBtn.addEventListener("click", refresh);
 

@@ -4938,6 +4938,28 @@ app.get("/api/admin/bots/status", async (req, res) => {
         const activeCount =
             (control && control.value && control.value.count) || 0;
 
+        // Read global auto-force-posts flag if present
+        let forcePostsEnabled = false;
+        try {
+            const { data: fControl } = await supabase
+                .from("bot_control")
+                .select("value")
+                .eq("key", "bots.force_posts")
+                .maybeSingle();
+            if (fControl && fControl.value !== undefined) {
+                const v = fControl.value;
+                if (typeof v === "object") {
+                    forcePostsEnabled =
+                        v.enabled === true || String(v.enabled) === "true";
+                } else {
+                    forcePostsEnabled =
+                        v === true || String(v) === "true" || String(v) === "1";
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
+
         const { data: sampleData, error: sampleErr } = await supabase
             .from("bots")
             .select(
@@ -4950,6 +4972,7 @@ app.get("/api/admin/bots/status", async (req, res) => {
             totalBots: Number(totalBots) || 0,
             activeCount: Number(activeCount) || 0,
             sample: sampleData || [],
+            forcePosts: !!forcePostsEnabled,
         });
     } catch (e) {
         console.error("/api/admin/bots/status error", e?.message || e);
@@ -5047,6 +5070,38 @@ app.post("/api/admin/bots/toggle-active", async (req, res) => {
     }
 });
 
+// Set global auto-force-posts flag for bots (stored in bot_control)
+app.post("/api/admin/bots/set-force-posts", async (req, res) => {
+    const authResult = await authenticateSuperAdmin(req);
+    if (authResult.error) {
+        return res
+            .status(authResult.error.status)
+            .send(authResult.error.message);
+    }
+
+    const raw =
+        req.body && req.body.enabled !== undefined
+            ? req.body.enabled
+            : req.query.enabled;
+    const enabled = raw === true || raw === "true" || raw === "1" || raw === 1;
+
+    try {
+        const { error: upErr } = await supabase.from("bot_control").upsert(
+            {
+                key: "bots.force_posts",
+                value: { enabled: !!enabled },
+                updated_at: new Date().toISOString(),
+            },
+            { onConflict: "key" },
+        );
+        if (upErr) throw upErr;
+        return res.json({ success: true, enabled: !!enabled });
+    } catch (e) {
+        console.error("/api/admin/bots/set-force-posts error", e?.message || e);
+        return res.status(500).send("Erreur interne");
+    }
+});
+
 // Run-once runner for bots - intended for serverless environments (Vercel cron)
 app.post("/api/admin/bots/run-now", async (req, res) => {
     // Authorize cron invocation (uses CRON_SECRET or Bearer token / x-cron-secret)
@@ -5090,6 +5145,30 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         );
     }
 
+    // Check global bot_control flag to auto-force posts (admin can set bots.force_posts)
+    let globalForcePostsEnabled = false;
+    try {
+        const { data: forceControl } = await supabase
+            .from("bot_control")
+            .select("value")
+            .eq("key", "bots.force_posts")
+            .maybeSingle();
+        if (forceControl && forceControl.value !== undefined) {
+            const v = forceControl.value;
+            if (typeof v === "object") {
+                globalForcePostsEnabled =
+                    v.enabled === true ||
+                    String(v.enabled) === "true" ||
+                    Number(v.enabled) === 1;
+            } else {
+                globalForcePostsEnabled =
+                    v === true || String(v) === "true" || String(v) === "1";
+            }
+        }
+    } catch (e) {
+        // ignore and default to false
+    }
+
     async function postAsBot(bot) {
         try {
             const dayKey = new Date().toISOString().slice(0, 10);
@@ -5125,10 +5204,32 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             const title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
             const description = `Partage quotidien — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
 
+            // Compute next day_number for this user's content (incremental per-user)
+            let nextDayNumber = 1;
+            try {
+                const { data: lastRow, error: lastErr } = await supabase
+                    .from("content")
+                    .select("day_number")
+                    .eq("user_id", bot.user_id)
+                    .order("day_number", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (
+                    !lastErr &&
+                    lastRow &&
+                    Number.isFinite(Number(lastRow.day_number))
+                ) {
+                    nextDayNumber = Number(lastRow.day_number) + 1;
+                }
+            } catch (e) {
+                // ignore and fallback to 1
+            }
+
             const payload = {
                 user_id: bot.user_id,
+                day_number: nextDayNumber,
                 type: "image",
-                state: "published",
+                state: "success",
                 title,
                 description,
                 media_url: mediaUrl,
@@ -5303,8 +5404,12 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         for (const bot of bots || []) {
             // Post
             if (posts < MAX_POSTS_PER_RUN) {
-                // Ignore hour check if force is true
-                if (force || Number(bot.schedule_hour) === currentHour) {
+                // Determine if we should force posting for this run (request param OR global admin flag)
+                const shouldForcePostsForRun = force || globalForcePostsEnabled;
+                if (
+                    shouldForcePostsForRun ||
+                    Number(bot.schedule_hour) === currentHour
+                ) {
                     const todayStart = new Date(
                         Date.UTC(
                             now.getUTCFullYear(),
@@ -5312,10 +5417,11 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                             now.getUTCDate(),
                         ),
                     );
-                    if (
-                        !bot.last_posted_at ||
-                        new Date(bot.last_posted_at) < todayStart
-                    ) {
+                    const shouldPost = shouldForcePostsForRun
+                        ? true
+                        : !bot.last_posted_at ||
+                          new Date(bot.last_posted_at) < todayStart;
+                    if (shouldPost) {
                         const d = await postAsBot(bot);
                         if (d) posts += 1;
                     }
@@ -5331,7 +5437,7 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                     const notDoneToday =
                         !bot.last_encouraged_at ||
                         !isSameDayUTC(bot.last_encouraged_at, now);
-                    
+
                     // Ignore day check if force is true
                     if (force || (days.includes(dayOfWeek) && notDoneToday)) {
                         const e = await encourageAsBot(bot);
@@ -5357,10 +5463,11 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             posts,
             encourages,
             follows,
-            activeCount,
+            activeCount: activeCountValue,
         });
     } catch (e) {
-        console.error("/api/admin/bots/run-now error", e?.message || e);
+        console.error("/api/admin/bots/run-now error", e);
+        if (e && e.stack) console.error(e.stack);
         return res.status(500).send("Erreur interne");
     }
 });
