@@ -585,7 +585,9 @@
 .wallet-collapsible {
     display: grid;
     grid-template-rows: 1fr;
-    transition: grid-template-rows 0.22s ease, opacity 0.22s ease;
+    transition:
+        grid-template-rows 0.22s ease,
+        opacity 0.22s ease;
 }
 
 .wallet-collapsible > * {
@@ -672,7 +674,9 @@
     background: white;
     border-radius: 16px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition:
+        transform 0.2s,
+        box-shadow 0.2s;
 }
 
 .revenue-card:hover {
@@ -804,7 +808,11 @@
     justify-content: space-between;
     align-items: center;
     padding: 20px;
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+    background: linear-gradient(
+        135deg,
+        rgba(102, 126, 234, 0.1),
+        rgba(118, 75, 162, 0.1)
+    );
     border-radius: 12px;
     margin-top: 20px;
 }
@@ -880,12 +888,30 @@
     padding: 40px;
 }
 
-.status-success { color: var(--success); font-weight: 600; }
-.status-pending { color: var(--warning); font-weight: 600; }
-.status-failed { color: var(--error); font-weight: 600; }
-.status-refunded { color: #95a5a6; font-weight: 600; }
-.status-paid { color: var(--success); font-weight: 600; }
-.status-processing { color: var(--plan-standard); font-weight: 600; }
+.status-success {
+    color: var(--success);
+    font-weight: 600;
+}
+.status-pending {
+    color: var(--warning);
+    font-weight: 600;
+}
+.status-failed {
+    color: var(--error);
+    font-weight: 600;
+}
+.status-refunded {
+    color: #95a5a6;
+    font-weight: 600;
+}
+.status-paid {
+    color: var(--success);
+    font-weight: 600;
+}
+.status-processing {
+    color: var(--plan-standard);
+    font-weight: 600;
+}
 
 /* Section Requirements */
 .requirements-section {
@@ -957,8 +983,16 @@
 body.monetization-dashboard-page {
     min-height: 100vh;
     background:
-        radial-gradient(circle at top left, rgba(99, 102, 241, 0.18), transparent 32%),
-        radial-gradient(circle at top right, rgba(168, 85, 247, 0.16), transparent 28%),
+        radial-gradient(
+            circle at top left,
+            rgba(99, 102, 241, 0.18),
+            transparent 32%
+        ),
+        radial-gradient(
+            circle at top right,
+            rgba(168, 85, 247, 0.16),
+            transparent 28%
+        ),
         linear-gradient(180deg, #05070d 0%, #090d17 38%, #0a1120 100%);
     color: #eef2ff;
     overflow-x: hidden;
@@ -975,8 +1009,17 @@ body.monetization-dashboard-page .dashboard-header {
     position: relative;
     overflow: hidden;
     background:
-        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.14), transparent 24%),
-        linear-gradient(135deg, rgba(67, 56, 202, 0.92) 0%, rgba(109, 40, 217, 0.9) 52%, rgba(21, 94, 117, 0.88) 100%);
+        radial-gradient(
+            circle at 20% 20%,
+            rgba(255, 255, 255, 0.14),
+            transparent 24%
+        ),
+        linear-gradient(
+            135deg,
+            rgba(67, 56, 202, 0.92) 0%,
+            rgba(109, 40, 217, 0.9) 52%,
+            rgba(21, 94, 117, 0.88) 100%
+        );
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 24px 60px rgba(3, 8, 20, 0.45);
 }
@@ -1290,7 +1333,11 @@ body.monetization-dashboard-page .status-detail {
 
 .plan-card.recommended {
     border-color: var(--plan-pro);
-    background: linear-gradient(135deg, rgba(243, 156, 18, 0.05), rgba(211, 84, 0, 0.05));
+    background: linear-gradient(
+        135deg,
+        rgba(243, 156, 18, 0.05),
+        rgba(211, 84, 0, 0.05)
+    );
 }
 
 .recommended-badge {
@@ -1709,10 +1756,8 @@ body.monetization-dashboard-page .status-detail {
 
     body.monetization-dashboard-page.has-mobile-nav nav {
         justify-content: space-between;
-        padding:
-            calc(0.95rem + env(safe-area-inset-top, 0px))
-            max(0.95rem, env(safe-area-inset-right, 0px))
-            0.85rem
+        padding: calc(0.95rem + env(safe-area-inset-top, 0px))
+            max(0.95rem, env(safe-area-inset-right, 0px)) 0.85rem
             max(0.95rem, env(safe-area-inset-left, 0px));
     }
 
@@ -1740,19 +1785,20 @@ body.monetization-dashboard-page .status-detail {
     }
 
     body.monetization-dashboard-page .dashboard-main {
-        padding: calc(84px + env(safe-area-inset-top, 0px)) 15px calc(32px + env(safe-area-inset-bottom, 0px));
+        padding: calc(84px + env(safe-area-inset-top, 0px)) 15px
+            calc(32px + env(safe-area-inset-bottom, 0px));
     }
-    
+
     .dashboard-header {
         flex-direction: column;
         text-align: center;
         gap: 20px;
     }
-    
+
     .header-stats {
         justify-content: center;
     }
-    
+
     .wallet-cards,
     .revenue-cards {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1772,35 +1818,35 @@ body.monetization-dashboard-page .status-detail {
         width: 100%;
         justify-content: center;
     }
-    
+
     .status-card {
         flex-direction: column;
         text-align: center;
     }
-    
+
     .section-header {
         flex-direction: column;
         gap: 15px;
         align-items: flex-start;
     }
-    
+
     .period-filter {
         flex-wrap: wrap;
     }
-    
+
     .plans-comparison {
         grid-template-columns: 1fr;
     }
-    
+
     .amount-options {
         grid-template-columns: repeat(2, 1fr);
     }
-    
+
     .video-stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 14px;
     }
-    
+
     .video-cta {
         flex-direction: column;
         gap: 15px;
@@ -1822,7 +1868,8 @@ body.monetization-dashboard-page .status-detail {
 
 @media (max-width: 480px) {
     body.monetization-dashboard-page .dashboard-main {
-        padding: calc(80px + env(safe-area-inset-top, 0px)) 12px calc(24px + env(safe-area-inset-bottom, 0px));
+        padding: calc(80px + env(safe-area-inset-top, 0px)) 12px
+            calc(24px + env(safe-area-inset-bottom, 0px));
     }
 
     body.monetization-dashboard-page .dashboard-header,
@@ -1971,8 +2018,16 @@ body.plans-page::before {
     position: fixed;
     inset: 0;
     background:
-        radial-gradient(1200px 500px at 8% -10%, rgba(56, 189, 248, 0.18), transparent 65%),
-        radial-gradient(900px 450px at 92% 0%, rgba(245, 158, 11, 0.16), transparent 70%);
+        radial-gradient(
+            1200px 500px at 8% -10%,
+            rgba(56, 189, 248, 0.18),
+            transparent 65%
+        ),
+        radial-gradient(
+            900px 450px at 92% 0%,
+            rgba(245, 158, 11, 0.16),
+            transparent 70%
+        );
     pointer-events: none;
     z-index: -1;
 }
@@ -2048,11 +2103,18 @@ body.plans-page::before {
     cursor: pointer;
     background: transparent;
     color: var(--text-secondary);
-    transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+    transition:
+        transform 0.15s ease,
+        background 0.15s ease,
+        color 0.15s ease;
 }
 
 .billing-btn.active {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08));
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.18),
+        rgba(255, 255, 255, 0.08)
+    );
     color: var(--text-primary);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
@@ -2086,7 +2148,11 @@ body.plans-page::before {
 }
 
 .plans-hero-card {
-    background: linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+    background: linear-gradient(
+        160deg,
+        rgba(255, 255, 255, 0.08),
+        rgba(255, 255, 255, 0.02)
+    );
     border: 1px solid var(--border-color);
     border-radius: 24px;
     padding: 24px;
@@ -2099,8 +2165,16 @@ body.plans-page::before {
     position: absolute;
     inset: 0;
     background:
-        radial-gradient(600px 240px at 20% -10%, rgba(74, 163, 255, 0.22), transparent 60%),
-        radial-gradient(520px 220px at 90% 0%, rgba(245, 158, 11, 0.18), transparent 65%);
+        radial-gradient(
+            600px 240px at 20% -10%,
+            rgba(74, 163, 255, 0.22),
+            transparent 60%
+        ),
+        radial-gradient(
+            520px 220px at 90% 0%,
+            rgba(245, 158, 11, 0.18),
+            transparent 65%
+        );
     opacity: 0.9;
     pointer-events: none;
 }
@@ -2179,7 +2253,10 @@ body.plans-page::before {
     text-align: left;
     position: relative;
     overflow: hidden;
-    transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    transition:
+        transform 0.3s ease,
+        border-color 0.3s ease,
+        box-shadow 0.3s ease;
 }
 
 .plan-detail-card::after {
@@ -2189,7 +2266,12 @@ body.plans-page::before {
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, transparent, var(--plan-accent), transparent);
+    background: linear-gradient(
+        90deg,
+        transparent,
+        var(--plan-accent),
+        transparent
+    );
     opacity: 0.9;
 }
 
@@ -2197,7 +2279,11 @@ body.plans-page::before {
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(260px 120px at 15% -20%, var(--plan-accent-soft), transparent 70%);
+    background: radial-gradient(
+        260px 120px at 15% -20%,
+        var(--plan-accent-soft),
+        transparent 70%
+    );
     opacity: 0.8;
     pointer-events: none;
 }
@@ -2346,9 +2432,15 @@ body.plans-page::before {
     font-weight: 700;
     cursor: pointer;
     color: #fff;
-    background: linear-gradient(135deg, var(--plan-accent-strong), var(--plan-accent));
+    background: linear-gradient(
+        135deg,
+        var(--plan-accent-strong),
+        var(--plan-accent)
+    );
     border: 1px solid rgba(255, 255, 255, 0.15);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
 }
 
 .btn-subscribe:hover {
@@ -2397,6 +2489,38 @@ body.plans-page::before {
     border-radius: 16px;
     overflow: hidden;
     background: var(--surface-color);
+}
+
+/* Mobile: feed cards should show icon-only support buttons (no text) */
+@media (max-width: 600px) {
+    /* Hide textual label for non-profile support buttons (feed/cards/etc) */
+    .support-btn:not(.support-btn-profile) .support-btn-label {
+        display: none !important;
+    }
+
+    /* Make the button more compact and icon-centered */
+    .support-btn:not(.support-btn-profile) {
+        padding: 6px 8px !important;
+        gap: 0 !important;
+        min-width: 40px;
+        justify-content: center;
+        border-radius: 999px;
+    }
+
+    /* Ensure icon sizing for images and font icons */
+    .support-btn:not(.support-btn-profile) .support-icon-img {
+        width: 18px !important;
+        height: 18px !important;
+    }
+    .support-btn:not(.support-btn-profile) i {
+        font-size: 16px !important;
+        line-height: 1;
+    }
+
+    /* Slight adjustment for disabled state */
+    .support-btn:not(.support-btn-profile).support-btn-disabled {
+        padding: 6px !important;
+    }
 }
 
 .faq-question {
@@ -2556,7 +2680,11 @@ body.plans-page .confirm-note {
 }
 
 .payment-summary .summary-card {
-    background: linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+    background: linear-gradient(
+        160deg,
+        rgba(255, 255, 255, 0.08),
+        rgba(255, 255, 255, 0.02)
+    );
     border: 1px solid var(--border-color);
     border-radius: 24px;
     padding: 28px;
@@ -2568,7 +2696,11 @@ body.plans-page .confirm-note {
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(260px 120px at 12% -10%, rgba(74, 163, 255, 0.2), transparent 65%);
+    background: radial-gradient(
+        260px 120px at 12% -10%,
+        rgba(74, 163, 255, 0.2),
+        transparent 65%
+    );
     opacity: 0.9;
     pointer-events: none;
 }
@@ -2684,7 +2816,10 @@ body.plans-page .confirm-note {
     background: rgba(255, 255, 255, 0.02);
     color: var(--text-primary);
     cursor: pointer;
-    transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    transition:
+        transform 0.2s ease,
+        border-color 0.2s ease,
+        background 0.2s ease;
     text-align: left;
 }
 
