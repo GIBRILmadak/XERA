@@ -9,15 +9,29 @@ const crypto = require("crypto");
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+const isDryRun = process.env.DRY_RUN === "1" || process.env.DRY_RUN === "true";
+
 if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars");
-    process.exit(1);
+    if (!isDryRun) {
+        console.error(
+            "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars",
+        );
+        process.exit(1);
+    } else {
+        console.warn("Missing SUPABASE env vars but running in DRY_RUN mode.");
+    }
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: { persistSession: false },
-    global: { headers: { "X-Client-Info": "xera-bot-generator" } }
-});
+let supabase = null;
+if (SUPABASE_URL && SUPABASE_KEY) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: { persistSession: false },
+        global: { headers: { "X-Client-Info": "xera-bot-generator" } },
+    });
+}
+
+const { getName } = require("./names");
+const SEED_POSTS_PER_BOT = Number(process.env.SEED_POSTS_PER_BOT || 0);
 
 function randomDaysOfWeek(count = 3) {
     const s = new Set();
@@ -25,45 +39,211 @@ function randomDaysOfWeek(count = 3) {
     return Array.from(s).sort();
 }
 
- async function createBot(i) {
-     const id = crypto.randomUUID();
-     const name = `Bot XERA ${i}`;
-     const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`;
-     const scheduleHour = i % 24;
-     const encourageDays = randomDaysOfWeek(3);
+// Helper to retry network calls with exponential backoff for transient errors
+async function withRetries(fn, opts = {}) {
+    const retries = typeof opts.retries === "number" ? opts.retries : 3;
+    const baseDelay = typeof opts.baseDelay === "number" ? opts.baseDelay : 500;
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return await fn();
+        } catch (err) {
+            const code = err?.cause?.code || err?.code || "";
+            const msg = String(err?.message || err || "");
+            const isRetryable =
+                code === "UND_ERR_CONNECT_TIMEOUT" ||
+                msg.includes("fetch failed") ||
+                msg.includes("Connect Timeout");
+            if (!isRetryable || attempt >= retries) throw err;
+            const wait = baseDelay * Math.pow(2, attempt - 1);
+            console.warn(
+                `Transient error (attempt ${attempt}) - retrying in ${wait}ms: ${msg}`,
+            );
+            await new Promise((r) => setTimeout(r, wait));
+        }
+    }
+}
 
-     try {
-         // Upsert user - use name instead of username (users table has no username column)
-         const { error: upErr } = await supabase.from("users").upsert({
-             id,
-             name,
-             avatar,
-             is_bot: true,
-             updated_at: new Date().toISOString(),
-         });
-         if (upErr) throw upErr;
+function pickRandom(arr) {
+    if (!arr || arr.length === 0) return null;
+    return arr[Math.floor(Math.random() * arr.length)];
+}
 
-         // Insert bots table
-         const { error: botErr } = await supabase.from("bots").insert({
-             user_id: id,
-             display_name: name,
-             avatar_url: avatar,
-             active: false,
-             schedule_hour: scheduleHour,
-             encourage_days: encourageDays,
-             meta: { seeded: true },
-         });
-         if (botErr) throw botErr;
+async function createPostForUser(userId, index = 0) {
+    const dayKey = new Date().toISOString().slice(0, 10);
+    const uniq = crypto
+        .createHash("sha1")
+        .update(`${userId}:${dayKey}:${index}`)
+        .digest("hex")
+        .slice(0, 6);
 
-         console.log(
-             `Created bot ${i}: ${id} (${name}) hour=${scheduleHour} days=${encourageDays}`,
-         );
-         return id;
-     } catch (e) {
-         console.error(`Failed to create bot ${i}:`, e?.message || e);
-         return null;
-     }
- }
+    const mediaUrl = `https://picsum.photos/seed/${encodeURIComponent(
+        userId + "-" + dayKey + "-" + uniq,
+    )}/1200/800`;
+
+    const adjectives = [
+        "Petit",
+        "Grand",
+        "Nouveau",
+        "Simple",
+        "Rapide",
+        "Beau",
+    ];
+    const nouns = [
+        "progrès",
+        "instant",
+        "moment",
+        "capture",
+        "éclair",
+        "point",
+    ];
+    const verbs = [
+        "du jour",
+        "du matin",
+        "du soir",
+        "du week-end",
+        "d'aujourd'hui",
+    ];
+
+    const title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
+    const description = `Post initial — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
+
+    const payload = {
+        user_id: userId,
+        type: Math.random() < 0.6 ? "image" : "text",
+        state: "published",
+        title,
+        description,
+        media_url: mediaUrl,
+        created_at: new Date().toISOString(),
+    };
+
+    if (!isDryRun) {
+        const { data, error } = await withRetries(
+            () => supabase.from("content").insert(payload).select().single(),
+            { retries: 2, baseDelay: 500 },
+        );
+        if (error) {
+            console.warn("createPostForUser error:", error?.message || error);
+            return null;
+        }
+        return data;
+    } else {
+        console.log(`[dry-run] would create post for ${userId}: ${title}`);
+        return { id: `dry-${userId}-${uniq}` };
+    }
+}
+
+async function createBot(i) {
+    const baseName = getName(i);
+    // Ensure deterministic avatar seed
+    const name = `${baseName}`;
+    const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`;
+    const scheduleHour = i % 24;
+    const encourageDays = randomDaysOfWeek(3);
+
+    const dryRun = isDryRun;
+    const emailDomain = process.env.BOT_EMAIL_DOMAIN || "example.com";
+    const email = `bot+${Date.now()}-${i}@${emailDomain}`;
+    const password = crypto.randomBytes(12).toString("hex");
+
+    try {
+        let authUserId = null;
+
+        if (dryRun) {
+            console.log(
+                `[dry-run] would create auth user ${email} with password ${password}`,
+            );
+            authUserId = `dry-run-${i}`;
+        } else {
+            if (!supabase) throw new Error("Supabase client not configured");
+
+            // First, try to find an existing auth user by email via admin.listUsers (with retries)
+            let page = 1;
+            const perPage = 100;
+            while (!authUserId) {
+                const { data: listData, error: listErr } = await withRetries(
+                    () => supabase.auth.admin.listUsers({ page, perPage }),
+                    { retries: 3, baseDelay: 500 },
+                );
+                if (listErr) throw listErr;
+                const users = listData?.users || [];
+                const u = users.find(
+                    (uu) =>
+                        String(uu.email || "").toLowerCase() ===
+                        email.toLowerCase(),
+                );
+                if (u) {
+                    authUserId = u.id;
+                    break;
+                }
+                if (users.length < perPage) break;
+                page++;
+            }
+
+            // If not found, create a new auth user (with retries)
+            if (!authUserId) {
+                const { data: authData, error: authErr } = await withRetries(
+                    () =>
+                        supabase.auth.admin.createUser({
+                            email,
+                            password,
+                            email_confirm: true,
+                            user_metadata: { name, avatar },
+                        }),
+                    { retries: 3, baseDelay: 500 },
+                );
+                if (authErr) throw authErr;
+                authUserId = authData?.user?.id || authData?.id || null;
+            }
+        }
+
+        if (!dryRun) {
+            // Upsert public.users row for the auth user (do NOT assume an 'email' column exists)
+            const upsertPayload = {
+                id: authUserId,
+                name,
+                avatar,
+                is_bot: true,
+                updated_at: new Date().toISOString(),
+            };
+            const { error: upErr } = await withRetries(
+                () => supabase.from("users").upsert(upsertPayload),
+                { retries: 2, baseDelay: 500 },
+            );
+            if (upErr) throw upErr;
+
+            // Insert into bots table (with retry on network errors)
+            const { error: botErr } = await withRetries(
+                () =>
+                    supabase.from("bots").insert({
+                        user_id: authUserId,
+                        display_name: name,
+                        avatar_url: avatar,
+                        active: false,
+                        schedule_hour: scheduleHour,
+                        encourage_days: encourageDays,
+                        meta: { seeded: true },
+                    }),
+                { retries: 2, baseDelay: 500 },
+            );
+            if (botErr) throw botErr;
+
+            // Optional: seed initial posts for this bot
+            const seedCount = Number(SEED_POSTS_PER_BOT || 0);
+            for (let p = 0; p < seedCount; p++) {
+                await createPostForUser(authUserId, p);
+                await new Promise((r) => setTimeout(r, 120));
+            }
+        }
+
+        console.log(
+            `Created bot ${i}: ${authUserId} (${name}) hour=${scheduleHour} days=${encourageDays}`,
+        );
+        return authUserId;
+    } catch (e) {
+        console.error(`Failed to create bot ${i}:`, e?.message || e);
+        return null;
+    }
 }
 
 async function main() {
@@ -72,7 +252,7 @@ async function main() {
     for (let i = 1; i <= target; i++) {
         await createBot(i);
         // small delay
-        await new Promise((r) => setTimeout(r, 120));
+        await new Promise((r) => setTimeout(r, 250));
     }
     console.log("Done");
     process.exit(0);
