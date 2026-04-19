@@ -41,7 +41,9 @@ const {
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-    process.exit(1);
+    // Do not exit the process in serverless environments (Vercel functions)
+    // to avoid FUNCTION_INVOCATION_FAILED on missing env vars. Endpoints
+    // will return errors later if configuration is invalid.
 }
 
 if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
@@ -5186,44 +5188,157 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                     : bot.meta
                       ? JSON.parse(bot.meta)
                       : {};
-            const topic = meta.topic || (Array.isArray(meta.topics) && meta.topics[0]) || "general";
+            const topic =
+                meta.topic ||
+                (Array.isArray(meta.topics) && meta.topics[0]) ||
+                "general";
 
             let title;
             let description;
-            if (topic && ["robotics", "ai", "diy", "coding", "entrepreneurship", "mechanics"].includes(topic)) {
+            if (
+                topic &&
+                [
+                    "robotics",
+                    "ai",
+                    "diy",
+                    "coding",
+                    "entrepreneurship",
+                    "mechanics",
+                ].includes(topic)
+            ) {
                 const tplMap = {
                     robotics: {
-                        prefixes: ["Prototype", "Module", "Capteur", "Contrôleur", "Bras robotique", "Moteur"],
-                        actions: ["en test", "v1.0", "au labo", "en montage", "intégration Arduino", "optimisé"],
+                        prefixes: [
+                            "Prototype",
+                            "Module",
+                            "Capteur",
+                            "Contrôleur",
+                            "Bras robotique",
+                            "Moteur",
+                        ],
+                        actions: [
+                            "en test",
+                            "v1.0",
+                            "au labo",
+                            "en montage",
+                            "intégration Arduino",
+                            "optimisé",
+                        ],
                     },
                     ai: {
-                        prefixes: ["Modèle", "Expérience", "Réseau", "Pipeline", "Fine-tune", "Prototype"],
-                        actions: ["pour vision", "NLP", "en entraînement", "avec PyTorch", "optimisé", "en production"],
+                        prefixes: [
+                            "Modèle",
+                            "Expérience",
+                            "Réseau",
+                            "Pipeline",
+                            "Fine-tune",
+                            "Prototype",
+                        ],
+                        actions: [
+                            "pour vision",
+                            "NLP",
+                            "en entraînement",
+                            "avec PyTorch",
+                            "optimisé",
+                            "en production",
+                        ],
                     },
                     diy: {
-                        prefixes: ["Tuto", "Astuce", "Montage", "Projet DIY", "Guide", "Hack"],
-                        actions: ["étape par étape", "facile", "avec pièces récupérées", "low-cost", "rapide"],
+                        prefixes: [
+                            "Tuto",
+                            "Astuce",
+                            "Montage",
+                            "Projet DIY",
+                            "Guide",
+                            "Hack",
+                        ],
+                        actions: [
+                            "étape par étape",
+                            "facile",
+                            "avec pièces récupérées",
+                            "low-cost",
+                            "rapide",
+                        ],
                     },
                     coding: {
-                        prefixes: ["Snippet", "Pattern", "Refactor", "Truc", "Astuce dev", "Bricolage code"],
-                        actions: ["JS/Node", "Python", "best-practices", "optimisation", "débogage"],
+                        prefixes: [
+                            "Snippet",
+                            "Pattern",
+                            "Refactor",
+                            "Truc",
+                            "Astuce dev",
+                            "Bricolage code",
+                        ],
+                        actions: [
+                            "JS/Node",
+                            "Python",
+                            "best-practices",
+                            "optimisation",
+                            "débogage",
+                        ],
                     },
                     entrepreneurship: {
-                        prefixes: ["Business", "MVP", "Pitch", "Growth", "Leçon", "Astuce"],
-                        actions: ["lean", "croissance", "marketing", "monétisation", "expérience client"],
+                        prefixes: [
+                            "Business",
+                            "MVP",
+                            "Pitch",
+                            "Growth",
+                            "Leçon",
+                            "Astuce",
+                        ],
+                        actions: [
+                            "lean",
+                            "croissance",
+                            "marketing",
+                            "monétisation",
+                            "expérience client",
+                        ],
                     },
                     mechanics: {
-                        prefixes: ["Réglage", "Mécanique", "Diagnostic", "Atelier", "Maintenance", "Assemblage"],
-                        actions: ["pignon", "roulement", "couple", "soudure", "usinage"],
+                        prefixes: [
+                            "Réglage",
+                            "Mécanique",
+                            "Diagnostic",
+                            "Atelier",
+                            "Maintenance",
+                            "Assemblage",
+                        ],
+                        actions: [
+                            "pignon",
+                            "roulement",
+                            "couple",
+                            "soudure",
+                            "usinage",
+                        ],
                     },
                 };
                 const tpl = tplMap[topic] || tplMap.coding;
                 title = `${pickRandom(tpl.prefixes)} ${pickRandom(tpl.actions)} • ${uniq}`;
                 description = `Partage technique (${topic}) — ${pickRandom(["Petit retour d'expérience", "Astuce pratique", "Étapes clés", "Code & schéma"])} (${uniq})`;
             } else {
-                const adjectives = ["Petit", "Grand", "Nouveau", "Simple", "Rapide", "Beau"];
-                const nouns = ["progrès", "instant", "moment", "capture", "éclair", "point"];
-                const verbs = ["du jour", "du matin", "du soir", "du week-end", "d'aujourd'hui"];
+                const adjectives = [
+                    "Petit",
+                    "Grand",
+                    "Nouveau",
+                    "Simple",
+                    "Rapide",
+                    "Beau",
+                ];
+                const nouns = [
+                    "progrès",
+                    "instant",
+                    "moment",
+                    "capture",
+                    "éclair",
+                    "point",
+                ];
+                const verbs = [
+                    "du jour",
+                    "du matin",
+                    "du soir",
+                    "du week-end",
+                    "d'aujourd'hui",
+                ];
                 title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
                 description = `Partage quotidien — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
             }
@@ -5296,7 +5411,9 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             if (!candidates || candidates.length === 0) return null;
 
             // Prioritize content from real users (is_bot = false)
-            const userIds = Array.from(new Set(candidates.map((c) => c.user_id).filter(Boolean)));
+            const userIds = Array.from(
+                new Set(candidates.map((c) => c.user_id).filter(Boolean)),
+            );
             let usersMap = {};
             if (userIds.length > 0) {
                 const { data: users } = await supabase
@@ -5366,59 +5483,69 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             const followingIds = new Set(await getFollowingIds(bot.user_id));
             const { data: candidates, error } = await supabase
                 .from("users")
-                .select("id, name")
-                .is("is_bot", false)
+                .select("id, name, is_bot, followers_count")
                 .neq("id", bot.user_id)
                 .order("followers_count", { ascending: false })
-                .limit(200);
+                .limit(400);
             if (error) throw error;
             if (!candidates || candidates.length === 0) return 0;
+
+            // Prioritize real users first, then bots
+            candidates.sort((a, b) => {
+                const aBot = a && a.is_bot ? 1 : 0;
+                const bBot = b && b.is_bot ? 1 : 0;
+                if (aBot !== bBot) return aBot - bBot; // real users first
+                return (b.followers_count || 0) - (a.followers_count || 0);
+            });
 
             let followed = 0;
             for (const cand of candidates) {
                 if (followed >= maxToFollow) break;
                 if (!cand || !cand.id) continue;
-                    const { data: candidates, error } = await supabase
-                        .from("users")
-                        .select("id, name, is_bot, followers_count")
-                        .neq("id", bot.user_id)
-                        .order("followers_count", { ascending: false })
-                        .limit(400);
+                if (followingIds.has(cand.id)) continue;
+                try {
+                    const { error: insErr } = await supabase
+                        .from("followers")
+                        .insert({
+                            follower_id: bot.user_id,
+                            following_id: cand.id,
                         });
                     if (insErr) {
+                        // ignore duplicates or constraint errors
                         console.warn(
-                    // Prioritize real users first, then bots
-                    candidates.sort((a, b) => {
-                        const aBot = a && a.is_bot ? 1 : 0;
-                        const bBot = b && b.is_bot ? 1 : 0;
-                        if (aBot !== bBot) return aBot - bBot; // real users (0) first
-                        return (b.followers_count || 0) - (a.followers_count || 0);
-                    });
-
-                    let followed = 0;
-                    for (const cand of candidates) {
-                        if (followed >= maxToFollow) break;
-                        if (!cand || !cand.id) continue;
-                        if (followingIds.has(cand.id)) continue;
-                        try {
-                            const { error: insErr } = await supabase
-                                .from("followers")
-                                .insert({
-                                    follower_id: bot.user_id,
-                                    following_id: cand.id,
-                                });
-                            if (insErr) {
-                                console.warn("follow insert err", insErr?.message || insErr);
-                                continue;
-                            }
-                            followingIds.add(cand.id);
-                            followed += 1;
-                            // small delay between follow actions
-                            await sleep(150 + Math.random() * 500);
-                        } catch (e) {
-                            console.warn("followAsBot insert error", e?.message || e);
-                        }
+                            "follow insert err",
+                            insErr?.message || insErr,
+                        );
+                        continue;
                     }
+                    followingIds.add(cand.id);
+                    followed += 1;
+                    // small delay between follow actions
+                    await sleep(150 + Math.random() * 500);
+                } catch (e) {
+                    console.warn("followAsBot insert error", e?.message || e);
+                }
+            }
+
+            // Update meta
+            meta.follow_total = (Number(meta.follow_total) || 0) + followed;
+            meta.last_followed_date = todayStr;
+            await supabase
+                .from("bots")
+                .update({
+                    meta: meta,
+                    last_action_at: new Date().toISOString(),
+                })
+                .eq("user_id", bot.user_id);
+            if (followed > 0)
+                console.log(`Bot ${bot.user_id} followed ${followed} user(s)`);
+            return followed;
+        } catch (e) {
+            console.warn(
+                `followAsBot error for ${bot.user_id}:`,
+                e?.message || e,
+            );
+            return 0;
         }
     }
 

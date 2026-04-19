@@ -1371,7 +1371,7 @@ function renderSupportButton(creator, options = {}) {
         return `
             <button type="button" class="support-btn support-btn-disabled ${size}" disabled title="Ce créateur ne peut pas recevoir de soutiens">
                 <i class="fas fa-lock"></i>
-                Soutien indisponible
+                <span class="support-btn-label">Soutien indisponible</span>
             </button>
         `;
     }
@@ -1381,7 +1381,7 @@ function renderSupportButton(creator, options = {}) {
                 data-creator-id="${creatorId}"
                 data-creator-name="${creatorName}">
             <i class="fas fa-heart"></i>
-            Soutenir
+            <span class="support-btn-label">Soutenir</span>
         </button>
     `;
 }
