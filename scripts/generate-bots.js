@@ -64,7 +64,6 @@ function randomDaysOfWeek(count = 3) {
          return null;
      }
  }
-}
 
 async function main() {
     const target = Math.max(0, Number(process.argv[2] || 50));
