@@ -5448,7 +5448,11 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             if (rpcErr) throw rpcErr;
             // Ensure content.encouragements_count reflects server state (if RPC returned count)
             try {
-                const serverCount = rpcData && (Number(rpcData.count) || Number(rpcData.count) === 0 ? Number(rpcData.count) : null);
+                const serverCount =
+                    rpcData &&
+                    (Number(rpcData.count) || Number(rpcData.count) === 0
+                        ? Number(rpcData.count)
+                        : null);
                 if (Number.isFinite(serverCount)) {
                     await supabase
                         .from("content")
@@ -5460,16 +5464,20 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                         .select("encouragements_count")
                         .eq("id", target.id)
                         .maybeSingle();
-                    const newCount = (row && Number(row.encouragements_count))
-                        ? Number(row.encouragements_count) + 1
-                        : 1;
+                    const newCount =
+                        row && Number(row.encouragements_count)
+                            ? Number(row.encouragements_count) + 1
+                            : 1;
                     await supabase
                         .from("content")
                         .update({ encouragements_count: newCount })
                         .eq("id", target.id);
                 }
             } catch (err) {
-                console.warn(`update encouragements_count error for ${target.id}:`, err?.message || err);
+                console.warn(
+                    `update encouragements_count error for ${target.id}:`,
+                    err?.message || err,
+                );
             }
             await supabase
                 .from("bots")
@@ -5527,8 +5535,12 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             // Prioritize real users first, then bots (stronger preference)
             const realUsers = candidates.filter((c) => !c.is_bot);
             const botUsers = candidates.filter((c) => c.is_bot);
-            realUsers.sort((a, b) => (b.followers_count || 0) - (a.followers_count || 0));
-            botUsers.sort((a, b) => (b.followers_count || 0) - (a.followers_count || 0));
+            realUsers.sort(
+                (a, b) => (b.followers_count || 0) - (a.followers_count || 0),
+            );
+            botUsers.sort(
+                (a, b) => (b.followers_count || 0) - (a.followers_count || 0),
+            );
             const orderedCandidates = [...realUsers, ...botUsers];
 
             let followed = 0;
@@ -5555,16 +5567,19 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                     followed += 1;
                     // Simuler que le bot a vu les derniers posts de l'utilisateur suivi
                     try {
-                        const { data: recent, error: recentErr } = await supabase
-                            .from("content")
-                            .select("id")
-                            .eq("user_id", cand.id)
-                            .order("created_at", { ascending: false })
-                            .limit(3);
+                        const { data: recent, error: recentErr } =
+                            await supabase
+                                .from("content")
+                                .select("id")
+                                .eq("user_id", cand.id)
+                                .order("created_at", { ascending: false })
+                                .limit(3);
                         if (!recentErr && Array.isArray(recent)) {
                             for (const r of recent) {
                                 try {
-                                    await supabase.rpc("increment_views", { row_id: r.id });
+                                    await supabase.rpc("increment_views", {
+                                        row_id: r.id,
+                                    });
                                 } catch (rvErr) {
                                     // ignore individual errors
                                 }

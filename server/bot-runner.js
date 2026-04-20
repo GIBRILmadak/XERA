@@ -343,7 +343,11 @@ async function encourageAsBot(bot) {
         if (rpcErr) throw rpcErr;
         // Ensure content.encouragements_count reflects server state (if RPC returned count)
         try {
-            const serverCount = rpcData && (Number(rpcData.count) || Number(rpcData.count) === 0 ? Number(rpcData.count) : null);
+            const serverCount =
+                rpcData &&
+                (Number(rpcData.count) || Number(rpcData.count) === 0
+                    ? Number(rpcData.count)
+                    : null);
             if (Number.isFinite(serverCount)) {
                 await supabase
                     .from("content")
@@ -356,16 +360,20 @@ async function encourageAsBot(bot) {
                     .select("encouragements_count")
                     .eq("id", target.id)
                     .maybeSingle();
-                const newCount = (row && Number(row.encouragements_count))
-                    ? Number(row.encouragements_count) + 1
-                    : 1;
+                const newCount =
+                    row && Number(row.encouragements_count)
+                        ? Number(row.encouragements_count) + 1
+                        : 1;
                 await supabase
                     .from("content")
                     .update({ encouragements_count: newCount })
                     .eq("id", target.id);
             }
         } catch (err) {
-            console.warn(`update encouragements_count error for ${target.id}:`, err?.message || err);
+            console.warn(
+                `update encouragements_count error for ${target.id}:`,
+                err?.message || err,
+            );
         }
         await supabase
             .from("bots")
@@ -421,12 +429,15 @@ async function followAsBot(bot, maxToFollow = 1) {
         if (error) throw error;
         if (!candidates || candidates.length === 0) return 0;
 
-
         // Prioritize real users first, then bots (stronger preference)
         const realUsers = candidates.filter((c) => !c.is_bot);
         const botUsers = candidates.filter((c) => c.is_bot);
-        realUsers.sort((a, b) => (b.followers_count || 0) - (a.followers_count || 0));
-        botUsers.sort((a, b) => (b.followers_count || 0) - (a.followers_count || 0));
+        realUsers.sort(
+            (a, b) => (b.followers_count || 0) - (a.followers_count || 0),
+        );
+        botUsers.sort(
+            (a, b) => (b.followers_count || 0) - (a.followers_count || 0),
+        );
         const orderedCandidates = [...realUsers, ...botUsers];
 
         let followed = 0;
@@ -462,7 +473,9 @@ async function followAsBot(bot, maxToFollow = 1) {
                     if (!recentErr && Array.isArray(recent)) {
                         for (const r of recent) {
                             try {
-                                await supabase.rpc("increment_views", { row_id: r.id });
+                                await supabase.rpc("increment_views", {
+                                    row_id: r.id,
+                                });
                             } catch (rvErr) {
                                 // ignore individual errors
                             }

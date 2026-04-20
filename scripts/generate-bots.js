@@ -284,7 +284,8 @@ async function createBot(i) {
     const maxNameAttempts = 12;
     let name = null;
     for (let attempt = 0; attempt < maxNameAttempts; attempt++) {
-        const randIdx = Math.floor(Math.random() * (Number(combos) || 1000)) + 1;
+        const randIdx =
+            Math.floor(Math.random() * (Number(combos) || 1000)) + 1;
         const candidate = getName(randIdx);
         // In dry-run mode we accept the first candidate
         if (dryRun) {

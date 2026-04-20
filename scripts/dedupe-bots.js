@@ -44,7 +44,9 @@ async function main() {
             groups[n].push(b);
         }
 
-        const duplicates = Object.entries(groups).filter(([name, arr]) => arr.length > 1);
+        const duplicates = Object.entries(groups).filter(
+            ([name, arr]) => arr.length > 1,
+        );
         if (duplicates.length === 0) {
             console.log("No duplicate display_name groups found.");
             return;
@@ -63,7 +65,9 @@ async function main() {
                 .in("id", userIds);
             const counts = {};
             if (users && Array.isArray(users)) {
-                users.forEach((u) => (counts[u.id] = Number(u.followers_count) || 0));
+                users.forEach(
+                    (u) => (counts[u.id] = Number(u.followers_count) || 0),
+                );
             }
 
             // pick keep candidate = max followers_count, fallback to first
@@ -77,19 +81,26 @@ async function main() {
                 }
             }
 
-            const toDelete = list.filter((r) => r.user_id !== keep.user_id).map((r) => r.user_id);
+            const toDelete = list
+                .filter((r) => r.user_id !== keep.user_id)
+                .map((r) => r.user_id);
             if (toDelete.length === 0) {
                 console.log(`Nothing to delete for group '${name}'.`);
                 continue;
             }
 
-            console.log(`Keeping ${keep.user_id} and deleting ${toDelete.length} bot(s).`);
+            console.log(
+                `Keeping ${keep.user_id} and deleting ${toDelete.length} bot(s).`,
+            );
             const { error: delErr } = await supabase
                 .from("bots")
                 .delete()
                 .in("user_id", toDelete);
             if (delErr) {
-                console.error(`Failed to delete bots for group '${name}':`, delErr);
+                console.error(
+                    `Failed to delete bots for group '${name}':`,
+                    delErr,
+                );
             } else {
                 totalDeleted += toDelete.length;
             }
