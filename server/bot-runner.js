@@ -61,18 +61,38 @@ function pickRandom(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function getDeterministicRandom(seed, max) {
+    const hash = crypto.createHash("sha1").update(seed).digest("hex");
+    return parseInt(hash.slice(0, 8), 16) % max;
+}
+
+function getTargetMinutes(baseHour, seed, jitterRange = 30) {
+    const jitter = getDeterministicRandom(seed, jitterRange * 2 + 1) - jitterRange;
+    return baseHour * 60 + jitter;
+}
+
 async function postAsBot(bot) {
     try {
         // Générer un post distinctif par bot par jour
         const dayKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        
+        // Fetch current post count today to make the uniq hash unique for multiple posts same day
+        const { count: todayCount } = await supabase
+            .from("content")
+            .select("*", { count: 'exact', head: true })
+            .eq("user_id", bot.user_id)
+            .gte("created_at", dayKey + "T00:00:00Z");
+
+        const postIndex = (todayCount || 0) + 1;
         const uniq = crypto
             .createHash("sha1")
-            .update(`${bot.user_id}:${dayKey}`)
+            .update(`${bot.user_id}:${dayKey}:${postIndex}`)
             .digest("hex")
             .slice(0, 6);
 
+        // Seed unique pour chaque bot et chaque post
         const mediaUrl = `https://picsum.photos/seed/${encodeURIComponent(
-            bot.user_id + "-" + dayKey + "-" + uniq,
+            bot.user_id + "-" + dayKey + "-" + postIndex + "-" + uniq,
         )}/1200/800`;
 
         const meta =
@@ -86,154 +106,77 @@ async function postAsBot(bot) {
             (Array.isArray(meta.topics) && meta.topics[0]) ||
             "general";
 
+        // Varier les types de posts (Victoire, Pose, Réflexion)
+        const postTypes = ["victory", "pose", "reflection", "technical"];
+        const chosenType = postTypes[getDeterministicRandom(bot.user_id + dayKey + postIndex, postTypes.length)];
+
         let title;
         let description;
-        if (
-            topic &&
-            [
-                "robotics",
-                "ai",
-                "diy",
-                "coding",
-                "entrepreneurship",
-                "mechanics",
-            ].includes(topic)
-        ) {
-            const tplMap = {
-                robotics: {
-                    prefixes: [
-                        "Prototype",
-                        "Module",
-                        "Capteur",
-                        "Contrôleur",
-                        "Bras robotique",
-                        "Moteur",
-                    ],
-                    actions: [
-                        "en test",
-                        "v1.0",
-                        "au labo",
-                        "en montage",
-                        "intégration Arduino",
-                        "optimisé",
-                    ],
-                },
-                ai: {
-                    prefixes: [
-                        "Modèle",
-                        "Expérience",
-                        "Réseau",
-                        "Pipeline",
-                        "Fine-tune",
-                        "Prototype",
-                    ],
-                    actions: [
-                        "pour vision",
-                        "NLP",
-                        "en entraînement",
-                        "avec PyTorch",
-                        "optimisé",
-                        "en production",
-                    ],
-                },
-                diy: {
-                    prefixes: [
-                        "Tuto",
-                        "Astuce",
-                        "Montage",
-                        "Projet DIY",
-                        "Guide",
-                        "Hack",
-                    ],
-                    actions: [
-                        "étape par étape",
-                        "facile",
-                        "avec pièces récupérées",
-                        "low-cost",
-                        "rapide",
-                    ],
-                },
-                coding: {
-                    prefixes: [
-                        "Snippet",
-                        "Pattern",
-                        "Refactor",
-                        "Truc",
-                        "Astuce dev",
-                        "Bricolage code",
-                    ],
-                    actions: [
-                        "JS/Node",
-                        "Python",
-                        "best-practices",
-                        "optimisation",
-                        "débogage",
-                    ],
-                },
-                entrepreneurship: {
-                    prefixes: [
-                        "Business",
-                        "MVP",
-                        "Pitch",
-                        "Growth",
-                        "Leçon",
-                        "Astuce",
-                    ],
-                    actions: [
-                        "lean",
-                        "croissance",
-                        "marketing",
-                        "monétisation",
-                        "expérience client",
-                    ],
-                },
-                mechanics: {
-                    prefixes: [
-                        "Réglage",
-                        "Mécanique",
-                        "Diagnostic",
-                        "Atelier",
-                        "Maintenance",
-                        "Assemblage",
-                    ],
-                    actions: [
-                        "pignon",
-                        "roulement",
-                        "couple",
-                        "soudure",
-                        "usinage",
-                    ],
-                },
-            };
-            const tpl = tplMap[topic] || tplMap.coding;
-            title = `${pickRandom(tpl.prefixes)} ${pickRandom(tpl.actions)} • ${uniq}`;
-            description = `Partage technique (${topic}) — ${pickRandom(["Petit retour d'expérience", "Astuce pratique", "Étapes clés", "Code & schéma"])} (${uniq})`;
+
+        if (chosenType === "victory") {
+            const victories = ["Victoire !", "Succès", "Étape franchie", "Objectif atteint", "Enfin réussi"];
+            const details = ["Le prototype fonctionne !", "Test validé avec succès", "Grosse avancée aujourd'hui", "On avance bien sur le projet"];
+            title = `${pickRandom(victories)} • ${topic.toUpperCase()} • ${uniq}`;
+            description = `${pickRandom(details)} (${topic}) — ${uniq}`;
+        } else if (chosenType === "pose") {
+            const poses = ["Petite pause", "Moment de calme", "Inspiration", "Café & Code", "Prendre du recul"];
+            const details = ["On recharge les batteries", "Prendre le temps de réfléchir", "Le labo au calme", "Inspiration du moment"];
+            title = `${pickRandom(poses)} • ${uniq}`;
+            description = `${pickRandom(details)} — ${topic} logic. (${uniq})`;
+        } else if (chosenType === "reflection") {
+            const reflections = ["Réflexion", "Analyse", "Pensée du jour", "Brainstorming", "Questionnement"];
+            const details = ["Comment optimiser ce module ?", "Et si on changeait d'approche ?", "Recherche de la meilleure solution", "Architecture en cours..."];
+            title = `${pickRandom(reflections)} • ${topic} • ${uniq}`;
+            description = `${pickRandom(details)} (${uniq})`;
         } else {
-            const adjectives = [
-                "Petit",
-                "Grand",
-                "Nouveau",
-                "Simple",
-                "Rapide",
-                "Beau",
-            ];
-            const nouns = [
-                "progrès",
-                "instant",
-                "moment",
-                "capture",
-                "éclair",
-                "point",
-            ];
-            const verbs = [
-                "du jour",
-                "du matin",
-                "du soir",
-                "du week-end",
-                "d'aujourd'hui",
-            ];
-            title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
-            description = `Partage quotidien — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
+            // Fallback to technical/standard
+            if (
+                topic &&
+                [
+                    "robotics",
+                    "ai",
+                    "diy",
+                    "coding",
+                    "entrepreneurship",
+                    "mechanics",
+                ].includes(topic)
+            ) {
+                const tplMap = {
+                    robotics: {
+                        prefixes: ["Prototype", "Module", "Capteur", "Contrôleur", "Bras robotique", "Moteur"],
+                        actions: ["en test", "v1.0", "au labo", "en montage", "intégration Arduino", "optimisé"],
+                    },
+                    ai: {
+                        prefixes: ["Modèle", "Expérience", "Réseau", "Pipeline", "Fine-tune", "Prototype"],
+                        actions: ["pour vision", "NLP", "en entraînement", "avec PyTorch", "optimisé", "en production"],
+                    },
+                    diy: {
+                        prefixes: ["Tuto", "Astuce", "Montage", "Projet DIY", "Guide", "Hack"],
+                        actions: ["étape par étape", "facile", "avec pièces récupérées", "low-cost", "rapide"],
+                    },
+                    coding: {
+                        prefixes: ["Snippet", "Pattern", "Refactor", "Truc", "Astuce dev", "Bricolage code"],
+                        actions: ["JS/Node", "Python", "best-practices", "optimisation", "débogage"],
+                    },
+                    entrepreneurship: {
+                        prefixes: ["Business", "MVP", "Pitch", "Growth", "Leçon", "Astuce"],
+                        actions: ["lean", "croissance", "marketing", "monétisation", "expérience client"],
+                    },
+                    mechanics: {
+                        prefixes: ["Réglage", "Mécanique", "Diagnostic", "Atelier", "Maintenance", "Assemblage"],
+                        actions: ["pignon", "roulement", "couple", "soudure", "usinage"],
+                    },
+                };
+                const tpl = tplMap[topic] || tplMap.coding;
+                title = `${pickRandom(tpl.prefixes)} ${pickRandom(tpl.actions)} • ${uniq}`;
+                description = `Partage technique (${topic}) — ${pickRandom(["Petit retour d'expérience", "Astuce pratique", "Étapes clés", "Code & schéma"])} (${uniq})`;
+            } else {
+                const adjectives = ["Petit", "Grand", "Nouveau", "Simple", "Rapide", "Beau"];
+                const nouns = ["progrès", "instant", "moment", "capture", "éclair", "point"];
+                const verbs = ["du jour", "du matin", "du soir", "du week-end", "d'aujourd'hui"];
+                title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
+                description = `Partage quotidien — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
+            }
         }
 
         // Compute next day_number for this user's content (incremental per-user)
@@ -341,6 +284,22 @@ async function encourageAsBot(bot) {
             { row_id: target.id, user_id_param: bot.user_id },
         );
         if (rpcErr) throw rpcErr;
+
+        // Update meta for encouragement count
+        const meta =
+            bot.meta && typeof bot.meta === "object"
+                ? bot.meta
+                : bot.meta
+                  ? JSON.parse(bot.meta)
+                  : {};
+        const todayStr = new Date().toISOString().slice(0, 10);
+        if (meta.last_action_date !== todayStr) {
+            meta.last_action_date = todayStr;
+            meta.encouraged_today = 1;
+        } else {
+            meta.encouraged_today = (Number(meta.encouraged_today) || 0) + 1;
+        }
+
         // Ensure content.encouragements_count reflects server state (if RPC returned count)
         try {
             const serverCount =
@@ -380,6 +339,7 @@ async function encourageAsBot(bot) {
             .update({
                 last_encouraged_at: new Date().toISOString(),
                 last_action_at: new Date().toISOString(),
+                meta: meta,
             })
             .eq("user_id", bot.user_id);
         console.log(`Bot ${bot.user_id} encouraged content ${target.id}`);
@@ -527,66 +487,109 @@ async function loopOnce() {
         if (!bots || bots.length === 0) return;
 
         const now = new Date();
-        const currentHour = now.getUTCHours();
+        const currentMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
         const todayStart = new Date(
             Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
         );
-        const dayOfWeek = now.getUTCDay();
+        const todayStr = todayStart.toISOString().slice(0, 10);
 
-        // Poster: bots qui ont schedule_hour === currentHour et qui n'ont pas posté aujourd'hui
-        const toPost = bots.filter(
-            (b) =>
-                Number(b.schedule_hour) === currentHour &&
-                (!b.last_posted_at || new Date(b.last_posted_at) < todayStart),
-        );
-        for (const bot of toPost) {
-            await postAsBot(bot);
-            await sleep(500 + Math.random() * 800);
-        }
+        // Fetch all bot posts today to avoid many queries
+        const botUserIds = bots.map((b) => b.user_id);
+        const { data: postsToday } = await supabase
+            .from("content")
+            .select("user_id")
+            .in("user_id", botUserIds)
+            .gte("created_at", todayStart.toISOString());
 
-        // Encourager: bots dont encourage aujourd'hui et dont encourage_days contient le jour courant
-        const toEncourage = bots.filter((b) => {
-            try {
-                const days = Array.isArray(b.encourage_days)
-                    ? b.encourage_days.map(Number)
-                    : [];
-                const shouldToday = days.includes(dayOfWeek);
-                const notDoneToday =
-                    !b.last_encouraged_at ||
-                    !isSameDayUTC(b.last_encouraged_at, now);
-                return shouldToday && notDoneToday;
-            } catch (e) {
-                return false;
-            }
+        const postsCountMap = {};
+        (postsToday || []).forEach((p) => {
+            postsCountMap[p.user_id] = (postsCountMap[p.user_id] || 0) + 1;
         });
 
-        for (const bot of toEncourage) {
-            await encourageAsBot(bot);
-            await sleep(400 + Math.random() * 800);
-        }
-
-        // Followers: bots follow a small number of real users once per day (quota)
-        const toFollow = bots.filter((b) => {
+        for (const bot of bots) {
             try {
                 const meta =
-                    b.meta && typeof b.meta === "object"
-                        ? b.meta
-                        : b.meta
-                          ? JSON.parse(b.meta)
+                    bot.meta && typeof bot.meta === "object"
+                        ? bot.meta
+                        : bot.meta
+                          ? JSON.parse(bot.meta)
                           : {};
-                const lastFollow = meta && meta.last_followed_date;
-                const todayStr = now.toISOString().slice(0, 10);
-                const followTotal = Number(meta.follow_total) || 0;
-                if (followTotal >= MAX_FOLLOWS_PER_BOT) return false;
-                return lastFollow !== todayStr;
-            } catch (e) {
-                return true;
-            }
-        });
 
-        for (const bot of toFollow) {
-            await followAsBot(bot, FOLLOW_DAILY_LIMIT);
-            await sleep(300 + Math.random() * 900);
+                // --- POSTING (0-2 posts) ---
+                const numPostsTarget = getDeterministicRandom(
+                    bot.user_id + todayStr + "posts",
+                    3,
+                );
+                const currentPosts = postsCountMap[bot.user_id] || 0;
+
+                if (currentPosts < numPostsTarget) {
+                    // Spread posts: base hour for first post is schedule_hour, second is +6 hours
+                    const baseHour = (Number(bot.schedule_hour) + currentPosts * 6) % 24;
+                    const targetMin = getTargetMinutes(
+                        baseHour,
+                        bot.user_id + todayStr + "post" + currentPosts,
+                        30,
+                    );
+
+                    if (currentMinutes >= targetMin) {
+                        const postResult = await postAsBot(bot);
+                        if (postResult) {
+                            postsCountMap[bot.user_id] = currentPosts + 1;
+                            await sleep(500 + Math.random() * 800);
+                        }
+                    }
+                }
+
+                // --- ENCOURAGING (min 5 per day) ---
+                const encouragedToday =
+                    meta.last_action_date === todayStr
+                        ? Number(meta.encouraged_today) || 0
+                        : 0;
+
+                if (encouragedToday < 5) {
+                    // Spread throughout the day (every 4 hours approximately)
+                    const baseHour = (encouragedToday * 4) % 24;
+                    const targetMin = getTargetMinutes(
+                        baseHour,
+                        bot.user_id + todayStr + "enc" + encouragedToday,
+                        60,
+                    );
+
+                    if (currentMinutes >= targetMin) {
+                        await encourageAsBot(bot);
+                        // We don't update local meta here because encourageAsBot updates it in DB
+                        // and we refetch bots every loopOnce
+                        await sleep(400 + Math.random() * 800);
+                    }
+                }
+
+                // --- FOLLOWING (jitter) ---
+                const lastFollow = meta.last_followed_date;
+                const followTotal = Number(meta.follow_total) || 0;
+
+                if (
+                    followTotal < MAX_FOLLOWS_PER_BOT &&
+                    lastFollow !== todayStr
+                ) {
+                    // Following with ±30min jitter on a base hour
+                    const baseHour = (Number(bot.schedule_hour) + 2) % 24;
+                    const targetMin = getTargetMinutes(
+                        baseHour,
+                        bot.user_id + todayStr + "follow",
+                        30,
+                    );
+
+                    if (currentMinutes >= targetMin) {
+                        await followAsBot(bot, FOLLOW_DAILY_LIMIT);
+                        await sleep(300 + Math.random() * 900);
+                    }
+                }
+            } catch (botErr) {
+                console.warn(
+                    `Error in loopOnce for bot ${bot.user_id}:`,
+                    botErr?.message || botErr,
+                );
+            }
         }
     } catch (e) {
         console.error("loopOnce error:", e?.message || e);
