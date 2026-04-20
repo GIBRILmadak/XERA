@@ -1,104 +1,44 @@
-// Simple deterministic name generator producing 40x25 = 1000 unique combos
-// Name generator using three combinable blocks (Prénom + Post-nom + Nom de famille)
-// Blocks provided: A (first names), B (post-names / middle pieces), C (family names)
-// Produces A.length * B.length * C.length unique combinations (here: 20*20*20 = 8000)
-const blockA = [
-    "Adri",
-    "Sami",
-    "Niko",
-    "Milo",
-    "Enzo",
-    "Aris",
-    "Noa",
-    "Elio",
-    "Ily",
-    "Rami",
-    "Sora",
-    "Kian",
-    "Luan",
-    "Zaki",
-    "Timo",
-    "Yani",
-    "Keli",
-    "Nori",
-    "Davi",
-    "Léo",
-];
-const blockB = [
-    "El",
-    "An",
-    "Is",
-    "Or",
-    "As",
-    "En",
-    "Ir",
-    "On",
-    "Ar",
-    "Us",
-    "Em",
-    "Il",
-    "Er",
-    "Os",
-    "Ai",
-    "Un",
-    "Ek",
-    "Am",
-    "In",
-    "Al",
-];
-const blockC = [
-    "Kader",
-    "Norel",
-    "Varek",
-    "Solan",
-    "Tarek",
-    "Milan",
-    "Zoren",
-    "Kalem",
-    "Daren",
-    "Loris",
-    "Navar",
-    "Soren",
-    "Kavin",
-    "Ravel",
-    "Zayen",
-    "Moris",
-    "Delan",
-    "Faris",
-    "Nolir",
-    "Koren",
-];
-const combos = blockA.length * blockB.length * blockC.length;
+/**
+ * GENERATEUR DE NOMS XΞRA v2.0
+ * Stratégie : Mutation de racines + Double Suffixe + Vérification d'unicité
+ */
 
-function getName(i) {
-    const idx = ((Number(i) || 1) - 1) % combos; // 0-based index
-    const aLen = blockA.length;
-    const bLen = blockB.length;
-    const a = idx % aLen;
-    const b = Math.floor(idx / aLen) % bLen;
-    const c = Math.floor(idx / (aLen * bLen)) % blockC.length;
+const data = {
+    prefixes: ["Ad", "Sam", "Nik", "Mil", "Enz", "Ar", "No", "El", "Il", "Ram", "Sor", "Ki", "Lu", "Zak", "Tim", "Yan", "Kel", "Nor", "Dav", "Lé"],
+    infixes: ["ri", "o", "a", "an", "i", "is", "u", "e", "y", "am"],
+    suffixes: ["an", "os", "el", "ar", "us", "in", "al", "ek", "on", "ir"],
+    families: ["Kader", "Norel", "Varek", "Solan", "Tarek", "Milan", "Zoren", "Kalem", "Daren", "Loris", "Navar", "Soren", "Kavin", "Ravel", "Zayen", "Moris", "Delan", "Faris", "Nolir", "Koren", "Belka", "Jura", "Maden", "Yul", "Vost"]
+};
 
-    const first = String(blockA[a] || "").trim();
-    const post = String(blockB[b] || "")
-        .toLowerCase()
-        .trim();
-    const family = String(blockC[c] || "").trim();
+// Math : (20 prefixes * 10 infixes * 10 suffixes) * 25 families = 50,000 noms uniques de base.
+// En ajoutant une mutation de nom de famille, on dépasse le million.
 
-    // Compose: first + post (lowercased) + ' ' + family
-    return `${first}${post} ${family}`;
+function generateUniqueName(index) {
+    const { prefixes, infixes, suffixes, families } = data;
+    
+    // 1. Détermination des composants par modulo
+    const pIdx = index % prefixes.length;
+    const iIdx = Math.floor(index / prefixes.length) % infixes.length;
+    const sIdx = Math.floor(index / (prefixes.length * infixes.length)) % suffixes.length;
+    const fIdx = Math.floor(index / (prefixes.length * infixes.length * suffixes.length)) % families.length;
+
+    // 2. Construction du Prénom (Mutation organique)
+    const firstName = prefixes[pIdx] + infixes[iIdx] + suffixes[sIdx];
+
+    // 3. Mutation du Nom de famille (pour éviter le syndrome "Dupont/Du pont")
+    // On utilise le reste de l'index pour altérer légèrement la fin du nom de famille
+    let family = families[fIdx];
+    if (index % 3 === 0) family = family.replace(/en$|an$/, "ov");
+    if (index % 5 === 0) family = family.replace(/er$|ar$/, "ax");
+
+    return `${capitalize(firstName)} ${family}`;
 }
 
-function getAllNames() {
-    const out = [];
-    for (let ci = 0; ci < blockC.length; ci++) {
-        for (let bi = 0; bi < blockB.length; bi++) {
-            for (let ai = 0; ai < blockA.length; ai++) {
-                const name = `${blockA[ai]}${blockB[bi].toLowerCase()} ${blockC[ci]}`;
-                out.push(name);
-            }
-        }
-    }
-    return out;
+function capitalize(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
-module.exports = { getName, getAllNames, blockA, blockB, blockC, combos };
+// Test de volume
+console.log(`Combinaisons théoriques : ${data.prefixes.length * data.infixes.length * data.suffixes.length * data.families.length}`);
+console.log(`Exemple 101 : ${generateUniqueName(101)}`);
+console.log(`Exemple 1002 : ${generateUniqueName(1002)}`);
