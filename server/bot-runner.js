@@ -325,12 +325,48 @@ async function encourageAsBot(bot) {
         const target = pickRandom(pickFrom);
         if (!target) return null;
 
+        // Incrémenter les vues: simuler que le bot a vu ce contenu
+        try {
+            await supabase.rpc("increment_views", { row_id: target.id });
+        } catch (incErr) {
+            console.warn(
+                `increment_views rpc error for ${target.id}:`,
+                incErr?.message || incErr,
+            );
+        }
+
         // Utiliser la RPC server-side existante toggle_courage
         const { data: rpcData, error: rpcErr } = await supabase.rpc(
             "toggle_courage",
             { row_id: target.id, user_id_param: bot.user_id },
         );
         if (rpcErr) throw rpcErr;
+        // Ensure content.encouragements_count reflects server state (if RPC returned count)
+        try {
+            const serverCount = rpcData && (Number(rpcData.count) || Number(rpcData.count) === 0 ? Number(rpcData.count) : null);
+            if (Number.isFinite(serverCount)) {
+                await supabase
+                    .from("content")
+                    .update({ encouragements_count: serverCount })
+                    .eq("id", target.id);
+            } else {
+                // Fallback: increment by 1 (best-effort)
+                const { data: row } = await supabase
+                    .from("content")
+                    .select("encouragements_count")
+                    .eq("id", target.id)
+                    .maybeSingle();
+                const newCount = (row && Number(row.encouragements_count))
+                    ? Number(row.encouragements_count) + 1
+                    : 1;
+                await supabase
+                    .from("content")
+                    .update({ encouragements_count: newCount })
+                    .eq("id", target.id);
+            }
+        } catch (err) {
+            console.warn(`update encouragements_count error for ${target.id}:`, err?.message || err);
+        }
         await supabase
             .from("bots")
             .update({
@@ -385,16 +421,16 @@ async function followAsBot(bot, maxToFollow = 1) {
         if (error) throw error;
         if (!candidates || candidates.length === 0) return 0;
 
-        // Prioritize real users first, then bots
-        candidates.sort((a, b) => {
-            const aBot = a && a.is_bot ? 1 : 0;
-            const bBot = b && b.is_bot ? 1 : 0;
-            if (aBot !== bBot) return aBot - bBot; // real users first
-            return (b.followers_count || 0) - (a.followers_count || 0);
-        });
+
+        // Prioritize real users first, then bots (stronger preference)
+        const realUsers = candidates.filter((c) => !c.is_bot);
+        const botUsers = candidates.filter((c) => c.is_bot);
+        realUsers.sort((a, b) => (b.followers_count || 0) - (a.followers_count || 0));
+        botUsers.sort((a, b) => (b.followers_count || 0) - (a.followers_count || 0));
+        const orderedCandidates = [...realUsers, ...botUsers];
 
         let followed = 0;
-        for (const cand of candidates) {
+        for (const cand of orderedCandidates) {
             if (followed >= maxToFollow) break;
             if (!cand || !cand.id) continue;
             if (followingIds.has(cand.id)) continue;
@@ -415,6 +451,28 @@ async function followAsBot(bot, maxToFollow = 1) {
                 }
                 followingIds.add(cand.id);
                 followed += 1;
+                // Simuler que le bot a vu les derniers posts de l'utilisateur suivi
+                try {
+                    const { data: recent, error: recentErr } = await supabase
+                        .from("content")
+                        .select("id")
+                        .eq("user_id", cand.id)
+                        .order("created_at", { ascending: false })
+                        .limit(3);
+                    if (!recentErr && Array.isArray(recent)) {
+                        for (const r of recent) {
+                            try {
+                                await supabase.rpc("increment_views", { row_id: r.id });
+                            } catch (rvErr) {
+                                // ignore individual errors
+                            }
+                            // tiny delay to avoid DB bursts
+                            await sleep(60 + Math.random() * 200);
+                        }
+                    }
+                } catch (rvCatch) {
+                    // ignore
+                }
                 // small delay between follow actions
                 await sleep(150 + Math.random() * 500);
             } catch (e) {

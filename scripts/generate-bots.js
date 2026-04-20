@@ -280,11 +280,47 @@ async function createPostForUser(userId, index = 0, topic = "general") {
 }
 
 async function createBot(i) {
-    // Use a random name index for bots to make names non-deterministic
-    const randIdx = Math.floor(Math.random() * (Number(combos) || 1000)) + 1;
-    const baseName = getName(randIdx);
-    // Ensure deterministic avatar seed
-    const name = `${baseName}`;
+    // Pick a random name index for bots, ensure uniqueness against existing bots/users
+    const maxNameAttempts = 12;
+    let name = null;
+    for (let attempt = 0; attempt < maxNameAttempts; attempt++) {
+        const randIdx = Math.floor(Math.random() * (Number(combos) || 1000)) + 1;
+        const candidate = getName(randIdx);
+        // In dry-run mode we accept the first candidate
+        if (dryRun) {
+            name = candidate;
+            break;
+        }
+
+        // Check existing bots/users for the same display name (case-insensitive)
+        try {
+            const { data: existingBots } = await supabase
+                .from("bots")
+                .select("user_id")
+                .ilike("display_name", candidate)
+                .limit(1);
+            if (existingBots && existingBots.length > 0) continue;
+
+            const { data: existingUsers } = await supabase
+                .from("users")
+                .select("id")
+                .ilike("name", candidate)
+                .limit(1);
+            if (existingUsers && existingUsers.length > 0) continue;
+
+            name = candidate;
+            break;
+        } catch (e) {
+            // On errors, fallback to candidate
+            name = candidate;
+            break;
+        }
+    }
+
+    if (!name) {
+        // If all attempts failed, append index to force uniqueness
+        name = `${getName(1)}-${Date.now()}-${i}`;
+    }
     const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`;
     const scheduleHour = i % 24;
     const encourageDays = randomDaysOfWeek(3);
