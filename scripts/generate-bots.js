@@ -422,6 +422,7 @@ async function createPostForUser(userId, index = 0, topic = "general") {
 }
 
 async function createBot(i) {
+    const dryRun = isDryRun;
     // Pick a random name index for bots, ensure uniqueness against existing bots/users
     const maxNameAttempts = 12;
     let name = null;
@@ -468,7 +469,6 @@ async function createBot(i) {
     const scheduleHour = i % 24;
     const encourageDays = randomDaysOfWeek(3);
 
-    const dryRun = isDryRun;
     // assign topic for this bot (40% technical, otherwise general)
     const topic = Math.random() < 0.4 ? pickRandom(TECH_TOPICS) : "general";
     const emailDomain = process.env.BOT_EMAIL_DOMAIN || "example.com";

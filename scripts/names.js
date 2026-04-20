@@ -42,3 +42,8 @@ function capitalize(s) {
 console.log(`Combinaisons théoriques : ${data.prefixes.length * data.infixes.length * data.suffixes.length * data.families.length}`);
 console.log(`Exemple 101 : ${generateUniqueName(101)}`);
 console.log(`Exemple 1002 : ${generateUniqueName(1002)}`);
+ 
+module.exports = {
+    getName: generateUniqueName,
+    combos: data.prefixes.length * data.infixes.length * data.suffixes.length * data.families.length,
+};
