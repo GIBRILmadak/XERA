@@ -5118,39 +5118,52 @@ app.post("/api/admin/bots/delete-all", async (req, res) => {
         const { data: bots, error: botsErr } = await supabase
             .from("bots")
             .select("user_id");
-        if (botsErr) throw botsErr;
+        if (botsErr) {
+            console.error("delete-all: fetch bots error", botsErr);
+            throw botsErr;
+        }
 
         const botUserIds = (bots || []).map(b => b.user_id).filter(Boolean);
+        console.log("delete-all: found", botUserIds.length, "bots");
 
         let deleted = { bots: 0, users: 0 };
 
-        // 2. Delete from bots table
+        // 2. Delete from bots table - direct delete one by one to avoid .in() issues
         if (botUserIds.length > 0) {
-            const { error: delBotsErr } = await supabase
-                .from("bots")
-                .delete()
-                .in("user_id", botUserIds);
-            if (delBotsErr) throw delBotsErr;
+            for (const userId of botUserIds) {
+                const { error: delErr } = await supabase
+                    .from("bots")
+                    .delete()
+                    .eq("user_id", userId);
+                if (delErr) {
+                    console.warn("delete-all: del bot error", userId, delErr);
+                }
+            }
             deleted.bots = botUserIds.length;
         }
 
-        // 3. Delete users (optional - comment out if you just want to disable bots)
+        // 3. Delete users
         if (botUserIds.length > 0) {
-            const { error: delUsersErr } = await supabase
-                .from("users")
-                .delete()
-                .in("id", botUserIds);
-            if (delUsersErr) throw delUsersErr;
+            for (const userId of botUserIds) {
+                const { error: delErr } = await supabase
+                    .from("users")
+                    .delete()
+                    .eq("id", userId);
+                if (delErr) {
+                    console.warn("delete-all: del user error", userId, delErr);
+                }
+            }
             deleted.users = botUserIds.length;
         }
 
         // 4. Also delete related content
         if (botUserIds.length > 0) {
-            await supabase
-                .from("content")
-                .delete()
-                .in("user_id", botUserIds);
-            // Ignore error - may not have related content
+            for (const userId of botUserIds) {
+                await supabase
+                    .from("content")
+                    .delete()
+                    .eq("user_id", userId);
+            }
         }
 
         // 5. Reset bot_control count
@@ -5160,10 +5173,11 @@ app.post("/api/admin/bots/delete-all", async (req, res) => {
             updated_at: new Date().toISOString(),
         }, { onConflict: "key" });
 
+        console.log("delete-all: success", deleted);
         return res.json({ success: true, deleted });
     } catch (e) {
         console.error("/api/admin/bots/delete-all error", e?.message || e);
-        return res.status(500).send("Erreur interne");
+        return res.status(500).send("Erreur interne: " + (e?.message || e));
     }
 });
 
