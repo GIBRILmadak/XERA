@@ -32,9 +32,22 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 
 const { getName, combos } = require("./names");
 const TECH_TOPICS = [
-    "robotics", "ai", "diy", "coding", "entrepreneurship", "mechanics",
-    "music", "gaming", "cooking", "fitness", "photography", "travel",
-    "art", "science", "writing", "gardening"
+    "robotics",
+    "ai",
+    "diy",
+    "coding",
+    "entrepreneurship",
+    "mechanics",
+    "music",
+    "gaming",
+    "cooking",
+    "fitness",
+    "photography",
+    "travel",
+    "art",
+    "science",
+    "writing",
+    "gardening",
 ];
 const SEED_POSTS_PER_BOT = Number(process.env.SEED_POSTS_PER_BOT || 0);
 
@@ -76,87 +89,249 @@ function pickRandom(arr) {
 // Hashtags par topic (cohérents avec le contenu du post)
 const TOPIC_HASHTAGS = {
     robotics: [
-        "#robotique", "#robot", "#arduino", "#maker", "#electronique",
-        "#iot", "#automates", "#mecanique", "#cnc", "#impression3d",
-        "#raspberrypi", "#servomoteur", "#capteur"
+        "#robotique",
+        "#robot",
+        "#arduino",
+        "#maker",
+        "#electronique",
+        "#iot",
+        "#automates",
+        "#mecanique",
+        "#cnc",
+        "#impression3d",
+        "#raspberrypi",
+        "#servomoteur",
+        "#capteur",
     ],
     ai: [
-        "#ai", "#ia", "#machinelearning", "#deeplearning", "#pytorch",
-        "#tensorflow", "#neuralnetwork", "#datascience", "#chatgpt",
-        "#llm", "#nlp", "#computerVision"
+        "#ai",
+        "#ia",
+        "#machinelearning",
+        "#deeplearning",
+        "#pytorch",
+        "#tensorflow",
+        "#neuralnetwork",
+        "#datascience",
+        "#chatgpt",
+        "#llm",
+        "#nlp",
+        "#computerVision",
     ],
     diy: [
-        "#diy", "#bricolage", "#faitmain", "#tuto", "#astuce",
-        "#recup", "#upcycling", "#makers", "# homemade"
+        "#diy",
+        "#bricolage",
+        "#faitmain",
+        "#tuto",
+        "#astuce",
+        "#recup",
+        "#upcycling",
+        "#makers",
+        "# homemade",
     ],
     coding: [
-        "#coding", "#dev", "#programmation", "#javascript", "#python",
-        "#nodejs", "#webdev", "#opensource", "#code", "#developer",
-        "#react", "#typescript", "#api"
+        "#coding",
+        "#dev",
+        "#programmation",
+        "#javascript",
+        "#python",
+        "#nodejs",
+        "#webdev",
+        "#opensource",
+        "#code",
+        "#developer",
+        "#react",
+        "#typescript",
+        "#api",
     ],
     entrepreneurship: [
-        "#entrepreneur", "#startup", "#business", "#growth", "#mvp",
-        "#lean", "#marketing", "#sideproject", "#saas", "#bootstrapping"
+        "#entrepreneur",
+        "#startup",
+        "#business",
+        "#growth",
+        "#mvp",
+        "#lean",
+        "#marketing",
+        "#sideproject",
+        "#saas",
+        "#bootstrapping",
     ],
     mechanics: [
-        "#mecanique", "#mecanicien", "#atelier", "#soudure", "#usinage",
-        "#maintenance", "#diagnostic", "#technique", "#automobile"
+        "#mecanique",
+        "#mecanicien",
+        "#atelier",
+        "#soudure",
+        "#usinage",
+        "#maintenance",
+        "#diagnostic",
+        "#technique",
+        "#automobile",
     ],
     music: [
-        "#music", "#musique", "#guitar", "#piano", "#producer", "#dj",
-        "#spotify", "#concert", "#spotifywrapped", "#beats", "#studio",
-        "#songwriting", "#livemusic", "#musicianlife"
+        "#music",
+        "#musique",
+        "#guitar",
+        "#piano",
+        "#producer",
+        "#dj",
+        "#spotify",
+        "#concert",
+        "#spotifywrapped",
+        "#beats",
+        "#studio",
+        "#songwriting",
+        "#livemusic",
+        "#musicianlife",
     ],
     gaming: [
-        "#gaming", "#videogames", "#twitch", "#esports", "#streamer",
-        "#ps5", "#xbox", "#nintendo", "#pcgaming", "#retrogaming",
-        "#gamer", "#gamingcommunity", "#levelup"
+        "#gaming",
+        "#videogames",
+        "#twitch",
+        "#esports",
+        "#streamer",
+        "#ps5",
+        "#xbox",
+        "#nintendo",
+        "#pcgaming",
+        "#retrogaming",
+        "#gamer",
+        "#gamingcommunity",
+        "#levelup",
     ],
     cooking: [
-        "#cooking", "#cuisine", "#foodie", "#recipe", "#cheflife",
-        "#homemade", "#foodporn", "#baking", "#healthyfood", "#mealprep",
-        "#delicious", "#foodblogger", "#yummy"
+        "#cooking",
+        "#cuisine",
+        "#foodie",
+        "#recipe",
+        "#cheflife",
+        "#homemade",
+        "#foodporn",
+        "#baking",
+        "#healthyfood",
+        "#mealprep",
+        "#delicious",
+        "#foodblogger",
+        "#yummy",
     ],
     fitness: [
-        "#fitness", "#gym", "#workout", "#health", "#sport", "#training",
-        "#motivation", "#fitfam", "#bodybuilding", "#crossfit", "#yoga",
-        "#wellness", "#fitlife", "#personaltrainer"
+        "#fitness",
+        "#gym",
+        "#workout",
+        "#health",
+        "#sport",
+        "#training",
+        "#motivation",
+        "#fitfam",
+        "#bodybuilding",
+        "#crossfit",
+        "#yoga",
+        "#wellness",
+        "#fitlife",
+        "#personaltrainer",
     ],
     photography: [
-        "#photography", "#photo", "#photographer", "#camera", "#portrait",
-        "#landscape", "#streetphotography", "#nikon", "#canon", "#sony",
-        "#photoshop", "#editing", "#visualart"
+        "#photography",
+        "#photo",
+        "#photographer",
+        "#camera",
+        "#portrait",
+        "#landscape",
+        "#streetphotography",
+        "#nikon",
+        "#canon",
+        "#sony",
+        "#photoshop",
+        "#editing",
+        "#visualart",
     ],
     travel: [
-        "#travel", "#voyage", "#adventure", "#explore", "#wanderlust",
-        "#travelgram", "#vacation", "#roadtrip", "#backpacking", "#nature",
-        "#travelphotography", "#instatravel", "#travelblogger"
+        "#travel",
+        "#voyage",
+        "#adventure",
+        "#explore",
+        "#wanderlust",
+        "#travelgram",
+        "#vacation",
+        "#roadtrip",
+        "#backpacking",
+        "#nature",
+        "#travelphotography",
+        "#instatravel",
+        "#travelblogger",
     ],
     art: [
-        "#art", "#artist", "#artwork", "#drawing", "#painting", "#sketch",
-        "#digitalart", "#illustration", "#creative", "#design", "#artistsoninstagram",
-        "#artoftheday", "#instaart", "#artgallery"
+        "#art",
+        "#artist",
+        "#artwork",
+        "#drawing",
+        "#painting",
+        "#sketch",
+        "#digitalart",
+        "#illustration",
+        "#creative",
+        "#design",
+        "#artistsoninstagram",
+        "#artoftheday",
+        "#instaart",
+        "#artgallery",
     ],
     science: [
-        "#science", "#scientist", "#research", "#physics", "#chemistry",
-        "#biology", "#space", "#astronomy", "#laboratory", "#discovery",
-        "#stem", "#innovation", "#scientific"
+        "#science",
+        "#scientist",
+        "#research",
+        "#physics",
+        "#chemistry",
+        "#biology",
+        "#space",
+        "#astronomy",
+        "#laboratory",
+        "#discovery",
+        "#stem",
+        "#innovation",
+        "#scientific",
     ],
     writing: [
-        "#writing", "#writer", "#author", "#poetry", "#blogging", "#storytelling",
-        "#creativewriting", "#novel", "#script", "#books", "#wordsmith",
-        "#writetips", "#authorlife", "#published"
+        "#writing",
+        "#writer",
+        "#author",
+        "#poetry",
+        "#blogging",
+        "#storytelling",
+        "#creativewriting",
+        "#novel",
+        "#script",
+        "#books",
+        "#wordsmith",
+        "#writetips",
+        "#authorlife",
+        "#published",
     ],
     gardening: [
-        "#gardening", "#garden", "#plants", "#flowers", "#vegetables",
-        "#greenthumb", "#organic", "#plantbased", "#horticulture", "#growyourown",
-        "#homegarden", "#permaculture", "#botanical"
+        "#gardening",
+        "#garden",
+        "#plants",
+        "#flowers",
+        "#vegetables",
+        "#greenthumb",
+        "#organic",
+        "#plantbased",
+        "#horticulture",
+        "#growyourown",
+        "#homegarden",
+        "#permaculture",
+        "#botanical",
     ],
     general: [
-        "#progres", "#quotidien", "#perseverance", "#motivation",
-        "#handmade", "#learning", "#croissance", "#quotidien",
-        "#passion", "#creation"
-    ]
+        "#progres",
+        "#quotidien",
+        "#perseverance",
+        "#motivation",
+        "#handmade",
+        "#learning",
+        "#croissance",
+        "#quotidien",
+        "#passion",
+        "#creation",
+    ],
 };
 
 function generateHashtags(topic, userId, count = 3) {
@@ -165,19 +340,37 @@ function generateHashtags(topic, userId, count = 3) {
 
     const seed = (topic || "general") + (userId || "") + Date.now();
     const shuffled = [...available].sort((a, b) => {
-        const hashA = parseInt(crypto.createHash("sha1").update(a + seed).digest("hex").slice(0, 8), 16);
-        const hashB = parseInt(crypto.createHash("sha1").update(b + seed).digest("hex").slice(0, 8), 16);
+        const hashA = parseInt(
+            crypto
+                .createHash("sha1")
+                .update(a + seed)
+                .digest("hex")
+                .slice(0, 8),
+            16,
+        );
+        const hashB = parseInt(
+            crypto
+                .createHash("sha1")
+                .update(b + seed)
+                .digest("hex")
+                .slice(0, 8),
+            16,
+        );
         return hashA - hashB;
     });
 
     const selected = shuffled.slice(0, count);
 
     if (Math.random() > 0.3) {
-        const otherTopics = Object.keys(TOPIC_HASHTAGS).filter(t => t !== topic);
-        const randomTopic = otherTopics[Math.floor(Math.random() * otherTopics.length)];
-        const extraTag = TOPIC_HASHTAGS[randomTopic][
-            Math.floor(Math.random() * TOPIC_HASHTAGS[randomTopic].length)
-        ];
+        const otherTopics = Object.keys(TOPIC_HASHTAGS).filter(
+            (t) => t !== topic,
+        );
+        const randomTopic =
+            otherTopics[Math.floor(Math.random() * otherTopics.length)];
+        const extraTag =
+            TOPIC_HASHTAGS[randomTopic][
+                Math.floor(Math.random() * TOPIC_HASHTAGS[randomTopic].length)
+            ];
         if (extraTag && !selected.includes(extraTag)) {
             selected.push(extraTag);
         }
@@ -193,19 +386,37 @@ function generateHashtagsArray(topic, userId, count = 3) {
 
     const seed = (topic || "general") + (userId || "") + "array" + Date.now();
     const shuffled = [...available].sort((a, b) => {
-        const hashA = parseInt(crypto.createHash("sha1").update(a + seed).digest("hex").slice(0, 8), 16);
-        const hashB = parseInt(crypto.createHash("sha1").update(b + seed).digest("hex").slice(0, 8), 16);
+        const hashA = parseInt(
+            crypto
+                .createHash("sha1")
+                .update(a + seed)
+                .digest("hex")
+                .slice(0, 8),
+            16,
+        );
+        const hashB = parseInt(
+            crypto
+                .createHash("sha1")
+                .update(b + seed)
+                .digest("hex")
+                .slice(0, 8),
+            16,
+        );
         return hashA - hashB;
     });
 
     const selected = shuffled.slice(0, count);
 
     if (Math.random() > 0.3) {
-        const otherTopics = Object.keys(TOPIC_HASHTAGS).filter(t => t !== topic);
-        const randomTopic = otherTopics[Math.floor(Math.random() * otherTopics.length)];
-        const extraTag = TOPIC_HASHTAGS[randomTopic][
-            Math.floor(Math.random() * TOPIC_HASHTAGS[randomTopic].length)
-        ];
+        const otherTopics = Object.keys(TOPIC_HASHTAGS).filter(
+            (t) => t !== topic,
+        );
+        const randomTopic =
+            otherTopics[Math.floor(Math.random() * otherTopics.length)];
+        const extraTag =
+            TOPIC_HASHTAGS[randomTopic][
+                Math.floor(Math.random() * TOPIC_HASHTAGS[randomTopic].length)
+            ];
         if (extraTag && !selected.includes(extraTag)) {
             selected.push(extraTag);
         }
