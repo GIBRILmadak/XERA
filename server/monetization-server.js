@@ -5104,6 +5104,69 @@ app.post("/api/admin/bots/set-force-posts", async (req, res) => {
     }
 });
 
+// Delete all bots - pour supprimer tous les bots de la DB
+app.post("/api/admin/bots/delete-all", async (req, res) => {
+    const adminAuth = await authenticateSuperAdmin(req);
+    if (adminAuth.error) {
+        return res
+            .status(adminAuth.error.status)
+            .send(adminAuth.error.message);
+    }
+
+    try {
+        // 1. Get all bot user_ids
+        const { data: bots, error: botsErr } = await supabase
+            .from("bots")
+            .select("user_id");
+        if (botsErr) throw botsErr;
+
+        const botUserIds = (bots || []).map(b => b.user_id).filter(Boolean);
+
+        let deleted = { bots: 0, users: 0 };
+
+        // 2. Delete from bots table
+        if (botUserIds.length > 0) {
+            const { error: delBotsErr } = await supabase
+                .from("bots")
+                .delete()
+                .in("user_id", botUserIds);
+            if (delBotsErr) throw delBotsErr;
+            deleted.bots = botUserIds.length;
+        }
+
+        // 3. Delete users (optional - comment out if you just want to disable bots)
+        if (botUserIds.length > 0) {
+            const { error: delUsersErr } = await supabase
+                .from("users")
+                .delete()
+                .in("id", botUserIds);
+            if (delUsersErr) throw delUsersErr;
+            deleted.users = botUserIds.length;
+        }
+
+        // 4. Also delete related content
+        if (botUserIds.length > 0) {
+            await supabase
+                .from("content")
+                .delete()
+                .in("user_id", botUserIds);
+            // Ignore error - may not have related content
+        }
+
+        // 5. Reset bot_control count
+        await supabase.from("bot_control").upsert({
+            key: "bots.active_count",
+            value: { count: 0 },
+            updated_at: new Date().toISOString(),
+        }, { onConflict: "key" });
+
+        return res.json({ success: true, deleted });
+    } catch (e) {
+        console.error("/api/admin/bots/delete-all error", e?.message || e);
+        return res.status(500).send("Erreur interne");
+    }
+});
+
 // Run-once runner for bots - intended for serverless environments (Vercel cron)
 app.post("/api/admin/bots/run-now", async (req, res) => {
     // Authorize cron invocation (uses CRON_SECRET or Bearer token / x-cron-secret)

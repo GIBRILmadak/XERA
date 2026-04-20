@@ -25,6 +25,149 @@ const MAX_ENCOURAGES_PER_RUN =
     Number(process.env.BOT_MAX_ENCOURAGES_PER_RUN) || 1000;
 const MAX_POSTS_PER_RUN = Number(process.env.BOT_MAX_POSTS_PER_RUN) || 1000;
 
+// Hashtags par topic (cohérents avec le contenu du post)
+const TOPIC_HASHTAGS = {
+    robotics: [
+        "#robotique", "#robot", "#arduino", "#maker", "#electronique",
+        "#iot", "#automates", "#mecanique", "#cnc", "#impression3d",
+        "#raspberrypi", "#servomoteur", "#capteur"
+    ],
+    ai: [
+        "#ai", "#ia", "#machinelearning", "#deeplearning", "#pytorch",
+        "#tensorflow", "#neuralnetwork", "#datascience", "#chatgpt",
+        "#llm", "#nlp", "#computerVision"
+    ],
+    diy: [
+        "#diy", "#bricolage", "#faitmain", "#tuto", "#astuce",
+        "#recup", "#upcycling", "#makers", "# homemade"
+    ],
+    coding: [
+        "#coding", "#dev", "#programmation", "#javascript", "#python",
+        "#nodejs", "#webdev", "#opensource", "#code", "#developer",
+        "#react", "#typescript", "#api"
+    ],
+    entrepreneurship: [
+        "#entrepreneur", "#startup", "#business", "#growth", "#mvp",
+        "#lean", "#marketing", "#sideproject", "#saas", "#bootstrapping"
+    ],
+    mechanics: [
+        "#mecanique", "#mecanicien", "#atelier", "#soudure", "#usinage",
+        "#maintenance", "#diagnostic", "#technique", "#automobile"
+    ],
+    music: [
+        "#music", "#musique", "#guitar", "#piano", "#producer", "#dj",
+        "#spotify", "#concert", "#spotifywrapped", "#beats", "#studio",
+        "#songwriting", "#livemusic", "#musicianlife"
+    ],
+    gaming: [
+        "#gaming", "#videogames", "#twitch", "#esports", "#streamer",
+        "#ps5", "#xbox", "#nintendo", "#pcgaming", "#retrogaming",
+        "#gamer", "#gamingcommunity", "#levelup"
+    ],
+    cooking: [
+        "#cooking", "#cuisine", "#foodie", "#recipe", "#cheflife",
+        "#homemade", "#foodporn", "#baking", "#healthyfood", "#mealprep",
+        "#delicious", "#foodblogger", "#yummy"
+    ],
+    fitness: [
+        "#fitness", "#gym", "#workout", "#health", "#sport", "#training",
+        "#motivation", "#fitfam", "#bodybuilding", "#crossfit", "#yoga",
+        "#wellness", "#fitlife", "#personaltrainer"
+    ],
+    photography: [
+        "#photography", "#photo", "#photographer", "#camera", "#portrait",
+        "#landscape", "#streetphotography", "#nikon", "#canon", "#sony",
+        "#photoshop", "#editing", "#visualart"
+    ],
+    travel: [
+        "#travel", "#voyage", "#adventure", "#explore", "#wanderlust",
+        "#travelgram", "#vacation", "#roadtrip", "#backpacking", "#nature",
+        "#travelphotography", "#instatravel", "#travelblogger"
+    ],
+    art: [
+        "#art", "#artist", "#artwork", "#drawing", "#painting", "#sketch",
+        "#digitalart", "#illustration", "#creative", "#design", "#artistsoninstagram",
+        "#artoftheday", "#instaart", "#artgallery"
+    ],
+    science: [
+        "#science", "#scientist", "#research", "#physics", "#chemistry",
+        "#biology", "#space", "#astronomy", "#laboratory", "#discovery",
+        "#stem", "#innovation", "#scientific"
+    ],
+    writing: [
+        "#writing", "#writer", "#author", "#poetry", "#blogging", "#storytelling",
+        "#creativewriting", "#novel", "#script", "#books", "#wordsmith",
+        "#writetips", "#authorlife", "#published"
+    ],
+    gardening: [
+        "#gardening", "#garden", "#plants", "#flowers", "#vegetables",
+        "#greenthumb", "#organic", "#plantbased", "#horticulture", "#growyourown",
+        "#homegarden", "#permaculture", "#botanical"
+    ],
+    general: [
+        "#progres", "#quotidien", "#perseverance", "#motivation",
+        "#handmade", "#learning", "#croissance", "#quotidien",
+        "#passion", "#creation"
+    ]
+};
+
+function generateHashtags(topic, count = 3) {
+    const available = TOPIC_HASHTAGS[topic] || TOPIC_HASHTAGS.general;
+    if (!available || available.length === 0) return "";
+
+    // Seed aléatoire basé sur le topic et l'heure pour varier les hashtags
+    const seed = topic + Date.now();
+    const shuffled = [...available].sort((a, b) => {
+        const hashA = parseInt(crypto.createHash("sha1").update(a + seed).digest("hex").slice(0, 8), 16);
+        const hashB = parseInt(crypto.createHash("sha1").update(b + seed).digest("hex").slice(0, 8), 16);
+        return hashA - hashB;
+    });
+
+    const selected = shuffled.slice(0, count);
+
+    // Ajouter 1 hashtag aléatoire d'un autre topic (diversity)
+    if (Math.random() > 0.3) {
+        const otherTopics = Object.keys(TOPIC_HASHTAGS).filter(t => t !== topic);
+        const randomTopic = otherTopics[Math.floor(Math.random() * otherTopics.length)];
+        const extraTag = TOPIC_HASHTAGS[randomTopic][
+            Math.floor(Math.random() * TOPIC_HASHTAGS[randomTopic].length)
+        ];
+        if (extraTag && !selected.includes(extraTag)) {
+            selected.push(extraTag);
+        }
+    }
+
+    return selected.join(" ");
+}
+
+// Version retournant un tableau pour insertion en base
+function generateHashtagsArray(topic, count = 3) {
+    const available = TOPIC_HASHTAGS[topic] || TOPIC_HASHTAGS.general;
+    if (!available || available.length === 0) return [];
+
+    const seed = topic + "array" + Date.now();
+    const shuffled = [...available].sort((a, b) => {
+        const hashA = parseInt(crypto.createHash("sha1").update(a + seed).digest("hex").slice(0, 8), 16);
+        const hashB = parseInt(crypto.createHash("sha1").update(b + seed).digest("hex").slice(0, 8), 16);
+        return hashA - hashB;
+    });
+
+    const selected = shuffled.slice(0, count);
+
+    if (Math.random() > 0.3) {
+        const otherTopics = Object.keys(TOPIC_HASHTAGS).filter(t => t !== topic);
+        const randomTopic = otherTopics[Math.floor(Math.random() * otherTopics.length)];
+        const extraTag = TOPIC_HASHTAGS[randomTopic][
+            Math.floor(Math.random() * TOPIC_HASHTAGS[randomTopic].length)
+        ];
+        if (extraTag && !selected.includes(extraTag)) {
+            selected.push(extraTag);
+        }
+    }
+
+    return selected;
+}
+
 async function getActiveCount() {
     try {
         const { data } = await supabase
@@ -133,12 +276,9 @@ async function postAsBot(bot) {
             if (
                 topic &&
                 [
-                    "robotics",
-                    "ai",
-                    "diy",
-                    "coding",
-                    "entrepreneurship",
-                    "mechanics",
+                    "robotics", "ai", "diy", "coding", "entrepreneurship", "mechanics",
+                    "music", "gaming", "cooking", "fitness", "photography", "travel",
+                    "art", "science", "writing", "gardening"
                 ].includes(topic)
             ) {
                 const tplMap = {
@@ -165,6 +305,46 @@ async function postAsBot(bot) {
                     mechanics: {
                         prefixes: ["Réglage", "Mécanique", "Diagnostic", "Atelier", "Maintenance", "Assemblage"],
                         actions: ["pignon", "roulement", "couple", "soudure", "usinage"],
+                    },
+                    music: {
+                        prefixes: ["Morceau", "Beat", "Sample", "Mix", "Session", "Jam"],
+                        actions: ["en studio", "live session", "nouveau track", "enregistrement", "production", "enfin prêt"],
+                    },
+                    gaming: {
+                        prefixes: ["Session", "Stream", "Ranking", "Build", "Coop", "Speedrun"],
+                        actions: ["sur Twitch", "nouveau record", "completion", "en solo", "avec la team", "ce soir"],
+                    },
+                    cooking: {
+                        prefixes: ["Recette", "Plat", "Dish", "Menu", "Prépa", "Astuce cuisine"],
+                        actions: ["maison", "express", "healthy", "vegan", "traditionnel", "nouvelle déclinaison"],
+                    },
+                    fitness: {
+                        prefixes: ["Entraînement", "Séance", "Workout", "Routine", "Progrès", "Défi"],
+                        actions: ["matinal", "intense", "à la salle", "en extérieur", "nouveau record", "recovery"],
+                    },
+                    photography: {
+                        prefixes: ["Shot", "Cliché", "Photo", "Portrait", "Paysage", "Session"],
+                        actions: ["en lumière naturelle", "edit RAW", "nouveau spot", "avec le 50mm", "golden hour", "street"],
+                    },
+                    travel: {
+                        prefixes: ["Trip", "Aventure", "Road trip", "Destination", "Échapée", "Exploration"],
+                        actions: ["en solo", "en couple", "backpack", "week-end", "discovery", "inattendu"],
+                    },
+                    art: {
+                        prefixes: ["Sketch", "Illustration", "Peinture", "Digital", "Concept", "Projet"],
+                        actions: ["en cours", "time-lapse", "nouveau médium", "study", "commission", "finished"],
+                    },
+                    science: {
+                        prefixes: ["Expérience", "Recherche", "Découverte", "Hypothèse", "Analyse", "Prototype"],
+                        actions: ["au labo", "en cours", "résultats", "publication", "collaboration", "breakthrough"],
+                    },
+                    writing: {
+                        prefixes: ["Chapitre", "Scène", "Blog", "Poème", "Script", "Draft"],
+                        actions: ["en écriture", "révision", "brainstorming", "plot twist", "edit", "final draft"],
+                    },
+                    gardening: {
+                        prefixes: ["Plant", "Semis", "Récolte", "Jardin", "Potager", "Bloom"],
+                        actions: ["en croissance", "fleuri", "nouveau seedling", "bio", "saison", "transplantation"],
                     },
                 };
                 const tpl = tplMap[topic] || tplMap.coding;
@@ -200,6 +380,9 @@ async function postAsBot(bot) {
             // ignore and fallback to 1
         }
 
+        // Générer les hashtags cohérents avec le topic (tableau pour colonne dédiée)
+        const hashtagsArray = generateHashtagsArray(topic, 3);
+
         const payload = {
             user_id: bot.user_id,
             day_number: nextDayNumber,
@@ -207,6 +390,7 @@ async function postAsBot(bot) {
             state: "success",
             title,
             description,
+            hashtags: hashtagsArray,
             media_url: mediaUrl,
             created_at: new Date().toISOString(),
         };
