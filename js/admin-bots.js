@@ -122,6 +122,34 @@ function formatDays(days) {
     return days.map((d) => names[d] || String(d)).join(", ");
 }
 
+async function deleteAllBots() {
+    try {
+        const confirmMsg = "Êtes-vous sûr de vouloir SUPPRIMER TOUS les bots ?\n\nCette action est irréversible !\n\nCliquez sur OK pour confirmer.";
+        if (!confirm(confirmMsg)) return null;
+
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        const res = await apiFetch("/api/admin/bots/delete-all", {
+            method: "POST",
+            headers: {
+                Authorization: token ? `Bearer ${token}` : "",
+                "Content-Type": "application/json",
+            },
+        });
+        if (!res.ok) {
+            const body = await res.text().catch(() => "");
+            const msg = body || `HTTP ${res.status}`;
+            throw new Error(msg);
+        }
+        return await res.json();
+    } catch (e) {
+        console.error("deleteAllBots error", e);
+        throw e;
+    }
+}
+
 async function renderSuperAdminPage() {
     const container = document.getElementById("admin-dashboard");
     if (!container) return;
@@ -181,6 +209,7 @@ async function renderSuperAdminPage() {
                             <button id="bots-run-now-btn" style="margin-left:.5rem">Run now</button>
                             <label style="margin-left:1rem;display:inline-flex;align-items:center;gap:.5rem">Auto-force posts: <input id="bots-force-posts-checkbox" type="checkbox" style="margin-left:.25rem"></label>
                             <button id="bots-force-posts-set-btn" style="margin-left:.25rem">Save</button>
+                            <button id="bots-delete-all-btn" style="margin-left:1rem;background:var(--error);color:#fff;padding:0.25rem 0.5rem;border-radius:4px;border:none;cursor:pointer;">Delete All Bots</button>
                             <span id="bots-run-result" style="margin-left:0.75rem;color:var(--text-secondary)"></span>
                         </div>
                     </div>
@@ -359,7 +388,7 @@ async function renderSuperAdminPage() {
             runResultSpan.textContent = `Processed ${json.processed || 0} bots — posts ${json.posts || 0}, encourages ${json.encourages || 0}, follows ${json.follows || 0}`;
             // refresh stats after run
             await refresh();
-        } catch (err) {
+} catch (err) {
             console.error("run-now error", err);
             runResultSpan.textContent = `Erreur: ${err && err.message ? err.message : "unknown"}`;
         } finally {
@@ -367,6 +396,31 @@ async function renderSuperAdminPage() {
             runNowBtn.textContent = originalText;
         }
     });
+
+    // Delete all bots button handler
+    const deleteAllBtn = document.getElementById("bots-delete-all-btn");
+    if (deleteAllBtn) {
+        deleteAllBtn.addEventListener("click", async () => {
+            deleteAllBtn.disabled = true;
+            const originalText = deleteAllBtn.textContent;
+            deleteAllBtn.textContent = "Deleting...";
+            runResultSpan.textContent = "";
+            try {
+                const result = await deleteAllBots();
+                if (result && result.success) {
+                    runResultSpan.textContent = `Deleted: ${result.deleted?.bots || 0} bots, ${result.deleted?.users || 0} users`;
+                }
+                // Refresh after delete
+                await refresh();
+            } catch (err) {
+                console.error("delete-all error", err);
+                runResultSpan.textContent = `Erreur: ${err && err.message ? err.message : "unknown"}`;
+            } finally {
+                deleteAllBtn.disabled = false;
+                deleteAllBtn.textContent = originalText;
+            }
+        });
+    }
 
     // Initial load
     await refresh();
@@ -380,5 +434,6 @@ window.AdminBots = {
     fetchBotStatus,
     setActiveBotCount,
     toggleBotActive,
+    deleteAllBots,
     renderSuperAdminPage,
 };
