@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const { createClient } = require("@supabase/supabase-js");
 const webpush = require("web-push");
 const crypto = require("crypto");
+const { buildBotPostDraft } = require("./bot-post-generator");
 
 dotenv.config();
 
@@ -5251,174 +5252,29 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
     async function postAsBot(bot) {
         try {
             const dayKey = new Date().toISOString().slice(0, 10);
-            const uniq = require("crypto")
-                .createHash("sha1")
-                .update(`${bot.user_id}:${dayKey}`)
-                .digest("hex")
-                .slice(0, 6);
-            const mediaUrl = `https://picsum.photos/seed/${encodeURIComponent(bot.user_id + "-" + dayKey + "-" + uniq)}/1200/800`;
+            const todayStartIso = `${dayKey}T00:00:00Z`;
 
-            // parse meta and choose topic templates
-            const meta =
-                bot.meta && typeof bot.meta === "object"
-                    ? bot.meta
-                    : bot.meta
-                      ? JSON.parse(bot.meta)
-                      : {};
-            const topic =
-                meta.topic ||
-                (Array.isArray(meta.topics) && meta.topics[0]) ||
-                "general";
+            const { count: todayCount } = await supabase
+                .from("content")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", bot.user_id)
+                .gte("created_at", todayStartIso);
 
-            let title;
-            let description;
-            if (
-                topic &&
-                [
-                    "robotics",
-                    "ai",
-                    "diy",
-                    "coding",
-                    "entrepreneurship",
-                    "mechanics",
-                ].includes(topic)
-            ) {
-                const tplMap = {
-                    robotics: {
-                        prefixes: [
-                            "Prototype",
-                            "Module",
-                            "Capteur",
-                            "Contrôleur",
-                            "Bras robotique",
-                            "Moteur",
-                        ],
-                        actions: [
-                            "en test",
-                            "v1.0",
-                            "au labo",
-                            "en montage",
-                            "intégration Arduino",
-                            "optimisé",
-                        ],
-                    },
-                    ai: {
-                        prefixes: [
-                            "Modèle",
-                            "Expérience",
-                            "Réseau",
-                            "Pipeline",
-                            "Fine-tune",
-                            "Prototype",
-                        ],
-                        actions: [
-                            "pour vision",
-                            "NLP",
-                            "en entraînement",
-                            "avec PyTorch",
-                            "optimisé",
-                            "en production",
-                        ],
-                    },
-                    diy: {
-                        prefixes: [
-                            "Tuto",
-                            "Astuce",
-                            "Montage",
-                            "Projet DIY",
-                            "Guide",
-                            "Hack",
-                        ],
-                        actions: [
-                            "étape par étape",
-                            "facile",
-                            "avec pièces récupérées",
-                            "low-cost",
-                            "rapide",
-                        ],
-                    },
-                    coding: {
-                        prefixes: [
-                            "Snippet",
-                            "Pattern",
-                            "Refactor",
-                            "Truc",
-                            "Astuce dev",
-                            "Bricolage code",
-                        ],
-                        actions: [
-                            "JS/Node",
-                            "Python",
-                            "best-practices",
-                            "optimisation",
-                            "débogage",
-                        ],
-                    },
-                    entrepreneurship: {
-                        prefixes: [
-                            "Business",
-                            "MVP",
-                            "Pitch",
-                            "Growth",
-                            "Leçon",
-                            "Astuce",
-                        ],
-                        actions: [
-                            "lean",
-                            "croissance",
-                            "marketing",
-                            "monétisation",
-                            "expérience client",
-                        ],
-                    },
-                    mechanics: {
-                        prefixes: [
-                            "Réglage",
-                            "Mécanique",
-                            "Diagnostic",
-                            "Atelier",
-                            "Maintenance",
-                            "Assemblage",
-                        ],
-                        actions: [
-                            "pignon",
-                            "roulement",
-                            "couple",
-                            "soudure",
-                            "usinage",
-                        ],
-                    },
-                };
-                const tpl = tplMap[topic] || tplMap.coding;
-                title = `${pickRandom(tpl.prefixes)} ${pickRandom(tpl.actions)} • ${uniq}`;
-                description = `Partage technique (${topic}) — ${pickRandom(["Petit retour d'expérience", "Astuce pratique", "Étapes clés", "Code & schéma"])} (${uniq})`;
-            } else {
-                const adjectives = [
-                    "Petit",
-                    "Grand",
-                    "Nouveau",
-                    "Simple",
-                    "Rapide",
-                    "Beau",
-                ];
-                const nouns = [
-                    "progrès",
-                    "instant",
-                    "moment",
-                    "capture",
-                    "éclair",
-                    "point",
-                ];
-                const verbs = [
-                    "du jour",
-                    "du matin",
-                    "du soir",
-                    "du week-end",
-                    "d'aujourd'hui",
-                ];
-                title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
-                description = `Partage quotidien — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
-            }
+            const postIndex = (todayCount || 0) + 1;
+
+            const { data: recentPosts } = await supabase
+                .from("content")
+                .select("title, description")
+                .eq("user_id", bot.user_id)
+                .order("created_at", { ascending: false })
+                .limit(20);
+
+            const draft = buildBotPostDraft({
+                bot,
+                dayKey,
+                postIndex,
+                recentPosts: recentPosts || [],
+            });
 
             // Compute next day_number for this user's content (incremental per-user)
             let nextDayNumber = 1;
@@ -5446,9 +5302,10 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                 day_number: nextDayNumber,
                 type: "image",
                 state: "success",
-                title,
-                description,
-                media_url: mediaUrl,
+                title: draft.title,
+                description: draft.description,
+                hashtags: draft.hashtags,
+                media_url: draft.mediaUrl,
                 created_at: new Date().toISOString(),
             };
 

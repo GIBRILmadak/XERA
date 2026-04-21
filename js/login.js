@@ -164,6 +164,49 @@ function showPersistentSuccess(message) {
     errorMessage.style.display = 'none';
 }
 
+// Convertir les erreurs d'authentification en messages utiles
+function formatLoginError(result) {
+    const rawMessage = String(result?.error || '').trim();
+    const lowerMessage = rawMessage.toLowerCase();
+    const errorCode = String(result?.code || '').toLowerCase();
+    const errorStatus = Number(result?.status);
+
+    if (
+        typeof navigator !== 'undefined' &&
+        navigator.onLine === false
+    ) {
+        return 'Vous êtes hors connexion. Vérifiez Internet puis réessayez.';
+    }
+
+    if (
+        errorCode.includes('network') ||
+        lowerMessage.includes('failed to fetch') ||
+        lowerMessage.includes('network')
+    ) {
+        return 'Connexion au serveur impossible. Réessayez dans quelques secondes.';
+    }
+
+    if (
+        errorCode === 'email_not_confirmed' ||
+        lowerMessage.includes('email not confirmed')
+    ) {
+        return 'Vous devez confirmer votre email avant de vous connecter. Vérifiez votre boîte mail.';
+    }
+
+    if (
+        errorCode === 'invalid_credentials' ||
+        lowerMessage.includes('invalid login credentials')
+    ) {
+        return 'Email ou code incorrect. Si vous n\'avez pas encore de compte, vous devez créer un compte pour vous connecter.';
+    }
+
+    if (errorStatus === 429 || lowerMessage.includes('too many requests')) {
+        return 'Trop de tentatives. Patientez un instant puis réessayez.';
+    }
+
+    return rawMessage || 'Impossible de se connecter pour le moment. Veuillez réessayer.';
+}
+
 // Toggle entre connexion et inscription
 function toggleMode(keepMessages = false) {
     try {
@@ -276,28 +319,30 @@ async function handleSubmit(e) {
             }
         } else {
             // Login
+            const rememberMe = rememberMeCheckbox.checked;
+            
+            // Important: configurer le bon stockage AVANT la connexion
+            // sinon la session peut être écrasée juste après le login.
+            if (typeof updateSessionStorage === 'function') {
+                updateSessionStorage(rememberMe);
+            }
+
             const result = await signIn(email, password);
             
             if (result.success) {
                 // Sauvegarder les préférences "Se souvenir de moi"
-                const rememberMe = rememberMeCheckbox.checked;
                 saveRememberMe(email, rememberMe);
-                
-                // Reconfigurer le stockage de session
-                if (typeof updateSessionStorage === 'function') {
-                    updateSessionStorage(rememberMe);
-                }
                 
                 // Le profil sera créé automatiquement par ensureUserProfile() dans app-supabase.js
                 
-                showSuccess('Login successful! Redirecting...');
+                showSuccess('Connexion réussie ! Redirection...');
                 
                 // Rediriger vers la page principale après 1 seconde
                 setTimeout(() => {
                     window.location.href = resolveRedirectTarget();
                 }, 1000);
             } else {
-                showError(result.error || 'Email ou mot de passe incorrect.');
+                showError(formatLoginError(result));
             }
         }
     } catch (error) {

@@ -1,8 +1,7 @@
-name: Bots run-now (hourly)
+name: Bots run-now (manual)
 
 on:
-    schedule:
-        - cron: "0 * * * *" # every hour
+    workflow_dispatch:
 
 jobs:
     run:
