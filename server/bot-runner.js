@@ -25,6 +25,7 @@ const MAX_FOLLOWS_PER_BOT = Number(process.env.BOT_MAX_FOLLOWS_PER_BOT) || 50;
 const MAX_ENCOURAGES_PER_RUN =
     Number(process.env.BOT_MAX_ENCOURAGES_PER_RUN) || 1000;
 const MAX_POSTS_PER_RUN = Number(process.env.BOT_MAX_POSTS_PER_RUN) || 1000;
+const BOT_DAILY_VIEWS_TARGET = Number(process.env.BOT_DAILY_VIEWS_TARGET) || 30;
 
 // Hashtags par topic (cohérents avec le contenu du post)
 const TOPIC_HASHTAGS = {
@@ -215,6 +216,48 @@ function getTargetMinutes(baseHour, seed, jitterRange = 30) {
     return baseHour * 60 + jitter;
 }
 
+function parseBotMeta(metaValue) {
+    try {
+        if (!metaValue) return {};
+        if (typeof metaValue === "object" && !Array.isArray(metaValue)) {
+            return { ...metaValue };
+        }
+        return JSON.parse(metaValue);
+    } catch (_error) {
+        return {};
+    }
+}
+
+async function fetchCurrentBotMeta(userId, fallbackMeta = null) {
+    try {
+        const { data, error } = await supabase
+            .from("bots")
+            .select("meta")
+            .eq("user_id", userId)
+            .maybeSingle();
+        if (error) throw error;
+        return parseBotMeta(data?.meta);
+    } catch (_error) {
+        return parseBotMeta(fallbackMeta);
+    }
+}
+
+async function persistMergedBotMeta(userId, metaUpdater, extraPayload = {}) {
+    const currentMeta = await fetchCurrentBotMeta(userId);
+    const nextMeta =
+        typeof metaUpdater === "function"
+            ? metaUpdater({ ...currentMeta })
+            : { ...currentMeta, ...(metaUpdater || {}) };
+    await supabase
+        .from("bots")
+        .update({
+            meta: nextMeta,
+            ...extraPayload,
+        })
+        .eq("user_id", userId);
+    return nextMeta;
+}
+
 async function postAsBot(bot) {
     try {
         // Generer un post varie et coherent avec le theme du bot
@@ -351,20 +394,7 @@ async function encourageAsBot(bot) {
         );
         if (rpcErr) throw rpcErr;
 
-        // Update meta for encouragement count
-        const meta =
-            bot.meta && typeof bot.meta === "object"
-                ? bot.meta
-                : bot.meta
-                  ? JSON.parse(bot.meta)
-                  : {};
         const todayStr = new Date().toISOString().slice(0, 10);
-        if (meta.last_action_date !== todayStr) {
-            meta.last_action_date = todayStr;
-            meta.encouraged_today = 1;
-        } else {
-            meta.encouraged_today = (Number(meta.encouraged_today) || 0) + 1;
-        }
 
         // Ensure content.encouragements_count reflects server state (if RPC returned count)
         try {
@@ -400,14 +430,24 @@ async function encourageAsBot(bot) {
                 err?.message || err,
             );
         }
-        await supabase
-            .from("bots")
-            .update({
-                last_encouraged_at: new Date().toISOString(),
-                last_action_at: new Date().toISOString(),
-                meta: meta,
-            })
-            .eq("user_id", bot.user_id);
+        const nowIso = new Date().toISOString();
+        await persistMergedBotMeta(
+            bot.user_id,
+            (meta) => {
+                if (meta.last_action_date !== todayStr) {
+                    meta.last_action_date = todayStr;
+                    meta.encouraged_today = 1;
+                } else {
+                    meta.encouraged_today =
+                        (Number(meta.encouraged_today) || 0) + 1;
+                }
+                return meta;
+            },
+            {
+                last_encouraged_at: nowIso,
+                last_action_at: nowIso,
+            },
+        );
         console.log(`Bot ${bot.user_id} encouraged content ${target.id}`);
         return rpcData;
     } catch (e) {
@@ -437,12 +477,7 @@ async function followAsBot(bot, maxToFollow = 1) {
     try {
         const now = new Date();
         const todayStr = now.toISOString().slice(0, 10);
-        const meta =
-            bot.meta && typeof bot.meta === "object"
-                ? bot.meta
-                : bot.meta
-                  ? JSON.parse(bot.meta)
-                  : {};
+        const meta = await fetchCurrentBotMeta(bot.user_id, bot.meta);
         if (meta.last_followed_date === todayStr) return 0;
 
         const followingIds = new Set(await getFollowingIds(bot.user_id));
@@ -520,17 +555,113 @@ async function followAsBot(bot, maxToFollow = 1) {
         }
 
         // Update meta
-        meta.follow_total = (Number(meta.follow_total) || 0) + followed;
-        meta.last_followed_date = todayStr;
-        await supabase
-            .from("bots")
-            .update({ meta: meta, last_action_at: new Date().toISOString() })
-            .eq("user_id", bot.user_id);
+        await persistMergedBotMeta(
+            bot.user_id,
+            (latestMeta) => {
+                latestMeta.follow_total =
+                    (Number(latestMeta.follow_total) || 0) + followed;
+                latestMeta.last_followed_date = todayStr;
+                return latestMeta;
+            },
+            { last_action_at: new Date().toISOString() },
+        );
         if (followed > 0)
             console.log(`Bot ${bot.user_id} followed ${followed} user(s)`);
         return followed;
     } catch (e) {
         console.warn(`followAsBot error for ${bot.user_id}:`, e?.message || e);
+        return 0;
+    }
+}
+
+async function viewAsBot(bot, dailyTarget = BOT_DAILY_VIEWS_TARGET) {
+    try {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const meta = await fetchCurrentBotMeta(bot.user_id, bot.meta);
+        const viewedToday =
+            meta.last_viewed_date === todayStr
+                ? Number(meta.viewed_today) || 0
+                : 0;
+        const remaining = Math.max(0, Number(dailyTarget) - viewedToday);
+        if (remaining <= 0) return 0;
+
+        const seenIds =
+            meta.last_viewed_date === todayStr &&
+            Array.isArray(meta.viewed_content_ids)
+                ? meta.viewed_content_ids.map(String)
+                : [];
+        const seenSet = new Set(seenIds);
+
+        const { data: candidates, error } = await supabase
+            .from("content")
+            .select("id, user_id, created_at")
+            .neq("user_id", bot.user_id)
+            .order("created_at", { ascending: false })
+            .limit(1000);
+        if (error) throw error;
+
+        const available = (candidates || []).filter(
+            (item) => item?.id && !seenSet.has(String(item.id)),
+        );
+        if (available.length === 0) return 0;
+
+        // Seeded shuffle for deterministic variety per bot/day
+        const shuffled = [...available].sort((a, b) => {
+            const av = getDeterministicRandom(
+                `${bot.user_id}:${todayStr}:view:${a.id}`,
+                2147483646,
+            );
+            const bv = getDeterministicRandom(
+                `${bot.user_id}:${todayStr}:view:${b.id}`,
+                2147483646,
+            );
+            return av - bv;
+        });
+
+        const targets = shuffled.slice(0, Math.min(remaining, 30));
+        let viewed = 0;
+        const viewedIds = [];
+        for (const target of targets) {
+            try {
+                await supabase.rpc("increment_views", { row_id: target.id });
+                viewed += 1;
+                viewedIds.push(String(target.id));
+                await sleep(20 + Math.random() * 50);
+            } catch (_error) {
+                // ignore per-view errors
+            }
+        }
+
+        if (viewed > 0) {
+            const nowIso = new Date().toISOString();
+            await persistMergedBotMeta(
+                bot.user_id,
+                (latestMeta) => {
+                    const baseViewed =
+                        latestMeta.last_viewed_date === todayStr
+                            ? Number(latestMeta.viewed_today) || 0
+                            : 0;
+                    const baseIds =
+                        latestMeta.last_viewed_date === todayStr &&
+                        Array.isArray(latestMeta.viewed_content_ids)
+                            ? latestMeta.viewed_content_ids.map(String)
+                            : [];
+                    const mergedIds = Array.from(
+                        new Set([...baseIds, ...viewedIds]),
+                    ).slice(-180);
+                    latestMeta.last_viewed_date = todayStr;
+                    latestMeta.viewed_today = baseViewed + viewed;
+                    latestMeta.viewed_content_ids = mergedIds;
+                    return latestMeta;
+                },
+                { last_action_at: nowIso },
+            );
+            console.log(`Bot ${bot.user_id} viewed ${viewed} post(s)`);
+        }
+
+        return viewed;
+    } catch (e) {
+        console.warn(`viewAsBot error for ${bot.user_id}:`, e?.message || e);
         return 0;
     }
 }
@@ -649,6 +780,12 @@ async function loopOnce() {
                         await followAsBot(bot, FOLLOW_DAILY_LIMIT);
                         await sleep(300 + Math.random() * 900);
                     }
+                }
+
+                // --- VIEWING (up to N posts per day across bots + real users) ---
+                const viewed = await viewAsBot(bot, BOT_DAILY_VIEWS_TARGET);
+                if (viewed > 0) {
+                    await sleep(180 + Math.random() * 420);
                 }
             } catch (botErr) {
                 console.warn(

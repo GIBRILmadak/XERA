@@ -5208,6 +5208,8 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
     const MAX_POSTS_PER_RUN = Number(process.env.BOT_MAX_POSTS_PER_RUN) || 50;
     const MAX_ENCOURAGES_PER_RUN =
         Number(process.env.BOT_MAX_ENCOURAGES_PER_RUN) || 200;
+    const BOT_DAILY_VIEWS_TARGET =
+        Number(process.env.BOT_DAILY_VIEWS_TARGET) || 30;
 
     function pickRandom(arr) {
         if (!arr || arr.length === 0) return null;
@@ -5223,6 +5225,48 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             da.getUTCMonth() === db.getUTCMonth() &&
             da.getUTCDate() === db.getUTCDate()
         );
+    }
+
+    function parseBotMeta(metaValue) {
+        try {
+            if (!metaValue) return {};
+            if (typeof metaValue === "object" && !Array.isArray(metaValue)) {
+                return { ...metaValue };
+            }
+            return JSON.parse(metaValue);
+        } catch (_error) {
+            return {};
+        }
+    }
+
+    async function fetchCurrentBotMeta(userId, fallbackMeta = null) {
+        try {
+            const { data, error } = await supabase
+                .from("bots")
+                .select("meta")
+                .eq("user_id", userId)
+                .maybeSingle();
+            if (error) throw error;
+            return parseBotMeta(data?.meta);
+        } catch (_error) {
+            return parseBotMeta(fallbackMeta);
+        }
+    }
+
+    async function persistMergedBotMeta(userId, metaUpdater, extraPayload = {}) {
+        const currentMeta = await fetchCurrentBotMeta(userId);
+        const nextMeta =
+            typeof metaUpdater === "function"
+                ? metaUpdater({ ...currentMeta })
+                : { ...currentMeta, ...(metaUpdater || {}) };
+        await supabase
+            .from("bots")
+            .update({
+                meta: nextMeta,
+                ...extraPayload,
+            })
+            .eq("user_id", userId);
+        return nextMeta;
     }
 
     // Check global bot_control flag to auto-force posts (admin can set bots.force_posts)
@@ -5448,12 +5492,7 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         try {
             const now = new Date();
             const todayStr = now.toISOString().slice(0, 10);
-            const meta =
-                bot.meta && typeof bot.meta === "object"
-                    ? bot.meta
-                    : bot.meta
-                      ? JSON.parse(bot.meta)
-                      : {};
+            const meta = await fetchCurrentBotMeta(bot.user_id, bot.meta);
             if (meta.last_followed_date === todayStr) return 0;
 
             const followingIds = new Set(await getFollowingIds(bot.user_id));
@@ -5531,21 +5570,105 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             }
 
             // Update meta
-            meta.follow_total = (Number(meta.follow_total) || 0) + followed;
-            meta.last_followed_date = todayStr;
-            await supabase
-                .from("bots")
-                .update({
-                    meta: meta,
-                    last_action_at: new Date().toISOString(),
-                })
-                .eq("user_id", bot.user_id);
+            await persistMergedBotMeta(
+                bot.user_id,
+                (latestMeta) => {
+                    latestMeta.follow_total =
+                        (Number(latestMeta.follow_total) || 0) + followed;
+                    latestMeta.last_followed_date = todayStr;
+                    return latestMeta;
+                },
+                { last_action_at: new Date().toISOString() },
+            );
             if (followed > 0)
                 console.log(`Bot ${bot.user_id} followed ${followed} user(s)`);
             return followed;
         } catch (e) {
             console.warn(
                 `followAsBot error for ${bot.user_id}:`,
+                e?.message || e,
+            );
+            return 0;
+        }
+    }
+
+    async function viewAsBot(bot, dailyTarget = BOT_DAILY_VIEWS_TARGET) {
+        try {
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const meta = await fetchCurrentBotMeta(bot.user_id, bot.meta);
+            const viewedToday =
+                meta.last_viewed_date === todayStr
+                    ? Number(meta.viewed_today) || 0
+                    : 0;
+            const remaining = Math.max(0, Number(dailyTarget) - viewedToday);
+            if (remaining <= 0) return 0;
+
+            const seenIds =
+                meta.last_viewed_date === todayStr &&
+                Array.isArray(meta.viewed_content_ids)
+                    ? meta.viewed_content_ids.map(String)
+                    : [];
+            const seenSet = new Set(seenIds);
+
+            const { data: candidates, error } = await supabase
+                .from("content")
+                .select("id, user_id, created_at")
+                .neq("user_id", bot.user_id)
+                .order("created_at", { ascending: false })
+                .limit(1000);
+            if (error) throw error;
+
+            const available = (candidates || []).filter(
+                (item) => item?.id && !seenSet.has(String(item.id)),
+            );
+            if (available.length === 0) return 0;
+
+            const shuffled = [...available].sort((a, b) =>
+                String(a.id).localeCompare(String(b.id)),
+            );
+            const targets = shuffled.slice(0, Math.min(remaining, 30));
+            let viewed = 0;
+            const viewedIds = [];
+            for (const target of targets) {
+                try {
+                    await supabase.rpc("increment_views", { row_id: target.id });
+                    viewed += 1;
+                    viewedIds.push(String(target.id));
+                } catch (_error) {
+                    // ignore individual failures
+                }
+            }
+
+            if (viewed > 0) {
+                const nowIso = new Date().toISOString();
+                await persistMergedBotMeta(
+                    bot.user_id,
+                    (latestMeta) => {
+                        const baseViewed =
+                            latestMeta.last_viewed_date === todayStr
+                                ? Number(latestMeta.viewed_today) || 0
+                                : 0;
+                        const baseIds =
+                            latestMeta.last_viewed_date === todayStr &&
+                            Array.isArray(latestMeta.viewed_content_ids)
+                                ? latestMeta.viewed_content_ids.map(String)
+                                : [];
+                        const mergedIds = Array.from(
+                            new Set([...baseIds, ...viewedIds]),
+                        ).slice(-180);
+                        latestMeta.last_viewed_date = todayStr;
+                        latestMeta.viewed_today = baseViewed + viewed;
+                        latestMeta.viewed_content_ids = mergedIds;
+                        return latestMeta;
+                    },
+                    { last_action_at: nowIso },
+                );
+            }
+
+            return viewed;
+        } catch (e) {
+            console.warn(
+                `viewAsBot error for ${bot.user_id}:`,
                 e?.message || e,
             );
             return 0;
@@ -5577,6 +5700,7 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         let posts = 0;
         let encourages = 0;
         let follows = 0;
+        let views = 0;
 
         for (const bot of bots || []) {
             // Post
@@ -5632,6 +5756,14 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             } catch (e) {
                 // ignore follow errors
             }
+
+            // Views (up to 30 posts/day per bot, real + bot posts)
+            try {
+                const viewed = await viewAsBot(bot, BOT_DAILY_VIEWS_TARGET);
+                if (viewed) views += viewed;
+            } catch (e) {
+                // ignore view errors
+            }
         }
 
         return res.json({
@@ -5640,6 +5772,7 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             posts,
             encourages,
             follows,
+            views,
             activeCount: activeCountValue,
         });
     } catch (e) {
