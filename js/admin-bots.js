@@ -372,23 +372,70 @@ async function renderSuperAdminPage() {
                 data: { session },
             } = await supabase.auth.getSession();
             const token = session?.access_token;
-            const res = await apiFetch("/api/admin/bots/run-now", {
-                method: "POST",
-                headers: {
-                    Authorization: token ? `Bearer ${token}` : "",
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ force: true }),
-            });
-            if (!res.ok) {
-                const body = await res.text().catch(() => "");
-                throw new Error(body || `HTTP ${res.status}`);
+
+            // Le backend run-now est limite par batch (20 par defaut).
+            // On enchaine les batches pour couvrir tous les bots actifs.
+            const activeFromLabel = parseInt(
+                document.getElementById("bots-active-count")?.textContent || "0",
+                10,
+            );
+            const activeFromInput = parseInt(input?.value || "0", 10);
+            const targetActive = Math.max(
+                0,
+                Number.isFinite(activeFromLabel) && activeFromLabel > 0
+                    ? activeFromLabel
+                    : activeFromInput,
+            );
+            const BATCH_SIZE = 20;
+            let remaining = targetActive > 0 ? targetActive : BATCH_SIZE;
+            let totalProcessed = 0;
+            let totalPosts = 0;
+            let totalEncourages = 0;
+            let totalFollows = 0;
+            let totalViews = 0;
+            let batchIndex = 0;
+
+            while (remaining > 0 && batchIndex < 100) {
+                const currentLimit = Math.max(
+                    1,
+                    Math.min(BATCH_SIZE, remaining),
+                );
+                runResultSpan.textContent = `Batch ${batchIndex + 1} en cours... (${Math.max(remaining, 0)} restant)`;
+
+                const res = await apiFetch("/api/admin/bots/run-now", {
+                    method: "POST",
+                    headers: {
+                        Authorization: token ? `Bearer ${token}` : "",
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        force: true,
+                        limit: currentLimit,
+                    }),
+                });
+                if (!res.ok) {
+                    const body = await res.text().catch(() => "");
+                    throw new Error(body || `HTTP ${res.status}`);
+                }
+
+                const json = await res.json();
+                const processed = Number(json.processed) || 0;
+                totalProcessed += processed;
+                totalPosts += Number(json.posts) || 0;
+                totalEncourages += Number(json.encourages) || 0;
+                totalFollows += Number(json.follows) || 0;
+                totalViews += Number(json.views) || 0;
+                remaining -= processed;
+                batchIndex += 1;
+
+                if (processed <= 0) break;
+                await new Promise((resolve) => setTimeout(resolve, 120));
             }
-            const json = await res.json();
-            runResultSpan.textContent = `Processed ${json.processed || 0} bots — posts ${json.posts || 0}, encourages ${json.encourages || 0}, follows ${json.follows || 0}`;
+
+            runResultSpan.textContent = `Processed ${totalProcessed} bots — posts ${totalPosts}, encourages ${totalEncourages}, follows ${totalFollows}, views ${totalViews}`;
             // refresh stats after run
             await refresh();
-} catch (err) {
+        } catch (err) {
             console.error("run-now error", err);
             runResultSpan.textContent = `Erreur: ${err && err.message ? err.message : "unknown"}`;
         } finally {

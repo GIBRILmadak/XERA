@@ -1072,12 +1072,12 @@ function buildMediaUrl(profile, seed) {
         `${seed}:image-query`,
         "workspace,project,build",
     );
-    const lock = toHashInt(`${seed}:image-lock`, 1000000) + 1;
-    const safeQuery = String(query || "workspace,project,build")
-        .replace(/\s+/g, ",")
-        .replace(/,+/g, ",")
-        .replace(/^,|,$/g, "");
-    return `https://loremflickr.com/1200/800/${encodeURIComponent(safeQuery)}?lock=${lock}`;
+    const uniqueSeed = crypto
+        .createHash("sha1")
+        .update(`${seed}:${query}`)
+        .digest("hex")
+        .slice(0, 24);
+    return `https://picsum.photos/seed/${uniqueSeed}/1200/800`;
 }
 
 function buildBotPostDraft({ bot, dayKey, postIndex = 1, recentPosts = [] }) {

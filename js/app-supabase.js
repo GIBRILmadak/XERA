@@ -15162,35 +15162,72 @@ function subscribeToRealtime() {
             async (payload) => {
                 console.log("Changement détecté dans content:", payload);
 
-                const { eventType, new: newRecord } = payload;
+                const { eventType, new: newRecord, old: oldRecord } = payload;
 
                 if (eventType === "INSERT" || eventType === "UPDATE") {
-                    const userId = newRecord.user_id;
+                    const userId = newRecord?.user_id;
+                    if (!userId) return;
 
-                    // Recharger le contenu de l'utilisateur concerné
+                    // Mise a jour locale immediate pour un feed temps reel plus reactif
+                    try {
+                        const converted = convertSupabaseContent(newRecord);
+                        const currentList = Array.isArray(userContents[userId])
+                            ? userContents[userId]
+                            : [];
+                        const merged = [
+                            converted,
+                            ...currentList.filter(
+                                (item) =>
+                                    item?.contentId !== converted.contentId,
+                            ),
+                        ].sort(
+                            (left, right) =>
+                                new Date(
+                                    right?.createdAt || right?.created_at || 0,
+                                ) -
+                                new Date(
+                                    left?.createdAt || left?.created_at || 0,
+                                ),
+                        );
+                        userContents[userId] = merged;
+                    } catch (_error) {
+                        // fallback ci-dessous via refetch complet
+                    }
+
+                    // Recharger en fond pour garder un etat exact (tags, arcs, etc.)
                     const contentResult = await getUserContent(userId);
                     if (contentResult.success) {
                         userContents[userId] = contentResult.data.map(
                             convertSupabaseContent,
                         );
+                    }
 
-                        // Si on affiche le profil de cet utilisateur, rafraîchir
-                        if (window.currentProfileViewed === userId) {
-                            console.log("Mise à jour automatique du profil...");
-                            // Si l'immersif est ouvert, éviter de rafraîchir automatiquement
-                            if (!window.__immersiveOpen) {
-                                await renderProfileIntoContainer(userId);
-                            } else {
-                                console.log(
-                                    "Immersive open: skip profile auto-refresh",
-                                );
-                            }
+                    // Si on affiche le profil de cet utilisateur, rafraîchir
+                    if (window.currentProfileViewed === userId) {
+                        console.log("Mise à jour automatique du profil...");
+                        if (!window.__immersiveOpen) {
+                            await renderProfileIntoContainer(userId);
+                        } else {
+                            console.log(
+                                "Immersive open: skip profile auto-refresh",
+                            );
                         }
+                    }
 
-                        // Refresh Discover cards (multiple cards can exist per user/arc)
-                        if (document.querySelector(".discover-grid")) {
-                            scheduleDiscoverRefresh();
-                        }
+                    // Refresh Discover cards (multiple cards can exist per user/arc)
+                    if (document.querySelector(".discover-grid")) {
+                        scheduleDiscoverRefresh();
+                    }
+                } else if (eventType === "DELETE") {
+                    const userId = oldRecord?.user_id;
+                    const contentId = oldRecord?.id;
+                    if (userId && contentId && Array.isArray(userContents[userId])) {
+                        userContents[userId] = userContents[userId].filter(
+                            (item) => item?.contentId !== contentId,
+                        );
+                    }
+                    if (document.querySelector(".discover-grid")) {
+                        scheduleDiscoverRefresh();
                     }
                 }
             },
