@@ -8,8 +8,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_o7_j9WXXd96YKXa-fmfs1Q_OEwNTh1M";
 // Initialiser le client Supabase seulement s'il n'existe pas déjà
 if (!window.supabaseClient) {
     try {
-        // Détecter si l'utilisateur veut être rappelé
-        const rememberMe = localStorage.getItem("rize-remember-me") === "true";
+        // Détecter si l'utilisateur veut être rappelé (activé par défaut)
+        const rememberMeRaw = localStorage.getItem("rize-remember-me");
+        const rememberMe =
+            rememberMeRaw === null ? true : rememberMeRaw === "true";
+        if (rememberMeRaw === null) {
+            localStorage.setItem("rize-remember-me", "true");
+        }
 
         if (window.supabase && window.supabase.createClient) {
             window.supabaseClient = window.supabase.createClient(
@@ -39,9 +44,6 @@ var supabase = window.supabaseClient;
 
 // Fonction pour reconfigurer le stockage de session selon les préférences
 function updateSessionStorage(rememberMe) {
-    // Sauvegarder la session actuelle si elle existe
-    const currentSession = supabase.auth.getSession();
-
     // Créer un nouveau client avec le bon stockage
     window.supabaseClient = window.supabase.createClient(
         SUPABASE_URL,
@@ -58,8 +60,7 @@ function updateSessionStorage(rememberMe) {
     );
 
     supabase = window.supabaseClient;
-
-    return currentSession;
+    return supabase;
 }
 
 // État d'authentification global
@@ -110,6 +111,8 @@ async function signIn(email, password) {
         return {
             success: false,
             error: error.message,
+            code: error.code || null,
+            status: Number.isFinite(error.status) ? error.status : null,
         };
     }
 }

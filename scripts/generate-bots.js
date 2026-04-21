@@ -5,6 +5,7 @@
 require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
 const crypto = require("crypto");
+const { buildBotPostDraft } = require("../server/bot-post-generator");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -126,7 +127,7 @@ const TOPIC_HASHTAGS = {
         "#recup",
         "#upcycling",
         "#makers",
-        "# homemade",
+        "#homemade",
     ],
     coding: [
         "#coding",
@@ -427,156 +428,32 @@ function generateHashtagsArray(topic, userId, count = 3) {
 
 async function createPostForUser(userId, index = 0, topic = "general") {
     const dayKey = new Date().toISOString().slice(0, 10);
-    const uniq = crypto
-        .createHash("sha1")
-        .update(`${userId}:${dayKey}:${index}`)
-        .digest("hex")
-        .slice(0, 6);
+    const postIndex = Number(index) + 1;
 
-    const mediaUrl = `https://picsum.photos/seed/${encodeURIComponent(
-        userId + "-" + dayKey + "-" + uniq,
-    )}/1200/800`;
-
-    // Topic-specific templates
-    let title;
-    let description;
-    if (topic && TECH_TOPICS.includes(topic)) {
-        const tpl = {
-            robotics: {
-                prefixes: [
-                    "Prototype",
-                    "Module",
-                    "Capteur",
-                    "Contrôleur",
-                    "Bras robotique",
-                    "Moteur",
-                ],
-                actions: [
-                    "en test",
-                    "v1.0",
-                    "au labo",
-                    "en montage",
-                    "intégration Arduino",
-                    "optimisé",
-                ],
-            },
-            ai: {
-                prefixes: [
-                    "Modèle",
-                    "Expérience",
-                    "Réseau",
-                    "Pipeline",
-                    "Fine-tune",
-                    "Prototype",
-                ],
-                actions: [
-                    "pour vision",
-                    "NLP",
-                    "en entraînement",
-                    "avec PyTorch",
-                    "optimisé",
-                    "en production",
-                ],
-            },
-            diy: {
-                prefixes: [
-                    "Tuto",
-                    "Astuce",
-                    "Montage",
-                    "Projet DIY",
-                    "Guide",
-                    "Hack",
-                ],
-                actions: [
-                    "étape par étape",
-                    "facile",
-                    "avec pièces récupérées",
-                    "low-cost",
-                    "rapide",
-                ],
-            },
-            coding: {
-                prefixes: [
-                    "Snippet",
-                    "Pattern",
-                    "Refactor",
-                    "Truc",
-                    "Astuce dev",
-                    "Bricolage code",
-                ],
-                actions: [
-                    "JS/Node",
-                    "Python",
-                    "best-practices",
-                    "optimisation",
-                    "débogage",
-                ],
-            },
-            entrepreneurship: {
-                prefixes: [
-                    "Business",
-                    "MVP",
-                    "Pitch",
-                    "Growth",
-                    "Leçon",
-                    "Astuce",
-                ],
-                actions: [
-                    "lean",
-                    "croissance",
-                    "marketing",
-                    "monétisation",
-                    "expérience client",
-                ],
-            },
-            mechanics: {
-                prefixes: [
-                    "Réglage",
-                    "Mécanique",
-                    "Diagnostic",
-                    "Atelier",
-                    "Maintenance",
-                    "Assemblage",
-                ],
-                actions: [
-                    "pignon",
-                    "roulement",
-                    "couple",
-                    "soudure",
-                    "usinage",
-                ],
-            },
-        }[topic];
-
-        title = `${pickRandom(tpl.prefixes)} ${pickRandom(tpl.actions)} • ${uniq}`;
-        description = `Partage technique (${topic}) — ${pickRandom(["Petit retour d'expérience", "Astuce pratique", "Étapes clés", "Code & schéma"])} (${uniq})`;
-    } else {
-        const adjectives = [
-            "Petit",
-            "Grand",
-            "Nouveau",
-            "Simple",
-            "Rapide",
-            "Beau",
-        ];
-        const nouns = [
-            "progrès",
-            "instant",
-            "moment",
-            "capture",
-            "éclair",
-            "point",
-        ];
-        const verbs = [
-            "du jour",
-            "du matin",
-            "du soir",
-            "du week-end",
-            "d'aujourd'hui",
-        ];
-        title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
-        description = `Post initial — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
+    let recentPosts = [];
+    if (supabase) {
+        try {
+            const { data } = await supabase
+                .from("content")
+                .select("title, description")
+                .eq("user_id", userId)
+                .order("created_at", { ascending: false })
+                .limit(20);
+            recentPosts = data || [];
+        } catch (_error) {
+            recentPosts = [];
+        }
     }
+
+    const draft = buildBotPostDraft({
+        bot: {
+            user_id: userId,
+            meta: { topic },
+        },
+        dayKey,
+        postIndex,
+        recentPosts,
+    });
 
     // Compute next day_number for this user's content (incremental per-user)
     let nextDayNumber = 1;
@@ -601,18 +478,15 @@ async function createPostForUser(userId, index = 0, topic = "general") {
         }
     }
 
-    // Générer les hashtags cohérents avec le topic (tableau pour colonne dédiée)
-    const hashtagsArray = generateHashtagsArray(topic, userId, 3);
-
     const payload = {
         user_id: userId,
         day_number: nextDayNumber,
         type: "image",
         state: "success",
-        title,
-        description,
-        hashtags: hashtagsArray,
-        media_url: mediaUrl,
+        title: draft.title,
+        description: draft.description,
+        hashtags: draft.hashtags,
+        media_url: draft.mediaUrl,
         created_at: new Date().toISOString(),
     };
 
@@ -627,8 +501,10 @@ async function createPostForUser(userId, index = 0, topic = "general") {
         }
         return data;
     } else {
-        console.log(`[dry-run] would create post for ${userId}: ${title}`);
-        return { id: `dry-${userId}-${uniq}` };
+        console.log(
+            `[dry-run] would create post for ${userId}: ${draft.title}`,
+        );
+        return { id: `dry-${userId}-${dayKey}-${postIndex}` };
     }
 }
 

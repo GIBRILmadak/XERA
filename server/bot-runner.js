@@ -6,6 +6,7 @@ require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const crypto = require("crypto");
+const { buildBotPostDraft } = require("./bot-post-generator");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -39,7 +40,7 @@ const TOPIC_HASHTAGS = {
     ],
     diy: [
         "#diy", "#bricolage", "#faitmain", "#tuto", "#astuce",
-        "#recup", "#upcycling", "#makers", "# homemade"
+        "#recup", "#upcycling", "#makers", "#homemade"
     ],
     coding: [
         "#coding", "#dev", "#programmation", "#javascript", "#python",
@@ -216,7 +217,7 @@ function getTargetMinutes(baseHour, seed, jitterRange = 30) {
 
 async function postAsBot(bot) {
     try {
-        // Générer un post distinctif par bot par jour
+        // Generer un post varie et coherent avec le theme du bot
         const dayKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
         
         // Fetch current post count today to make the uniq hash unique for multiple posts same day
@@ -227,137 +228,21 @@ async function postAsBot(bot) {
             .gte("created_at", dayKey + "T00:00:00Z");
 
         const postIndex = (todayCount || 0) + 1;
-        const uniq = crypto
-            .createHash("sha1")
-            .update(`${bot.user_id}:${dayKey}:${postIndex}`)
-            .digest("hex")
-            .slice(0, 6);
 
-        // Seed unique pour chaque bot et chaque post
-        const mediaUrl = `https://picsum.photos/seed/${encodeURIComponent(
-            bot.user_id + "-" + dayKey + "-" + postIndex + "-" + uniq,
-        )}/1200/800`;
+        // Recuperer un petit historique pour eviter les doublons de titres/descriptions
+        const { data: recentPosts } = await supabase
+            .from("content")
+            .select("title, description")
+            .eq("user_id", bot.user_id)
+            .order("created_at", { ascending: false })
+            .limit(20);
 
-        const meta =
-            bot.meta && typeof bot.meta === "object"
-                ? bot.meta
-                : bot.meta
-                  ? JSON.parse(bot.meta)
-                  : {};
-        const topic =
-            meta.topic ||
-            (Array.isArray(meta.topics) && meta.topics[0]) ||
-            "general";
-
-        // Varier les types de posts (Victoire, Pose, Réflexion)
-        const postTypes = ["victory", "pose", "reflection", "technical"];
-        const chosenType = postTypes[getDeterministicRandom(bot.user_id + dayKey + postIndex, postTypes.length)];
-
-        let title;
-        let description;
-
-        if (chosenType === "victory") {
-            const victories = ["Victoire !", "Succès", "Étape franchie", "Objectif atteint", "Enfin réussi"];
-            const details = ["Le prototype fonctionne !", "Test validé avec succès", "Grosse avancée aujourd'hui", "On avance bien sur le projet"];
-            title = `${pickRandom(victories)} • ${topic.toUpperCase()} • ${uniq}`;
-            description = `${pickRandom(details)} (${topic}) — ${uniq}`;
-        } else if (chosenType === "pose") {
-            const poses = ["Petite pause", "Moment de calme", "Inspiration", "Café & Code", "Prendre du recul"];
-            const details = ["On recharge les batteries", "Prendre le temps de réfléchir", "Le labo au calme", "Inspiration du moment"];
-            title = `${pickRandom(poses)} • ${uniq}`;
-            description = `${pickRandom(details)} — ${topic} logic. (${uniq})`;
-        } else if (chosenType === "reflection") {
-            const reflections = ["Réflexion", "Analyse", "Pensée du jour", "Brainstorming", "Questionnement"];
-            const details = ["Comment optimiser ce module ?", "Et si on changeait d'approche ?", "Recherche de la meilleure solution", "Architecture en cours..."];
-            title = `${pickRandom(reflections)} • ${topic} • ${uniq}`;
-            description = `${pickRandom(details)} (${uniq})`;
-        } else {
-            // Fallback to technical/standard
-            if (
-                topic &&
-                [
-                    "robotics", "ai", "diy", "coding", "entrepreneurship", "mechanics",
-                    "music", "gaming", "cooking", "fitness", "photography", "travel",
-                    "art", "science", "writing", "gardening"
-                ].includes(topic)
-            ) {
-                const tplMap = {
-                    robotics: {
-                        prefixes: ["Prototype", "Module", "Capteur", "Contrôleur", "Bras robotique", "Moteur"],
-                        actions: ["en test", "v1.0", "au labo", "en montage", "intégration Arduino", "optimisé"],
-                    },
-                    ai: {
-                        prefixes: ["Modèle", "Expérience", "Réseau", "Pipeline", "Fine-tune", "Prototype"],
-                        actions: ["pour vision", "NLP", "en entraînement", "avec PyTorch", "optimisé", "en production"],
-                    },
-                    diy: {
-                        prefixes: ["Tuto", "Astuce", "Montage", "Projet DIY", "Guide", "Hack"],
-                        actions: ["étape par étape", "facile", "avec pièces récupérées", "low-cost", "rapide"],
-                    },
-                    coding: {
-                        prefixes: ["Snippet", "Pattern", "Refactor", "Truc", "Astuce dev", "Bricolage code"],
-                        actions: ["JS/Node", "Python", "best-practices", "optimisation", "débogage"],
-                    },
-                    entrepreneurship: {
-                        prefixes: ["Business", "MVP", "Pitch", "Growth", "Leçon", "Astuce"],
-                        actions: ["lean", "croissance", "marketing", "monétisation", "expérience client"],
-                    },
-                    mechanics: {
-                        prefixes: ["Réglage", "Mécanique", "Diagnostic", "Atelier", "Maintenance", "Assemblage"],
-                        actions: ["pignon", "roulement", "couple", "soudure", "usinage"],
-                    },
-                    music: {
-                        prefixes: ["Morceau", "Beat", "Sample", "Mix", "Session", "Jam"],
-                        actions: ["en studio", "live session", "nouveau track", "enregistrement", "production", "enfin prêt"],
-                    },
-                    gaming: {
-                        prefixes: ["Session", "Stream", "Ranking", "Build", "Coop", "Speedrun"],
-                        actions: ["sur Twitch", "nouveau record", "completion", "en solo", "avec la team", "ce soir"],
-                    },
-                    cooking: {
-                        prefixes: ["Recette", "Plat", "Dish", "Menu", "Prépa", "Astuce cuisine"],
-                        actions: ["maison", "express", "healthy", "vegan", "traditionnel", "nouvelle déclinaison"],
-                    },
-                    fitness: {
-                        prefixes: ["Entraînement", "Séance", "Workout", "Routine", "Progrès", "Défi"],
-                        actions: ["matinal", "intense", "à la salle", "en extérieur", "nouveau record", "recovery"],
-                    },
-                    photography: {
-                        prefixes: ["Shot", "Cliché", "Photo", "Portrait", "Paysage", "Session"],
-                        actions: ["en lumière naturelle", "edit RAW", "nouveau spot", "avec le 50mm", "golden hour", "street"],
-                    },
-                    travel: {
-                        prefixes: ["Trip", "Aventure", "Road trip", "Destination", "Échapée", "Exploration"],
-                        actions: ["en solo", "en couple", "backpack", "week-end", "discovery", "inattendu"],
-                    },
-                    art: {
-                        prefixes: ["Sketch", "Illustration", "Peinture", "Digital", "Concept", "Projet"],
-                        actions: ["en cours", "time-lapse", "nouveau médium", "study", "commission", "finished"],
-                    },
-                    science: {
-                        prefixes: ["Expérience", "Recherche", "Découverte", "Hypothèse", "Analyse", "Prototype"],
-                        actions: ["au labo", "en cours", "résultats", "publication", "collaboration", "breakthrough"],
-                    },
-                    writing: {
-                        prefixes: ["Chapitre", "Scène", "Blog", "Poème", "Script", "Draft"],
-                        actions: ["en écriture", "révision", "brainstorming", "plot twist", "edit", "final draft"],
-                    },
-                    gardening: {
-                        prefixes: ["Plant", "Semis", "Récolte", "Jardin", "Potager", "Bloom"],
-                        actions: ["en croissance", "fleuri", "nouveau seedling", "bio", "saison", "transplantation"],
-                    },
-                };
-                const tpl = tplMap[topic] || tplMap.coding;
-                title = `${pickRandom(tpl.prefixes)} ${pickRandom(tpl.actions)} • ${uniq}`;
-                description = `Partage technique (${topic}) — ${pickRandom(["Petit retour d'expérience", "Astuce pratique", "Étapes clés", "Code & schéma"])} (${uniq})`;
-            } else {
-                const adjectives = ["Petit", "Grand", "Nouveau", "Simple", "Rapide", "Beau"];
-                const nouns = ["progrès", "instant", "moment", "capture", "éclair", "point"];
-                const verbs = ["du jour", "du matin", "du soir", "du week-end", "d'aujourd'hui"];
-                title = `${pickRandom(adjectives)} ${pickRandom(nouns)} ${pickRandom(verbs)} • ${uniq}`;
-                description = `Partage quotidien — ${pickRandom(["Un pas de plus", "Petite victoire", "Persévérance", "Suivi de progrès"])} (${uniq})`;
-            }
-        }
+        const draft = buildBotPostDraft({
+            bot,
+            dayKey,
+            postIndex,
+            recentPosts: recentPosts || [],
+        });
 
         // Compute next day_number for this user's content (incremental per-user)
         let nextDayNumber = 1;
@@ -380,18 +265,15 @@ async function postAsBot(bot) {
             // ignore and fallback to 1
         }
 
-        // Générer les hashtags cohérents avec le topic (tableau pour colonne dédiée)
-        const hashtagsArray = generateHashtagsArray(topic, 3);
-
         const payload = {
             user_id: bot.user_id,
             day_number: nextDayNumber,
             type: "image",
             state: "success",
-            title,
-            description,
-            hashtags: hashtagsArray,
-            media_url: mediaUrl,
+            title: draft.title,
+            description: draft.description,
+            hashtags: draft.hashtags,
+            media_url: draft.mediaUrl,
             created_at: new Date().toISOString(),
         };
 
