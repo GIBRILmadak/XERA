@@ -51,6 +51,9 @@ const TECH_TOPICS = [
     "gardening",
 ];
 const SEED_POSTS_PER_BOT = Number(process.env.SEED_POSTS_PER_BOT || 0);
+// By default, generated bots are active so they can post on schedule.
+// Set BOT_DEFAULT_ACTIVE=false to generate inactive bots.
+const DEFAULT_BOT_ACTIVE = String(process.env.BOT_DEFAULT_ACTIVE || "true") !== "false";
 
 function randomDaysOfWeek(count = 3) {
     const s = new Set();
@@ -633,7 +636,7 @@ async function createBot(i) {
                         user_id: authUserId,
                         display_name: name,
                         avatar_url: avatar,
-                        active: false,
+                        active: DEFAULT_BOT_ACTIVE,
                         schedule_hour: scheduleHour,
                         encourage_days: encourageDays,
                         meta: { seeded: true, topic },
