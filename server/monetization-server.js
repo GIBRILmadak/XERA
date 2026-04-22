@@ -5255,14 +5255,36 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         return now.getUTCHours() * 60 + now.getUTCMinutes();
     }
 
-    function getElapsedWindowEnd(currentMinutes, startMinute, endMinute) {
-        return Math.max(startMinute, Math.min(endMinute, currentMinutes));
-    }
+	    function getElapsedWindowEnd(currentMinutes, startMinute, endMinute) {
+	        return Math.max(startMinute, Math.min(endMinute, currentMinutes));
+	    }
 
-    function parseBotMeta(metaValue) {
-        try {
-            if (!metaValue) return {};
-            if (typeof metaValue === "object" && !Array.isArray(metaValue)) {
+	    function clampMinute(value, min, max) {
+	        const v = Math.floor(Number(value) || 0);
+	        return Math.max(min, Math.min(max, v));
+	    }
+
+	    function getBotScheduledPostMinute(bot, dayKey, fallbackMinute = 0) {
+	        const rawHour = Number(bot?.schedule_hour);
+	        const hour = Number.isFinite(rawHour)
+	            ? clampMinute(rawHour, 0, 23)
+	            : getDeterministicRandom(`${bot?.user_id}:${dayKey}:postHour`, 24);
+	        const minuteInHour = getDeterministicRandom(
+	            `${bot?.user_id}:${dayKey}:postMinute`,
+	            60,
+	        );
+	        const minuteOfDay = hour * 60 + minuteInHour;
+	        return clampMinute(
+	            Number.isFinite(minuteOfDay) ? minuteOfDay : fallbackMinute,
+	            BOT_POST_WINDOW_START_MINUTE,
+	            BOT_POST_WINDOW_END_MINUTE,
+	        );
+	    }
+
+	    function parseBotMeta(metaValue) {
+	        try {
+	            if (!metaValue) return {};
+	            if (typeof metaValue === "object" && !Array.isArray(metaValue)) {
                 return { ...metaValue };
             }
             return JSON.parse(metaValue);
@@ -5322,21 +5344,22 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         }
     }
 
-    function resolveDailyPostCreatedAt(bot, postMinuteMap, now) {
-        const dayKey = now.toISOString().slice(0, 10);
-        const fallbackMinute = getElapsedWindowEnd(
-            getCurrentUtcMinute(now),
-            BOT_POST_WINDOW_START_MINUTE,
-            BOT_POST_WINDOW_END_MINUTE,
-        );
-        const assignedMinute =
-            postMinuteMap.get(String(bot.user_id)) ?? fallbackMinute;
-        return buildIsoFromMinuteOfDay(
-            dayKey,
-            assignedMinute,
-            `${bot.user_id}:post`,
-        );
-    }
+	    function resolveDailyPostCreatedAt(bot, postMinuteMap, now) {
+	        const dayKey = now.toISOString().slice(0, 10);
+	        const fallbackMinute = getElapsedWindowEnd(
+	            getCurrentUtcMinute(now),
+	            BOT_POST_WINDOW_START_MINUTE,
+	            BOT_POST_WINDOW_END_MINUTE,
+	        );
+	        const assignedMinute = Number.isFinite(Number(bot?.schedule_hour))
+	            ? getBotScheduledPostMinute(bot, dayKey, fallbackMinute)
+	            : postMinuteMap.get(String(bot.user_id)) ?? fallbackMinute;
+	        return buildIsoFromMinuteOfDay(
+	            dayKey,
+	            assignedMinute,
+	            `${bot.user_id}:post`,
+	        );
+	    }
 
     function getBotEncouragementBacklog(bot, meta, todayStr, currentMinutes) {
         const dailyTarget = getBotDailyEncourageTarget(
@@ -5861,29 +5884,41 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             postsCountMap[post.user_id] = (postsCountMap[post.user_id] || 0) + 1;
         });
 
-        const postMinuteMap = buildDistributedMinuteSlots(bots || [], {
-            dayKey: todayStr,
-            actionKey: "post",
-            startMinute: BOT_POST_WINDOW_START_MINUTE,
-            endMinute: getElapsedWindowEnd(
-                currentMinutes,
-                BOT_POST_WINDOW_START_MINUTE,
-                BOT_POST_WINDOW_END_MINUTE,
-            ),
-        });
+	        const postMinuteMap = buildDistributedMinuteSlots(bots || [], {
+	            dayKey: todayStr,
+	            actionKey: "post",
+	            startMinute: BOT_POST_WINDOW_START_MINUTE,
+	            endMinute: getElapsedWindowEnd(
+	                currentMinutes,
+	                BOT_POST_WINDOW_START_MINUTE,
+	                BOT_POST_WINDOW_END_MINUTE,
+	            ),
+	        });
 
-        for (const bot of bots || []) {
-            const meta = parseBotMeta(bot.meta);
-            const currentPosts = postsCountMap[bot.user_id] || 0;
+	        for (const bot of bots || []) {
+	            const meta = parseBotMeta(bot.meta);
+	            const currentPosts = postsCountMap[bot.user_id] || 0;
 
-            if (posts < MAX_POSTS_PER_RUN && currentPosts < BOT_MIN_POSTS_PER_DAY) {
-                const createdAt = resolveDailyPostCreatedAt(bot, postMinuteMap, now);
-                const result = await postAsBot(bot, { createdAt });
-                if (result) {
-                    posts += 1;
-                    postsCountMap[bot.user_id] = currentPosts + 1;
-                }
-            }
+	            if (posts < MAX_POSTS_PER_RUN && currentPosts < BOT_MIN_POSTS_PER_DAY) {
+	                const scheduledMinute = Number.isFinite(Number(bot?.schedule_hour))
+	                    ? getBotScheduledPostMinute(bot, todayStr)
+	                    : postMinuteMap.get(String(bot.user_id));
+	                const isDue =
+	                    Number.isFinite(Number(scheduledMinute)) &&
+	                    currentMinutes >= Number(scheduledMinute);
+	                if (!shouldForcePostsForRun && !isDue) {
+	                    // Not time yet for this bot today.
+	                    continue;
+	                }
+	                const createdAt = shouldForcePostsForRun
+	                    ? new Date().toISOString()
+	                    : resolveDailyPostCreatedAt(bot, postMinuteMap, now);
+	                const result = await postAsBot(bot, { createdAt });
+	                if (result) {
+	                    posts += 1;
+	                    postsCountMap[bot.user_id] = currentPosts + 1;
+	                }
+	            }
 
             if (encourages < MAX_ENCOURAGES_PER_RUN) {
                 const encouragedToday =
