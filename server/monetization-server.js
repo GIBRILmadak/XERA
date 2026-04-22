@@ -5014,7 +5014,13 @@ app.post("/api/admin/bots/set-active-count", async (req, res) => {
     if (!Number.isFinite(parsed) || parsed < 0) {
         return res.status(400).send("Paramètre count invalide");
     }
-    const count = Math.max(0, Math.min(400, parseInt(parsed, 10)));
+    const maxCount = Math.max(
+        0,
+        Number.isFinite(Number(process.env.BOTS_ACTIVE_COUNT_MAX))
+            ? Number(process.env.BOTS_ACTIVE_COUNT_MAX)
+            : 10000,
+    );
+    const count = Math.max(0, Math.min(maxCount, parseInt(parsed, 10)));
 
     try {
         // Upsert control

@@ -199,15 +199,15 @@ async function renderSuperAdminPage() {
             <div id="admin-bots-column">
                 <div class="settings-section">
                     <h2>Bots Manager</h2>
-                    <div id="bots-stats" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
-                        <div>Total bots: <strong id="bots-total">—</strong></div>
-                        <div>Active: <strong id="bots-active-count">—</strong></div>
-                        <div>
-                            <label>Set active count: <input id="bots-active-input" type="number" min="0" max="400" style="width:6rem;margin-left:.5rem"></label>
-                            <button id="bots-active-set-btn">Apply</button>
-                            <button id="bots-refresh-btn">Refresh</button>
-                            <button id="bots-run-now-btn" style="margin-left:.5rem">Run now</button>
-                            <label style="margin-left:1rem;display:inline-flex;align-items:center;gap:.5rem">Auto-force posts: <input id="bots-force-posts-checkbox" type="checkbox" style="margin-left:.25rem"></label>
+	                    <div id="bots-stats" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+	                        <div>Total bots: <strong id="bots-total">—</strong></div>
+	                        <div>Active: <strong id="bots-active-count">—</strong></div>
+	                        <div>
+	                            <label>Set active count: <input id="bots-active-input" type="number" min="0" max="10000" style="width:6rem;margin-left:.5rem"></label>
+	                            <button id="bots-active-set-btn">Apply</button>
+	                            <button id="bots-refresh-btn">Refresh</button>
+	                            <button id="bots-run-now-btn" style="margin-left:.5rem">Run now</button>
+	                            <label style="margin-left:1rem;display:inline-flex;align-items:center;gap:.5rem">Auto-force posts: <input id="bots-force-posts-checkbox" type="checkbox" style="margin-left:.25rem"></label>
                             <button id="bots-force-posts-set-btn" style="margin-left:.25rem">Save</button>
                             <button id="bots-delete-all-btn" style="margin-left:1rem;background:var(--error);color:#fff;padding:0.25rem 0.5rem;border-radius:4px;border:none;cursor:pointer;">Delete All Bots</button>
                             <span id="bots-run-result" style="margin-left:0.75rem;color:var(--text-secondary)"></span>
