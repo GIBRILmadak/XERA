@@ -19,4 +19,4 @@ ON CONFLICT (key) DO UPDATE SET value = '{"count":0}';
 
 -- Vérifier
 SELECT COUNT(*) as bots_restants FROM bots;
-SELECT COUNT(*) as users_bots_restants FROM users WHERE is_bot = true;
+SELECT COUNT(*) as users_bots_restants FROM users WHERE is_bot = true;   

@@ -2,9 +2,16 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const { createClient } = require("@supabase/supabase-js");
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const webpush = require("web-push");
 const crypto = require("crypto");
 const { buildBotPostDraft } = require("./bot-post-generator");
+const {
+    buildDistributedMinuteSlots,
+    buildIsoFromMinuteOfDay,
+    getBotDailyEncourageTarget,
+    getDeterministicRandom,
+} = require("./bot-schedule-utils");
 
 dotenv.config();
 
@@ -5184,9 +5191,7 @@ app.post("/api/admin/bots/delete-all", async (req, res) => {
 
 // Run-once runner for bots - intended for serverless environments (Vercel cron)
 app.post("/api/admin/bots/run-now", async (req, res) => {
-    // Authorize cron invocation (uses CRON_SECRET or Bearer token / x-cron-secret)
     const cronAuth = authorizeCronRequest(req);
-    // Allow either a valid cron secret OR an authenticated super-admin session
     let authorized = cronAuth.ok === true;
     if (!authorized) {
         const adminAuth = await authenticateSuperAdmin(req);
@@ -5203,28 +5208,41 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             process.env.BOT_RUN_ONCE_BATCH ??
             20,
     );
-    // Par défaut suivre 3 utilisateurs par bot et par jour
     const FOLLOW_DAILY_LIMIT = Number(process.env.BOT_FOLLOW_DAILY_LIMIT) || 3;
     const MAX_POSTS_PER_RUN = Number(process.env.BOT_MAX_POSTS_PER_RUN) || 50;
-    const MAX_ENCOURAGES_PER_RUN =
-        Number(process.env.BOT_MAX_ENCOURAGES_PER_RUN) || 200;
+    const BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY = Math.max(
+        15,
+        Number(process.env.BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY) || 15,
+    );
+    const MAX_ENCOURAGES_PER_RUN = Math.max(
+        Number(process.env.BOT_MAX_ENCOURAGES_PER_RUN) || 200,
+        Math.max(1, limit) * BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY,
+    );
     const BOT_DAILY_VIEWS_TARGET =
         Number(process.env.BOT_DAILY_VIEWS_TARGET) || 30;
+    const BOT_MIN_POSTS_PER_DAY =
+        Math.max(1, Number(process.env.BOT_MIN_POSTS_PER_DAY) || 1);
+    const BOT_POST_WINDOW_START_MINUTE =
+        Math.max(0, Number(process.env.BOT_POST_WINDOW_START_MINUTE) || 6 * 60);
+    const BOT_POST_WINDOW_END_MINUTE = Math.min(
+        23 * 60 + 30,
+        Number(process.env.BOT_POST_WINDOW_END_MINUTE) || 22 * 60 + 30,
+    );
+    const BOT_ENCOURAGE_WINDOW_START_MINUTE = Math.max(
+        0,
+        Number(process.env.BOT_ENCOURAGE_WINDOW_START_MINUTE) || 7 * 60,
+    );
+    const BOT_ENCOURAGE_WINDOW_END_MINUTE = Math.min(
+        23 * 60 + 45,
+        Number(process.env.BOT_ENCOURAGE_WINDOW_END_MINUTE) || 23 * 60,
+    );
 
-    function pickRandom(arr) {
-        if (!arr || arr.length === 0) return null;
-        return arr[Math.floor(Math.random() * arr.length)];
+    function getCurrentUtcMinute(now = new Date()) {
+        return now.getUTCHours() * 60 + now.getUTCMinutes();
     }
 
-    function isSameDayUTC(a, b) {
-        if (!a || !b) return false;
-        const da = new Date(a);
-        const db = new Date(b);
-        return (
-            da.getUTCFullYear() === db.getUTCFullYear() &&
-            da.getUTCMonth() === db.getUTCMonth() &&
-            da.getUTCDate() === db.getUTCDate()
-        );
+    function getElapsedWindowEnd(currentMinutes, startMinute, endMinute) {
+        return Math.max(startMinute, Math.min(endMinute, currentMinutes));
     }
 
     function parseBotMeta(metaValue) {
@@ -5269,7 +5287,84 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         return nextMeta;
     }
 
-    // Check global bot_control flag to auto-force posts (admin can set bots.force_posts)
+    async function fetchAlreadyEncouragedIds(botUserId, contentIds = []) {
+        const uniqueIds = Array.from(new Set((contentIds || []).filter(Boolean)));
+        if (!botUserId || uniqueIds.length === 0) return new Set();
+
+        try {
+            const { data, error } = await supabase
+                .from("content_encouragements")
+                .select("content_id")
+                .eq("user_id", botUserId)
+                .in("content_id", uniqueIds);
+            if (error) throw error;
+            return new Set((data || []).map((row) => String(row.content_id)));
+        } catch (error) {
+            console.warn(
+                `fetchAlreadyEncouragedIds error for ${botUserId}:`,
+                error?.message || error,
+            );
+            return new Set();
+        }
+    }
+
+    function resolveDailyPostCreatedAt(bot, postMinuteMap, now) {
+        const dayKey = now.toISOString().slice(0, 10);
+        const fallbackMinute = getElapsedWindowEnd(
+            getCurrentUtcMinute(now),
+            BOT_POST_WINDOW_START_MINUTE,
+            BOT_POST_WINDOW_END_MINUTE,
+        );
+        const assignedMinute =
+            postMinuteMap.get(String(bot.user_id)) ?? fallbackMinute;
+        return buildIsoFromMinuteOfDay(
+            dayKey,
+            assignedMinute,
+            `${bot.user_id}:post`,
+        );
+    }
+
+    function getBotEncouragementBacklog(bot, meta, todayStr, currentMinutes) {
+        const dailyTarget = getBotDailyEncourageTarget(
+            bot,
+            BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY,
+        );
+        if (
+            dailyTarget <= 0 ||
+            currentMinutes < BOT_ENCOURAGE_WINDOW_START_MINUTE
+        ) {
+            return 0;
+        }
+
+        const encouragedToday =
+            meta.last_action_date === todayStr
+                ? Number(meta.encouraged_today) || 0
+                : 0;
+        if (encouragedToday >= dailyTarget) return 0;
+
+        const elapsedEnd = getElapsedWindowEnd(
+            currentMinutes,
+            BOT_ENCOURAGE_WINDOW_START_MINUTE,
+            BOT_ENCOURAGE_WINDOW_END_MINUTE,
+        );
+        const fullSpan = Math.max(
+            1,
+            BOT_ENCOURAGE_WINDOW_END_MINUTE -
+                BOT_ENCOURAGE_WINDOW_START_MINUTE +
+                1,
+        );
+        const elapsedSpan = Math.max(
+            1,
+            elapsedEnd - BOT_ENCOURAGE_WINDOW_START_MINUTE + 1,
+        );
+        const targetByNow = Math.min(
+            dailyTarget,
+            Math.max(1, Math.ceil((elapsedSpan / fullSpan) * dailyTarget)),
+        );
+
+        return Math.max(0, targetByNow - encouragedToday);
+    }
+
     let globalForcePostsEnabled = false;
     try {
         const { data: forceControl } = await supabase
@@ -5289,20 +5384,25 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                     v === true || String(v) === "true" || String(v) === "1";
             }
         }
-    } catch (e) {
+    } catch (_error) {
         // ignore and default to false
     }
 
-    async function postAsBot(bot) {
+    async function postAsBot(bot, options = {}) {
         try {
-            const dayKey = new Date().toISOString().slice(0, 10);
+            const createdAt = options.createdAt || new Date().toISOString();
+            const dayKey = createdAt.slice(0, 10);
             const todayStartIso = `${dayKey}T00:00:00Z`;
+            const nextDayIso = new Date(
+                Date.parse(`${dayKey}T00:00:00Z`) + 24 * 60 * 60 * 1000,
+            ).toISOString();
 
             const { count: todayCount } = await supabase
                 .from("content")
                 .select("*", { count: "exact", head: true })
                 .eq("user_id", bot.user_id)
-                .gte("created_at", todayStartIso);
+                .gte("created_at", todayStartIso)
+                .lt("created_at", nextDayIso);
 
             const postIndex = (todayCount || 0) + 1;
 
@@ -5320,7 +5420,6 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                 recentPosts: recentPosts || [],
             });
 
-            // Compute next day_number for this user's content (incremental per-user)
             let nextDayNumber = 1;
             try {
                 const { data: lastRow, error: lastErr } = await supabase
@@ -5337,7 +5436,7 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                 ) {
                     nextDayNumber = Number(lastRow.day_number) + 1;
                 }
-            } catch (e) {
+            } catch (_error) {
                 // ignore and fallback to 1
             }
 
@@ -5350,7 +5449,7 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                 description: draft.description,
                 hashtags: draft.hashtags,
                 media_url: draft.mediaUrl,
-                created_at: new Date().toISOString(),
+                created_at: createdAt,
             };
 
             const { data, error } = await supabase
@@ -5359,57 +5458,72 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                 .select()
                 .single();
             if (error) throw error;
+
             await supabase
                 .from("bots")
                 .update({
-                    last_posted_at: new Date().toISOString(),
+                    last_posted_at: createdAt,
                     last_action_at: new Date().toISOString(),
                 })
                 .eq("user_id", bot.user_id);
             return data;
-        } catch (e) {
-            console.warn(
-                `postAsBot error for ${bot.user_id}:`,
-                e?.message || e,
-            );
+        } catch (error) {
+            console.warn(`postAsBot error for ${bot.user_id}:`, error?.message || error);
             return null;
         }
     }
 
     async function encourageAsBot(bot) {
         try {
-            // Fetch recent content candidates
+            const todayStr = new Date().toISOString().slice(0, 10);
             const { data: candidates, error } = await supabase
                 .from("content")
                 .select("id, user_id, created_at")
                 .neq("user_id", bot.user_id)
                 .order("created_at", { ascending: false })
-                .limit(500);
+                .limit(800);
             if (error) throw error;
             if (!candidates || candidates.length === 0) return null;
 
-            // Prioritize content from real users (is_bot = false)
-            const userIds = Array.from(
-                new Set(candidates.map((c) => c.user_id).filter(Boolean)),
+            const alreadyEncouragedIds = await fetchAlreadyEncouragedIds(
+                bot.user_id,
+                candidates.map((item) => item.id),
             );
-            let usersMap = {};
+            const availableCandidates = candidates.filter(
+                (item) => item?.id && !alreadyEncouragedIds.has(String(item.id)),
+            );
+            if (availableCandidates.length === 0) return null;
+
+            const userIds = Array.from(
+                new Set(availableCandidates.map((c) => c.user_id).filter(Boolean)),
+            );
+            const usersMap = {};
             if (userIds.length > 0) {
                 const { data: users } = await supabase
                     .from("users")
                     .select("id, is_bot")
                     .in("id", userIds);
                 if (users && users.length) {
-                    users.forEach((u) => {
-                        usersMap[u.id] = !!u.is_bot;
+                    users.forEach((user) => {
+                        usersMap[user.id] = !!user.is_bot;
                     });
                 }
             }
 
-            const prioritized = candidates.filter((c) => !usersMap[c.user_id]);
-            const pickFrom = prioritized.length > 0 ? prioritized : candidates;
-            const target = pickRandom(pickFrom);
+            const prioritized = availableCandidates.filter(
+                (item) => !usersMap[item.user_id],
+            );
+            const pickFrom = prioritized.length > 0 ? prioritized : availableCandidates;
+            const freshnessPool = pickFrom.slice(0, Math.min(40, pickFrom.length));
+            const target =
+                freshnessPool[
+                    getDeterministicRandom(
+                        `${bot.user_id}:${todayStr}:encourage:${freshnessPool.length}`,
+                        freshnessPool.length,
+                    )
+                ];
             if (!target) return null;
-            // Incrémenter les vues: simuler que le bot a vu ce contenu
+
             try {
                 await supabase.rpc("increment_views", { row_id: target.id });
             } catch (incErr) {
@@ -5424,7 +5538,7 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                 { row_id: target.id, user_id_param: bot.user_id },
             );
             if (rpcErr) throw rpcErr;
-            // Ensure content.encouragements_count reflects server state (if RPC returned count)
+
             try {
                 const serverCount =
                     rpcData &&
@@ -5457,18 +5571,30 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                     err?.message || err,
                 );
             }
-            await supabase
-                .from("bots")
-                .update({
-                    last_encouraged_at: new Date().toISOString(),
-                    last_action_at: new Date().toISOString(),
-                })
-                .eq("user_id", bot.user_id);
+
+            const nowIso = new Date().toISOString();
+            await persistMergedBotMeta(
+                bot.user_id,
+                (meta) => {
+                    if (meta.last_action_date !== todayStr) {
+                        meta.last_action_date = todayStr;
+                        meta.encouraged_today = 1;
+                    } else {
+                        meta.encouraged_today =
+                            (Number(meta.encouraged_today) || 0) + 1;
+                    }
+                    return meta;
+                },
+                {
+                    last_encouraged_at: nowIso,
+                    last_action_at: nowIso,
+                },
+            );
             return rpcData;
-        } catch (e) {
+        } catch (error) {
             console.warn(
                 `encourageAsBot error for ${bot.user_id}:`,
-                e?.message || e,
+                error?.message || error,
             );
             return null;
         }
@@ -5481,9 +5607,9 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                 .select("following_id")
                 .eq("follower_id", botUserId);
             if (error) throw error;
-            return (data || []).map((r) => r.following_id).filter(Boolean);
-        } catch (e) {
-            console.warn("getFollowingIds error", e?.message || e);
+            return (data || []).map((row) => row.following_id).filter(Boolean);
+        } catch (error) {
+            console.warn("getFollowingIds error", error?.message || error);
             return [];
         }
     }
@@ -5505,9 +5631,8 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             if (error) throw error;
             if (!candidates || candidates.length === 0) return 0;
 
-            // Prioritize real users first, then bots (stronger preference)
-            const realUsers = candidates.filter((c) => !c.is_bot);
-            const botUsers = candidates.filter((c) => c.is_bot);
+            const realUsers = candidates.filter((candidate) => !candidate.is_bot);
+            const botUsers = candidates.filter((candidate) => candidate.is_bot);
             realUsers.sort(
                 (a, b) => (b.followers_count || 0) - (a.followers_count || 0),
             );
@@ -5517,59 +5642,51 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             const orderedCandidates = [...realUsers, ...botUsers];
 
             let followed = 0;
-            for (const cand of orderedCandidates) {
+            for (const candidate of orderedCandidates) {
                 if (followed >= maxToFollow) break;
-                if (!cand || !cand.id) continue;
-                if (followingIds.has(cand.id)) continue;
+                if (!candidate || !candidate.id) continue;
+                if (followingIds.has(candidate.id)) continue;
                 try {
-                    const { error: insErr } = await supabase
+                    const { error: insertError } = await supabase
                         .from("followers")
                         .insert({
                             follower_id: bot.user_id,
-                            following_id: cand.id,
+                            following_id: candidate.id,
                         });
-                    if (insErr) {
-                        // ignore duplicates or constraint errors
-                        console.warn(
-                            "follow insert err",
-                            insErr?.message || insErr,
-                        );
+                    if (insertError) {
+                        console.warn("follow insert err", insertError?.message || insertError);
                         continue;
                     }
-                    followingIds.add(cand.id);
+                    followingIds.add(candidate.id);
                     followed += 1;
-                    // Simuler que le bot a vu les derniers posts de l'utilisateur suivi
                     try {
-                        const { data: recent, error: recentErr } =
-                            await supabase
-                                .from("content")
-                                .select("id")
-                                .eq("user_id", cand.id)
-                                .order("created_at", { ascending: false })
-                                .limit(3);
+                        const { data: recent, error: recentErr } = await supabase
+                            .from("content")
+                            .select("id")
+                            .eq("user_id", candidate.id)
+                            .order("created_at", { ascending: false })
+                            .limit(3);
                         if (!recentErr && Array.isArray(recent)) {
-                            for (const r of recent) {
+                            for (const row of recent) {
                                 try {
                                     await supabase.rpc("increment_views", {
-                                        row_id: r.id,
+                                        row_id: row.id,
                                     });
-                                } catch (rvErr) {
+                                } catch (_error) {
                                     // ignore individual errors
                                 }
                                 await sleep(60 + Math.random() * 200);
                             }
                         }
-                    } catch (rvCatch) {
+                    } catch (_error) {
                         // ignore
                     }
-                    // small delay between follow actions
                     await sleep(150 + Math.random() * 500);
-                } catch (e) {
-                    console.warn("followAsBot insert error", e?.message || e);
+                } catch (error) {
+                    console.warn("followAsBot insert error", error?.message || error);
                 }
             }
 
-            // Update meta
             await persistMergedBotMeta(
                 bot.user_id,
                 (latestMeta) => {
@@ -5580,14 +5697,9 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                 },
                 { last_action_at: new Date().toISOString() },
             );
-            if (followed > 0)
-                console.log(`Bot ${bot.user_id} followed ${followed} user(s)`);
             return followed;
-        } catch (e) {
-            console.warn(
-                `followAsBot error for ${bot.user_id}:`,
-                e?.message || e,
-            );
+        } catch (error) {
+            console.warn(`followAsBot error for ${bot.user_id}:`, error?.message || error);
             return 0;
         }
     }
@@ -5623,9 +5735,18 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             );
             if (available.length === 0) return 0;
 
-            const shuffled = [...available].sort((a, b) =>
-                String(a.id).localeCompare(String(b.id)),
-            );
+            const shuffled = [...available].sort((a, b) => {
+                const av = getDeterministicRandom(
+                    `${bot.user_id}:${todayStr}:view:${a.id}`,
+                    2147483646,
+                );
+                const bv = getDeterministicRandom(
+                    `${bot.user_id}:${todayStr}:view:${b.id}`,
+                    2147483646,
+                );
+                return av - bv;
+            });
+
             const targets = shuffled.slice(0, Math.min(remaining, 30));
             let viewed = 0;
             const viewedIds = [];
@@ -5666,11 +5787,8 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             }
 
             return viewed;
-        } catch (e) {
-            console.warn(
-                `viewAsBot error for ${bot.user_id}:`,
-                e?.message || e,
-            );
+        } catch (error) {
+            console.warn(`viewAsBot error for ${bot.user_id}:`, error?.message || error);
             return 0;
         }
     }
@@ -5684,84 +5802,102 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         const activeCountValue =
             (control && control.value && Number(control.value.count)) || 0;
 
-        const q = supabase
+        const query = supabase
             .from("bots")
             .select("*")
             .eq("active", true)
             .order("last_action_at", { ascending: true });
-        if (limit && Number.isFinite(limit) && limit > 0) q.limit(limit);
-        const { data: bots, error: botsErr } = await q;
+        if (limit && Number.isFinite(limit) && limit > 0) query.limit(limit);
+        const { data: bots, error: botsErr } = await query;
         if (botsErr) throw botsErr;
 
         const now = new Date();
-        const currentHour = now.getUTCHours();
-        const dayOfWeek = now.getUTCDay();
+        const currentMinutes = getCurrentUtcMinute(now);
+        const todayStart = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+        );
+        const todayStr = todayStart.toISOString().slice(0, 10);
+        const shouldForcePostsForRun = force || globalForcePostsEnabled;
 
         let posts = 0;
         let encourages = 0;
         let follows = 0;
         let views = 0;
 
+        const botUserIds = (bots || []).map((bot) => bot.user_id).filter(Boolean);
+        const { data: postsToday } = await supabase
+            .from("content")
+            .select("user_id")
+            .in("user_id", botUserIds)
+            .gte("created_at", todayStart.toISOString());
+
+        const postsCountMap = {};
+        (postsToday || []).forEach((post) => {
+            postsCountMap[post.user_id] = (postsCountMap[post.user_id] || 0) + 1;
+        });
+
+        const postMinuteMap = buildDistributedMinuteSlots(bots || [], {
+            dayKey: todayStr,
+            actionKey: "post",
+            startMinute: BOT_POST_WINDOW_START_MINUTE,
+            endMinute: getElapsedWindowEnd(
+                currentMinutes,
+                BOT_POST_WINDOW_START_MINUTE,
+                BOT_POST_WINDOW_END_MINUTE,
+            ),
+        });
+
         for (const bot of bots || []) {
-            // Post
-            if (posts < MAX_POSTS_PER_RUN) {
-                // Determine if we should force posting for this run (request param OR global admin flag)
-                const shouldForcePostsForRun = force || globalForcePostsEnabled;
-                if (
-                    shouldForcePostsForRun ||
-                    Number(bot.schedule_hour) === currentHour
-                ) {
-                    const todayStart = new Date(
-                        Date.UTC(
-                            now.getUTCFullYear(),
-                            now.getUTCMonth(),
-                            now.getUTCDate(),
-                        ),
-                    );
-                    const shouldPost = shouldForcePostsForRun
-                        ? true
-                        : !bot.last_posted_at ||
-                          new Date(bot.last_posted_at) < todayStart;
-                    if (shouldPost) {
-                        const d = await postAsBot(bot);
-                        if (d) posts += 1;
-                    }
+            const meta = parseBotMeta(bot.meta);
+            const currentPosts = postsCountMap[bot.user_id] || 0;
+
+            if (posts < MAX_POSTS_PER_RUN && currentPosts < BOT_MIN_POSTS_PER_DAY) {
+                const createdAt = resolveDailyPostCreatedAt(bot, postMinuteMap, now);
+                const result = await postAsBot(bot, { createdAt });
+                if (result) {
+                    posts += 1;
+                    postsCountMap[bot.user_id] = currentPosts + 1;
                 }
             }
 
-            // Encourage
             if (encourages < MAX_ENCOURAGES_PER_RUN) {
-                try {
-                    const days = Array.isArray(bot.encourage_days)
-                        ? bot.encourage_days.map(Number)
-                        : [];
-                    const notDoneToday =
-                        !bot.last_encouraged_at ||
-                        !isSameDayUTC(bot.last_encouraged_at, now);
-
-                    // Ignore day check if force is true
-                    if (force || (days.includes(dayOfWeek) && notDoneToday)) {
-                        const e = await encourageAsBot(bot);
-                        if (e) encourages += 1;
-                    }
-                } catch (e) {
-                    // ignore per-bot parse errors
+                const encouragedToday =
+                    meta.last_action_date === todayStr
+                        ? Number(meta.encouraged_today) || 0
+                        : 0;
+                const dailyTarget = getBotDailyEncourageTarget(
+                    bot,
+                    BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY,
+                );
+                const remainingToday = Math.max(0, dailyTarget - encouragedToday);
+                const backlog = shouldForcePostsForRun
+                    ? remainingToday
+                    : getBotEncouragementBacklog(
+                          bot,
+                          meta,
+                          todayStr,
+                          currentMinutes,
+                      );
+                const encourageAttempts = Math.min(5, backlog);
+                for (let i = 0; i < encourageAttempts; i += 1) {
+                    if (encourages >= MAX_ENCOURAGES_PER_RUN) break;
+                    const result = await encourageAsBot(bot);
+                    if (!result) break;
+                    encourages += 1;
                 }
             }
 
-            // Follows (small daily quota)
             try {
-                const f = await followAsBot(bot, FOLLOW_DAILY_LIMIT);
-                if (f) follows += f;
-            } catch (e) {
+                const followed = await followAsBot(bot, FOLLOW_DAILY_LIMIT);
+                if (followed) follows += followed;
+            } catch (_error) {
                 // ignore follow errors
             }
 
-            // Views (up to 30 posts/day per bot, real + bot posts)
             try {
                 const viewed = await viewAsBot(bot, BOT_DAILY_VIEWS_TARGET);
                 if (viewed) views += viewed;
-            } catch (e) {
+            } catch (_error) {
                 // ignore view errors
             }
         }
@@ -5775,12 +5911,13 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             views,
             activeCount: activeCountValue,
         });
-    } catch (e) {
-        console.error("/api/admin/bots/run-now error", e);
-        if (e && e.stack) console.error(e.stack);
+    } catch (error) {
+        console.error("/api/admin/bots/run-now error", error);
+        if (error && error.stack) console.error(error.stack);
         return res.status(500).send("Erreur interne");
     }
 });
+
 
 if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {
     sweepExpiredSubscriptions();
