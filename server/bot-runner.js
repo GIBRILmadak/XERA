@@ -53,6 +53,8 @@ const BOT_ENCOURAGE_WINDOW_END_MINUTE = Math.min(
     Number(process.env.BOT_ENCOURAGE_WINDOW_END_MINUTE) || 23 * 60,
 );
 
+let usedVideoUrlsThisRun = new Set();
+
 // Hashtags par topic (cohérents avec le contenu du post)
 const TOPIC_HASHTAGS = {
     robotics: [
@@ -240,6 +242,28 @@ function getElapsedWindowEnd(currentMinutes, startMinute, endMinute) {
     return Math.max(startMinute, Math.min(endMinute, currentMinutes));
 }
 
+function clampMinute(value, min, max) {
+    const v = Math.floor(Number(value) || 0);
+    return Math.max(min, Math.min(max, v));
+}
+
+function getBotScheduledPostMinute(bot, dayKey, fallbackMinute = 0) {
+    const rawHour = Number(bot?.schedule_hour);
+    const hour = Number.isFinite(rawHour)
+        ? clampMinute(rawHour, 0, 23)
+        : getDeterministicRandom(`${bot?.user_id}:${dayKey}:postHour`, 24);
+    const minuteInHour = getDeterministicRandom(
+        `${bot?.user_id}:${dayKey}:postMinute`,
+        60,
+    );
+    const minuteOfDay = hour * 60 + minuteInHour;
+    return clampMinute(
+        Number.isFinite(minuteOfDay) ? minuteOfDay : fallbackMinute,
+        BOT_POST_WINDOW_START_MINUTE,
+        BOT_POST_WINDOW_END_MINUTE,
+    );
+}
+
 async function fetchAlreadyEncouragedIds(botUserId, contentIds = []) {
     const uniqueIds = Array.from(new Set((contentIds || []).filter(Boolean)));
     if (!botUserId || uniqueIds.length === 0) return new Set();
@@ -268,8 +292,9 @@ function resolveDailyPostCreatedAt(bot, postMinuteMap, now) {
         BOT_POST_WINDOW_START_MINUTE,
         BOT_POST_WINDOW_END_MINUTE,
     );
-    const assignedMinute =
-        postMinuteMap.get(String(bot.user_id)) ?? fallbackMinute;
+    const assignedMinute = Number.isFinite(Number(bot?.schedule_hour))
+        ? getBotScheduledPostMinute(bot, dayKey, fallbackMinute)
+        : postMinuteMap.get(String(bot.user_id)) ?? fallbackMinute;
     return buildIsoFromMinuteOfDay(
         dayKey,
         assignedMinute,
@@ -806,7 +831,7 @@ async function loopOnce() {
         const activeCount = await getActiveCount();
         const bots = await fetchActiveBots(activeCount || undefined);
         if (!bots || bots.length === 0) return;
-        const usedVideoUrlsThisRun = new Set();
+        usedVideoUrlsThisRun = new Set();
 
         const now = new Date();
         const currentMinutes = getCurrentUtcMinute(now);
@@ -850,6 +875,17 @@ async function loopOnce() {
                     postsProcessed < MAX_POSTS_PER_RUN &&
                     currentPosts < BOT_MIN_POSTS_PER_DAY
                 ) {
+                    const scheduledMinute = Number.isFinite(
+                        Number(bot?.schedule_hour),
+                    )
+                        ? getBotScheduledPostMinute(bot, todayStr)
+                        : postMinuteMap.get(String(bot.user_id));
+                    if (
+                        Number.isFinite(Number(scheduledMinute)) &&
+                        currentMinutes < Number(scheduledMinute)
+                    ) {
+                        continue;
+                    }
                     const postResult = await postAsBot(bot, {
                         createdAt: resolveDailyPostCreatedAt(bot, postMinuteMap, now),
                     });
