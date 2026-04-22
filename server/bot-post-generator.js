@@ -1,5 +1,12 @@
 const crypto = require("crypto");
 
+const {
+    BOT_VIDEO_PROVIDER = "pexels",
+    BOT_VIDEO_API_KEY = "GV89ZHRpcegXAPvv7D5bZOUt3Xo5EXogQ8SWWHSGrIsLJpw8Fe71W954",
+    BOT_VIDEO_MAX_DURATION_SECONDS = "30",
+    BOT_VIDEO_SEARCH_TIMEOUT_MS = "5000",
+} = process.env;
+
 const BOT_STYLES = ["builder", "storyteller", "mentor", "analyst"];
 
 const FALLBACK_TOPICS = [
@@ -1080,7 +1087,187 @@ function buildMediaUrl(profile, seed) {
     return `https://picsum.photos/seed/${uniqueSeed}/1200/800`;
 }
 
-function buildBotPostDraft({ bot, dayKey, postIndex = 1, recentPosts = [] }) {
+function dedupeStrings(values = []) {
+    return Array.from(
+        new Set(
+            values
+                .map((value) => String(value || "").trim())
+                .filter(Boolean),
+        ),
+    );
+}
+
+function toSearchPhrase(value) {
+    return String(value || "")
+        .replace(/[#|/_,.-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function buildVideoSearchQueries(profile, topic, context = {}) {
+    const topicLabel = TOPIC_LABELS[topic] || TOPIC_LABELS.general;
+    const profileQueries = Array.isArray(profile?.imageQueries)
+        ? profile.imageQueries.map((query) => toSearchPhrase(query))
+        : [];
+    const candidates = [
+        `${topicLabel} ${context.activity || ""}`.trim(),
+        `${topicLabel} ${context.projectName || ""}`.trim(),
+        `${topicLabel} ${context.nextStep || ""}`.trim(),
+        `${topicLabel} workspace process`.trim(),
+        ...profileQueries,
+        topicLabel,
+    ];
+    return dedupeStrings(candidates).slice(0, 6);
+}
+
+function buildFetchTimeout(timeoutMs) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    return {
+        signal: controller.signal,
+        clear: () => clearTimeout(timeoutId),
+    };
+}
+
+async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 5000) {
+    const timer = buildFetchTimeout(timeoutMs);
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: timer.signal,
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return await response.json();
+    } finally {
+        timer.clear();
+    }
+}
+
+function pickPreferredVideoFile(video) {
+    const files = Array.isArray(video?.video_files) ? video.video_files : [];
+    const mp4Files = files.filter(
+        (file) =>
+            file &&
+            String(file.file_type || "").toLowerCase() === "video/mp4" &&
+            file.link,
+    );
+    if (mp4Files.length === 0) return null;
+    const ranked = [...mp4Files].sort((a, b) => {
+        const aScore =
+            Math.abs((Number(a.width) || 0) - 1080) +
+            Math.abs((Number(a.height) || 0) - 1920);
+        const bScore =
+            Math.abs((Number(b.width) || 0) - 1080) +
+            Math.abs((Number(b.height) || 0) - 1920);
+        return aScore - bScore;
+    });
+    return ranked[0] || null;
+}
+
+function normalizeRemoteVideoCandidate(video) {
+    const file = pickPreferredVideoFile(video);
+    const maxDurationSeconds = Number(BOT_VIDEO_MAX_DURATION_SECONDS) || 30;
+    const durationSeconds = Number(video?.duration) || 0;
+    if (
+        !file?.link ||
+        !durationSeconds ||
+        durationSeconds > maxDurationSeconds
+    ) {
+        return null;
+    }
+    return {
+        type: "video",
+        mediaUrl: String(file.link),
+        mediaDurationSeconds: durationSeconds,
+        mediaSource: BOT_VIDEO_PROVIDER,
+        mediaLabel: `remote-video-${video?.id || "unknown"}`,
+    };
+}
+
+async function findRemoteVideoAsset(profile, topic, seed, options = {}) {
+    if (String(BOT_VIDEO_PROVIDER).toLowerCase() !== "pexels") return null;
+    if (!String(BOT_VIDEO_API_KEY || "").trim()) return null;
+
+    const recentMediaUrls = new Set(
+        Array.isArray(options.recentMediaUrls)
+            ? options.recentMediaUrls.filter(Boolean).map(String)
+            : [],
+    );
+    const queries = buildVideoSearchQueries(profile, topic, options.context);
+    const timeoutMs = Math.max(
+        1000,
+        Number(BOT_VIDEO_SEARCH_TIMEOUT_MS) || 5000,
+    );
+
+    for (const query of queries) {
+        try {
+            const payload = await fetchJsonWithTimeout(
+                `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=15`,
+                {
+                    headers: {
+                        Authorization: String(BOT_VIDEO_API_KEY),
+                    },
+                },
+                timeoutMs,
+            );
+            const candidates = (payload?.videos || [])
+                .map(normalizeRemoteVideoCandidate)
+                .filter(
+                    (candidate) =>
+                        candidate &&
+                        !recentMediaUrls.has(String(candidate.mediaUrl)),
+                );
+            if (candidates.length > 0) {
+                return pickSeeded(
+                    candidates,
+                    `${seed}:video:${query}`,
+                    candidates[0],
+                );
+            }
+        } catch (_error) {
+            // ignore individual provider errors and fall back to image
+        }
+    }
+
+    return null;
+}
+
+async function buildMediaAsset(profile, topic, seed, options = {}) {
+    const safeProfile = profile || {};
+    const recentMediaUrls = new Set(
+        Array.isArray(options.recentMediaUrls)
+            ? options.recentMediaUrls.filter(Boolean).map(String)
+            : [],
+    );
+    const roll = getDeterministicRandom(`${seed}:media-roll`, 100);
+    const shouldUseVideo = roll < 30;
+
+    if (shouldUseVideo) {
+        const remoteVideo = await findRemoteVideoAsset(safeProfile, topic, seed, {
+            ...options,
+            recentMediaUrls: Array.from(recentMediaUrls),
+        });
+        if (remoteVideo) return remoteVideo;
+    }
+
+    return {
+        type: "image",
+        mediaUrl: buildMediaUrl(safeProfile, seed),
+        mediaDurationSeconds: null,
+        mediaSource: "picsum",
+        mediaLabel: "bot-image",
+    };
+}
+
+async function buildBotPostDraft({
+    bot,
+    dayKey,
+    postIndex = 1,
+    recentPosts = [],
+    recentMediaUrls = [],
+} = {}) {
     const resolvedDay = String(dayKey || new Date().toISOString().slice(0, 10));
     const botId = String(bot?.user_id || bot?.id || bot?.display_name || "bot");
     const baseSeed = `${botId}:${resolvedDay}:${postIndex}`;
@@ -1184,6 +1371,17 @@ function buildBotPostDraft({ bot, dayKey, postIndex = 1, recentPosts = [] }) {
         chosenSeed = `${baseSeed}:fallback`;
     }
 
+    const mediaAsset = await buildMediaAsset(profile, topic, chosenSeed, {
+        recentMediaUrls,
+        context: {
+            projectName,
+            topicLabel,
+            activity: chosenActivity,
+            result: chosenResult,
+            nextStep: chosenNextStep,
+        },
+    });
+
     return {
         topic,
         style,
@@ -1194,7 +1392,11 @@ function buildBotPostDraft({ bot, dayKey, postIndex = 1, recentPosts = [] }) {
         title: finalTitle,
         description: finalDescription,
         hashtags: buildHashtags(profile, topic, chosenSeed),
-        mediaUrl: buildMediaUrl(profile, chosenSeed),
+        mediaType: mediaAsset.type,
+        mediaUrl: mediaAsset.mediaUrl,
+        mediaDurationSeconds: mediaAsset.mediaDurationSeconds,
+        mediaSource: mediaAsset.mediaSource,
+        mediaLabel: mediaAsset.mediaLabel,
     };
 }
 

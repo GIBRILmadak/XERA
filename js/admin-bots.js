@@ -252,10 +252,17 @@ async function renderSuperAdminPage() {
         try {
             const status = await fetchBotStatus();
             const totalBots = status.totalBots || 0;
+            const actualActiveCount = Number(status.activeCount) || 0;
+            const configuredActiveCount =
+                Number(status.configuredActiveCount) || 0;
             document.getElementById("bots-total").textContent = totalBots;
-            document.getElementById("bots-active-count").textContent =
-                status.activeCount || 0;
-            input.value = status.activeCount || 0;
+            const activeCountEl = document.getElementById("bots-active-count");
+            activeCountEl.textContent = actualActiveCount;
+            activeCountEl.title =
+                configuredActiveCount !== actualActiveCount
+                    ? `Actifs reels: ${actualActiveCount} · Configures: ${configuredActiveCount}`
+                    : `Actifs reels: ${actualActiveCount}`;
+            input.value = configuredActiveCount || 0;
             const body = document.getElementById("bots-sample-body");
             body.innerHTML = "";
 
@@ -379,12 +386,9 @@ async function renderSuperAdminPage() {
                 document.getElementById("bots-active-count")?.textContent || "0",
                 10,
             );
-            const activeFromInput = parseInt(input?.value || "0", 10);
             const targetActive = Math.max(
                 0,
-                Number.isFinite(activeFromLabel) && activeFromLabel > 0
-                    ? activeFromLabel
-                    : activeFromInput,
+                Number.isFinite(activeFromLabel) ? activeFromLabel : 0,
             );
             const BATCH_SIZE = 20;
             let remaining = targetActive > 0 ? targetActive : BATCH_SIZE;
