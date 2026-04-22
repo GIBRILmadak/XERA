@@ -4939,13 +4939,20 @@ app.get("/api/admin/bots/status", async (req, res) => {
             .select("id", { count: "exact", head: true });
         if (countErr) console.warn("bots count error", countErr);
 
+        const { count: activeBotsCount, error: activeCountErr } = await supabase
+            .from("bots")
+            .select("id", { count: "exact", head: true })
+            .eq("active", true);
+        if (activeCountErr)
+            console.warn("active bots count error", activeCountErr);
+
         const { data: control } = await supabase
             .from("bot_control")
             .select("value")
             .eq("key", "bots.active_count")
             .maybeSingle();
 
-        const activeCount =
+        const configuredActiveCount =
             (control && control.value && control.value.count) || 0;
 
         // Read global auto-force-posts flag if present
@@ -4980,7 +4987,8 @@ app.get("/api/admin/bots/status", async (req, res) => {
 
         return res.json({
             totalBots: Number(totalBots) || 0,
-            activeCount: Number(activeCount) || 0,
+            activeCount: Number(activeBotsCount) || 0,
+            configuredActiveCount: Number(configuredActiveCount) || 0,
             sample: sampleData || [],
             forcePosts: !!forcePostsEnabled,
         });
@@ -5408,16 +5416,22 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
 
             const { data: recentPosts } = await supabase
                 .from("content")
-                .select("title, description")
+                .select("title, description, media_url")
                 .eq("user_id", bot.user_id)
                 .order("created_at", { ascending: false })
                 .limit(20);
 
-            const draft = buildBotPostDraft({
+            const draft = await buildBotPostDraft({
                 bot,
                 dayKey,
                 postIndex,
                 recentPosts: recentPosts || [],
+                recentMediaUrls: [
+                    ...(recentPosts || [])
+                        .map((row) => row?.media_url)
+                        .filter(Boolean),
+                    ...Array.from(usedVideoUrlsThisRun),
+                ],
             });
 
             let nextDayNumber = 1;
@@ -5443,7 +5457,7 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             const payload = {
                 user_id: bot.user_id,
                 day_number: nextDayNumber,
-                type: "image",
+                type: draft.mediaType || "image",
                 state: "success",
                 title: draft.title,
                 description: draft.description,
@@ -5458,6 +5472,10 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                 .select()
                 .single();
             if (error) throw error;
+
+            if (draft.mediaType === "video" && draft.mediaUrl) {
+                usedVideoUrlsThisRun.add(String(draft.mediaUrl));
+            }
 
             await supabase
                 .from("bots")
@@ -5810,6 +5828,7 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         if (limit && Number.isFinite(limit) && limit > 0) query.limit(limit);
         const { data: bots, error: botsErr } = await query;
         if (botsErr) throw botsErr;
+        const usedVideoUrlsThisRun = new Set();
 
         const now = new Date();
         const currentMinutes = getCurrentUtcMinute(now);

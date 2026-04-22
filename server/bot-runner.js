@@ -377,16 +377,22 @@ async function postAsBot(bot, options = {}) {
 
         const { data: recentPosts } = await supabase
             .from("content")
-            .select("title, description")
+            .select("title, description, media_url")
             .eq("user_id", bot.user_id)
             .order("created_at", { ascending: false })
             .limit(20);
 
-        const draft = buildBotPostDraft({
+        const draft = await buildBotPostDraft({
             bot,
             dayKey,
             postIndex,
             recentPosts: recentPosts || [],
+            recentMediaUrls: [
+                ...(recentPosts || [])
+                    .map((row) => row?.media_url)
+                    .filter(Boolean),
+                ...Array.from(usedVideoUrlsThisRun),
+            ],
         });
 
         let nextDayNumber = 1;
@@ -412,7 +418,7 @@ async function postAsBot(bot, options = {}) {
         const payload = {
             user_id: bot.user_id,
             day_number: nextDayNumber,
-            type: "image",
+            type: draft.mediaType || "image",
             state: "success",
             title: draft.title,
             description: draft.description,
@@ -427,6 +433,10 @@ async function postAsBot(bot, options = {}) {
             .select()
             .single();
         if (error) throw error;
+
+        if (draft.mediaType === "video" && draft.mediaUrl) {
+            usedVideoUrlsThisRun.add(String(draft.mediaUrl));
+        }
 
         await supabase
             .from("bots")
@@ -796,6 +806,7 @@ async function loopOnce() {
         const activeCount = await getActiveCount();
         const bots = await fetchActiveBots(activeCount || undefined);
         if (!bots || bots.length === 0) return;
+        const usedVideoUrlsThisRun = new Set();
 
         const now = new Date();
         const currentMinutes = getCurrentUtcMinute(now);

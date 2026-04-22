@@ -3079,10 +3079,11 @@ async function toggleFollow(viewerId, targetUserId) {
                 ".follower-stat-count",
             );
             if (followerStats[0]) {
-                followerStats[0].textContent = followerCount;
+                followerStats[0].textContent = formatCompactCount(followerCount);
             } else if (followerStats.length > 0) {
                 followerStats.forEach(
-                    (stat) => (stat.textContent = followerCount),
+                    (stat) =>
+                        (stat.textContent = formatCompactCount(followerCount)),
                 );
             }
         }
@@ -3093,7 +3094,7 @@ async function toggleFollow(viewerId, targetUserId) {
                 ".follower-stat-count",
             );
             if (followerStats[1]) {
-                followerStats[1].textContent = followingCount;
+                followerStats[1].textContent = formatCompactCount(followingCount);
             }
         }
 
@@ -3414,7 +3415,10 @@ async function toggleCourage(contentId, btnElement) {
             }
         }
         if (countSpan) {
-            countSpan.textContent = String(Math.max(0, Number(count) || 0));
+            const safeCount = Math.max(0, Number(count) || 0);
+            countSpan.dataset.count = String(safeCount);
+            countSpan.textContent = formatCompactCount(safeCount);
+            countSpan.title = safeCount.toLocaleString("fr-FR");
         }
     };
 
@@ -3425,9 +3429,8 @@ async function toggleCourage(contentId, btnElement) {
         }
     };
 
-    const currentCount = Number.parseInt(
-        btnElement?.querySelector(".courage-count")?.textContent || "0",
-        10,
+    const currentCount = Number(
+        btnElement?.querySelector(".courage-count")?.dataset?.count || 0,
     );
     const safeCurrentCount = Number.isFinite(currentCount) ? currentCount : 0;
     const isCurrentlyEncouraged = btnElement.classList.contains("encouraged");
@@ -3435,9 +3438,9 @@ async function toggleCourage(contentId, btnElement) {
     // Comportement demandé: une fois encouragé, le bouton reste vert.
     if (isCurrentlyEncouraged) {
         allCourageButtons.forEach((btn) => {
-            const btnCount = Number.parseInt(
-                btn.querySelector(".courage-count")?.textContent || "0",
-                10,
+            const btnCount = Number(
+                btn.querySelector(".courage-count")?.dataset?.count ||
+                    safeCurrentCount,
             );
             updateButtonUI(
                 btn,
@@ -4021,9 +4024,35 @@ function formatStatNumber(value) {
         return "—";
     }
     const n = Number(value);
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 10_000) return `${Math.round(n / 1000)}k`;
-    return n.toLocaleString("fr-FR");
+    return formatCompactCount(n);
+}
+
+function formatCompactCount(value) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) {
+        return "0";
+    }
+
+    const n = Number(value);
+    const abs = Math.abs(n);
+    if (abs < 1000) {
+        return Math.round(n).toLocaleString("fr-FR");
+    }
+
+    const units = [
+        { value: 1_000_000_000, suffix: "B" },
+        { value: 1_000_000, suffix: "M" },
+        { value: 1_000, suffix: "K" },
+    ];
+
+    const unit = units.find((entry) => abs >= entry.value) || units.at(-1);
+    const shortValue = n / unit.value;
+    const useDecimal = Math.abs(shortValue) < 10;
+    const formatted = new Intl.NumberFormat("fr-FR", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: useDecimal ? 1 : 0,
+    }).format(shortValue);
+
+    return `${formatted}${unit.suffix}`;
 }
 
 async function fetchTotalContentViews() {
@@ -6404,13 +6433,13 @@ function renderProfileUpdateCard(
             <button class="btn btn-secondary courage-btn profile-encourage-btn ${isEncouraged ? "encouraged" : ""}" data-content-id="${content.contentId}" onclick="event.stopPropagation(); toggleCourage('${content.contentId}', this)">
                 <img src="${courageIcon}" width="16" height="16" alt="">
                 <span>Encourager</span>
-                <span class="courage-count profile-encourage-count">${content.encouragementsCount || 0}</span>
+                <span class="courage-count profile-encourage-count" data-count="${Number(content.encouragementsCount) || 0}" title="${(Number(content.encouragementsCount) || 0).toLocaleString("fr-FR")}">${formatCompactCount(content.encouragementsCount || 0)}</span>
             </button>
         `
         : `
             <div class="profile-update-stat-pill">
                 <img src="icons/courage-blue.svg" width="16" height="16" alt="">
-                <span>${content.encouragementsCount || 0} encouragement${Number(content.encouragementsCount || 0) > 1 ? "s" : ""}</span>
+                <span>${formatCompactCount(content.encouragementsCount || 0)} encouragement${Number(content.encouragementsCount || 0) > 1 ? "s" : ""}</span>
             </div>
         `;
 
@@ -6488,8 +6517,8 @@ function renderProfileUpdateCard(
             </div>
             <div class="profile-update-footer">
                 <div class="profile-update-stats">
-                    <span>${viewsCount} vue${viewsCount > 1 ? "s" : ""}</span>
-                    <span>${content.encouragementsCount || 0} encouragement${Number(content.encouragementsCount || 0) > 1 ? "s" : ""}</span>
+                    <span>${formatCompactCount(viewsCount)} vue${viewsCount > 1 ? "s" : ""}</span>
+                    <span>${formatCompactCount(content.encouragementsCount || 0)} encouragement${Number(content.encouragementsCount || 0) > 1 ? "s" : ""}</span>
                 </div>
                 <div class="profile-update-actions">
                     ${encourageButtonHtml}
@@ -6704,15 +6733,15 @@ function renderProfileSelectedArcContent(
     const metrics = [
         {
             label: "Updates",
-            value: safeContents.length,
+            value: formatCompactCount(safeContents.length),
         },
         {
             label: "Encouragements",
-            value: encouragements,
+            value: formatCompactCount(encouragements),
         },
         {
             label: "Contributeurs",
-            value: uniqueUsers.size || 1,
+            value: formatCompactCount(uniqueUsers.size || 1),
         },
         {
             label: "Derniere",
@@ -7257,9 +7286,9 @@ function renderUserCard(
                     ${collabCornerHtml}
                     ${supportOverlayHtml}
                     <div class="card-stats-overlay">
-                        <div class="stat-pill">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                            <span>${latestContent.views || 0}</span>
+                            <div class="stat-pill">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <span title="${(Number(latestContent.views) || 0).toLocaleString("fr-FR")}">${formatCompactCount(latestContent.views || 0)}</span>
                         </div>
                     </div>
                 </div>
@@ -7297,7 +7326,7 @@ function renderUserCard(
                         <div class="card-stats-overlay">
                             <div class="stat-pill">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8  -4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                <span>${latestContent.views || 0}</span>
+                                <span title="${(Number(latestContent.views) || 0).toLocaleString("fr-FR")}">${formatCompactCount(latestContent.views || 0)}</span>
                             </div>
                         </div>
                     </div>
@@ -7311,7 +7340,7 @@ function renderUserCard(
                         <div class="card-stats-overlay">
                             <div class="stat-pill">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8  -4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                <span>${latestContent.views || 0}</span>
+                                <span title="${(Number(latestContent.views) || 0).toLocaleString("fr-FR")}">${formatCompactCount(latestContent.views || 0)}</span>
                             </div>
                         </div>
                     </div>
@@ -7517,7 +7546,7 @@ function renderUserCard(
                     </div>
                     <button class="${courageClass}" data-content-id="${latestContent.contentId}" onclick="event.stopPropagation(); toggleCourage('${latestContent.contentId}', this)">
                         <img src="${courageIcon}" width="16" height="16">
-                        <span class="courage-count">${latestContent.encouragementsCount || 0}</span>
+                        <span class="courage-count" data-count="${Number(latestContent.encouragementsCount) || 0}" title="${(Number(latestContent.encouragementsCount) || 0).toLocaleString("fr-FR")}">${formatCompactCount(latestContent.encouragementsCount || 0)}</span>
                     </button>
                 </div>
                 ${liveCta}
@@ -9179,11 +9208,11 @@ async function renderImmersiveFeed(contents) {
                             <div class="post-stats" style="display:flex; gap:1rem;">
                                 <div class="stat-pill" title="Vues">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                    <span>${content.views || 0}</span>
+                                    <span title="${(Number(content.views) || 0).toLocaleString("fr-FR")}">${formatCompactCount(content.views || 0)}</span>
                                 </div>
                                 <button class="${courageClass}" data-content-id="${content.contentId}" onclick="event.stopPropagation(); toggleCourage('${content.contentId}', this)" title="Encourager">
                                     <img src="${courageIcon}" width="16" height="16">
-                                    <span class="courage-count">${content.encouragementsCount || 0}</span>
+                                    <span class="courage-count" data-count="${Number(content.encouragementsCount) || 0}" title="${(Number(content.encouragementsCount) || 0).toLocaleString("fr-FR")}">${formatCompactCount(content.encouragementsCount || 0)}</span>
                                 </button>
                             </div>
                         </div>
@@ -10691,11 +10720,11 @@ async function renderProfileTimeline(userId) {
     const engagementStatsHtml = `
         <div class="follow-section" style="margin-top: 0.5rem;">
             <div class="follower-stat">
-                <div class="follower-stat-count">${engagementTotals.totalViews}</div>
+                <div class="follower-stat-count" title="${Number(engagementTotals.totalViews || 0).toLocaleString("fr-FR")}">${formatCompactCount(engagementTotals.totalViews)}</div>
                 <div class="follower-stat-label">Vues totales</div>
             </div>
             <div class="follower-stat">
-                <div class="follower-stat-count">${userTraces.length}</div>
+                <div class="follower-stat-count" title="${Number(userTraces.length || 0).toLocaleString("fr-FR")}">${formatCompactCount(userTraces.length)}</div>
                 <div class="follower-stat-label">Updates</div>
             </div>
         </div>
@@ -10854,11 +10883,11 @@ async function renderProfileTimeline(userId) {
                     ? `
                 <div class="follow-section">
                     <div class="follower-stat">
-                        <div class="follower-stat-count">${followerCount}</div>
+                        <div class="follower-stat-count" title="${Number(followerCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followerCount)}</div>
                         <div class="follower-stat-label">Abonnés</div>
                     </div>
                     <div class="follower-stat">
-                        <div class="follower-stat-count">${followingCount}</div>
+                        <div class="follower-stat-count" title="${Number(followingCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followingCount)}</div>
                         <div class="follower-stat-label">Abonnements</div>
                     </div>
                 </div>
@@ -10874,11 +10903,11 @@ async function renderProfileTimeline(userId) {
                     : `
                 <div class="follow-section">
                     <div class="follower-stat">
-                        <div class="follower-stat-count">${followerCount}</div>
+                        <div class="follower-stat-count" title="${Number(followerCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followerCount)}</div>
                         <div class="follower-stat-label">Abonnés</div>
                     </div>
                     <div class="follower-stat">
-                        <div class="follower-stat-count">${followingCount}</div>
+                        <div class="follower-stat-count" title="${Number(followingCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followingCount)}</div>
                         <div class="follower-stat-label">Abonnements</div>
                     </div>
                 </div>
