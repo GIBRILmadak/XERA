@@ -5215,15 +5215,18 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         return res.status(401).send("Unauthorized cron request.");
     }
 
-    const force = req.body?.force === true;
-    const limit = Number(
-        req.body?.limit ??
-            req.query?.limit ??
-            process.env.BOT_RUN_ONCE_BATCH ??
-            20,
-    );
-    const FOLLOW_DAILY_LIMIT = Number(process.env.BOT_FOLLOW_DAILY_LIMIT) || 3;
-    const MAX_POSTS_PER_RUN = Number(process.env.BOT_MAX_POSTS_PER_RUN) || 50;
+	    const force = req.body?.force === true;
+	    const limitRaw = Number(
+	        req.body?.limit ??
+	            req.query?.limit ??
+	            process.env.BOT_RUN_ONCE_BATCH ??
+	            20,
+	    );
+	    const limit = Math.max(1, Math.min(500, Number.isFinite(limitRaw) ? limitRaw : 20));
+	    const offsetRaw = Number(req.body?.offset ?? req.query?.offset ?? 0);
+	    const offset = Math.max(0, Number.isFinite(offsetRaw) ? Math.floor(offsetRaw) : 0);
+	    const FOLLOW_DAILY_LIMIT = Number(process.env.BOT_FOLLOW_DAILY_LIMIT) || 3;
+	    const MAX_POSTS_PER_RUN = Number(process.env.BOT_MAX_POSTS_PER_RUN) || 50;
     const BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY = Math.max(
         15,
         Number(process.env.BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY) || 15,
@@ -5849,15 +5852,15 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         const activeCountValue =
             (control && control.value && Number(control.value.count)) || 0;
 
-        const query = supabase
-            .from("bots")
-            .select("*")
-            .eq("active", true)
-            .order("last_action_at", { ascending: true });
-        if (limit && Number.isFinite(limit) && limit > 0) query.limit(limit);
-        const { data: bots, error: botsErr } = await query;
-        if (botsErr) throw botsErr;
-        const usedVideoUrlsThisRun = new Set();
+	        const query = supabase
+	            .from("bots")
+	            .select("*")
+	            .eq("active", true)
+	            .order("last_action_at", { ascending: true });
+	        query.range(offset, offset + limit - 1);
+	        const { data: bots, error: botsErr } = await query;
+	        if (botsErr) throw botsErr;
+	        const usedVideoUrlsThisRun = new Set();
 
         const now = new Date();
         const currentMinutes = getCurrentUtcMinute(now);
@@ -5962,16 +5965,18 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             }
         }
 
-        return res.json({
-            success: true,
-            processed: (bots || []).length,
-            posts,
-            encourages,
-            follows,
-            views,
-            activeCount: activeCountValue,
-        });
-    } catch (error) {
+	        return res.json({
+	            success: true,
+	            processed: (bots || []).length,
+	            offset,
+	            nextOffset: offset + (bots || []).length,
+	            posts,
+	            encourages,
+	            follows,
+	            views,
+	            activeCount: activeCountValue,
+	        });
+	    } catch (error) {
         console.error("/api/admin/bots/run-now error", error);
         if (error && error.stack) console.error(error.stack);
         return res.status(500).send("Erreur interne");

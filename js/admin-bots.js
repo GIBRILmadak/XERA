@@ -398,12 +398,10 @@ async function renderSuperAdminPage() {
             let totalFollows = 0;
             let totalViews = 0;
             let batchIndex = 0;
+            let offset = 0;
 
-            while (remaining > 0 && batchIndex < 100) {
-                const currentLimit = Math.max(
-                    1,
-                    Math.min(BATCH_SIZE, remaining),
-                );
+            while (remaining > 0 && batchIndex < 300) {
+                const currentLimit = Math.max(1, Math.min(BATCH_SIZE, remaining));
                 runResultSpan.textContent = `Batch ${batchIndex + 1} en cours... (${Math.max(remaining, 0)} restant)`;
 
                 const res = await apiFetch("/api/admin/bots/run-now", {
@@ -415,6 +413,7 @@ async function renderSuperAdminPage() {
                     body: JSON.stringify({
                         force: true,
                         limit: currentLimit,
+                        offset,
                     }),
                 });
                 if (!res.ok) {
@@ -424,6 +423,7 @@ async function renderSuperAdminPage() {
 
                 const json = await res.json();
                 const processed = Number(json.processed) || 0;
+                offset = Number(json.nextOffset) || offset + processed;
                 totalProcessed += processed;
                 totalPosts += Number(json.posts) || 0;
                 totalEncourages += Number(json.encourages) || 0;
@@ -432,12 +432,11 @@ async function renderSuperAdminPage() {
                 remaining -= processed;
                 batchIndex += 1;
 
-                if (processed <= 0) break;
+                if (processed < currentLimit) break;
                 await new Promise((resolve) => setTimeout(resolve, 120));
             }
 
             runResultSpan.textContent = `Processed ${totalProcessed} bots — posts ${totalPosts}, encourages ${totalEncourages}, follows ${totalFollows}, views ${totalViews}`;
-            // refresh stats after run
             await refresh();
         } catch (err) {
             console.error("run-now error", err);
