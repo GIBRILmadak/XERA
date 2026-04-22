@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Worker simple pour exécuter les actions des bots (poster 1x/jour, encourager 3x/semaine)
+// Worker simple pour exécuter les actions des bots (poster chaque jour et encourager les posts recents sans doublon)
 // Usage: SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node server/bot-runner.js
 
 require("dotenv").config();
@@ -7,6 +7,12 @@ const { createClient } = require("@supabase/supabase-js");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const crypto = require("crypto");
 const { buildBotPostDraft } = require("./bot-post-generator");
+const {
+    buildDistributedMinuteSlots,
+    buildIsoFromMinuteOfDay,
+    getBotDailyEncourageTarget,
+    getDeterministicRandom,
+} = require("./bot-schedule-utils");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -26,6 +32,26 @@ const MAX_ENCOURAGES_PER_RUN =
     Number(process.env.BOT_MAX_ENCOURAGES_PER_RUN) || 1000;
 const MAX_POSTS_PER_RUN = Number(process.env.BOT_MAX_POSTS_PER_RUN) || 1000;
 const BOT_DAILY_VIEWS_TARGET = Number(process.env.BOT_DAILY_VIEWS_TARGET) || 30;
+const BOT_MIN_POSTS_PER_DAY =
+    Math.max(1, Number(process.env.BOT_MIN_POSTS_PER_DAY) || 1);
+const BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY = Math.max(
+    15,
+    Number(process.env.BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY) || 15,
+);
+const BOT_POST_WINDOW_START_MINUTE =
+    Math.max(0, Number(process.env.BOT_POST_WINDOW_START_MINUTE) || 6 * 60);
+const BOT_POST_WINDOW_END_MINUTE = Math.min(
+    23 * 60 + 30,
+    Number(process.env.BOT_POST_WINDOW_END_MINUTE) || 22 * 60 + 30,
+);
+const BOT_ENCOURAGE_WINDOW_START_MINUTE = Math.max(
+    0,
+    Number(process.env.BOT_ENCOURAGE_WINDOW_START_MINUTE) || 7 * 60,
+);
+const BOT_ENCOURAGE_WINDOW_END_MINUTE = Math.min(
+    23 * 60 + 45,
+    Number(process.env.BOT_ENCOURAGE_WINDOW_END_MINUTE) || 23 * 60,
+);
 
 // Hashtags par topic (cohérents avec le contenu du post)
 const TOPIC_HASHTAGS = {
@@ -206,14 +232,87 @@ function pickRandom(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function getDeterministicRandom(seed, max) {
-    const hash = crypto.createHash("sha1").update(seed).digest("hex");
-    return parseInt(hash.slice(0, 8), 16) % max;
+function getCurrentUtcMinute(now = new Date()) {
+    return now.getUTCHours() * 60 + now.getUTCMinutes();
 }
 
-function getTargetMinutes(baseHour, seed, jitterRange = 30) {
-    const jitter = getDeterministicRandom(seed, jitterRange * 2 + 1) - jitterRange;
-    return baseHour * 60 + jitter;
+function getElapsedWindowEnd(currentMinutes, startMinute, endMinute) {
+    return Math.max(startMinute, Math.min(endMinute, currentMinutes));
+}
+
+async function fetchAlreadyEncouragedIds(botUserId, contentIds = []) {
+    const uniqueIds = Array.from(new Set((contentIds || []).filter(Boolean)));
+    if (!botUserId || uniqueIds.length === 0) return new Set();
+
+    try {
+        const { data, error } = await supabase
+            .from("content_encouragements")
+            .select("content_id")
+            .eq("user_id", botUserId)
+            .in("content_id", uniqueIds);
+        if (error) throw error;
+        return new Set((data || []).map((row) => String(row.content_id)));
+    } catch (error) {
+        console.warn(
+            `fetchAlreadyEncouragedIds error for ${botUserId}:`,
+            error?.message || error,
+        );
+        return new Set();
+    }
+}
+
+function resolveDailyPostCreatedAt(bot, postMinuteMap, now) {
+    const dayKey = now.toISOString().slice(0, 10);
+    const fallbackMinute = getElapsedWindowEnd(
+        getCurrentUtcMinute(now),
+        BOT_POST_WINDOW_START_MINUTE,
+        BOT_POST_WINDOW_END_MINUTE,
+    );
+    const assignedMinute =
+        postMinuteMap.get(String(bot.user_id)) ?? fallbackMinute;
+    return buildIsoFromMinuteOfDay(
+        dayKey,
+        assignedMinute,
+        `${bot.user_id}:post`,
+    );
+}
+
+function getBotEncouragementBacklog(bot, meta, todayStr, currentMinutes) {
+    const dailyTarget = getBotDailyEncourageTarget(
+        bot,
+        BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY,
+    );
+    if (dailyTarget <= 0 || currentMinutes < BOT_ENCOURAGE_WINDOW_START_MINUTE) {
+        return 0;
+    }
+
+    const encouragedToday =
+        meta.last_action_date === todayStr
+            ? Number(meta.encouraged_today) || 0
+            : 0;
+    if (encouragedToday >= dailyTarget) return 0;
+
+    const elapsedEnd = getElapsedWindowEnd(
+        currentMinutes,
+        BOT_ENCOURAGE_WINDOW_START_MINUTE,
+        BOT_ENCOURAGE_WINDOW_END_MINUTE,
+    );
+    const fullSpan = Math.max(
+        1,
+        BOT_ENCOURAGE_WINDOW_END_MINUTE -
+            BOT_ENCOURAGE_WINDOW_START_MINUTE +
+            1,
+    );
+    const elapsedSpan = Math.max(
+        1,
+        elapsedEnd - BOT_ENCOURAGE_WINDOW_START_MINUTE + 1,
+    );
+    const targetByNow = Math.min(
+        dailyTarget,
+        Math.max(1, Math.ceil((elapsedSpan / fullSpan) * dailyTarget)),
+    );
+
+    return Math.max(0, targetByNow - encouragedToday);
 }
 
 function parseBotMeta(metaValue) {
@@ -258,21 +357,24 @@ async function persistMergedBotMeta(userId, metaUpdater, extraPayload = {}) {
     return nextMeta;
 }
 
-async function postAsBot(bot) {
+async function postAsBot(bot, options = {}) {
     try {
-        // Generer un post varie et coherent avec le theme du bot
-        const dayKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-        
-        // Fetch current post count today to make the uniq hash unique for multiple posts same day
+        const createdAt = options.createdAt || new Date().toISOString();
+        const dayKey = createdAt.slice(0, 10);
+        const todayStartIso = `${dayKey}T00:00:00Z`;
+        const nextDayIso = new Date(
+            Date.parse(`${dayKey}T00:00:00Z`) + 24 * 60 * 60 * 1000,
+        ).toISOString();
+
         const { count: todayCount } = await supabase
             .from("content")
-            .select("*", { count: 'exact', head: true })
+            .select("*", { count: "exact", head: true })
             .eq("user_id", bot.user_id)
-            .gte("created_at", dayKey + "T00:00:00Z");
+            .gte("created_at", todayStartIso)
+            .lt("created_at", nextDayIso);
 
         const postIndex = (todayCount || 0) + 1;
 
-        // Recuperer un petit historique pour eviter les doublons de titres/descriptions
         const { data: recentPosts } = await supabase
             .from("content")
             .select("title, description")
@@ -287,7 +389,6 @@ async function postAsBot(bot) {
             recentPosts: recentPosts || [],
         });
 
-        // Compute next day_number for this user's content (incremental per-user)
         let nextDayNumber = 1;
         try {
             const { data: lastRow, error: lastErr } = await supabase
@@ -304,7 +405,7 @@ async function postAsBot(bot) {
             ) {
                 nextDayNumber = Number(lastRow.day_number) + 1;
             }
-        } catch (e) {
+        } catch (_error) {
             // ignore and fallback to 1
         }
 
@@ -317,7 +418,7 @@ async function postAsBot(bot) {
             description: draft.description,
             hashtags: draft.hashtags,
             media_url: draft.mediaUrl,
-            created_at: new Date().toISOString(),
+            created_at: createdAt,
         };
 
         const { data, error } = await supabase
@@ -326,10 +427,11 @@ async function postAsBot(bot) {
             .select()
             .single();
         if (error) throw error;
+
         await supabase
             .from("bots")
             .update({
-                last_posted_at: new Date().toISOString(),
+                last_posted_at: createdAt,
                 last_action_at: new Date().toISOString(),
             })
             .eq("user_id", bot.user_id);
@@ -345,39 +447,55 @@ async function postAsBot(bot) {
 
 async function encourageAsBot(bot) {
     try {
-        // Fetch recent content candidates
+        const todayStr = new Date().toISOString().slice(0, 10);
         const { data: candidates, error } = await supabase
             .from("content")
             .select("id, user_id, created_at")
             .neq("user_id", bot.user_id)
             .order("created_at", { ascending: false })
-            .limit(500);
+            .limit(800);
         if (error) throw error;
         if (!candidates || candidates.length === 0) return null;
 
-        // Prioritize content from real users (is_bot = false)
-        const userIds = Array.from(
-            new Set(candidates.map((c) => c.user_id).filter(Boolean)),
+        const alreadyEncouragedIds = await fetchAlreadyEncouragedIds(
+            bot.user_id,
+            candidates.map((item) => item.id),
         );
-        let usersMap = {};
+        const availableCandidates = candidates.filter(
+            (item) => item?.id && !alreadyEncouragedIds.has(String(item.id)),
+        );
+        if (availableCandidates.length === 0) return null;
+
+        const userIds = Array.from(
+            new Set(availableCandidates.map((c) => c.user_id).filter(Boolean)),
+        );
+        const usersMap = {};
         if (userIds.length > 0) {
             const { data: users } = await supabase
                 .from("users")
                 .select("id, is_bot")
                 .in("id", userIds);
             if (users && users.length) {
-                users.forEach((u) => {
-                    usersMap[u.id] = !!u.is_bot;
+                users.forEach((user) => {
+                    usersMap[user.id] = !!user.is_bot;
                 });
             }
         }
 
-        const prioritized = candidates.filter((c) => !usersMap[c.user_id]);
-        const pickFrom = prioritized.length > 0 ? prioritized : candidates;
-        const target = pickRandom(pickFrom);
+        const prioritized = availableCandidates.filter(
+            (item) => !usersMap[item.user_id],
+        );
+        const pickFrom = prioritized.length > 0 ? prioritized : availableCandidates;
+        const freshnessPool = pickFrom.slice(0, Math.min(40, pickFrom.length));
+        const target =
+            freshnessPool[
+                getDeterministicRandom(
+                    `${bot.user_id}:${todayStr}:encourage:${freshnessPool.length}`,
+                    freshnessPool.length,
+                )
+            ];
         if (!target) return null;
 
-        // Incrémenter les vues: simuler que le bot a vu ce contenu
         try {
             await supabase.rpc("increment_views", { row_id: target.id });
         } catch (incErr) {
@@ -387,16 +505,12 @@ async function encourageAsBot(bot) {
             );
         }
 
-        // Utiliser la RPC server-side existante toggle_courage
         const { data: rpcData, error: rpcErr } = await supabase.rpc(
             "toggle_courage",
             { row_id: target.id, user_id_param: bot.user_id },
         );
         if (rpcErr) throw rpcErr;
 
-        const todayStr = new Date().toISOString().slice(0, 10);
-
-        // Ensure content.encouragements_count reflects server state (if RPC returned count)
         try {
             const serverCount =
                 rpcData &&
@@ -409,7 +523,6 @@ async function encourageAsBot(bot) {
                     .update({ encouragements_count: serverCount })
                     .eq("id", target.id);
             } else {
-                // Fallback: increment by 1 (best-effort)
                 const { data: row } = await supabase
                     .from("content")
                     .select("encouragements_count")
@@ -430,6 +543,7 @@ async function encourageAsBot(bot) {
                 err?.message || err,
             );
         }
+
         const nowIso = new Date().toISOString();
         await persistMergedBotMeta(
             bot.user_id,
@@ -684,14 +798,13 @@ async function loopOnce() {
         if (!bots || bots.length === 0) return;
 
         const now = new Date();
-        const currentMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+        const currentMinutes = getCurrentUtcMinute(now);
         const todayStart = new Date(
             Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
         );
         const todayStr = todayStart.toISOString().slice(0, 10);
 
-        // Fetch all bot posts today to avoid many queries
-        const botUserIds = bots.map((b) => b.user_id);
+        const botUserIds = bots.map((bot) => bot.user_id).filter(Boolean);
         const { data: postsToday } = await supabase
             .from("content")
             .select("user_id")
@@ -699,93 +812,79 @@ async function loopOnce() {
             .gte("created_at", todayStart.toISOString());
 
         const postsCountMap = {};
-        (postsToday || []).forEach((p) => {
-            postsCountMap[p.user_id] = (postsCountMap[p.user_id] || 0) + 1;
+        (postsToday || []).forEach((post) => {
+            postsCountMap[post.user_id] = (postsCountMap[post.user_id] || 0) + 1;
         });
+
+        const postMinuteMap = buildDistributedMinuteSlots(bots, {
+            dayKey: todayStr,
+            actionKey: "post",
+            startMinute: BOT_POST_WINDOW_START_MINUTE,
+            endMinute: getElapsedWindowEnd(
+                currentMinutes,
+                BOT_POST_WINDOW_START_MINUTE,
+                BOT_POST_WINDOW_END_MINUTE,
+            ),
+        });
+
+        let postsProcessed = 0;
+        let encouragesProcessed = 0;
 
         for (const bot of bots) {
             try {
-                const meta =
-                    bot.meta && typeof bot.meta === "object"
-                        ? bot.meta
-                        : bot.meta
-                          ? JSON.parse(bot.meta)
-                          : {};
-
-                // --- POSTING (0-2 posts) ---
-                const numPostsTarget = getDeterministicRandom(
-                    bot.user_id + todayStr + "posts",
-                    3,
-                );
+                const meta = parseBotMeta(bot.meta);
                 const currentPosts = postsCountMap[bot.user_id] || 0;
 
-                if (currentPosts < numPostsTarget) {
-                    // Spread posts: base hour for first post is schedule_hour, second is +6 hours
-                    const baseHour = (Number(bot.schedule_hour) + currentPosts * 6) % 24;
-                    const targetMin = getTargetMinutes(
-                        baseHour,
-                        bot.user_id + todayStr + "post" + currentPosts,
-                        30,
-                    );
-
-                    if (currentMinutes >= targetMin) {
-                        const postResult = await postAsBot(bot);
-                        if (postResult) {
-                            postsCountMap[bot.user_id] = currentPosts + 1;
-                            await sleep(500 + Math.random() * 800);
-                        }
+                if (
+                    postsProcessed < MAX_POSTS_PER_RUN &&
+                    currentPosts < BOT_MIN_POSTS_PER_DAY
+                ) {
+                    const postResult = await postAsBot(bot, {
+                        createdAt: resolveDailyPostCreatedAt(bot, postMinuteMap, now),
+                    });
+                    if (postResult) {
+                        postsCountMap[bot.user_id] = currentPosts + 1;
+                        postsProcessed += 1;
+                        await sleep(300 + Math.random() * 600);
                     }
                 }
 
-                // --- ENCOURAGING (min 5 per day) ---
-                const encouragedToday =
-                    meta.last_action_date === todayStr
-                        ? Number(meta.encouraged_today) || 0
-                        : 0;
-
-                if (encouragedToday < 5) {
-                    // Spread throughout the day (every 4 hours approximately)
-                    const baseHour = (encouragedToday * 4) % 24;
-                    const targetMin = getTargetMinutes(
-                        baseHour,
-                        bot.user_id + todayStr + "enc" + encouragedToday,
-                        60,
-                    );
-
-                    if (currentMinutes >= targetMin) {
-                        await encourageAsBot(bot);
-                        // We don't update local meta here because encourageAsBot updates it in DB
-                        // and we refetch bots every loopOnce
-                        await sleep(400 + Math.random() * 800);
-                    }
+                const encouragementBacklog = getBotEncouragementBacklog(
+                    bot,
+                    meta,
+                    todayStr,
+                    currentMinutes,
+                );
+                const encourageAttempts = Math.min(3, encouragementBacklog);
+                for (let i = 0; i < encourageAttempts; i += 1) {
+                    if (encouragesProcessed >= MAX_ENCOURAGES_PER_RUN) break;
+                    const encourageResult = await encourageAsBot(bot);
+                    if (!encourageResult) break;
+                    encouragesProcessed += 1;
+                    await sleep(150 + Math.random() * 350);
                 }
 
-                // --- FOLLOWING (jitter) ---
                 const lastFollow = meta.last_followed_date;
                 const followTotal = Number(meta.follow_total) || 0;
-
                 if (
                     followTotal < MAX_FOLLOWS_PER_BOT &&
                     lastFollow !== todayStr
                 ) {
-                    // Following with ±30min jitter on a base hour
-                    const baseHour = (Number(bot.schedule_hour) + 2) % 24;
-                    const targetMin = getTargetMinutes(
-                        baseHour,
-                        bot.user_id + todayStr + "follow",
-                        30,
-                    );
-
-                    if (currentMinutes >= targetMin) {
+                    const followTargetMin =
+                        (Number(bot.schedule_hour) || 0) * 60 +
+                        getDeterministicRandom(
+                            `${bot.user_id}:${todayStr}:follow`,
+                            60,
+                        );
+                    if (currentMinutes >= followTargetMin) {
                         await followAsBot(bot, FOLLOW_DAILY_LIMIT);
-                        await sleep(300 + Math.random() * 900);
+                        await sleep(220 + Math.random() * 420);
                     }
                 }
 
-                // --- VIEWING (up to N posts per day across bots + real users) ---
                 const viewed = await viewAsBot(bot, BOT_DAILY_VIEWS_TARGET);
                 if (viewed > 0) {
-                    await sleep(180 + Math.random() * 420);
+                    await sleep(120 + Math.random() * 220);
                 }
             } catch (botErr) {
                 console.warn(
@@ -799,7 +898,8 @@ async function loopOnce() {
     }
 }
 
-async function main() {
+async function main()
+ {
     console.log("Bot runner started");
     while (true) {
         await loopOnce();
