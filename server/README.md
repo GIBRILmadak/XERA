@@ -73,4 +73,12 @@ Videos bots (optionnel)
     - `BOT_VIDEO_API_KEY=<cle API Pexels>`
     - `BOT_VIDEO_MAX_DURATION_SECONDS=30`
     - `BOT_VIDEO_SEARCH_TIMEOUT_MS=5000`
-- Sans `BOT_VIDEO_API_KEY`, les bots retombent sur des images et ne tirent plus de videos locales.
+- Sans `BOT_VIDEO_API_KEY`, les bots retombent sur des images (fallback) et ne tirent plus de videos distantes.
+
+Images bots (coherence avec le titre)
+
+- Quand `BOT_VIDEO_API_KEY` est defini, les images sont aussi recuperees depuis Pexels avec des requetes basees sur le titre / l'activite du post (au lieu d'un placeholder aleatoire).
+- Variables optionnelles si vous voulez separer la config image/vidéo :
+    - `BOT_IMAGE_PROVIDER=pexels` (defaut: meme provider que la video)
+    - `BOT_IMAGE_API_KEY=<cle API Pexels>` (defaut: reutilise `BOT_VIDEO_API_KEY`)
+    - `BOT_IMAGE_SEARCH_TIMEOUT_MS=5000` (defaut: reutilise `BOT_VIDEO_SEARCH_TIMEOUT_MS`)

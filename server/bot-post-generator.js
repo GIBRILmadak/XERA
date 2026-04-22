@@ -7,6 +7,13 @@ const {
     BOT_VIDEO_SEARCH_TIMEOUT_MS = "5000",
 } = process.env;
 
+// By default, reuse video provider/key for images as well so bots can fetch
+// coherent media (videos + images) from the same provider without extra config.
+const BOT_IMAGE_PROVIDER = process.env.BOT_IMAGE_PROVIDER || BOT_VIDEO_PROVIDER;
+const BOT_IMAGE_API_KEY = process.env.BOT_IMAGE_API_KEY || BOT_VIDEO_API_KEY;
+const BOT_IMAGE_SEARCH_TIMEOUT_MS =
+    process.env.BOT_IMAGE_SEARCH_TIMEOUT_MS || BOT_VIDEO_SEARCH_TIMEOUT_MS;
+
 const BOT_STYLES = ["builder", "storyteller", "mentor", "analyst"];
 
 const FALLBACK_TOPICS = [
@@ -1104,20 +1111,26 @@ function toSearchPhrase(value) {
         .trim();
 }
 
-function buildVideoSearchQueries(profile, topic, context = {}) {
+function buildMediaSearchQueries(profile, topic, context = {}) {
     const topicLabel = TOPIC_LABELS[topic] || TOPIC_LABELS.general;
     const profileQueries = Array.isArray(profile?.imageQueries)
         ? profile.imageQueries.map((query) => toSearchPhrase(query))
         : [];
     const candidates = [
+        toSearchPhrase(context.title || ""),
         `${topicLabel} ${context.activity || ""}`.trim(),
         `${topicLabel} ${context.projectName || ""}`.trim(),
         `${topicLabel} ${context.nextStep || ""}`.trim(),
+        `${topicLabel} ${context.result || ""}`.trim(),
         `${topicLabel} workspace process`.trim(),
         ...profileQueries,
         topicLabel,
     ];
     return dedupeStrings(candidates).slice(0, 6);
+}
+
+function buildVideoSearchQueries(profile, topic, context = {}) {
+    return buildMediaSearchQueries(profile, topic, context);
 }
 
 function buildFetchTimeout(timeoutMs) {
@@ -1186,6 +1199,78 @@ function normalizeRemoteVideoCandidate(video) {
     };
 }
 
+function pickPreferredPhotoUrl(photo) {
+    const src = photo?.src || {};
+    return (
+        src.large2x ||
+        src.large ||
+        src.original ||
+        src.medium ||
+        src.small ||
+        null
+    );
+}
+
+function normalizeRemotePhotoCandidate(photo) {
+    const url = pickPreferredPhotoUrl(photo);
+    if (!url) return null;
+    return {
+        type: "image",
+        mediaUrl: String(url),
+        mediaDurationSeconds: null,
+        mediaSource: BOT_IMAGE_PROVIDER,
+        mediaLabel: `remote-photo-${photo?.id || "unknown"}`,
+    };
+}
+
+async function findRemotePhotoAsset(profile, topic, seed, options = {}) {
+    if (String(BOT_IMAGE_PROVIDER).toLowerCase() !== "pexels") return null;
+    if (!String(BOT_IMAGE_API_KEY || "").trim()) return null;
+
+    const recentMediaUrls = new Set(
+        Array.isArray(options.recentMediaUrls)
+            ? options.recentMediaUrls.filter(Boolean).map(String)
+            : [],
+    );
+    const queries = buildMediaSearchQueries(profile, topic, options.context);
+    const timeoutMs = Math.max(
+        1000,
+        Number(BOT_IMAGE_SEARCH_TIMEOUT_MS) || 5000,
+    );
+
+    for (const query of queries) {
+        try {
+            const payload = await fetchJsonWithTimeout(
+                `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=15&orientation=landscape&size=large`,
+                {
+                    headers: {
+                        Authorization: String(BOT_IMAGE_API_KEY),
+                    },
+                },
+                timeoutMs,
+            );
+            const candidates = (payload?.photos || [])
+                .map(normalizeRemotePhotoCandidate)
+                .filter(
+                    (candidate) =>
+                        candidate &&
+                        !recentMediaUrls.has(String(candidate.mediaUrl)),
+                );
+            if (candidates.length > 0) {
+                return pickSeeded(
+                    candidates,
+                    `${seed}:photo:${query}`,
+                    candidates[0],
+                );
+            }
+        } catch (_error) {
+            // ignore individual provider errors and fall back to picsum
+        }
+    }
+
+    return null;
+}
+
 async function findRemoteVideoAsset(profile, topic, seed, options = {}) {
     if (String(BOT_VIDEO_PROVIDER).toLowerCase() !== "pexels") return null;
     if (!String(BOT_VIDEO_API_KEY || "").trim()) return null;
@@ -1251,6 +1336,12 @@ async function buildMediaAsset(profile, topic, seed, options = {}) {
         });
         if (remoteVideo) return remoteVideo;
     }
+
+    const remotePhoto = await findRemotePhotoAsset(safeProfile, topic, seed, {
+        ...options,
+        recentMediaUrls: Array.from(recentMediaUrls),
+    });
+    if (remotePhoto) return remotePhoto;
 
     return {
         type: "image",
@@ -1374,6 +1465,7 @@ async function buildBotPostDraft({
     const mediaAsset = await buildMediaAsset(profile, topic, chosenSeed, {
         recentMediaUrls,
         context: {
+            title: finalTitle,
             projectName,
             topicLabel,
             activity: chosenActivity,
