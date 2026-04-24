@@ -14,7 +14,7 @@
         />
     </head>
     <body class="plans-page">
-        <div class="app-container">
+        <div class="app-container" id="subscriptionPlansRoot">
             <!-- Navigation -->
             <nav>
                 <a class="logo" href="index.html">
@@ -144,7 +144,7 @@
             <div class="plans-container">
                 <div class="plans-grid">
                     <!-- Plan Standard -->
-                    <div class="plan-detail-card standard">
+                    <div class="plan-detail-card standard" data-plan-id="standard">
                         <div class="plan-icon">
                             <i class="fas fa-check-circle"></i>
                         </div>
@@ -190,7 +190,7 @@
                     </div>
 
                     <!-- Plan Medium -->
-                    <div class="plan-detail-card medium">
+                    <div class="plan-detail-card medium" data-plan-id="medium">
                         <div class="recommended-badge">Populaire</div>
                         <div class="plan-icon">
                             <i class="fas fa-heart"></i>
@@ -251,7 +251,7 @@
                     </div>
 
                     <!-- Plan Pro -->
-                    <div class="plan-detail-card pro recommended">
+                    <div class="plan-detail-card pro recommended" data-plan-id="pro">
                         <div class="plan-icon">
                             <i class="fas fa-crown"></i>
                         </div>
@@ -344,7 +344,7 @@
                 <h2>Questions fréquentes</h2>
 
                 <div class="faq-item">
-                    <button class="faq-question" onclick="toggleFaq(this)">
+                    <button class="faq-question" data-faq-id="monetization" onclick="toggleFaq(this)">
                         Comment fonctionne la monétisation ?
                         <i class="fas fa-chevron-down"></i>
                     </button>
@@ -360,7 +360,7 @@
                 </div>
 
                 <div class="faq-item">
-                    <button class="faq-question" onclick="toggleFaq(this)">
+                    <button class="faq-question" data-faq-id="commission" onclick="toggleFaq(this)">
                         Quelle commission prend XERA ?
                         <i class="fas fa-chevron-down"></i>
                     </button>
@@ -375,7 +375,7 @@
                 </div>
 
                 <div class="faq-item">
-                    <button class="faq-question" onclick="toggleFaq(this)">
+                    <button class="faq-question" data-faq-id="video-monetization" onclick="toggleFaq(this)">
                         Comment fonctionne la monétisation vidéo ?
                         <i class="fas fa-chevron-down"></i>
                     </button>
@@ -391,7 +391,7 @@
                 </div>
 
                 <div class="faq-item">
-                    <button class="faq-question" onclick="toggleFaq(this)">
+                    <button class="faq-question" data-faq-id="switch-plan" onclick="toggleFaq(this)">
                         Puis-je changer de plan à tout moment ?
                         <i class="fas fa-chevron-down"></i>
                     </button>
@@ -407,7 +407,7 @@
                 </div>
 
                 <div class="faq-item">
-                    <button class="faq-question" onclick="toggleFaq(this)">
+                    <button class="faq-question" data-faq-id="payouts" onclick="toggleFaq(this)">
                         Comment sont payés les revenus ?
                         <i class="fas fa-chevron-down"></i>
                     </button>
@@ -423,7 +423,7 @@
                 </div>
 
                 <div class="faq-item">
-                    <button class="faq-question" onclick="toggleFaq(this)">
+                    <button class="faq-question" data-faq-id="followers-threshold" onclick="toggleFaq(this)">
                         Que se passe-t-il si je descends en dessous de 1000
                         abonnés ?
                         <i class="fas fa-chevron-down"></i>
@@ -474,6 +474,18 @@
         <script src="js/supabase-config.js"></script>
         <script src="js/monetization-utils.js"></script>
         <script src="js/monetization.js?v=20260318-6"></script>
-        <script src="js/subscription-plans.js?v=20260318-1"></script>
+        <script src="js/xera-platform-bridge.js?v=20260424-1"></script>
+        <script
+            src="https://unpkg.com/react@18/umd/react.production.min.js"
+            crossorigin
+        ></script>
+        <script
+            src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+            crossorigin
+        ></script>
+        <script src="js/xera-react-core.js?v=20260424-1"></script>
+        <script src="js/subscription-plans-data.js?v=20260424-1"></script>
+        <script src="js/subscription-plans-hooks.js?v=20260424-1"></script>
+        <script src="js/subscription-plans.js?v=20260424-1"></script>
     </body>
 </html>

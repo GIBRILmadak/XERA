@@ -141,9 +141,19 @@ app.use(
             }
             callback(new Error("Origin not allowed by CORS"));
         },
-        methods: ["GET", "POST", "OPTIONS"],
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     }),
 );
+
+const APP_PROFILE_CACHE_TTL_MS = Math.max(
+    5000,
+    parseInt(process.env.APP_PROFILE_CACHE_TTL_MS || "15000", 10) || 15000,
+);
+const APP_DISCOVER_CACHE_TTL_MS = Math.max(
+    5000,
+    parseInt(process.env.APP_DISCOVER_CACHE_TTL_MS || "20000", 10) || 20000,
+);
+const APP_QUERY_CACHE = new Map();
 
 function parseBooleanEnv(value, fallback = false) {
     if (value === undefined || value === null || value === "") {
@@ -853,6 +863,358 @@ async function authenticateSuperAdmin(req) {
     return authResult;
 }
 
+function getCachedAppQueryValue(cacheKey) {
+    if (!cacheKey) return null;
+    const entry = APP_QUERY_CACHE.get(cacheKey);
+    if (!entry) return null;
+    if (!Number.isFinite(entry.expiresAt) || entry.expiresAt <= Date.now()) {
+        APP_QUERY_CACHE.delete(cacheKey);
+        return null;
+    }
+    return entry.value;
+}
+
+function setCachedAppQueryValue(cacheKey, value, ttlMs) {
+    if (!cacheKey) return value;
+    const safeTtl = Math.max(1000, Number(ttlMs || 0) || 1000);
+    APP_QUERY_CACHE.set(cacheKey, {
+        value,
+        expiresAt: Date.now() + safeTtl,
+    });
+    return value;
+}
+
+function deleteCachedAppQueryValue(cacheKey) {
+    if (!cacheKey) return false;
+    return APP_QUERY_CACHE.delete(cacheKey);
+}
+
+function normalizeUserProfileRecord(row) {
+    if (!row || typeof row !== "object") return row;
+    const normalizedSocialLinks =
+        row.socialLinks && typeof row.socialLinks === "object"
+            ? row.socialLinks
+            : row.social_links && typeof row.social_links === "object"
+              ? row.social_links
+              : {};
+
+    return {
+        ...row,
+        socialLinks: normalizedSocialLinks,
+        accountSubtype: row.accountSubtype || row.account_subtype || null,
+        planEndsAt: row.planEndsAt || row.plan_ends_at || null,
+    };
+}
+
+function normalizeSubscriptionRecord(row) {
+    if (!row || typeof row !== "object") return null;
+    return {
+        ...row,
+        currentPeriodStart:
+            row.currentPeriodStart || row.current_period_start || null,
+        currentPeriodEnd: row.currentPeriodEnd || row.current_period_end || null,
+        cancelAtPeriodEnd:
+            row.cancelAtPeriodEnd || row.cancel_at_period_end || false,
+        canceledAt: row.canceledAt || row.canceled_at || null,
+    };
+}
+
+function sanitizeProfileField(value, maxLength = 280) {
+    return String(value || "")
+        .trim()
+        .slice(0, maxLength);
+}
+
+function sanitizeProfileUrl(value, maxLength = 2048) {
+    const normalized = sanitizeProfileField(value, maxLength);
+    if (!normalized) return "";
+    if (
+        normalized.startsWith("http://") ||
+        normalized.startsWith("https://") ||
+        normalized.startsWith("data:")
+    ) {
+        return normalized;
+    }
+    if (
+        normalized.startsWith("/") ||
+        normalized.startsWith("./") ||
+        normalized.startsWith("../")
+    ) {
+        return normalized;
+    }
+    return normalized;
+}
+
+function sanitizeProfileSocialLinks(rawValue) {
+    if (!rawValue || typeof rawValue !== "object" || Array.isArray(rawValue)) {
+        return {};
+    }
+
+    const entries = Object.entries(rawValue)
+        .filter(([key]) => typeof key === "string" && key.trim())
+        .slice(0, 24);
+
+    return entries.reduce((accumulator, [key, value]) => {
+        const safeKey = String(key).trim().slice(0, 64);
+        const safeValue = sanitizeProfileField(value, 320);
+        if (safeKey) {
+            accumulator[safeKey] = safeValue;
+        }
+        return accumulator;
+    }, {});
+}
+
+function sanitizeProfilePayload(rawPayload, authUser, existingProfile) {
+    const source =
+        rawPayload && typeof rawPayload === "object" ? rawPayload : {};
+    const currentProfile =
+        existingProfile && typeof existingProfile === "object"
+            ? existingProfile
+            : {};
+    const authMetadata =
+        authUser?.user_metadata && typeof authUser.user_metadata === "object"
+            ? authUser.user_metadata
+            : {};
+
+    const existingBadge = sanitizeProfileField(
+        currentProfile.badge || authMetadata.badge || "",
+        80,
+    );
+    const requestedAccountType = sanitizeProfileField(
+        source.account_type || authMetadata.account_type || "",
+        80,
+    );
+    const requestedAccountSubtype = sanitizeProfileField(
+        source.account_subtype || authMetadata.account_subtype || "",
+        80,
+    );
+
+    return {
+        id: authUser?.id || currentProfile.id || null,
+        name: sanitizeProfileField(
+            source.name ||
+                currentProfile.name ||
+                authMetadata.username ||
+                authUser?.email?.split("@")[0] ||
+                "Nouveau membre",
+            120,
+        ),
+        title: sanitizeProfileField(
+            source.title || currentProfile.title || "",
+            160,
+        ),
+        bio: sanitizeProfileField(source.bio || currentProfile.bio || "", 1600),
+        avatar: sanitizeProfileUrl(
+            source.avatar || currentProfile.avatar || "",
+            4096,
+        ),
+        banner: sanitizeProfileUrl(
+            source.banner || currentProfile.banner || "",
+            4096,
+        ),
+        account_type: requestedAccountType || null,
+        account_subtype: requestedAccountSubtype || null,
+        badge: existingBadge || null,
+        social_links: sanitizeProfileSocialLinks(
+            source.socialLinks ||
+                source.social_links ||
+                currentProfile.social_links ||
+                currentProfile.socialLinks ||
+                {},
+        ),
+        updated_at: new Date().toISOString(),
+    };
+}
+
+function getAppProfileCacheKey(userId) {
+    return `app:profile:${String(userId || "").trim()}`;
+}
+
+function getAppDiscoverUsersCacheKey() {
+    return "app:discover:users";
+}
+
+function getAppSubscriptionStateCacheKey(userId) {
+    return `app:subscription-state:${String(userId || "").trim()}`;
+}
+
+function invalidateUserAppCaches(userId) {
+    const safeUserId = String(userId || "").trim();
+    if (!safeUserId) return;
+    deleteCachedAppQueryValue(getAppProfileCacheKey(safeUserId));
+    deleteCachedAppQueryValue(getAppSubscriptionStateCacheKey(safeUserId));
+    deleteCachedAppQueryValue(getAppDiscoverUsersCacheKey());
+}
+
+async function fetchProfileRecordById(userId, options = {}) {
+    const safeUserId = String(userId || "").trim();
+    if (!safeUserId) {
+        return {
+            success: false,
+            status: 400,
+            code: "INVALID_USER_ID",
+            error: "Identifiant utilisateur manquant.",
+        };
+    }
+
+    const cacheKey = getAppProfileCacheKey(safeUserId);
+    if (options.useCache !== false) {
+        const cached = getCachedAppQueryValue(cacheKey);
+        if (cached) {
+            return {
+                success: true,
+                data: cached,
+                cached: true,
+            };
+        }
+    }
+
+    const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", safeUserId)
+        .maybeSingle();
+
+    if (error) {
+        return {
+            success: false,
+            status: 500,
+            code: String(error.code || "UNKNOWN"),
+            error: error.message || "Impossible de lire le profil.",
+        };
+    }
+
+    if (!data) {
+        return {
+            success: false,
+            status: 404,
+            code: "PGRST116",
+            error: "Profile not found.",
+        };
+    }
+
+    const normalizedProfile = normalizeUserProfileRecord(data);
+    setCachedAppQueryValue(
+        cacheKey,
+        normalizedProfile,
+        APP_PROFILE_CACHE_TTL_MS,
+    );
+
+    return { success: true, data: normalizedProfile };
+}
+
+async function fetchDiscoverUsers(options = {}) {
+    const cacheKey = getAppDiscoverUsersCacheKey();
+    if (options.useCache !== false) {
+        const cached = getCachedAppQueryValue(cacheKey);
+        if (cached) {
+            return {
+                success: true,
+                data: cached,
+                cached: true,
+            };
+        }
+    }
+
+    const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+    if (error) {
+        return {
+            success: false,
+            status: 500,
+            code: String(error.code || "UNKNOWN"),
+            error: error.message || "Impossible de charger Discover.",
+        };
+    }
+
+    const normalizedUsers = Array.isArray(data)
+        ? data.map((row) => normalizeUserProfileRecord(row))
+        : [];
+
+    setCachedAppQueryValue(
+        cacheKey,
+        normalizedUsers,
+        APP_DISCOVER_CACHE_TTL_MS,
+    );
+
+    return { success: true, data: normalizedUsers };
+}
+
+async function fetchCurrentSubscriptionState(userId, options = {}) {
+    const safeUserId = String(userId || "").trim();
+    if (!safeUserId) {
+        return {
+            success: false,
+            status: 400,
+            code: "INVALID_USER_ID",
+            error: "Identifiant utilisateur manquant.",
+        };
+    }
+
+    const cacheKey = getAppSubscriptionStateCacheKey(safeUserId);
+    if (options.useCache !== false) {
+        const cached = getCachedAppQueryValue(cacheKey);
+        if (cached) {
+            return {
+                success: true,
+                data: cached,
+                cached: true,
+            };
+        }
+    }
+
+    const [profileResult, subscriptionResult] = await Promise.all([
+        fetchProfileRecordById(safeUserId, options),
+        supabase
+            .from("subscriptions")
+            .select("*")
+            .eq("user_id", safeUserId)
+            .order("created_at", { ascending: false })
+            .limit(1),
+    ]);
+
+    if (!profileResult.success) {
+        return profileResult;
+    }
+
+    const {
+        data: subscriptions,
+        error: subscriptionError,
+    } = subscriptionResult;
+
+    if (subscriptionError) {
+        return {
+            success: false,
+            status: 500,
+            code: String(subscriptionError.code || "UNKNOWN"),
+            error:
+                subscriptionError.message ||
+                "Impossible de charger l'abonnement actuel.",
+        };
+    }
+
+    const normalizedState = {
+        user: profileResult.data,
+        subscription: normalizeSubscriptionRecord(
+            Array.isArray(subscriptions) ? subscriptions[0] || null : null,
+        ),
+    };
+
+    setCachedAppQueryValue(
+        cacheKey,
+        normalizedState,
+        APP_PROFILE_CACHE_TTL_MS,
+    );
+
+    return {
+        success: true,
+        data: normalizedState,
+    };
+}
+
 function extractSubscriptionPaymentDetails(row) {
     const metadata =
         row?.metadata && typeof row.metadata === "object" ? row.metadata : {};
@@ -1557,6 +1919,8 @@ async function activateSubscription({
         transactionId = insertedTransaction?.id || null;
     }
 
+    invalidateUserAppCaches(userId);
+
     return {
         alreadyActivated: false,
         user: updatedUser,
@@ -1681,6 +2045,7 @@ function buildNotificationPushPayload(notification) {
         follow: "Nouvel abonné",
         like: "Nouveau like",
         comment: "Nouveau commentaire",
+        live_chat: "Message du live",
         mention: "Mention",
         achievement: "Succès débloqué",
         stream: "Live en cours",
@@ -3565,6 +3930,8 @@ app.post("/api/admin/gift-plan", async (req, res) => {
             });
         }
 
+        invalidateUserAppCaches(targetUserId);
+
         return res.json({ success: true, user: updated });
     } catch (error) {
         console.error("Admin gift plan error:", error);
@@ -4603,6 +4970,176 @@ function handlePublicConfig(req, res) {
 }
 
 app.get("/api/config", handlePublicConfig);
+
+app.get("/api/app/profiles/:userId", async (req, res) => {
+    try {
+        const profileResult = await fetchProfileRecordById(req.params.userId);
+        if (!profileResult.success) {
+            return res.status(profileResult.status || 500).json({
+                success: false,
+                error: profileResult.error || "Impossible de charger le profil.",
+                code: profileResult.code || "UNKNOWN",
+            });
+        }
+
+        return res.json({
+            success: true,
+            data: profileResult.data,
+            cached: profileResult.cached === true,
+        });
+    } catch (error) {
+        console.error("App profile read error:", error);
+        return res.status(500).json({
+            success: false,
+            error: error?.message || "Impossible de charger le profil.",
+            code: String(error?.code || "UNKNOWN"),
+        });
+    }
+});
+
+app.put("/api/app/profiles/:userId", async (req, res) => {
+    try {
+        const targetUserId = String(req.params.userId || "").trim();
+        if (!targetUserId) {
+            return res.status(400).json({
+                success: false,
+                error: "Identifiant utilisateur manquant.",
+            });
+        }
+
+        const authResult = await authenticateRequest(req);
+        if (authResult.error) {
+            return res.status(authResult.error.status).json({
+                success: false,
+                error: authResult.error.message,
+            });
+        }
+
+        if (
+            authResult.user.id !== targetUserId &&
+            authResult.user.id !== SUPER_ADMIN_ID
+        ) {
+            return res.status(403).json({
+                success: false,
+                error: "Mise a jour de profil refusee.",
+            });
+        }
+
+        const existingProfileResult = await fetchProfileRecordById(targetUserId, {
+            useCache: false,
+        });
+        const existingProfile = existingProfileResult.success
+            ? existingProfileResult.data
+            : null;
+
+        const payload = sanitizeProfilePayload(
+            req.body?.profile || req.body || {},
+            authResult.user,
+            existingProfile,
+        );
+
+        const { data, error } = await supabase
+            .from("users")
+            .upsert(payload)
+            .select("*")
+            .single();
+
+        if (error) {
+            return res.status(400).json({
+                success: false,
+                error: error.message || "Mise a jour de profil impossible.",
+                code: String(error.code || "UNKNOWN"),
+            });
+        }
+
+        invalidateUserAppCaches(targetUserId);
+
+        return res.json({
+            success: true,
+            data: normalizeUserProfileRecord(data),
+        });
+    } catch (error) {
+        console.error("App profile upsert error:", error);
+        return res.status(500).json({
+            success: false,
+            error: error?.message || "Mise a jour de profil impossible.",
+            code: String(error?.code || "UNKNOWN"),
+        });
+    }
+});
+
+app.get("/api/app/discover/users", async (_req, res) => {
+    try {
+        const usersResult = await fetchDiscoverUsers();
+        if (!usersResult.success) {
+            return res.status(usersResult.status || 500).json({
+                success: false,
+                error:
+                    usersResult.error ||
+                    "Impossible de charger les utilisateurs.",
+                code: usersResult.code || "UNKNOWN",
+            });
+        }
+
+        return res.json({
+            success: true,
+            data: usersResult.data,
+            cached: usersResult.cached === true,
+        });
+    } catch (error) {
+        console.error("App discover users error:", error);
+        return res.status(500).json({
+            success: false,
+            error:
+                error?.message ||
+                "Impossible de charger les utilisateurs Discover.",
+            code: String(error?.code || "UNKNOWN"),
+        });
+    }
+});
+
+app.get("/api/app/subscriptions/me", async (req, res) => {
+    try {
+        const authResult = await authenticateRequest(req);
+        if (authResult.error) {
+            return res.status(authResult.error.status).json({
+                success: false,
+                error: authResult.error.message,
+            });
+        }
+
+        const stateResult = await fetchCurrentSubscriptionState(
+            authResult.user.id,
+            {
+                useCache: false,
+            },
+        );
+
+        if (!stateResult.success) {
+            return res.status(stateResult.status || 500).json({
+                success: false,
+                error:
+                    stateResult.error ||
+                    "Impossible de charger l'etat de l'abonnement.",
+                code: stateResult.code || "UNKNOWN",
+            });
+        }
+
+        return res.json({
+            success: true,
+            data: stateResult.data,
+        });
+    } catch (error) {
+        console.error("App subscription state error:", error);
+        return res.status(500).json({
+            success: false,
+            error:
+                error?.message ||
+                "Impossible de charger l'etat de l'abonnement.",
+            code: String(error?.code || "UNKNOWN"),
+        });
+    }
+});
 
 // Enregistrer / mettre à jour un abonnement Web Push (navigateur)
 app.post("/api/push/subscribe", async (req, res) => {

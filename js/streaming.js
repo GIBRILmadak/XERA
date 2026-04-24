@@ -29,6 +29,7 @@ if (!window.__streamingLoaded) {
     let lastChatCreatedAt = null;
     let currentVideoDeviceId = null;
     let lastCameraDeviceId = null;
+    let availableHostVideoInputs = 0;
     let isMicMuted = false;
     let isScreenSharing = false;
     let streamDurationInterval = null;
@@ -45,6 +46,29 @@ if (!window.__streamingLoaded) {
     let pendingMobileScreenShareActivation = false;
     let pendingMobileScreenShareCleanup = null;
     let isShareScreenRequestInFlight = false;
+    let isCameraEnabled = true;
+    let standbyCameraTrack = null;
+    let cameraPlaceholderTrack = null;
+    let cameraPlaceholderStream = null;
+    let cameraPlaceholderInterval = null;
+    let chatRealtimeStatus = 'idle';
+    let lastChatFallbackSyncAt = 0;
+    let chatPinnedToBottom = true;
+    let chatShouldStickOnNextRender = true;
+    let chatUnseenCount = 0;
+    let hostPanelRegistry = new Map();
+    const customHostPanelTools = [];
+    let activeHostToolId = '';
+    let liveStudioState = null;
+    let hostPanelViewers = [];
+    let hostPanelViewersLoading = false;
+    let liveAnalyticsState = null;
+    let liveModerationEntries = [];
+    let liveModerationIndex = new Map();
+    let liveModeratorSearchTerm = '';
+    let liveModerationQueueFilter = 'all';
+    const chatUserCache = new Map();
+    const chatProfileRequests = new Map();
     const renderedChatMessageIds = new Set();
     const MOBILE_VIDEO_CONSTRAINTS = {
         width: { ideal: 960, max: 1280 },
@@ -52,6 +76,493 @@ if (!window.__streamingLoaded) {
         frameRate: { ideal: 24, max: 30 },
         facingMode: { ideal: 'user' }
     };
+    const CHAT_AUTO_SCROLL_THRESHOLD = 56;
+    const CHAT_FALLBACK_POLL_TICK_MS = 1000;
+    const CHAT_FALLBACK_FAST_SYNC_MS = 1200;
+    const CHAT_FALLBACK_STEADY_SYNC_MS = 6000;
+    const MODERATOR_ROLE_TEMPLATES = {
+        lead: {
+            label: 'Lead mod',
+            summary: 'Coordonne les decisions sensibles.',
+            permissions: {
+                queue: true,
+                mute: true,
+                links: true,
+                incidents: true,
+                quality: true,
+            },
+        },
+        chat: {
+            label: 'Chat mod',
+            summary: 'Cadre le chat et gere les liens.',
+            permissions: {
+                queue: true,
+                mute: true,
+                links: true,
+                incidents: false,
+                quality: false,
+            },
+        },
+        safety: {
+            label: 'Safety',
+            summary: 'Suit les alertes et les signalements.',
+            permissions: {
+                queue: true,
+                mute: true,
+                links: false,
+                incidents: true,
+                quality: false,
+            },
+        },
+        scene: {
+            label: 'Scene',
+            summary: 'Controle le rendu et les soucis visuels.',
+            permissions: {
+                queue: false,
+                mute: false,
+                links: false,
+                incidents: false,
+                quality: true,
+            },
+        },
+    };
+    const MODERATOR_PERMISSION_LABELS = {
+        queue: 'Queue',
+        mute: 'Mute',
+        links: 'Liens',
+        incidents: 'Alertes',
+        quality: 'Qualite',
+    };
+    const LIVE_AUTO_MOD_ACTIONS = {
+        flag: 'Signaler',
+        hold: 'Mettre en attente',
+        mask: 'Masquer',
+    };
+    const LIVE_STUDIO_DEFAULTS = {
+        previewFilter: 'none',
+        previewIntensity: 100,
+        previewSafeZone: true,
+        previewGrid: false,
+        previewMirror: false,
+        moderatorIds: [],
+        moderators: {},
+        giftsEnabled: true,
+        pollsEnabled: true,
+        autoModEnabled: false,
+        autoModKeywords: [],
+        autoModAction: 'mask',
+        autoModSensitivity: 'balanced',
+        mutedUserIds: [],
+    };
+    const LIVE_PREVIEW_FILTERS = {
+        none: {
+            label: 'Flux brut',
+            accent: '#cbd5e1',
+            buildCss: () => 'none',
+        },
+        focus: {
+            label: 'Focus',
+            accent: '#38bdf8',
+            buildCss: (intensity) => {
+                const ratio = clampNumber(intensity / 100, 0.4, 1.8);
+                return `saturate(${(1 + ratio * 0.08).toFixed(2)}) contrast(${(1 + ratio * 0.04).toFixed(2)})`;
+            },
+        },
+        cinema: {
+            label: 'Cinema',
+            accent: '#f59e0b',
+            buildCss: (intensity) => {
+                const ratio = clampNumber(intensity / 100, 0.4, 1.8);
+                return `contrast(${(1.04 + ratio * 0.05).toFixed(2)}) saturate(${(1 - ratio * 0.08).toFixed(2)}) brightness(${(0.98 - ratio * 0.03).toFixed(2)})`;
+            },
+        },
+        pop: {
+            label: 'Pop',
+            accent: '#f43f5e',
+            buildCss: (intensity) => {
+                const ratio = clampNumber(intensity / 100, 0.4, 1.8);
+                return `saturate(${(1.08 + ratio * 0.16).toFixed(2)}) contrast(${(1.02 + ratio * 0.06).toFixed(2)})`;
+            },
+        },
+        mono: {
+            label: 'Mono',
+            accent: '#a78bfa',
+            buildCss: (intensity) => {
+                const ratio = clampNumber(intensity / 100, 0.4, 1.4);
+                return `grayscale(${clampNumber(0.4 + ratio * 0.45, 0.45, 1).toFixed(2)}) contrast(${(1 + ratio * 0.06).toFixed(2)})`;
+            },
+        },
+    };
+    const LIVE_ANALYTICS_WINDOW_MS = 1000 * 60 * 18;
+    const LIVE_RATE_WINDOW_MS = 1000 * 60 * 5;
+    const LIVE_MODERATION_LOG_LIMIT = 36;
+
+function clampNumber(value, min, max) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return min;
+    return Math.min(max, Math.max(min, numeric));
+}
+
+function uniqueStringList(values) {
+    if (!Array.isArray(values)) return [];
+    return [...new Set(
+        values
+            .map((value) => String(value || '').trim())
+            .filter(Boolean),
+    )];
+}
+
+function cloneModeratorPermissions(permissions = {}) {
+    const next = {};
+    Object.keys(MODERATOR_PERMISSION_LABELS).forEach((key) => {
+        next[key] = Boolean(permissions[key]);
+    });
+    return next;
+}
+
+function getModeratorRoleTemplate(roleId = 'chat') {
+    return MODERATOR_ROLE_TEMPLATES[roleId] || MODERATOR_ROLE_TEMPLATES.chat;
+}
+
+function createModeratorConfig(userId, base = {}) {
+    const role = String(base.role || 'chat');
+    const template = getModeratorRoleTemplate(role);
+    return {
+        userId,
+        role,
+        permissions: cloneModeratorPermissions({
+            ...template.permissions,
+            ...(base.permissions || {}),
+        }),
+        assignedAt: base.assignedAt || Date.now(),
+        lastSeenAt: base.lastSeenAt || Date.now(),
+        name: base.name || '',
+        avatar: base.avatar || '',
+    };
+}
+
+function normalizeModeratorsState(rawModerators = {}, moderatorIds = []) {
+    const nextIds = uniqueStringList([
+        ...Object.keys(rawModerators || {}),
+        ...(Array.isArray(moderatorIds) ? moderatorIds : []),
+    ]);
+    const moderators = {};
+    nextIds.forEach((userId) => {
+        moderators[userId] = createModeratorConfig(
+            userId,
+            rawModerators?.[userId] || {},
+        );
+    });
+    return {
+        moderatorIds: nextIds,
+        moderators,
+    };
+}
+
+function createLiveAnalyticsState(stream = currentStream) {
+    const initialViewers = Math.max(0, Number(stream?.viewer_count) || 0);
+    return {
+        startedAt: resolveStreamStartMs(stream) || Date.now(),
+        viewerSeries: [],
+        messageSeries: [],
+        uniqueViewerIds: new Set(),
+        uniqueChatters: new Set(),
+        chatterCounts: {},
+        peakViewers: initialViewers,
+        lastViewerCount: initialViewers,
+        moderationHits: 0,
+        autoActions: 0,
+        manualActions: 0,
+        totalMessages: 0,
+        peakMomentum: 0,
+        peakMomentumLabel: 'Stable',
+    };
+}
+
+function ensureLiveAnalyticsState(stream = currentStream) {
+    if (!liveAnalyticsState) {
+        liveAnalyticsState = createLiveAnalyticsState(stream);
+    }
+    return liveAnalyticsState;
+}
+
+function trimTimedSeries(list, windowMs = LIVE_ANALYTICS_WINDOW_MS) {
+    const cutoff = Date.now() - windowMs;
+    return (Array.isArray(list) ? list : []).filter(
+        (entry) => Number(entry?.ts) >= cutoff,
+    );
+}
+
+function resetLiveStudioRuntime(stream = currentStream) {
+    liveStudioState = { ...LIVE_STUDIO_DEFAULTS };
+    liveAnalyticsState = createLiveAnalyticsState(stream);
+    liveModerationEntries = [];
+    liveModerationIndex = new Map();
+    liveModeratorSearchTerm = '';
+    liveModerationQueueFilter = 'all';
+    activeHostToolId = '';
+    hostPanelViewers = [];
+    hostPanelViewersLoading = false;
+}
+
+function registerViewerPresence(viewers = []) {
+    const analytics = ensureLiveAnalyticsState();
+    (Array.isArray(viewers) ? viewers : []).forEach((viewer) => {
+        if (viewer?.user_id) {
+            analytics.uniqueViewerIds.add(viewer.user_id);
+        }
+    });
+}
+
+function recordViewerSnapshot(count, viewers = hostPanelViewers) {
+    const analytics = ensureLiveAnalyticsState();
+    const safeCount = Math.max(0, Number(count) || 0);
+    const now = Date.now();
+    analytics.viewerSeries = trimTimedSeries([
+        ...analytics.viewerSeries,
+        { ts: now, value: safeCount },
+    ]);
+    analytics.lastViewerCount = safeCount;
+    analytics.peakViewers = Math.max(analytics.peakViewers, safeCount);
+    registerViewerPresence(viewers);
+
+    const recent = analytics.viewerSeries.slice(-6).map((entry) => entry.value);
+    const baseline = recent.length > 1
+        ? recent.slice(0, -1).reduce((sum, value) => sum + value, 0) /
+          Math.max(1, recent.length - 1)
+        : safeCount;
+    const momentum = safeCount - baseline;
+    analytics.peakMomentum = Math.max(analytics.peakMomentum, momentum);
+    if (momentum >= 6) {
+        analytics.peakMomentumLabel = 'Pic detecte';
+    } else if (momentum <= -4) {
+        analytics.peakMomentumLabel = 'Audience en retrait';
+    } else {
+        analytics.peakMomentumLabel = 'Stable';
+    }
+}
+
+function recordChatAnalytics(message, moderationRecord = null) {
+    if (!message) return;
+    const analytics = ensureLiveAnalyticsState();
+    const now = message.created_at
+        ? new Date(message.created_at).getTime()
+        : Date.now();
+    analytics.messageSeries = trimTimedSeries([
+        ...analytics.messageSeries,
+        { ts: now, userId: message.user_id || null },
+    ]);
+    analytics.totalMessages += 1;
+    if (message.user_id) {
+        analytics.uniqueChatters.add(message.user_id);
+        analytics.chatterCounts[message.user_id] = {
+            name: message.users?.name || message.user_name || 'Utilisateur',
+            count: Number(analytics.chatterCounts[message.user_id]?.count || 0) + 1,
+        };
+    }
+    if (moderationRecord && moderationRecord.status !== 'approved') {
+        analytics.moderationHits += 1;
+        if (moderationRecord.source === 'auto') {
+            analytics.autoActions += 1;
+        }
+    }
+}
+
+function getTimedSeriesCount(list, windowMs = LIVE_RATE_WINDOW_MS) {
+    const cutoff = Date.now() - windowMs;
+    return (Array.isArray(list) ? list : []).filter(
+        (entry) => Number(entry?.ts) >= cutoff,
+    ).length;
+}
+
+function getMessagesPerMinute() {
+    const analytics = ensureLiveAnalyticsState();
+    const recentCount = getTimedSeriesCount(
+        analytics.messageSeries,
+        LIVE_RATE_WINDOW_MS,
+    );
+    return Math.round(recentCount / Math.max(1, LIVE_RATE_WINDOW_MS / 60000));
+}
+
+function getTopChatters(limit = 3) {
+    const analytics = ensureLiveAnalyticsState();
+    return Object.entries(analytics.chatterCounts || {})
+        .sort((a, b) => (b[1]?.count || 0) - (a[1]?.count || 0))
+        .slice(0, limit)
+        .map(([userId, entry]) => ({
+            userId,
+            name: entry?.name || 'Utilisateur',
+            count: entry?.count || 0,
+        }));
+}
+
+function getEngagementScore() {
+    const analytics = ensureLiveAnalyticsState();
+    const activeViewers = Math.max(1, analytics.lastViewerCount || 1);
+    const liveRate = getMessagesPerMinute();
+    const chatterSpread = analytics.uniqueChatters.size;
+    const baseScore =
+        liveRate * 1.9 +
+        chatterSpread * 1.35 +
+        Math.min(activeViewers, 40) * 0.55;
+    return Math.round(baseScore);
+}
+
+function normalizeModerationText(value) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function buildMaskedMessage(reason = '') {
+    return reason
+        ? `[Message masque: ${reason}]`
+        : '[Message masque par moderation]';
+}
+
+function upsertModerationRecord(message, patch = {}) {
+    const key = getChatMessageKey(message);
+    if (!key) return null;
+    const existing = liveModerationIndex.get(key);
+    const next = {
+        key,
+        userId: patch.userId || existing?.userId || message?.user_id || '',
+        userName:
+            patch.userName ||
+            existing?.userName ||
+            message?.users?.name ||
+            message?.user_name ||
+            'Utilisateur',
+        avatar:
+            patch.avatar ||
+            existing?.avatar ||
+            message?.users?.avatar ||
+            '',
+        originalMessage:
+            existing?.originalMessage ||
+            message?._xeraOriginalMessage ||
+            message?.message ||
+            '',
+        renderedMessage:
+            patch.renderedMessage ||
+            existing?.renderedMessage ||
+            message?.message ||
+            '',
+        status: patch.status || existing?.status || 'approved',
+        reason: patch.reason || existing?.reason || '',
+        source: patch.source || existing?.source || 'manual',
+        keyword: patch.keyword || existing?.keyword || '',
+        createdAt:
+            patch.createdAt ||
+            existing?.createdAt ||
+            message?.created_at ||
+            new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+    };
+    liveModerationIndex.set(key, next);
+    liveModerationEntries = [
+        next,
+        ...liveModerationEntries.filter((entry) => entry.key !== key),
+    ].slice(0, LIVE_MODERATION_LOG_LIMIT);
+    return next;
+}
+
+function syncMessageContentWithModeration(messageKey, renderedMessage) {
+    if (!messageKey) return;
+    if (window.liveChatStore?.updateMessage) {
+        window.liveChatStore.updateMessage(messageKey, {
+            message: renderedMessage,
+        });
+        return;
+    }
+    const element = findChatMessageElement(messageKey);
+    const textNode = element?.querySelector('.chat-message-text');
+    if (textNode) {
+        textNode.textContent = renderedMessage;
+    }
+}
+
+function applyModerationRecordToMessage(message, record) {
+    if (!message || !record) return message;
+    message._xeraOriginalMessage = record.originalMessage;
+    message._xeraModeration = {
+        key: record.key,
+        status: record.status,
+        reason: record.reason,
+        source: record.source,
+    };
+    message.message =
+        record.status === 'approved'
+            ? record.originalMessage
+            : record.renderedMessage || buildMaskedMessage(record.reason);
+    return message;
+}
+
+function evaluateChatModeration(message) {
+    const key = getChatMessageKey(message);
+    if (!key) return null;
+
+    const existing = liveModerationIndex.get(key);
+    if (existing) {
+        return applyModerationRecordToMessage(message, existing)._xeraModeration;
+    }
+
+    const mutedUserIds = new Set(liveStudioState?.mutedUserIds || []);
+    const normalizedMessage = normalizeModerationText(message?.message || '');
+    const keywordList = uniqueStringList(liveStudioState?.autoModKeywords || [])
+        .map(normalizeModerationText)
+        .filter(Boolean);
+    const keywordHit = keywordList.find(
+        (keyword) => keyword && normalizedMessage.includes(keyword),
+    );
+
+    let record = null;
+    if (message?.user_id && mutedUserIds.has(message.user_id)) {
+        record = upsertModerationRecord(message, {
+            status: 'masked',
+            reason: 'auteur mute',
+            renderedMessage: buildMaskedMessage('auteur mute'),
+            source: 'manual',
+        });
+    } else if (liveStudioState?.autoModEnabled && keywordHit) {
+        const mode = liveStudioState?.autoModAction || 'mask';
+        const status = mode === 'flag' ? 'flagged' : mode === 'hold' ? 'held' : 'masked';
+        const renderedMessage =
+            status === 'flagged'
+                ? message.message
+                : buildMaskedMessage(`mot cle: ${keywordHit}`);
+        record = upsertModerationRecord(message, {
+            status,
+            reason: `mot cle: ${keywordHit}`,
+            renderedMessage,
+            source: 'auto',
+            keyword: keywordHit,
+        });
+    }
+
+    if (record) {
+        applyModerationRecordToMessage(message, record);
+        return message._xeraModeration;
+    }
+    return null;
+}
+
+function prepareChatMessageForDisplay(message, options = {}) {
+    if (!message) return message;
+    const moderation = evaluateChatModeration(message);
+    if (!moderation) {
+        message._xeraOriginalMessage = message.message || '';
+    }
+    if (options.trackMetrics !== false) {
+        recordChatAnalytics(message, moderation && moderation.status !== 'approved'
+            ? liveModerationIndex.get(moderation.key)
+            : null);
+    }
+    return message;
+}
 
 function isSecureStreamingContext() {
     return (
@@ -147,6 +658,610 @@ function setStreamStatusMode(mode, options = {}) {
     }
 }
 
+function getChatContainer() {
+    return document.getElementById('stream-chat-messages');
+}
+
+function isChatNearBottom(container = getChatContainer()) {
+    if (!container) return true;
+    const distance =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+    return distance <= CHAT_AUTO_SCROLL_THRESHOLD;
+}
+
+function getChatResumeButton() {
+    return document.getElementById('stream-chat-resume-btn');
+}
+
+function updateChatResumeButton() {
+    const button = getChatResumeButton();
+    if (!button) return;
+    const shouldShow = !chatPinnedToBottom && chatUnseenCount > 0;
+    button.hidden = !shouldShow;
+    button.textContent =
+        chatUnseenCount > 1
+            ? `${chatUnseenCount} nouveaux messages`
+            : 'Nouveau message';
+}
+
+function scrollChatToLatest({ behavior = 'smooth', force = false } = {}) {
+    const container = getChatContainer();
+    if (!container) return;
+    if (!force && !chatPinnedToBottom && !chatShouldStickOnNextRender) {
+        return;
+    }
+    try {
+        container.scrollTo({
+            top: container.scrollHeight,
+            behavior
+        });
+    } catch (error) {
+        container.scrollTop = container.scrollHeight;
+    }
+    chatPinnedToBottom = true;
+    chatShouldStickOnNextRender = true;
+    chatUnseenCount = 0;
+    updateChatResumeButton();
+}
+
+function prepareChatScrollForIncomingMessage() {
+    const container = getChatContainer();
+    const shouldStick = !container || chatPinnedToBottom || isChatNearBottom(container);
+    chatShouldStickOnNextRender = shouldStick;
+    if (!shouldStick) {
+        chatPinnedToBottom = false;
+        chatUnseenCount += 1;
+    }
+    updateChatResumeButton();
+    return shouldStick;
+}
+
+function handleChatMessagesRendered({ force = false, behavior = 'auto' } = {}) {
+    const container = getChatContainer();
+    if (!container) return;
+
+    const shouldStick =
+        force || chatShouldStickOnNextRender || isChatNearBottom(container);
+
+    if (shouldStick) {
+        scrollChatToLatest({ behavior, force: true });
+    } else {
+        chatPinnedToBottom = false;
+        updateChatResumeButton();
+    }
+
+    chatShouldStickOnNextRender = chatPinnedToBottom;
+}
+
+function setupChatInteractionUX() {
+    const container = getChatContainer();
+    const chatRoot = container?.closest('.stream-chat');
+    if (!container || !chatRoot) return;
+
+    if (!container.dataset.autoscrollBound) {
+        container.dataset.autoscrollBound = 'true';
+        container.addEventListener('scroll', () => {
+            const nearBottom = isChatNearBottom(container);
+            chatPinnedToBottom = nearBottom;
+            if (nearBottom) {
+                chatUnseenCount = 0;
+                chatShouldStickOnNextRender = true;
+            }
+            updateChatResumeButton();
+        });
+    }
+
+    if (!getChatResumeButton()) {
+        const button = document.createElement('button');
+        button.id = 'stream-chat-resume-btn';
+        button.type = 'button';
+        button.className = 'stream-chat-resume';
+        button.hidden = true;
+        button.textContent = 'Nouveau message';
+        button.addEventListener('click', () => {
+            scrollChatToLatest({ behavior: 'smooth', force: true });
+            const input = document.getElementById('stream-chat-input');
+            if (input && !input.disabled) {
+                try { input.focus({ preventScroll: true }); } catch (error) {}
+            }
+        });
+        const chatForm = document.getElementById('stream-chat-form');
+        chatRoot.insertBefore(button, chatForm || null);
+    }
+
+    chatPinnedToBottom = isChatNearBottom(container);
+    chatShouldStickOnNextRender = chatPinnedToBottom;
+    updateChatResumeButton();
+}
+
+function getLiveStudioStorageKey(streamId = currentStream?.id) {
+    return streamId ? `xera-live-studio:${streamId}` : '';
+}
+
+function saveLiveStudioState(streamId = currentStream?.id) {
+    const storageKey = getLiveStudioStorageKey(streamId);
+    if (!storageKey || !liveStudioState) return;
+    try {
+        localStorage.setItem(storageKey, JSON.stringify(liveStudioState));
+    } catch (error) {
+        console.warn('Sauvegarde studio live impossible:', error);
+    }
+}
+
+function loadLiveStudioState(streamId = currentStream?.id) {
+    const storageKey = getLiveStudioStorageKey(streamId);
+    let nextState = { ...LIVE_STUDIO_DEFAULTS };
+    if (storageKey) {
+        try {
+            const raw = localStorage.getItem(storageKey);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object') {
+                    const normalizedModerators = normalizeModeratorsState(
+                        parsed.moderators || {},
+                        parsed.moderatorIds || [],
+                    );
+                    nextState = {
+                        ...nextState,
+                        ...parsed,
+                        ...normalizedModerators,
+                        previewIntensity: clampNumber(
+                            parsed.previewIntensity ?? LIVE_STUDIO_DEFAULTS.previewIntensity,
+                            40,
+                            160,
+                        ),
+                        previewSafeZone:
+                            parsed.previewSafeZone !== undefined
+                                ? Boolean(parsed.previewSafeZone)
+                                : LIVE_STUDIO_DEFAULTS.previewSafeZone,
+                        previewGrid:
+                            parsed.previewGrid !== undefined
+                                ? Boolean(parsed.previewGrid)
+                                : LIVE_STUDIO_DEFAULTS.previewGrid,
+                        previewMirror:
+                            parsed.previewMirror !== undefined
+                                ? Boolean(parsed.previewMirror)
+                                : LIVE_STUDIO_DEFAULTS.previewMirror,
+                        autoModKeywords: uniqueStringList(
+                            parsed.autoModKeywords || [],
+                        ),
+                        autoModAction: LIVE_AUTO_MOD_ACTIONS[parsed.autoModAction]
+                            ? parsed.autoModAction
+                            : LIVE_STUDIO_DEFAULTS.autoModAction,
+                        autoModSensitivity: String(
+                            parsed.autoModSensitivity ||
+                                LIVE_STUDIO_DEFAULTS.autoModSensitivity,
+                        ),
+                        mutedUserIds: uniqueStringList(parsed.mutedUserIds || []),
+                    };
+                }
+            }
+        } catch (error) {
+            console.warn('Lecture studio live impossible:', error);
+        }
+    }
+    liveStudioState = nextState;
+    return liveStudioState;
+}
+
+function updateLiveStudioState(patch) {
+    const merged = {
+        ...(liveStudioState || { ...LIVE_STUDIO_DEFAULTS }),
+        ...(patch || {}),
+    };
+    const normalizedModerators = normalizeModeratorsState(
+        merged.moderators || {},
+        merged.moderatorIds || [],
+    );
+    liveStudioState = {
+        ...merged,
+        ...normalizedModerators,
+        previewIntensity: clampNumber(
+            merged.previewIntensity ?? LIVE_STUDIO_DEFAULTS.previewIntensity,
+            40,
+            160,
+        ),
+        autoModKeywords: uniqueStringList(merged.autoModKeywords || []),
+        autoModAction: LIVE_AUTO_MOD_ACTIONS[merged.autoModAction]
+            ? merged.autoModAction
+            : LIVE_STUDIO_DEFAULTS.autoModAction,
+        mutedUserIds: uniqueStringList(merged.mutedUserIds || []),
+    };
+    saveLiveStudioState();
+    applyLivePreviewFilter();
+    renderHostControlPanel();
+    renderHostToolDrawer();
+}
+
+function getActivePreviewFilterCss() {
+    const filterId = liveStudioState?.previewFilter || 'none';
+    const filter = LIVE_PREVIEW_FILTERS[filterId] || LIVE_PREVIEW_FILTERS.none;
+    const intensity = clampNumber(
+        liveStudioState?.previewIntensity ?? LIVE_STUDIO_DEFAULTS.previewIntensity,
+        40,
+        160,
+    );
+    return typeof filter.buildCss === 'function'
+        ? filter.buildCss(intensity)
+        : 'none';
+}
+
+function syncAudiencePreviewMonitors() {
+    const sourceVideo = document.getElementById('stream-video');
+    if (!sourceVideo) return;
+
+    const monitorIds = [
+        'stream-audience-preview-raw',
+        'stream-audience-preview-filtered',
+    ];
+    monitorIds.forEach((monitorId) => {
+        const previewVideo = document.getElementById(monitorId);
+        if (!previewVideo) return;
+        if (sourceVideo.srcObject && previewVideo.srcObject !== sourceVideo.srcObject) {
+            previewVideo.srcObject = sourceVideo.srcObject;
+        } else if (
+            !sourceVideo.srcObject &&
+            sourceVideo.currentSrc &&
+            previewVideo.src !== sourceVideo.currentSrc
+        ) {
+            previewVideo.src = sourceVideo.currentSrc;
+        }
+        previewVideo.muted = true;
+        previewVideo.autoplay = true;
+        previewVideo.playsInline = true;
+        const playPromise = previewVideo.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => {});
+        }
+    });
+
+    const filteredPreview = document.getElementById(
+        'stream-audience-preview-filtered',
+    );
+    if (filteredPreview) {
+        filteredPreview.style.filter = getActivePreviewFilterCss();
+    }
+
+    Array.from(document.querySelectorAll('[data-preview-shell="ops"]')).forEach(
+        (shell) => {
+            shell.classList.toggle(
+                'is-safe-zone',
+                Boolean(liveStudioState?.previewSafeZone),
+            );
+            shell.classList.toggle(
+                'is-grid',
+                Boolean(liveStudioState?.previewGrid),
+            );
+            shell.classList.toggle(
+                'is-mirror',
+                Boolean(liveStudioState?.previewMirror),
+            );
+        },
+    );
+    Array.from(document.querySelectorAll('[data-preview-shell="public"]')).forEach(
+        (shell) => {
+            shell.classList.remove('is-safe-zone', 'is-grid', 'is-mirror');
+        },
+    );
+}
+
+function applyLivePreviewFilter() {
+    const video = document.getElementById('stream-video');
+    if (!video) return;
+    const filterId = liveStudioState?.previewFilter || 'none';
+    const filter = LIVE_PREVIEW_FILTERS[filterId] || LIVE_PREVIEW_FILTERS.none;
+    video.style.filter = getActivePreviewFilterCss();
+    document.body.style.setProperty(
+        '--xera-live-filter-accent',
+        filter.accent || '#38bdf8',
+    );
+    syncAudiencePreviewMonitors();
+}
+
+function getCurrentHostVideoTrack() {
+    return localMediaStream?.getVideoTracks?.()[0] || null;
+}
+
+function markTrackSource(track, source) {
+    if (track) {
+        track.__xeraTrackSource = source;
+    }
+    return track;
+}
+
+function isTrackSource(track, source) {
+    return Boolean(track && track.__xeraTrackSource === source);
+}
+
+function clearStandbyCameraTrack({ stop = true } = {}) {
+    if (!standbyCameraTrack) return;
+    if (stop) {
+        try { standbyCameraTrack.stop(); } catch (error) {}
+    }
+    standbyCameraTrack = null;
+}
+
+function cleanupCameraPlaceholderTrack() {
+    if (cameraPlaceholderInterval) {
+        clearInterval(cameraPlaceholderInterval);
+        cameraPlaceholderInterval = null;
+    }
+    if (cameraPlaceholderTrack) {
+        try { cameraPlaceholderTrack.stop(); } catch (error) {}
+    }
+    if (cameraPlaceholderStream) {
+        try {
+            cameraPlaceholderStream.getTracks().forEach((track) => track.stop());
+        } catch (error) {}
+    }
+    cameraPlaceholderTrack = null;
+    cameraPlaceholderStream = null;
+}
+
+function createCameraPlaceholderTrack() {
+    cleanupCameraPlaceholderTrack();
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280;
+    canvas.height = 720;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const draw = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, '#050505');
+        gradient.addColorStop(1, '#111827');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+        ctx.lineWidth = 18;
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, canvas.height / 2 - 30, 74, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 20;
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2 - 95, canvas.height / 2 + 65);
+        ctx.lineTo(canvas.width / 2 + 95, canvas.height / 2 - 125);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '700 38px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Camera desactivee', canvas.width / 2, canvas.height / 2 + 122);
+        ctx.fillStyle = 'rgba(255,255,255,0.68)';
+        ctx.font = '500 24px system-ui, sans-serif';
+        ctx.fillText('Le live continue avec le son actif.', canvas.width / 2, canvas.height / 2 + 168);
+    };
+
+    draw();
+    cameraPlaceholderInterval = setInterval(draw, 1000);
+
+    cameraPlaceholderStream = canvas.captureStream(12);
+    cameraPlaceholderTrack =
+        markTrackSource(
+            cameraPlaceholderStream.getVideoTracks()[0] || null,
+            'placeholder',
+        );
+    return cameraPlaceholderTrack;
+}
+
+function getCachedChatProfile(userId) {
+    if (!userId) return null;
+    if (chatUserCache.has(userId)) {
+        return chatUserCache.get(userId);
+    }
+
+    if (currentUser?.id === userId) {
+        const currentProfile = {
+            id: userId,
+            name:
+                currentUser.user_metadata?.full_name ||
+                currentUser.user_metadata?.username ||
+                currentUser.email?.split('@')[0] ||
+                'Vous',
+            avatar:
+                currentUser.user_metadata?.avatar_url ||
+                currentUser.user_metadata?.picture ||
+                ''
+        };
+        chatUserCache.set(userId, currentProfile);
+        return currentProfile;
+    }
+
+    if (typeof window.getUser === 'function') {
+        const knownUser = window.getUser(userId);
+        if (knownUser) {
+            const profile = {
+                id: knownUser.id || userId,
+                name: knownUser.name || knownUser.username || 'Utilisateur',
+                avatar: knownUser.avatar || ''
+            };
+            chatUserCache.set(userId, profile);
+            return profile;
+        }
+    }
+
+    return null;
+}
+
+function cacheChatProfile(userId, profile) {
+    if (!userId || !profile) return null;
+    const cached = {
+        id: profile.id || userId,
+        name: profile.name || profile.username || 'Utilisateur',
+        avatar: profile.avatar || ''
+    };
+    chatUserCache.set(userId, cached);
+    return cached;
+}
+
+async function resolveChatProfile(userId) {
+    const cached = getCachedChatProfile(userId);
+    if (cached) return cached;
+
+    if (chatProfileRequests.has(userId)) {
+        return chatProfileRequests.get(userId);
+    }
+
+    const request = supabase
+        .from('users')
+        .select('id, name, avatar')
+        .eq('id', userId)
+        .single()
+        .then(({ data, error }) => {
+            if (error || !data) return null;
+            return cacheChatProfile(userId, data);
+        })
+        .catch(() => null)
+        .finally(() => {
+            chatProfileRequests.delete(userId);
+        });
+
+    chatProfileRequests.set(userId, request);
+    return request;
+}
+
+function findChatMessageElement(messageKey) {
+    if (!messageKey) return null;
+    return Array.from(
+        document.querySelectorAll('.chat-message[data-chat-key]'),
+    ).find((element) => element.dataset.chatKey === messageKey) || null;
+}
+
+function patchChatMessageElement(messageKey, profile) {
+    const element = findChatMessageElement(messageKey);
+    if (!element || !profile) return;
+
+    const avatar = element.querySelector('.chat-avatar');
+    if (avatar) {
+        avatar.src = profile.avatar || 'https://placehold.co/32';
+        avatar.alt = profile.name || 'Utilisateur';
+    }
+
+    const userId = profile.id || null;
+    const usernameHtml =
+        typeof window.renderUsernameWithBadge === 'function' && userId
+            ? window.renderUsernameWithBadge(profile.name || 'Utilisateur', userId)
+            : escapeHtml(profile.name || 'Utilisateur');
+
+    const usernameEl = element.querySelector('.chat-username');
+    if (usernameEl) {
+        usernameEl.innerHTML = usernameHtml;
+    }
+}
+
+async function hydrateChatMessageProfile(message, messageKey) {
+    if (!message?.user_id) return;
+    const profile = await resolveChatProfile(message.user_id);
+    if (!profile) return;
+    message.users = profile;
+    if (window.liveChatStore?.updateMessage) {
+        window.liveChatStore.updateMessage(messageKey, {
+            users: profile
+        });
+        return;
+    }
+    patchChatMessageElement(messageKey, profile);
+}
+
+async function tryAutoplayLiveWithAudio(video, { hasAudio = false } = {}) {
+    if (!video) return false;
+
+    const playWithState = async (muted) => {
+        video.muted = muted;
+        video.volume = 1;
+        syncAudioButtonState(muted);
+        const playAttempt = video.play();
+        if (playAttempt && typeof playAttempt.then === 'function') {
+            await playAttempt;
+        }
+    };
+
+    if (hasAudio) {
+        try {
+            await playWithState(false);
+            hideUnmuteOverlay();
+            return true;
+        } catch (error) {
+            console.warn('Autoplay audio refuse, fallback muet:', error);
+        }
+    }
+
+    try {
+        await playWithState(hasAudio);
+    } catch (error) {
+        console.warn('Lecture fallback live impossible:', error);
+    }
+
+    if (hasAudio) {
+        showUnmuteOverlay();
+    } else {
+        hideUnmuteOverlay();
+    }
+    return false;
+}
+
+function getChatNotificationAuthorName(message) {
+    if (message?.users?.name) {
+        return message.users.name;
+    }
+
+    const cachedProfile = getCachedChatProfile(message?.user_id);
+    if (cachedProfile?.name) {
+        return cachedProfile.name;
+    }
+
+    return (
+        currentUser?.user_metadata?.full_name ||
+        currentUser?.user_metadata?.username ||
+        currentUser?.email?.split('@')[0] ||
+        'Un viewer'
+    );
+}
+
+function buildLiveChatNotificationMessage(message) {
+    const body = String(message?.message || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!body) return '';
+
+    const preview = body.length > 140 ? `${body.slice(0, 137)}...` : body;
+    return `${getChatNotificationAuthorName(message)}: ${preview}`;
+}
+
+async function notifyLiveHostOfChatMessage(message) {
+    const streamId = message?.stream_id || currentStream?.id || null;
+    const hostId = currentStream?.user_id || null;
+    const senderId = message?.user_id || currentUser?.id || null;
+
+    if (!streamId || !hostId || !senderId) return;
+    if (hostId === senderId) return;
+    if ((currentStream?.status || 'live') !== 'live') return;
+
+    const notificationMessage = buildLiveChatNotificationMessage(message);
+    if (!notificationMessage) return;
+
+    try {
+        const { error } = await supabase
+            .from('notifications')
+            .insert({
+                user_id: hostId,
+                type: 'live_chat',
+                message: notificationMessage,
+                link: `stream.html?id=${streamId}&host=${hostId}`,
+                read: false
+            });
+
+        if (error) throw error;
+    } catch (error) {
+        console.warn('Notification chat live impossible:', error);
+    }
+}
+
 // Créer une session de streaming
 async function createStreamingSession(streamData) {
     try {
@@ -183,9 +1298,6 @@ async function createStreamingSession(streamData) {
             .single();
         
         if (error) throw error;
-        
-        // Afficher immédiatement le message côté client
-        handleNewChatMessage(data);
         return { success: true, data: data };
         
     } catch (error) {
@@ -375,16 +1487,25 @@ function subscribeToStream(streamId) {
     if (chatSyncInterval) {
         clearInterval(chatSyncInterval);
     }
+    lastChatFallbackSyncAt = 0;
     chatSyncInterval = setInterval(() => {
         if (!currentStream?.id) return;
+        const now = Date.now();
+        const syncCadence =
+            chatRealtimeStatus === 'SUBSCRIBED'
+                ? CHAT_FALLBACK_STEADY_SYNC_MS
+                : CHAT_FALLBACK_FAST_SYNC_MS;
+        if (now - lastChatFallbackSyncAt < syncCadence) return;
+        lastChatFallbackSyncAt = now;
         void fetchNewChatMessages(currentStream.id);
-    }, 3000);
+    }, CHAT_FALLBACK_POLL_TICK_MS);
 }
 
 function teardownChatChannel() {
     if (!chatChannel) return;
     supabase.removeChannel(chatChannel);
     chatChannel = null;
+    chatRealtimeStatus = 'idle';
 }
 
 function scheduleChatResubscribe(streamId) {
@@ -413,11 +1534,14 @@ function subscribeToChat(streamId) {
             }
         )
         .subscribe((status) => {
+            chatRealtimeStatus = status;
             if (status === 'SUBSCRIBED') {
+                lastChatFallbackSyncAt = 0;
                 void fetchNewChatMessages(streamId);
                 return;
             }
             if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+                lastChatFallbackSyncAt = 0;
                 scheduleChatResubscribe(streamId);
             }
         });
@@ -442,6 +1566,7 @@ async function sendChatMessage(message) {
         if (error) throw error;
         // Affichage immédiat côté émetteur (les doublons restent filtrés).
         void handleNewChatMessage(data);
+        void notifyLiveHostOfChatMessage(data);
         
         return { success: true, data: data };
         
@@ -463,10 +1588,24 @@ async function loadChatHistory(streamId, limit = 50) {
         
         if (error) throw error;
         
-        const messages = data.reverse();
-        messages.forEach(msg => {
+        const messages = data.reverse().map((msg) => {
+            if (msg?.users) {
+                cacheChatProfile(msg.user_id, {
+                    id: msg.user_id,
+                    ...msg.users,
+                });
+            } else {
+                const cachedProfile = getCachedChatProfile(msg.user_id);
+                if (cachedProfile) {
+                    msg.users = cachedProfile;
+                }
+            }
+            prepareChatMessageForDisplay(msg, {
+                source: 'history',
+            });
             const key = getChatMessageKey(msg);
             if (key) renderedChatMessageIds.add(key);
+            return msg;
         });
         if (messages.length > 0) {
             const lastMessage = messages[messages.length - 1];
@@ -497,6 +1636,7 @@ async function fetchNewChatMessages(streamId) {
         const { data, error } = await query;
         if (error) throw error;
         if (!data || data.length === 0) return;
+        lastChatFallbackSyncAt = Date.now();
 
         data.forEach(msg => {
             void handleNewChatMessage(msg);
@@ -521,24 +1661,28 @@ async function handleNewChatMessage(message) {
     if (key && renderedChatMessageIds.has(key)) return;
     if (key) renderedChatMessageIds.add(key);
 
-    if (!message.users && message.user_id) {
-        try {
-            const { data } = await supabase
-                .from('users')
-                .select('name, avatar')
-                .eq('id', message.user_id)
-                .single();
-            if (data) {
-                message.users = data;
-            }
-        } catch (error) {
-            // Fallback silencieux
+    if (message?.users) {
+        cacheChatProfile(message.user_id, {
+            id: message.user_id,
+            ...message.users
+        });
+    } else if (message?.user_id) {
+        const cachedProfile = getCachedChatProfile(message.user_id);
+        if (cachedProfile) {
+            message.users = cachedProfile;
+        } else if (key) {
+            void hydrateChatMessageProfile(message, key);
         }
     }
 
     if (message.created_at) {
         lastChatCreatedAt = message.created_at;
     }
+
+    prepareChatMessageForDisplay(message, {
+        source: 'live',
+    });
+    prepareChatScrollForIncomingMessage();
 
     if (window.liveChatStore) {
         window.liveChatStore.push(message);
@@ -550,15 +1694,17 @@ async function handleNewChatMessage(message) {
 
     const messageElement = createChatMessageElement(message);
     chatContainer.appendChild(messageElement);
-    
-    // Scroll vers le bas
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    handleChatMessagesRendered();
 }
 
 // Créer un élément de message de chat
 function createChatMessageElement(message) {
     const div = document.createElement('div');
     div.className = 'chat-message';
+    const messageKey = getChatMessageKey(message);
+    if (messageKey) {
+        div.dataset.chatKey = messageKey;
+    }
     
     const isOwnMessage = message.user_id === currentUser?.id;
     if (isOwnMessage) div.classList.add('own-message');
@@ -616,6 +1762,16 @@ function updateStreamUI(stream) {
     } else {
         setStreamStatusMode('ended');
     }
+
+    if (typeof stream?.viewer_count === 'number') {
+        recordViewerSnapshot(stream.viewer_count, hostPanelViewers);
+    }
+    syncAudiencePreviewMonitors();
+
+    if (isStreamHost) {
+        renderHostControlPanel();
+        renderHostToolDrawer();
+    }
 }
 
 async function getViewerCountForStream(streamId) {
@@ -654,24 +1810,19 @@ async function syncViewerCount(streamId, { updateSession = false } = {}) {
             console.error('Erreur update viewer_count:', error);
         }
     }
+
+    if (
+        isStreamHost &&
+        (activeHostToolId === 'moderators' || activeHostToolId === 'stats')
+    ) {
+        void fetchHostPanelViewers();
+    }
 }
 
 function startViewerCountSync(streamId) {
     if (viewerCountInterval) {
         clearInterval(viewerCountInterval);
         viewerCountInterval = null;
-    }
-    if (chatSyncInterval) {
-        clearInterval(chatSyncInterval);
-        chatSyncInterval = null;
-    }
-    if (chatResubscribeTimer) {
-        clearTimeout(chatResubscribeTimer);
-        chatResubscribeTimer = null;
-    }
-    if (hostBadgeRefreshInterval) {
-        clearInterval(hostBadgeRefreshInterval);
-        hostBadgeRefreshInterval = null;
     }
     const shouldUpdateSession = !!isStreamHost;
     syncViewerCount(streamId, { updateSession: shouldUpdateSession });
@@ -773,6 +1924,10 @@ function cleanupStream() {
         clearTimeout(chatResubscribeTimer);
         chatResubscribeTimer = null;
     }
+    if (hostBadgeRefreshInterval) {
+        clearInterval(hostBadgeRefreshInterval);
+        hostBadgeRefreshInterval = null;
+    }
     
     // Se désabonner des canaux
     teardownChatChannel();
@@ -796,6 +1951,8 @@ function cleanupStream() {
     previewInFlight = false;
     lastPreviewStamp = 0;
     cleanupScreenComposite();
+    cleanupCameraPlaceholderTrack();
+    clearStandbyCameraTrack();
     clearPendingMobileScreenShareActivation();
 
     if (localMediaStream) {
@@ -828,6 +1985,17 @@ function cleanupStream() {
     pendingViewerJoins.clear();
     renderedChatMessageIds.clear();
     lastChatCreatedAt = null;
+    lastChatFallbackSyncAt = 0;
+    chatRealtimeStatus = 'idle';
+    chatPinnedToBottom = true;
+    chatShouldStickOnNextRender = true;
+    chatUnseenCount = 0;
+    activeHostToolId = '';
+    liveStudioState = null;
+    hostPanelViewers = [];
+    hostPanelViewersLoading = false;
+    isCameraEnabled = true;
+    availableHostVideoInputs = 0;
     
     currentStream = null;
 }
@@ -882,17 +2050,13 @@ function createPeerConnection(peerId, isHostSide) {
                 video.srcObject = remoteStream;
                 video.autoplay = true;
                 video.playsInline = true;
-                video.muted = true;
-                syncAudioButtonState(true);
-                const playPromise = video.play();
-                if (playPromise && typeof playPromise.catch === 'function') {
-                    playPromise.catch(() => {});
-                }
+                syncAudiencePreviewMonitors();
             }
             const hasAudio = remoteStream.getAudioTracks().length > 0;
-            if (hasAudio) {
-                showUnmuteOverlay();
-            } else if (window.ToastManager) {
+            if (video) {
+                void tryAutoplayLiveWithAudio(video, { hasAudio });
+            }
+            if (!hasAudio && window.ToastManager) {
                 ToastManager.info(
                     'Audio du live',
                     'Aucune piste audio reçue. Vérifiez que l’hôte partage bien le micro ou l’audio de l’écran.'
@@ -1215,7 +2379,11 @@ function toggleAudio() {
         hideUnmuteOverlay();
         const playPromise = video.play();
         if (playPromise && typeof playPromise.catch === 'function') {
-            playPromise.catch(() => {});
+            playPromise.catch(() => {
+                video.muted = true;
+                syncAudioButtonState(true);
+                showUnmuteOverlay();
+            });
         }
     }
 }
@@ -1242,7 +2410,11 @@ function enableStreamAudio() {
     hideUnmuteOverlay();
     const playPromise = video.play();
     if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch(() => {});
+        playPromise.catch(() => {
+            video.muted = true;
+            syncAudioButtonState(true);
+            showUnmuteOverlay();
+        });
     }
 }
 
@@ -1254,6 +2426,10 @@ function updateMicButtonState() {
     if (label) {
         label.textContent = isMicMuted ? 'Micro coupé' : 'Muet';
     }
+    if (isStreamHost) {
+        renderHostControlPanel();
+        renderHostToolDrawer();
+    }
 }
 
 function updateScreenShareButtonState() {
@@ -1263,6 +2439,46 @@ function updateScreenShareButtonState() {
     const label = shareBtn.querySelector('.btn-text');
     if (label) {
         label.textContent = isScreenSharing ? 'Arrêter écran' : 'Écran';
+    }
+    if (isStreamHost) {
+        renderHostControlPanel();
+        renderHostToolDrawer();
+    }
+}
+
+function updateCameraButtonsState() {
+    const toggleBtn = document.getElementById('camera-toggle-btn');
+    if (toggleBtn) {
+        toggleBtn.classList.toggle('active', !isCameraEnabled);
+        const label = toggleBtn.querySelector('.btn-text');
+        if (label) {
+            if (isScreenSharing) {
+                label.textContent = isCameraEnabled ? 'Camera PiP' : 'Activer camera';
+            } else {
+                label.textContent = isCameraEnabled ? 'Camera ON' : 'Camera OFF';
+            }
+        }
+        toggleBtn.title = isCameraEnabled
+            ? 'Desactiver la camera sans couper le live'
+            : 'Reactiver la camera';
+    }
+
+    const switchBtn = document.getElementById('switch-camera-btn');
+    if (!switchBtn) return;
+    const label = switchBtn.querySelector('.btn-text');
+    if (label) {
+        label.textContent = 'Changer';
+    }
+    switchBtn.disabled = !isCameraEnabled || availableHostVideoInputs < 2;
+    switchBtn.classList.toggle('disabled', switchBtn.disabled);
+    if (!isCameraEnabled) {
+        switchBtn.title = 'Reactivez la camera pour changer de capteur';
+    } else if (availableHostVideoInputs < 2) {
+        switchBtn.title = 'Une seule camera detectee';
+    }
+    if (isStreamHost) {
+        renderHostControlPanel();
+        renderHostToolDrawer();
     }
 }
 
@@ -1408,7 +2624,148 @@ function setHostVideoTrack(newTrack, options = {}) {
     const video = document.getElementById('stream-video');
     if (video) {
         video.srcObject = localMediaStream;
+        applyLivePreviewFilter();
     }
+}
+
+async function restoreCameraBroadcast() {
+    if (activeDisplayStream) {
+        const restored = await refreshScreenShareVideoTrack({
+            preferCameraOverlay: true
+        });
+        isCameraEnabled = restored;
+        updateCameraButtonsState();
+        return restored;
+    }
+
+    const currentTrack = getCurrentHostVideoTrack();
+    const reusableTrack =
+        standbyCameraTrack && standbyCameraTrack.readyState === 'live'
+            ? standbyCameraTrack
+            : null;
+
+    if (reusableTrack) {
+        markTrackSource(reusableTrack, 'camera');
+        setHostVideoTrack(reusableTrack, {
+            stopPreviousTrack: !isTrackSource(currentTrack, 'screen')
+        });
+        currentVideoDeviceId =
+            reusableTrack.getSettings?.().deviceId || currentVideoDeviceId;
+        lastCameraDeviceId = currentVideoDeviceId || lastCameraDeviceId;
+        standbyCameraTrack = null;
+        cleanupCameraPlaceholderTrack();
+        isCameraEnabled = true;
+        updateCameraButtonsState();
+        return true;
+    }
+
+    await startCameraStream(lastCameraDeviceId || null);
+    isCameraEnabled = true;
+    updateCameraButtonsState();
+    return true;
+}
+
+async function disableCameraBroadcast() {
+    if (activeDisplayStream) {
+        await refreshScreenShareVideoTrack({
+            preferCameraOverlay: false
+        });
+        isCameraEnabled = false;
+        updateCameraButtonsState();
+        return true;
+    }
+
+    const currentTrack = getCurrentHostVideoTrack();
+    if (currentTrack && isTrackSource(currentTrack, 'camera')) {
+        clearStandbyCameraTrack();
+        standbyCameraTrack = currentTrack;
+    }
+
+    const placeholderTrack = createCameraPlaceholderTrack();
+    if (!placeholderTrack) return false;
+
+    setHostVideoTrack(placeholderTrack, {
+        stopPreviousTrack: false
+    });
+    isCameraEnabled = false;
+    updateCameraButtonsState();
+    return true;
+}
+
+async function toggleCameraBroadcast() {
+    try {
+        if (isCameraEnabled) {
+            return await disableCameraBroadcast();
+        }
+        return await restoreCameraBroadcast();
+    } catch (error) {
+        console.error('Camera toggle error:', error);
+        if (window.ToastManager) {
+            ToastManager.error(
+                'Camera',
+                error?.message || 'Impossible de modifier la camera.',
+            );
+        }
+        return false;
+    }
+}
+
+async function refreshScreenShareVideoTrack(options = {}) {
+    if (!activeDisplayStream) return false;
+
+    const preferCameraOverlay =
+        options.preferCameraOverlay !== undefined
+            ? options.preferCameraOverlay
+            : isCameraEnabled;
+    const displayTrack = activeDisplayStream.getVideoTracks?.()[0];
+    if (!displayTrack) return false;
+
+    markTrackSource(displayTrack, 'screen');
+
+    if (preferCameraOverlay) {
+        let overlayStream = screenOverlayCameraStream;
+        let overlayTrack = overlayStream?.getVideoTracks?.()[0];
+
+        if (!overlayTrack || overlayTrack.readyState !== 'live') {
+            overlayStream = await requestOverlayCameraStream();
+            overlayTrack = overlayStream?.getVideoTracks?.()[0];
+            if (overlayTrack) {
+                screenOverlayCameraStream = overlayStream;
+                lastCameraDeviceId =
+                    overlayTrack.getSettings?.().deviceId || lastCameraDeviceId;
+            }
+        }
+
+        if (overlayTrack) {
+            const compositeTrack = await buildScreenCameraCompositeTrack(
+                activeDisplayStream,
+                overlayStream,
+            );
+            if (compositeTrack) {
+                markTrackSource(compositeTrack, 'screen-composite');
+                const currentTrack = getCurrentHostVideoTrack();
+                setHostVideoTrack(compositeTrack, {
+                    stopPreviousTrack: !isTrackSource(currentTrack, 'screen'),
+                });
+                isScreenCompositeMode = true;
+                isCameraEnabled = true;
+                updateScreenShareButtonState();
+                updateCameraButtonsState();
+                return true;
+            }
+        }
+    }
+
+    cleanupScreenComposite({ keepDisplay: true, keepOverlayCamera: false });
+    const currentTrack = getCurrentHostVideoTrack();
+    setHostVideoTrack(displayTrack, {
+        stopPreviousTrack: !isTrackSource(currentTrack, 'screen'),
+    });
+    isScreenCompositeMode = false;
+    isCameraEnabled = false;
+    updateScreenShareButtonState();
+    updateCameraButtonsState();
+    return false;
 }
 
 async function requestOverlayCameraStream() {
@@ -1437,10 +2794,14 @@ async function stopScreenShareAndRestoreCamera() {
     isScreenSharing = false;
     updateScreenShareButtonState();
     try {
-        if (lastCameraDeviceId) {
-            await startCameraStream(lastCameraDeviceId);
+        if (isCameraEnabled) {
+            if (lastCameraDeviceId) {
+                await startCameraStream(lastCameraDeviceId);
+            } else {
+                await startCameraStream();
+            }
         } else {
-            await startCameraStream();
+            await disableCameraBroadcast();
         }
     } catch (error) {
         console.warn('Retour caméra impossible après arrêt écran:', error);
@@ -1476,15 +2837,19 @@ async function startCameraStream(deviceId = null) {
             audio: false
         };
     const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-    const newTrack = newStream.getVideoTracks()[0];
+    const newTrack = markTrackSource(newStream.getVideoTracks()[0], 'camera');
     if (!newTrack) return;
 
+    clearStandbyCameraTrack();
+    cleanupCameraPlaceholderTrack();
     setHostVideoTrack(newTrack, { stopPreviousTrack: true });
     currentVideoDeviceId = newTrack.getSettings?.().deviceId || deviceId || null;
     lastCameraDeviceId = currentVideoDeviceId || lastCameraDeviceId;
+    isCameraEnabled = true;
     isScreenSharing = false;
     isScreenCompositeMode = false;
     updateScreenShareButtonState();
+    updateCameraButtonsState();
 }
 
 async function switchCamera() {
@@ -1530,15 +2895,21 @@ async function shareScreen() {
             video: true,
             audio: false
         });
-        const displayTrack = displayStream.getVideoTracks()[0];
+        const displayTrack = markTrackSource(
+            displayStream.getVideoTracks()[0],
+            'screen',
+        );
         if (!displayTrack) return;
 
         activeDisplayStream = displayStream;
         let overlayStream = null;
-        const existingCameraTrack = localMediaStream?.getVideoTracks?.()[0];
-        if (existingCameraTrack && !isScreenSharing) {
+        const existingCameraTrack =
+            isCameraEnabled && isTrackSource(localMediaStream?.getVideoTracks?.()[0], 'camera')
+                ? localMediaStream.getVideoTracks()[0]
+                : null;
+        if (isCameraEnabled && existingCameraTrack && !isScreenSharing) {
             overlayStream = new MediaStream([existingCameraTrack.clone()]);
-        } else {
+        } else if (isCameraEnabled) {
             overlayStream = await requestOverlayCameraStream();
         }
         screenOverlayCameraStream = overlayStream;
@@ -1549,9 +2920,10 @@ async function shareScreen() {
         }
 
         let outgoingVideoTrack = displayTrack;
-        if (overlayStream?.getVideoTracks?.().length) {
+        if (isCameraEnabled && overlayStream?.getVideoTracks?.().length) {
             const compositeTrack = await buildScreenCameraCompositeTrack(displayStream, overlayStream);
             if (compositeTrack) {
+                markTrackSource(compositeTrack, 'screen-composite');
                 outgoingVideoTrack = compositeTrack;
                 isScreenCompositeMode = true;
             }
@@ -1561,6 +2933,7 @@ async function shareScreen() {
 
         isScreenSharing = true;
         updateScreenShareButtonState();
+        updateCameraButtonsState();
 
         displayTrack.onended = () => {
             void stopScreenShareAndRestoreCamera();
@@ -1586,6 +2959,7 @@ async function shareScreen() {
 
 function setupHostControls() {
     const endBtn = document.getElementById('end-stream-btn');
+    const cameraToggleBtn = document.getElementById('camera-toggle-btn');
     const switchBtn = document.getElementById('switch-camera-btn');
     const micBtn = document.getElementById('mute-mic-btn');
     const shareBtn = document.getElementById('share-screen-btn');
@@ -1632,17 +3006,28 @@ function setupHostControls() {
         shareBtn.title = 'Partage écran indisponible sur ce navigateur/appareil';
     }
 
-    if (switchBtn) {
+    if (cameraToggleBtn && !cameraToggleBtn.dataset.bound) {
+        cameraToggleBtn.dataset.bound = 'true';
+        cameraToggleBtn.addEventListener('click', () => {
+            void toggleCameraBroadcast();
+        });
+    }
+
+    if (switchBtn && !switchBtn.dataset.bound) {
+        switchBtn.dataset.bound = 'true';
         switchBtn.addEventListener('click', () => {
+            if (switchBtn.disabled) return;
             switchCamera().catch(err => console.error('Switch camera error:', err));
         });
     }
 
-    if (micBtn) {
+    if (micBtn && !micBtn.dataset.bound) {
+        micBtn.dataset.bound = 'true';
         micBtn.addEventListener('click', () => toggleMicMute());
     }
 
-    if (shareBtn) {
+    if (shareBtn && !shareBtn.dataset.bound) {
+        shareBtn.dataset.bound = 'true';
         shareBtn.addEventListener('click', () => {
             if (shareBtn.disabled) return;
             shareScreen();
@@ -1651,16 +3036,14 @@ function setupHostControls() {
 
     updateMicButtonState();
     updateScreenShareButtonState();
+    updateCameraButtonsState();
 
     if (switchBtn && navigator.mediaDevices?.enumerateDevices) {
         navigator.mediaDevices.enumerateDevices()
             .then(devices => {
                 const videoInputs = devices.filter(d => d.kind === 'videoinput');
-                if (videoInputs.length < 2) {
-                    switchBtn.disabled = true;
-                    switchBtn.classList.add('disabled');
-                    switchBtn.title = 'Une seule caméra détectée';
-                }
+                availableHostVideoInputs = videoInputs.length;
+                updateCameraButtonsState();
             })
             .catch(() => {});
     }
@@ -1719,7 +3102,10 @@ async function setupBroadcasterMedia(options = {}) {
     try {
         const source = options.source || 'camera';
         cleanupScreenComposite();
+        clearStandbyCameraTrack();
+        cleanupCameraPlaceholderTrack();
         clearPendingMobileScreenShareActivation();
+        isCameraEnabled = true;
         let stream = null;
         const isMobile = isMobileDevice();
         if (!isSecureStreamingContext()) {
@@ -1846,7 +3232,9 @@ async function setupBroadcasterMedia(options = {}) {
                 hostMicStream = micStream;
 
                 // Ajouter caméra + écran dans un seul flux vidéo (PiP)
-                const overlayCamera = await requestOverlayCameraStream();
+                const overlayCamera = isCameraEnabled
+                    ? await requestOverlayCameraStream()
+                    : null;
                 if (overlayCamera?.getVideoTracks?.().length) {
                     screenOverlayCameraStream = overlayCamera;
                     const overlayTrack = overlayCamera.getVideoTracks()[0];
@@ -1860,13 +3248,16 @@ async function setupBroadcasterMedia(options = {}) {
                         if (baseVideoTrack) {
                             stream.removeTrack(baseVideoTrack);
                         }
-                        stream.addTrack(compositeTrack);
+                        stream.addTrack(markTrackSource(compositeTrack, 'screen-composite'));
                         isScreenCompositeMode = true;
                     }
+                } else {
+                    isCameraEnabled = false;
                 }
 
                 const displayTrack = screenStream.getVideoTracks()[0];
                 if (displayTrack) {
+                    markTrackSource(displayTrack, 'screen');
                     displayTrack.onended = () => {
                         void stopScreenShareAndRestoreCamera();
                     };
@@ -1913,6 +3304,12 @@ async function setupBroadcasterMedia(options = {}) {
 
         const initialVideoTrack = stream?.getVideoTracks?.()[0];
         if (initialVideoTrack) {
+            if (!isTrackSource(initialVideoTrack, 'screen-composite')) {
+                markTrackSource(
+                    initialVideoTrack,
+                    source === 'screen' ? 'screen' : 'camera',
+                );
+            }
             currentVideoDeviceId = initialVideoTrack.getSettings?.().deviceId || currentVideoDeviceId;
             if (source !== 'screen') {
                 lastCameraDeviceId = currentVideoDeviceId || lastCameraDeviceId;
@@ -1950,6 +3347,7 @@ async function setupBroadcasterMedia(options = {}) {
             if (audioBtn) {
                 syncAudioButtonState(video.muted);
             }
+            applyLivePreviewFilter();
             
             localMediaStream = stream;
             if (pendingViewerJoins.size > 0) {
@@ -1962,6 +3360,7 @@ async function setupBroadcasterMedia(options = {}) {
                 startLivePreviewUpdates(currentStream.id);
             }
         }
+        updateCameraButtonsState();
     } catch (error) {
         console.error("Erreur accès média diffuseur:", error);
         alert("Impossible d'accéder à la caméra/micro. Vérifiez vos permissions.");
@@ -1984,8 +3383,11 @@ async function initializeStreamPage(streamId) {
         hydrateStreamInfo(result.stream);
     }
 
+    resetLiveStudioRuntime(result.stream || currentStream);
+
     const isHost = Boolean(currentUser && currentStream && currentUser.id === currentStream.user_id);
     applyStreamRoleUI(isHost);
+    setupChatInteractionUX();
     initWebRtcSignaling(streamId, isHost);
     startViewerCountSync(streamId);
     const container = document.querySelector('.stream-video-container');
@@ -2019,8 +3421,11 @@ async function initializeStreamPage(streamId) {
         console.log('Mode Diffuseur activé');
         await setupBroadcasterMedia({ source: window._streamBroadcastSource });
         setupHostControls();
+        setupHostControlPanel();
         setViewerWaiting(false);
     } else {
+        renderHostControlPanel();
+        renderHostToolDrawer();
         setViewerWaiting(true);
     }
     
@@ -2037,9 +3442,9 @@ async function initializeStreamPage(streamId) {
                     const element = createChatMessageElement(msg);
                     chatContainer.appendChild(element);
                 });
-                chatContainer.scrollTop = chatContainer.scrollHeight;
             }
         }
+        handleChatMessagesRendered({ force: true });
     }
     
     // Configurer le formulaire de chat
@@ -2258,6 +3663,1321 @@ function applyStreamRoleUI(isHost) {
             viewerBtn.disabled = true;
         }
     }
+
+    renderHostControlPanel();
+    renderHostToolDrawer();
+}
+
+function findHostTool(toolId) {
+    for (const section of hostPanelRegistry.values()) {
+        const tool = section.tools.find((entry) => entry.id === toolId);
+        if (tool) return tool;
+    }
+    return null;
+}
+
+function registerHostPanelTool(sectionMeta, tool) {
+    if (!sectionMeta?.id || !tool?.id) return;
+    if (!hostPanelRegistry.has(sectionMeta.id)) {
+        hostPanelRegistry.set(sectionMeta.id, {
+            ...sectionMeta,
+            tools: []
+        });
+    }
+    hostPanelRegistry.get(sectionMeta.id).tools.push(tool);
+}
+
+function getLiveMessagesCount() {
+    if (window.liveChatStore?.get) {
+        const list = window.liveChatStore.get();
+        return Array.isArray(list) ? list.length : 0;
+    }
+    return renderedChatMessageIds.size;
+}
+
+async function fetchHostPanelViewers() {
+    if (!currentStream?.id || hostPanelViewersLoading) return hostPanelViewers;
+    hostPanelViewersLoading = true;
+    try {
+        const cutoffIso = new Date(Date.now() - 30000).toISOString();
+        const { data, error } = await supabase
+            .from('stream_viewers')
+            .select('user_id, users(name, avatar)')
+            .eq('stream_id', currentStream.id)
+            .gte('last_seen', cutoffIso);
+        if (error) throw error;
+        hostPanelViewers = Array.isArray(data) ? data : [];
+        registerViewerPresence(hostPanelViewers);
+        recordViewerSnapshot(
+            currentStream?.viewer_count ?? hostPanelViewers.length,
+            hostPanelViewers,
+        );
+
+        if (liveStudioState?.moderators) {
+            const nextModerators = {
+                ...(liveStudioState.moderators || {}),
+            };
+            let changed = false;
+            hostPanelViewers.forEach((viewer) => {
+                const userId = viewer?.user_id;
+                if (!userId || !nextModerators[userId]) return;
+                const nextName = viewer?.users?.name || nextModerators[userId].name;
+                const nextAvatar =
+                    viewer?.users?.avatar || nextModerators[userId].avatar;
+                if (
+                    nextModerators[userId].name !== nextName ||
+                    nextModerators[userId].avatar !== nextAvatar
+                ) {
+                    nextModerators[userId] = {
+                        ...nextModerators[userId],
+                        name: nextName,
+                        avatar: nextAvatar,
+                        lastSeenAt: Date.now(),
+                    };
+                    changed = true;
+                }
+            });
+            if (changed) {
+                liveStudioState = {
+                    ...liveStudioState,
+                    moderators: nextModerators,
+                };
+                saveLiveStudioState();
+            }
+        }
+    } catch (error) {
+        console.error('Erreur chargement viewers panel:', error);
+        hostPanelViewers = [];
+    } finally {
+        hostPanelViewersLoading = false;
+        renderHostToolDrawer();
+        renderHostControlPanel();
+    }
+    return hostPanelViewers;
+}
+
+function toggleModerator(userId) {
+    if (!userId) return;
+    const currentIds = new Set(liveStudioState?.moderatorIds || []);
+    const moderators = {
+        ...(liveStudioState?.moderators || {}),
+    };
+    if (currentIds.has(userId)) {
+        currentIds.delete(userId);
+        delete moderators[userId];
+    } else {
+        currentIds.add(userId);
+        const viewer = hostPanelViewers.find((entry) => entry.user_id === userId);
+        moderators[userId] = createModeratorConfig(userId, {
+            ...(moderators[userId] || {}),
+            name: viewer?.users?.name || moderators[userId]?.name || '',
+            avatar: viewer?.users?.avatar || moderators[userId]?.avatar || '',
+            lastSeenAt: Date.now(),
+        });
+    }
+    ensureLiveAnalyticsState().manualActions += 1;
+    updateLiveStudioState({
+        moderatorIds: Array.from(currentIds),
+        moderators,
+    });
+}
+
+function getModeratorConfig(userId) {
+    return liveStudioState?.moderators?.[userId] || createModeratorConfig(userId);
+}
+
+function setModeratorRole(userId, roleId) {
+    if (!userId || !MODERATOR_ROLE_TEMPLATES[roleId]) return;
+    const currentIds = new Set(liveStudioState?.moderatorIds || []);
+    currentIds.add(userId);
+    const existing = getModeratorConfig(userId);
+    const template = getModeratorRoleTemplate(roleId);
+    ensureLiveAnalyticsState().manualActions += 1;
+    updateLiveStudioState({
+        moderatorIds: Array.from(currentIds),
+        moderators: {
+            ...(liveStudioState?.moderators || {}),
+            [userId]: createModeratorConfig(userId, {
+                ...existing,
+                role: roleId,
+                permissions: {
+                    ...template.permissions,
+                    ...(existing.permissions || {}),
+                },
+            }),
+        },
+    });
+}
+
+function toggleModeratorPermission(userId, permissionKey) {
+    if (!userId || !MODERATOR_PERMISSION_LABELS[permissionKey]) return;
+    const currentIds = new Set(liveStudioState?.moderatorIds || []);
+    currentIds.add(userId);
+    const existing = getModeratorConfig(userId);
+    ensureLiveAnalyticsState().manualActions += 1;
+    updateLiveStudioState({
+        moderatorIds: Array.from(currentIds),
+        moderators: {
+            ...(liveStudioState?.moderators || {}),
+            [userId]: createModeratorConfig(userId, {
+                ...existing,
+                permissions: {
+                    ...(existing.permissions || {}),
+                    [permissionKey]: !existing.permissions?.[permissionKey],
+                },
+            }),
+        },
+    });
+}
+
+function setPreviewFilter(filterId) {
+    const nextFilter = LIVE_PREVIEW_FILTERS[filterId] ? filterId : 'none';
+    updateLiveStudioState({
+        previewFilter: nextFilter
+    });
+}
+
+function setPreviewIntensity(value) {
+    updateLiveStudioState({
+        previewIntensity: clampNumber(value, 40, 160),
+    });
+}
+
+function togglePreviewOption(optionKey) {
+    if (
+        ![
+            'previewSafeZone',
+            'previewGrid',
+            'previewMirror',
+        ].includes(optionKey)
+    ) {
+        return;
+    }
+    updateLiveStudioState({
+        [optionKey]: !liveStudioState?.[optionKey],
+    });
+}
+
+function toggleFutureFeature(featureKey) {
+    if (!liveStudioState) return;
+    updateLiveStudioState({
+        [featureKey]: !liveStudioState[featureKey]
+    });
+}
+
+function setModeratorSearchTerm(value) {
+    liveModeratorSearchTerm = String(value || '').trim();
+    renderHostToolDrawer();
+}
+
+function setModerationQueueFilter(value) {
+    const nextFilter = ['all', 'flagged', 'held', 'masked'].includes(value)
+        ? value
+        : 'all';
+    liveModerationQueueFilter = nextFilter;
+    renderHostToolDrawer();
+}
+
+function updateAutoModKeywords(rawValue) {
+    const keywords = uniqueStringList(
+        String(rawValue || '')
+            .split(/[\n,;]/g)
+            .map((value) => value.trim())
+            .filter(Boolean),
+    );
+    updateLiveStudioState({
+        autoModKeywords: keywords,
+    });
+}
+
+function setAutoModAction(actionId) {
+    if (!LIVE_AUTO_MOD_ACTIONS[actionId]) return;
+    updateLiveStudioState({
+        autoModAction: actionId,
+    });
+}
+
+function applyModerationDecision(messageKey, actionId) {
+    const record = liveModerationIndex.get(messageKey);
+    if (!record) return;
+
+    const mutedUserIds = new Set(liveStudioState?.mutedUserIds || []);
+    let nextRecord = record;
+    let shouldPersistStudioState = false;
+    const recordPayload = {
+        user_id: record.userId,
+        users: {
+            name: record.userName,
+            avatar: record.avatar,
+        },
+        message: record.originalMessage,
+        created_at: record.createdAt,
+        id: record.key,
+    };
+
+    if (actionId === 'approve' || actionId === 'restore') {
+        nextRecord = upsertModerationRecord(recordPayload, {
+            status: 'approved',
+            renderedMessage: record.originalMessage,
+            reason: 'approuve',
+            source: 'manual',
+        });
+    } else if (actionId === 'mask') {
+        nextRecord = upsertModerationRecord(recordPayload, {
+            status: 'masked',
+            renderedMessage: buildMaskedMessage('decision manuelle'),
+            reason: 'decision manuelle',
+            source: 'manual',
+        });
+    } else if (actionId === 'hold') {
+        nextRecord = upsertModerationRecord(recordPayload, {
+            status: 'held',
+            renderedMessage: buildMaskedMessage('en attente'),
+            reason: 'en attente',
+            source: 'manual',
+        });
+    } else if (actionId === 'mute-user') {
+        if (record.userId) {
+            mutedUserIds.add(record.userId);
+            shouldPersistStudioState = true;
+        }
+        nextRecord = upsertModerationRecord(recordPayload, {
+            status: 'masked',
+            renderedMessage: buildMaskedMessage('auteur mute'),
+            reason: 'auteur mute',
+            source: 'manual',
+        });
+    } else if (actionId === 'unmute-user') {
+        if (record.userId) {
+            mutedUserIds.delete(record.userId);
+            shouldPersistStudioState = true;
+        }
+        nextRecord = upsertModerationRecord(recordPayload, {
+            status: 'approved',
+            renderedMessage: record.originalMessage,
+            reason: 'auteur reactive',
+            source: 'manual',
+        });
+    }
+
+    ensureLiveAnalyticsState().manualActions += 1;
+    syncMessageContentWithModeration(
+        messageKey,
+        nextRecord.status === 'approved'
+            ? nextRecord.originalMessage
+            : nextRecord.renderedMessage,
+    );
+
+    if (shouldPersistStudioState) {
+        updateLiveStudioState({
+            mutedUserIds: Array.from(mutedUserIds),
+        });
+        return;
+    }
+
+    renderHostControlPanel();
+    renderHostToolDrawer();
+}
+
+function getStreamDurationLabel() {
+    if (!streamStartedAtMs) return '00:00:00';
+    return formatStreamDuration(Date.now() - streamStartedAtMs);
+}
+
+function getAverageViewerCount() {
+    const analytics = ensureLiveAnalyticsState();
+    if (!analytics.viewerSeries.length) {
+        return Math.max(0, Number(currentStream?.viewer_count) || 0);
+    }
+    const total = analytics.viewerSeries.reduce(
+        (sum, entry) => sum + (Number(entry?.value) || 0),
+        0,
+    );
+    return Math.round(total / Math.max(1, analytics.viewerSeries.length));
+}
+
+function getModerationQueueCount() {
+    return liveModerationEntries.filter(
+        (entry) => entry.status && entry.status !== 'approved',
+    ).length;
+}
+
+function renderPulseCards() {
+    const analytics = ensureLiveAnalyticsState();
+    const cards = [
+        {
+            label: 'Audience',
+            value: String(currentStream?.viewer_count || 0),
+            meta: `pic ${analytics.peakViewers || 0}`,
+        },
+        {
+            label: 'Chat/min',
+            value: String(getMessagesPerMinute()),
+            meta: `${analytics.uniqueChatters.size} participants`,
+        },
+        {
+            label: 'Engagement',
+            value: String(getEngagementScore()),
+            meta: analytics.peakMomentumLabel || 'Stable',
+        },
+        {
+            label: 'Auto-mod',
+            value: liveStudioState?.autoModEnabled ? 'ON' : 'OFF',
+            meta: `${getModerationQueueCount()} alerte(s)`,
+        },
+    ];
+    return `
+        <div class="stream-host-pulse-grid">
+            ${cards
+                .map(
+                    (card) => `
+                        <article class="stream-host-pulse-card">
+                            <span>${escapeHtml(card.label)}</span>
+                            <strong>${escapeHtml(card.value)}</strong>
+                            <small>${escapeHtml(card.meta)}</small>
+                        </article>
+                    `,
+                )
+                .join('')}
+        </div>
+    `;
+}
+
+function buildHostControlRegistry() {
+    hostPanelRegistry = new Map();
+
+    registerHostPanelTool(
+        {
+            id: 'broadcast',
+            title: 'Diffusion',
+            description: 'Commandes critiques du direct'
+        },
+        {
+            id: 'camera-toggle',
+            label: 'Camera live',
+            description: 'Couper ou reactiver la video sans arreter l’audio.',
+            status: () => (isCameraEnabled ? 'Active' : 'Coupee'),
+            isActive: () => !isCameraEnabled,
+            run: () => toggleCameraBroadcast()
+        },
+    );
+    registerHostPanelTool(
+        {
+            id: 'broadcast',
+            title: 'Diffusion',
+            description: 'Commandes critiques du direct'
+        },
+        {
+            id: 'mic-toggle',
+            label: 'Micro',
+            description: 'Basculer le micro pendant le live.',
+            status: () => (isMicMuted ? 'Coupe' : 'Ouvert'),
+            isActive: () => isMicMuted,
+            run: () => toggleMicMute()
+        },
+    );
+    registerHostPanelTool(
+        {
+            id: 'broadcast',
+            title: 'Diffusion',
+            description: 'Commandes critiques du direct'
+        },
+        {
+            id: 'screen-share',
+            label: 'Partage ecran',
+            description: 'Montrer votre ecran sans couper le direct.',
+            status: () => (isScreenSharing ? 'Actif' : 'Pret'),
+            isActive: () => isScreenSharing,
+            run: () => shareScreen()
+        },
+    );
+    registerHostPanelTool(
+        {
+            id: 'broadcast',
+            title: 'Diffusion',
+            description: 'Commandes critiques du direct'
+        },
+        {
+            id: 'camera-switch',
+            label: 'Changer camera',
+            description: 'Basculer entre les capteurs detectes.',
+            status: () => (isCameraEnabled ? 'Disponible' : 'Reactivez la camera'),
+            isDisabled: () => !isCameraEnabled,
+            run: () => switchCamera()
+        },
+    );
+
+    registerHostPanelTool(
+        {
+            id: 'studio',
+            title: 'Studio',
+            description: 'Outils de pilotage et moderation'
+        },
+        {
+            id: 'preview',
+            label: 'Live preview',
+            description: 'Controle exact du flux public et du monitor ops.',
+            status: () =>
+                LIVE_PREVIEW_FILTERS[liveStudioState?.previewFilter || 'none']?.label ||
+                'Flux brut',
+            isDrawer: true
+        },
+    );
+    registerHostPanelTool(
+        {
+            id: 'studio',
+            title: 'Studio',
+            description: 'Outils de pilotage et moderation'
+        },
+        {
+            id: 'filters',
+            label: 'Filtres',
+            description: 'Presets, intensite et overlays du control room.',
+            status: () =>
+                `${liveStudioState?.previewIntensity || 100}%`,
+            isDrawer: true
+        },
+    );
+    registerHostPanelTool(
+        {
+            id: 'studio',
+            title: 'Studio',
+            description: 'Outils de pilotage et moderation'
+        },
+        {
+            id: 'moderators',
+            label: 'Moderateurs',
+            description: 'Roles et permissions de moderation en temps reel.',
+            status: () =>
+                `${(liveStudioState?.moderatorIds || []).length} actif(s)`,
+            isDrawer: true
+        },
+    );
+    registerHostPanelTool(
+        {
+            id: 'studio',
+            title: 'Studio',
+            description: 'Outils de pilotage et moderation'
+        },
+        {
+            id: 'stats',
+            label: 'Stats live',
+            description: 'Audience, rythme du chat, pics et sante du flux.',
+            status: () =>
+                `${currentStream?.viewer_count || 0} viewers`,
+            isDrawer: true
+        },
+    );
+
+    registerHostPanelTool(
+        {
+            id: 'extensions',
+            title: 'Extensions',
+            description: 'Points d’extension pour les modules avances'
+        },
+        {
+            id: 'engagement',
+            label: 'Cadeaux & sondages',
+            description: 'Pilotage UX en direct.',
+            status: () =>
+                [
+                    liveStudioState?.giftsEnabled ? 'cadeaux' : null,
+                    liveStudioState?.pollsEnabled ? 'sondages' : null
+                ]
+                    .filter(Boolean)
+                    .join(' + ') || 'desactive',
+            isDrawer: true
+        },
+    );
+    registerHostPanelTool(
+        {
+            id: 'extensions',
+            title: 'Extensions',
+            description: 'Points d’extension pour les modules avances'
+        },
+        {
+            id: 'automation',
+            label: 'Auto-moderation',
+            description: 'Regles de mots sensibles et actions instantanees.',
+            status: () =>
+                liveStudioState?.autoModEnabled
+                    ? `${getModerationQueueCount()} alerte(s)`
+                    : 'Desactivee',
+            isDrawer: true
+        },
+    );
+
+    customHostPanelTools.forEach((entry) => {
+        if (!entry?.sectionMeta || !entry?.tool) return;
+        registerHostPanelTool(entry.sectionMeta, entry.tool);
+    });
+}
+
+function renderHostControlPanel() {
+    const panel = document.getElementById('stream-host-panel');
+    const grid = document.getElementById('stream-host-panel-grid');
+    const status = document.getElementById('stream-host-panel-status');
+    if (!panel || !grid) return;
+
+    if (!isStreamHost) {
+        panel.hidden = true;
+        return;
+    }
+
+    panel.hidden = false;
+    buildHostControlRegistry();
+
+    let pulse = document.getElementById('stream-host-panel-pulse');
+    if (!pulse) {
+        pulse = document.createElement('div');
+        pulse.id = 'stream-host-panel-pulse';
+        pulse.className = 'stream-host-panel-pulse';
+        panel.insertBefore(pulse, grid);
+    }
+    pulse.innerHTML = renderPulseCards();
+
+    if (status) {
+        const moderationCount = getModerationQueueCount();
+        status.textContent = moderationCount > 0
+            ? `Live actif • ${moderationCount} alerte(s)`
+            : isScreenSharing
+              ? 'Live actif • ecran partage'
+              : 'Live actif';
+    }
+
+    grid.innerHTML = Array.from(hostPanelRegistry.values())
+        .map((section) => `
+            <section class="stream-host-section">
+                <div class="stream-host-section-head">
+                    <h4>${escapeHtml(section.title)}</h4>
+                    <p>${escapeHtml(section.description || '')}</p>
+                </div>
+                <div class="stream-host-section-tools">
+                    ${section.tools
+                        .map((tool) => {
+                            const isActive = tool.isActive ? tool.isActive() : activeHostToolId === tool.id;
+                            const isDisabled = tool.isDisabled ? tool.isDisabled() : false;
+                            const statusLabel = tool.status ? tool.status() : '';
+                            return `
+                                <button
+                                    type="button"
+                                    class="stream-host-tool ${isActive ? 'active' : ''}"
+                                    data-host-tool="${escapeHtml(tool.id)}"
+                                    ${isDisabled ? 'disabled' : ''}
+                                >
+                                    <span class="stream-host-tool-label">${escapeHtml(tool.label)}</span>
+                                    <span class="stream-host-tool-desc">${escapeHtml(tool.description || '')}</span>
+                                    <span class="stream-host-tool-status">${escapeHtml(statusLabel)}</span>
+                                </button>
+                            `;
+                        })
+                        .join('')}
+                </div>
+            </section>
+        `)
+        .join('');
+
+    Array.from(grid.querySelectorAll('[data-host-tool]')).forEach((button) => {
+        button.addEventListener('click', async () => {
+            const tool = findHostTool(button.dataset.hostTool);
+            if (!tool) return;
+            if (tool.isDrawer) {
+                activeHostToolId = activeHostToolId === tool.id ? '' : tool.id;
+                if (
+                    activeHostToolId === 'moderators' ||
+                    activeHostToolId === 'stats'
+                ) {
+                    void fetchHostPanelViewers();
+                }
+                renderHostControlPanel();
+                renderHostToolDrawer();
+                return;
+            }
+            await Promise.resolve(tool.run?.());
+            renderHostControlPanel();
+            renderHostToolDrawer();
+        });
+    });
+}
+
+function renderPreviewDrawerContent() {
+    const track = getCurrentHostVideoTrack();
+    const settings = track?.getSettings?.() || {};
+    const sourceLabel = isScreenSharing ? 'Ecran partage' : 'Camera live';
+    const resolution = settings.width && settings.height
+        ? `${settings.width} x ${settings.height}`
+        : 'Resolution en cours';
+    const filterLabel =
+        LIVE_PREVIEW_FILTERS[liveStudioState?.previewFilter || 'none']?.label ||
+        'Flux brut';
+    return `
+        <div class="stream-host-drawer-head">
+            <h4>Live preview</h4>
+            <p>Double monitor: flux public exact a gauche, monitor ops a droite pour verifier cadrage, qualite et overlays.</p>
+        </div>
+        <div class="stream-host-preview-grid">
+            <article class="stream-host-preview-card">
+                <div class="stream-host-preview-head">
+                    <div>
+                        <strong>Flux audience</strong>
+                        <span>Ce que voit le public en direct</span>
+                    </div>
+                    <span class="stream-host-preview-badge">Exact</span>
+                </div>
+                <div class="stream-host-preview-shell" data-preview-shell="public">
+                    <video id="stream-audience-preview-raw" playsinline autoplay muted></video>
+                    <span class="stream-host-preview-tag">Public</span>
+                </div>
+            </article>
+            <article class="stream-host-preview-card">
+                <div class="stream-host-preview-head">
+                    <div>
+                        <strong>Monitor ops</strong>
+                        <span>Safe-zone, grille et filtre d inspection</span>
+                    </div>
+                    <span class="stream-host-preview-badge">${escapeHtml(filterLabel)}</span>
+                </div>
+                <div class="stream-host-preview-shell" data-preview-shell="ops">
+                    <video id="stream-audience-preview-filtered" playsinline autoplay muted></video>
+                    <span class="stream-host-preview-tag">Ops</span>
+                </div>
+            </article>
+        </div>
+        <div class="stream-host-stats-grid stream-host-stats-grid--wide">
+            <div class="stream-host-stat">
+                <span>Source</span>
+                <strong>${escapeHtml(sourceLabel)}</strong>
+            </div>
+            <div class="stream-host-stat">
+                <span>Resolution</span>
+                <strong>${escapeHtml(resolution)}</strong>
+            </div>
+            <div class="stream-host-stat">
+                <span>Cadre</span>
+                <strong>${liveStudioState?.previewSafeZone ? 'safe-zone ON' : 'safe-zone OFF'}</strong>
+            </div>
+            <div class="stream-host-stat">
+                <span>Lecture</span>
+                <strong>${escapeHtml(getStreamDurationLabel())}</strong>
+            </div>
+        </div>
+        <div class="stream-host-inline-actions">
+            <button type="button" class="stream-host-inline-btn ${liveStudioState?.previewSafeZone ? 'active' : ''}" data-preview-toggle="previewSafeZone">
+                Safe zone
+            </button>
+            <button type="button" class="stream-host-inline-btn ${liveStudioState?.previewGrid ? 'active' : ''}" data-preview-toggle="previewGrid">
+                Grille
+            </button>
+            <button type="button" class="stream-host-inline-btn ${liveStudioState?.previewMirror ? 'active' : ''}" data-preview-toggle="previewMirror">
+                Mirror
+            </button>
+        </div>
+    `;
+}
+
+function renderFiltersDrawerContent() {
+    return `
+        <div class="stream-host-drawer-head">
+            <h4>Filtres et overlays</h4>
+            <p>Pilotez le rendu du monitor, l intensite du filtre et les aides visuelles sans perdre la lecture du direct.</p>
+        </div>
+        <div class="stream-host-filter-grid">
+            ${Object.entries(LIVE_PREVIEW_FILTERS)
+                .map(([filterId, filter]) => `
+                    <button
+                        type="button"
+                        class="stream-host-inline-btn ${liveStudioState?.previewFilter === filterId ? 'active' : ''}"
+                        data-live-filter="${escapeHtml(filterId)}"
+                    >
+                        ${escapeHtml(filter.label)}
+                    </button>
+                `)
+                .join('')}
+        </div>
+        <div class="stream-host-range-card">
+            <div class="stream-host-range-copy">
+                <strong>Intensite du monitor</strong>
+                <span>Actuellement ${escapeHtml(String(liveStudioState?.previewIntensity || 100))}%</span>
+            </div>
+            <input
+                type="range"
+                min="40"
+                max="160"
+                step="5"
+                value="${escapeHtml(String(liveStudioState?.previewIntensity || 100))}"
+                data-preview-intensity
+            />
+        </div>
+        <div class="stream-host-inline-actions">
+            <button type="button" class="stream-host-inline-btn ${liveStudioState?.previewSafeZone ? 'active' : ''}" data-preview-toggle="previewSafeZone">
+                Safe zone
+            </button>
+            <button type="button" class="stream-host-inline-btn ${liveStudioState?.previewGrid ? 'active' : ''}" data-preview-toggle="previewGrid">
+                Grille
+            </button>
+            <button type="button" class="stream-host-inline-btn ${liveStudioState?.previewMirror ? 'active' : ''}" data-preview-toggle="previewMirror">
+                Mirror
+            </button>
+        </div>
+        <p class="stream-host-note">
+            Le player principal reste votre reference temps reel. Ces filtres servent au control room pour controler cadrage, lisibilite et confort d exploitation.
+        </p>
+    `;
+}
+
+function renderModeratorsDrawerContent() {
+    const selectedIds = new Set(liveStudioState?.moderatorIds || []);
+    const moderators = liveStudioState?.moderators || {};
+    if (hostPanelViewersLoading && hostPanelViewers.length === 0) {
+        return '<div class="stream-host-empty">Chargement des viewers...</div>';
+    }
+
+    const rosterMap = new Map();
+    hostPanelViewers.forEach((viewer) => {
+        if (!viewer?.user_id) return;
+        rosterMap.set(viewer.user_id, {
+            user_id: viewer.user_id,
+            users: viewer.users || {},
+            isActiveViewer: true,
+        });
+    });
+
+    Object.entries(moderators).forEach(([userId, config]) => {
+        if (!rosterMap.has(userId)) {
+            rosterMap.set(userId, {
+                user_id: userId,
+                users: {
+                    name: config.name || 'Moderateur',
+                    avatar: config.avatar || '',
+                },
+                isActiveViewer: false,
+            });
+        }
+    });
+
+    const search = normalizeModerationText(liveModeratorSearchTerm);
+    const roster = Array.from(rosterMap.values()).filter((viewer) => {
+        if (!search) return true;
+        const haystack = normalizeModerationText(
+            `${viewer?.users?.name || ''} ${viewer?.user_id || ''}`,
+        );
+        return haystack.includes(search);
+    });
+
+    if (roster.length === 0) {
+        return `
+            <div class="stream-host-toolbar">
+                <input
+                    type="search"
+                    class="stream-host-search"
+                    placeholder="Rechercher un viewer..."
+                    value="${escapeHtml(liveModeratorSearchTerm)}"
+                    data-moderator-search
+                />
+            </div>
+            <div class="stream-host-empty">
+                Aucun profil ne correspond au filtre courant.
+            </div>
+        `;
+    }
+
+    return `
+        <div class="stream-host-toolbar">
+            <input
+                type="search"
+                class="stream-host-search"
+                placeholder="Rechercher un viewer..."
+                value="${escapeHtml(liveModeratorSearchTerm)}"
+                data-moderator-search
+            />
+            <span class="stream-host-counter">${escapeHtml(String(selectedIds.size))} moderateur(s)</span>
+        </div>
+        <div class="stream-host-roster">
+            ${roster
+                .map((viewer) => {
+                    const userId = viewer.user_id || '';
+                    const name = viewer.users?.name || 'Utilisateur';
+                    const isModerator = selectedIds.has(userId);
+                    const config = getModeratorConfig(userId);
+                    return `
+                        <article class="stream-host-member ${isModerator ? 'is-moderator' : ''}">
+                            <div class="stream-host-member-head">
+                                <div class="stream-host-member-copy">
+                                    <strong>${escapeHtml(name)}</strong>
+                                    <span>${escapeHtml(userId)}</span>
+                                </div>
+                                <div class="stream-host-member-actions">
+                                    <span class="stream-host-member-state">${viewer.isActiveViewer ? 'En salle' : 'Hors ligne'}</span>
+                                    <button
+                                        type="button"
+                                        class="stream-host-inline-btn ${isModerator ? 'active' : ''}"
+                                        data-moderator-id="${escapeHtml(userId)}"
+                                    >
+                                        ${isModerator ? 'Retirer' : 'Nommer'}
+                                    </button>
+                                </div>
+                            </div>
+                            ${
+                                isModerator
+                                    ? `
+                                        <div class="stream-host-role-row">
+                                            <label>
+                                                <span>Role</span>
+                                                <select data-moderator-role="${escapeHtml(userId)}">
+                                                    ${Object.entries(MODERATOR_ROLE_TEMPLATES)
+                                                        .map(([roleId, role]) => `
+                                                            <option value="${escapeHtml(roleId)}" ${config.role === roleId ? 'selected' : ''}>
+                                                                ${escapeHtml(role.label)}
+                                                            </option>
+                                                        `)
+                                                        .join('')}
+                                                </select>
+                                            </label>
+                                            <small>${escapeHtml(getModeratorRoleTemplate(config.role).summary || '')}</small>
+                                        </div>
+                                        <div class="stream-host-permission-grid">
+                                            ${Object.entries(MODERATOR_PERMISSION_LABELS)
+                                                .map(([permissionKey, permissionLabel]) => `
+                                                    <button
+                                                        type="button"
+                                                        class="stream-host-permission-chip ${config.permissions?.[permissionKey] ? 'active' : ''}"
+                                                        data-moderator-permission="${escapeHtml(permissionKey)}"
+                                                        data-moderator-user="${escapeHtml(userId)}"
+                                                    >
+                                                        ${escapeHtml(permissionLabel)}
+                                                    </button>
+                                                `)
+                                                .join('')}
+                                        </div>
+                                    `
+                                    : `
+                                        <p class="stream-host-note">
+                                            Ajoutez ce viewer pour lui attribuer un role et des permissions en temps reel.
+                                        </p>
+                                    `
+                            }
+                        </article>
+                    `;
+                })
+                .join('')}
+        </div>
+    `;
+}
+
+function buildViewerTrendBars() {
+    const analytics = ensureLiveAnalyticsState();
+    const points = analytics.viewerSeries.slice(-12);
+    if (!points.length) {
+        return '<div class="stream-host-empty">Collecte audience en cours...</div>';
+    }
+    const maxValue = Math.max(
+        1,
+        ...points.map((entry) => Number(entry?.value) || 0),
+    );
+    return `
+        <div class="stream-host-chart">
+            ${points
+                .map((entry) => {
+                    const height = Math.max(
+                        12,
+                        Math.round(((Number(entry?.value) || 0) / maxValue) * 100),
+                    );
+                    return `<span class="stream-host-chart-bar" style="height:${height}%"></span>`;
+                })
+                .join('')}
+        </div>
+    `;
+}
+
+function buildMessageTempoBars() {
+    const analytics = ensureLiveAnalyticsState();
+    const now = Date.now();
+    const bucketCount = 8;
+    const bucketSize = 1000 * 60;
+    const buckets = Array.from({ length: bucketCount }, (_, index) => {
+        const start = now - bucketSize * (bucketCount - index);
+        const end = start + bucketSize;
+        return analytics.messageSeries.filter(
+            (entry) => entry.ts >= start && entry.ts < end,
+        ).length;
+    });
+    const maxValue = Math.max(1, ...buckets);
+    return `
+        <div class="stream-host-chart stream-host-chart--tempo">
+            ${buckets
+                .map((value) => {
+                    const height = Math.max(
+                        10,
+                        Math.round((value / maxValue) * 100),
+                    );
+                    return `<span class="stream-host-chart-bar" style="height:${height}%"></span>`;
+                })
+                .join('')}
+        </div>
+    `;
+}
+
+function renderStatsDrawerContent() {
+    const analytics = ensureLiveAnalyticsState();
+    const topChatters = getTopChatters(3);
+    return `
+        <div class="stream-host-drawer-head">
+            <h4>Stats temps reel</h4>
+            <p>Lecture live de l audience, de l engagement et des pics de trafic observes pendant la session.</p>
+        </div>
+        <div class="stream-host-stats-grid stream-host-stats-grid--wide">
+            <div class="stream-host-stat">
+                <span>Viewers actifs</span>
+                <strong>${escapeHtml(String(currentStream?.viewer_count || 0))}</strong>
+            </div>
+            <div class="stream-host-stat">
+                <span>Pic audience</span>
+                <strong>${escapeHtml(String(analytics.peakViewers || 0))}</strong>
+            </div>
+            <div class="stream-host-stat">
+                <span>Moyenne session</span>
+                <strong>${escapeHtml(String(getAverageViewerCount()))}</strong>
+            </div>
+            <div class="stream-host-stat">
+                <span>Messages / min</span>
+                <strong>${escapeHtml(String(getMessagesPerMinute()))}</strong>
+            </div>
+            <div class="stream-host-stat">
+                <span>Participants chat</span>
+                <strong>${escapeHtml(String(analytics.uniqueChatters.size || 0))}</strong>
+            </div>
+            <div class="stream-host-stat">
+                <span>Viewers observes</span>
+                <strong>${escapeHtml(String(analytics.uniqueViewerIds.size || 0))}</strong>
+            </div>
+        </div>
+        <div class="stream-host-analytics-layout">
+            <article class="stream-host-analytics-card">
+                <div class="stream-host-analytics-head">
+                    <strong>Courbe audience</strong>
+                    <span>${escapeHtml(analytics.peakMomentumLabel || 'Stable')}</span>
+                </div>
+                ${buildViewerTrendBars()}
+            </article>
+            <article class="stream-host-analytics-card">
+                <div class="stream-host-analytics-head">
+                    <strong>Tempo chat</strong>
+                    <span>${escapeHtml(String(getMessagesPerMinute()))}/min</span>
+                </div>
+                ${buildMessageTempoBars()}
+            </article>
+        </div>
+        <div class="stream-host-list">
+            ${
+                topChatters.length
+                    ? topChatters
+                          .map((entry) => `
+                              <div class="stream-host-list-item">
+                                  <div class="stream-host-list-copy">
+                                      <strong>${escapeHtml(entry.name)}</strong>
+                                      <span>${escapeHtml(entry.userId)}</span>
+                                  </div>
+                                  <span class="stream-host-chip-plain">${escapeHtml(String(entry.count))} msg</span>
+                              </div>
+                          `)
+                          .join('')
+                    : '<div class="stream-host-empty">Les top chatters apparaitront ici des que la salle s anime.</div>'
+            }
+        </div>
+    `;
+}
+
+function renderEngagementDrawerContent() {
+    const analytics = ensureLiveAnalyticsState();
+    return `
+        <div class="stream-host-drawer-head">
+            <h4>Engagement avance</h4>
+            <p>Activez les leviers d interaction sans quitter la salle de controle.</p>
+        </div>
+        <div class="stream-host-inline-actions">
+            <button type="button" class="stream-host-inline-btn ${liveStudioState?.giftsEnabled ? 'active' : ''}" data-live-feature="giftsEnabled">
+                Cadeaux ${liveStudioState?.giftsEnabled ? 'ON' : 'OFF'}
+            </button>
+            <button type="button" class="stream-host-inline-btn ${liveStudioState?.pollsEnabled ? 'active' : ''}" data-live-feature="pollsEnabled">
+                Sondages ${liveStudioState?.pollsEnabled ? 'ON' : 'OFF'}
+            </button>
+        </div>
+        <div class="stream-host-stats-grid stream-host-stats-grid--wide">
+            <div class="stream-host-stat">
+                <span>Score engagement</span>
+                <strong>${escapeHtml(String(getEngagementScore()))}</strong>
+            </div>
+            <div class="stream-host-stat">
+                <span>Actions manuelles</span>
+                <strong>${escapeHtml(String(analytics.manualActions || 0))}</strong>
+            </div>
+            <div class="stream-host-stat">
+                <span>Momentum</span>
+                <strong>${escapeHtml(analytics.peakMomentumLabel || 'Stable')}</strong>
+            </div>
+            <div class="stream-host-stat">
+                <span>Duree live</span>
+                <strong>${escapeHtml(getStreamDurationLabel())}</strong>
+            </div>
+        </div>
+        <p class="stream-host-note">
+            Ces toggles sont persistants par session. Ils prepareront directement la salle pour les hooks backend cadeaux / sondages sans refonte UI.
+        </p>
+    `;
+}
+
+function renderAutomationDrawerContent() {
+    const queueEntries = liveModerationEntries.filter((entry) => {
+        if (!entry.status || entry.status === 'approved') return false;
+        if (liveModerationQueueFilter === 'all') return true;
+        return entry.status === liveModerationQueueFilter;
+    });
+    const mutedUsers = Array.from(new Set(liveStudioState?.mutedUserIds || []));
+    return `
+        <div class="stream-host-drawer-head">
+            <h4>Auto-moderation</h4>
+            <p>Reglez la reaction automatique, la liste de mots sensibles et traitez la file d alertes sans quitter le direct.</p>
+        </div>
+        <div class="stream-host-inline-actions">
+            <button type="button" class="stream-host-inline-btn ${liveStudioState?.autoModEnabled ? 'active' : ''}" data-live-feature="autoModEnabled">
+                Auto-mod ${liveStudioState?.autoModEnabled ? 'ON' : 'OFF'}
+            </button>
+            ${Object.entries(LIVE_AUTO_MOD_ACTIONS)
+                .map(([actionId, label]) => `
+                    <button
+                        type="button"
+                        class="stream-host-inline-btn ${liveStudioState?.autoModAction === actionId ? 'active' : ''}"
+                        data-auto-mod-action="${escapeHtml(actionId)}"
+                    >
+                        ${escapeHtml(label)}
+                    </button>
+                `)
+                .join('')}
+        </div>
+        <div class="stream-host-compose">
+            <label for="stream-host-keywords">Mots sensibles</label>
+            <textarea
+                id="stream-host-keywords"
+                class="stream-host-textarea"
+                rows="3"
+                placeholder="spam, arnaque, insulte, lien douteux"
+                data-auto-mod-keywords
+            >${escapeHtml((liveStudioState?.autoModKeywords || []).join(', '))}</textarea>
+            <div class="stream-host-inline-actions">
+                <button type="button" class="stream-host-inline-btn active" data-auto-mod-save>
+                    Mettre a jour
+                </button>
+            </div>
+        </div>
+        <div class="stream-host-toolbar">
+            <div class="stream-host-inline-actions">
+                ${['all', 'flagged', 'held', 'masked']
+                    .map((filterId) => `
+                        <button
+                            type="button"
+                            class="stream-host-inline-btn ${liveModerationQueueFilter === filterId ? 'active' : ''}"
+                            data-moderation-filter="${escapeHtml(filterId)}"
+                        >
+                            ${escapeHtml(filterId)}
+                        </button>
+                    `)
+                    .join('')}
+            </div>
+            <span class="stream-host-counter">${escapeHtml(String(queueEntries.length))} alerte(s)</span>
+        </div>
+        <div class="stream-host-queue">
+            ${
+                queueEntries.length
+                    ? queueEntries
+                          .map((entry) => `
+                              <article class="stream-host-queue-item">
+                                  <div class="stream-host-queue-head">
+                                      <div>
+                                          <strong>${escapeHtml(entry.userName || 'Utilisateur')}</strong>
+                                          <span>${escapeHtml(entry.reason || entry.status || 'alerte')}</span>
+                                      </div>
+                                      <span class="stream-host-chip-plain">${escapeHtml(entry.status)}</span>
+                                  </div>
+                                  <p>${escapeHtml(entry.originalMessage || '')}</p>
+                                  <div class="stream-host-inline-actions">
+                                      <button type="button" class="stream-host-inline-btn" data-moderation-action="approve" data-moderation-key="${escapeHtml(entry.key)}">Approuver</button>
+                                      <button type="button" class="stream-host-inline-btn" data-moderation-action="hold" data-moderation-key="${escapeHtml(entry.key)}">Attente</button>
+                                      <button type="button" class="stream-host-inline-btn" data-moderation-action="mask" data-moderation-key="${escapeHtml(entry.key)}">Masquer</button>
+                                      <button type="button" class="stream-host-inline-btn ${mutedUsers.includes(entry.userId) ? 'active' : ''}" data-moderation-action="${mutedUsers.includes(entry.userId) ? 'unmute-user' : 'mute-user'}" data-moderation-key="${escapeHtml(entry.key)}">
+                                          ${mutedUsers.includes(entry.userId) ? 'Unmute auteur' : 'Mute auteur'}
+                                      </button>
+                                  </div>
+                              </article>
+                          `)
+                          .join('')
+                    : '<div class="stream-host-empty">Aucune alerte pour le moment.</div>'
+            }
+        </div>
+        ${
+            mutedUsers.length
+                ? `
+                    <div class="stream-host-muted-list">
+                        <strong>Auteurs mutes</strong>
+                        <div class="stream-host-inline-actions">
+                            ${mutedUsers
+                                .map((userId) => `
+                                    <button
+                                        type="button"
+                                        class="stream-host-inline-btn active"
+                                        data-unmute-user="${escapeHtml(userId)}"
+                                    >
+                                        ${escapeHtml(userId)}
+                                    </button>
+                                `)
+                                .join('')}
+                        </div>
+                    </div>
+                `
+                : ''
+        }
+    `;
+}
+
+function renderHostToolDrawer() {
+    const drawer = document.getElementById('stream-host-panel-drawer');
+    if (!drawer) return;
+
+    const activeTool = findHostTool(activeHostToolId);
+    if (!activeTool || !isStreamHost) {
+        drawer.hidden = true;
+        drawer.innerHTML = '';
+        return;
+    }
+
+    let bodyHtml = '';
+    if (activeTool.id === 'preview') {
+        bodyHtml = renderPreviewDrawerContent();
+    } else if (activeTool.id === 'filters') {
+        bodyHtml = renderFiltersDrawerContent();
+    } else if (activeTool.id === 'moderators') {
+        bodyHtml = `
+            <div class="stream-host-drawer-head">
+                <h4>Moderateurs du live</h4>
+                <p>Nomination, role et permissions de l equipe de moderation en temps reel.</p>
+            </div>
+            ${renderModeratorsDrawerContent()}
+        `;
+    } else if (activeTool.id === 'stats') {
+        bodyHtml = renderStatsDrawerContent();
+    } else if (activeTool.id === 'engagement') {
+        bodyHtml = renderEngagementDrawerContent();
+    } else if (activeTool.id === 'automation') {
+        bodyHtml = renderAutomationDrawerContent();
+    }
+
+    drawer.hidden = false;
+    drawer.innerHTML = bodyHtml;
+    syncAudiencePreviewMonitors();
+
+    Array.from(drawer.querySelectorAll('[data-live-filter]')).forEach((button) => {
+        button.addEventListener('click', () => {
+            setPreviewFilter(button.dataset.liveFilter);
+        });
+    });
+
+    const previewIntensity = drawer.querySelector('[data-preview-intensity]');
+    if (previewIntensity) {
+        previewIntensity.addEventListener('input', (event) => {
+            setPreviewIntensity(event.target.value);
+        });
+    }
+
+    Array.from(drawer.querySelectorAll('[data-preview-toggle]')).forEach((button) => {
+        button.addEventListener('click', () => {
+            togglePreviewOption(button.dataset.previewToggle);
+        });
+    });
+
+    Array.from(drawer.querySelectorAll('[data-moderator-id]')).forEach((button) => {
+        button.addEventListener('click', () => {
+            toggleModerator(button.dataset.moderatorId);
+        });
+    });
+
+    const moderatorSearch = drawer.querySelector('[data-moderator-search]');
+    if (moderatorSearch) {
+        moderatorSearch.addEventListener('input', (event) => {
+            setModeratorSearchTerm(event.target.value);
+        });
+    }
+
+    Array.from(drawer.querySelectorAll('[data-moderator-role]')).forEach((select) => {
+        select.addEventListener('change', (event) => {
+            setModeratorRole(
+                event.target.dataset.moderatorRole,
+                event.target.value,
+            );
+        });
+    });
+
+    Array.from(drawer.querySelectorAll('[data-moderator-permission]')).forEach((button) => {
+        button.addEventListener('click', () => {
+            toggleModeratorPermission(
+                button.dataset.moderatorUser,
+                button.dataset.moderatorPermission,
+            );
+        });
+    });
+
+    Array.from(drawer.querySelectorAll('[data-live-feature]')).forEach((button) => {
+        button.addEventListener('click', () => {
+            toggleFutureFeature(button.dataset.liveFeature);
+        });
+    });
+
+    Array.from(drawer.querySelectorAll('[data-auto-mod-action]')).forEach((button) => {
+        button.addEventListener('click', () => {
+            setAutoModAction(button.dataset.autoModAction);
+        });
+    });
+
+    const autoModKeywords = drawer.querySelector('[data-auto-mod-keywords]');
+    const autoModSave = drawer.querySelector('[data-auto-mod-save]');
+    if (autoModKeywords && autoModSave) {
+        autoModSave.addEventListener('click', () => {
+            updateAutoModKeywords(autoModKeywords.value);
+        });
+    }
+
+    Array.from(drawer.querySelectorAll('[data-moderation-filter]')).forEach((button) => {
+        button.addEventListener('click', () => {
+            setModerationQueueFilter(button.dataset.moderationFilter);
+        });
+    });
+
+    Array.from(drawer.querySelectorAll('[data-moderation-action]')).forEach((button) => {
+        button.addEventListener('click', () => {
+            applyModerationDecision(
+                button.dataset.moderationKey,
+                button.dataset.moderationAction,
+            );
+        });
+    });
+
+    Array.from(drawer.querySelectorAll('[data-unmute-user]')).forEach((button) => {
+        button.addEventListener('click', () => {
+            const targetUserId = button.dataset.unmuteUser;
+            const mutedUserIds = new Set(liveStudioState?.mutedUserIds || []);
+            mutedUserIds.delete(targetUserId);
+            ensureLiveAnalyticsState().manualActions += 1;
+            updateLiveStudioState({
+                mutedUserIds: Array.from(mutedUserIds),
+            });
+        });
+    });
+}
+
+function setupHostControlPanel() {
+    if (!isStreamHost) return;
+    loadLiveStudioState();
+    applyLivePreviewFilter();
+    renderHostControlPanel();
+    renderHostToolDrawer();
 }
 
 function setChatEnabled(enabled) {
@@ -2384,6 +5104,34 @@ function showStreamEndedMessage() {
     window.initializeStreamPage = initializeStreamPage;
     window.toggleAudio = toggleAudio;
     window.enableStreamAudio = enableStreamAudio;
+    window.XeraLiveStudio = {
+        registerTool(sectionMeta, tool) {
+            customHostPanelTools.push({ sectionMeta, tool });
+            renderHostControlPanel();
+            renderHostToolDrawer();
+        },
+        getState() {
+            return { ...(liveStudioState || LIVE_STUDIO_DEFAULTS) };
+        },
+        updateState(patch) {
+            updateLiveStudioState(patch);
+        },
+        openTool(toolId) {
+            activeHostToolId = toolId || '';
+            renderHostControlPanel();
+            renderHostToolDrawer();
+        },
+        render() {
+            renderHostControlPanel();
+            renderHostToolDrawer();
+        }
+    };
+    window.XeraLiveChatUI = {
+        setup: setupChatInteractionUX,
+        onMessagesRendered: handleChatMessagesRendered,
+        scrollToLatest: scrollChatToLatest,
+        prepareIncomingMessage: prepareChatScrollForIncomingMessage
+    };
 } else {
     console.warn('streaming.js déjà chargé, initialisation ignorée.');
 }
