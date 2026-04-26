@@ -14,7 +14,7 @@
         <link rel="stylesheet" href="css/monetization.css" />
         <link
             rel="stylesheet"
-            href="css/streaming-analytics.css?v=20260301-1"
+            href="css/streaming-analytics.css?v=20260424-2"
         />
         <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     </head>
@@ -82,7 +82,6 @@
                         class="stream-video"
                         autoplay
                         playsinline
-                        muted
                     ></video>
                     <button
                         id="unmute-overlay"
@@ -214,6 +213,14 @@
                             id="stream-host-controls"
                         >
                             <button
+                                class="stream-action-btn btn"
+                                id="camera-toggle-btn"
+                                type="button"
+                                title="Activer ou couper la caméra"
+                            >
+                                <span class="btn-text">Camera ON</span>
+                            </button>
+                            <button
                                 class="stream-action-btn btn stream-action-danger"
                                 id="end-stream-btn"
                                 type="button"
@@ -227,7 +234,7 @@
                                 type="button"
                                 title="Changer de caméra"
                             >
-                                <span class="btn-text">Caméra</span>
+                                <span class="btn-text">Changer</span>
                             </button>
                             <button
                                 class="stream-action-btn btn"
@@ -302,6 +309,34 @@
                                 alt="Soutenir"
                             />
                         </button>
+                    </div>
+                    <div
+                        class="stream-host-panel"
+                        id="stream-host-panel"
+                        hidden
+                    >
+                        <div class="stream-host-panel-header">
+                            <div>
+                                <p class="stream-host-panel-eyebrow">
+                                    Studio Live
+                                </p>
+                                <h3>Panel administrateur</h3>
+                            </div>
+                            <span
+                                class="stream-host-panel-status"
+                                id="stream-host-panel-status"
+                                >Live actif</span
+                            >
+                        </div>
+                        <div
+                            class="stream-host-panel-grid"
+                            id="stream-host-panel-grid"
+                        ></div>
+                        <div
+                            class="stream-host-panel-drawer"
+                            id="stream-host-panel-drawer"
+                            hidden
+                        ></div>
                     </div>
                 </div>
             </div>
@@ -381,6 +416,7 @@
         <script src="js/monetization-ui.js?v=20260319-1"></script>
         <script src="js/ux-enhancements.js"></script>
         <script src="js/stream-enhancements.js?v=20260203-1"></script>
+        <script src="js/xera-platform-bridge.js?v=20260424-1" defer></script>
         <!-- React runtime pour rendu temps réel du chat -->
         <script
             src="https://unpkg.com/react@18/umd/react.production.min.js"
@@ -392,7 +428,8 @@
             crossorigin
             defer
         ></script>
-        <script src="js/react-live-chat.js" defer></script>
+        <script src="js/xera-react-core.js?v=20260424-1" defer></script>
+        <script src="js/react-live-chat.js?v=20260424-1" defer></script>
         <script src="js/streaming.js?v=20260302-1"></script>
         <script src="js/stream-page.js?v=20260302-1"></script>
     </body>

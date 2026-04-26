@@ -1,36 +1,40 @@
 (function () {
+    const ReactCore = window.XeraReactCore;
+    const Services = window.XeraAppServices || {};
+
     function canUseReact() {
-        return !!(window.React && window.ReactDOM && window.ReactDOM.createRoot);
+        if (ReactCore?.canUseReact) {
+            return ReactCore.canUseReact();
+        }
+        return Boolean(
+            window.React &&
+                window.ReactDOM &&
+                typeof window.ReactDOM.createRoot === "function",
+        );
     }
 
     function withCacheBust(url, version) {
-        if (!url) return url;
-        if (typeof url !== "string") return url;
-        if (url.startsWith("data:")) return url;
+        if (ReactCore?.withCacheBust) {
+            return ReactCore.withCacheBust(url, version);
+        }
+        if (!url || typeof url !== "string" || url.startsWith("data:")) {
+            return url;
+        }
         const joiner = url.includes("?") ? "&" : "?";
         return `${url}${joiner}v=${encodeURIComponent(version || Date.now())}`;
     }
 
     function getDiscoverUsers() {
-        const list = Array.isArray(window.allUsers) ? window.allUsers : [];
-        if (typeof window.sortUsersByLatestRecency === "function") {
-            try {
-                return window.sortUsersByLatestRecency([...list]);
-            } catch (e) {
-                return [...list];
-            }
+        if (Services.profiles?.getDiscoverUsers) {
+            return Services.profiles.getDiscoverUsers();
         }
-        return [...list];
+        return Array.isArray(window.allUsers) ? [...window.allUsers] : [];
     }
 
     function renderCardHtml(user) {
-        if (!user || !user.id) return "";
-        if (typeof window.renderUserCard === "function") {
-            try {
-                return window.renderUserCard(user.id);
-            } catch (e) {
-                return "";
-            }
+        if (!user?.id) return "";
+        if (Services.profiles?.renderUserCard) {
+            return Services.profiles.renderUserCard(user.id);
         }
         return "";
     }
@@ -38,69 +42,70 @@
     function DiscoverGridIsland(props) {
         const React = window.React;
         const [limit, setLimit] = React.useState(props.initialLimit || 18);
-
         const users = props.users;
         const total = users.length;
 
         React.useEffect(() => {
-            if (limit >= total) return;
-            const next = () => setLimit((l) => Math.min(total, l + 24));
+            if (limit >= total) return undefined;
 
-            let handle = null;
+            const revealMore = () => {
+                setLimit((previousLimit) => Math.min(total, previousLimit + 24));
+            };
+
             if (typeof requestIdleCallback === "function") {
-                handle = requestIdleCallback(next, { timeout: 1200 });
+                const idleHandle = requestIdleCallback(revealMore, {
+                    timeout: 1200,
+                });
                 return () => {
                     try {
-                        cancelIdleCallback(handle);
-                    } catch (e) {
+                        cancelIdleCallback(idleHandle);
+                    } catch (error) {
                         /* ignore */
                     }
                 };
             }
 
-            const t = setTimeout(next, 150);
-            return () => clearTimeout(t);
+            const timerId = window.setTimeout(revealMore, 150);
+            return () => window.clearTimeout(timerId);
         }, [limit, total]);
 
         return React.createElement(
             React.Fragment,
             null,
-            users.slice(0, limit).map((u) =>
+            users.slice(0, limit).map((user) =>
                 React.createElement("div", {
-                    key: u.id,
-                    dangerouslySetInnerHTML: { __html: renderCardHtml(u) },
+                    key: user.id,
+                    dangerouslySetInnerHTML: {
+                        __html: renderCardHtml(user),
+                    },
                 }),
             ),
         );
     }
 
     function mountDiscover(gridEl) {
-        if (!canUseReact()) return false;
-        if (!gridEl) return false;
+        if (!canUseReact() || !gridEl) return false;
 
-        const React = window.React;
         const users = getDiscoverUsers();
-
-        try {
-            if (gridEl.__xeraReactRoot && typeof gridEl.__xeraReactRoot.unmount === "function") {
-                gridEl.__xeraReactRoot.unmount();
-            }
-        } catch (e) {
-            /* ignore */
+        if (ReactCore?.mountIsland) {
+            return ReactCore.mountIsland(
+                gridEl,
+                (React) =>
+                    React.createElement(DiscoverGridIsland, {
+                        users,
+                    }),
+                {
+                    captureMarkup: true,
+                    name: "discoverGrid",
+                },
+            );
         }
 
         const root = window.ReactDOM.createRoot(gridEl);
         gridEl.__xeraReactRoot = root;
-
-        root.render(React.createElement(DiscoverGridIsland, { users }));
+        root.render(window.React.createElement(DiscoverGridIsland, { users }));
         return true;
     }
-
-    // Public API used by app-supabase.js
-    window.renderDiscoverGridReact = function (gridEl) {
-        const el = gridEl || document.querySelector(".discover-grid");
-        return mountDiscover(el);
-    };
 
     function ProfileIsland(props) {
         const React = window.React;
@@ -125,29 +130,31 @@
             let canceled = false;
             let idleHandle = null;
             let timerHandle = null;
+
             (async () => {
                 try {
-                    if (typeof window.renderProfileTimeline !== "function") {
+                    if (!Services.profiles?.renderProfileTimeline) {
                         setIsLoading(false);
                         return;
                     }
 
-                    // Defer heavy HTML building to idle time to keep PWA responsive.
                     await new Promise((resolve) => {
                         if (typeof requestIdleCallback === "function") {
-                            idleHandle = requestIdleCallback(
-                                () => resolve(),
-                                { timeout: 900 },
-                            );
-                        } else {
-                            timerHandle = setTimeout(resolve, 40);
+                            idleHandle = requestIdleCallback(resolve, {
+                                timeout: 900,
+                            });
+                            return;
                         }
+                        timerHandle = window.setTimeout(resolve, 40);
                     });
 
-                    const html = await window.renderProfileTimeline(props.userId);
+                    const html = await Services.profiles.renderProfileTimeline(
+                        props.userId,
+                    );
+
                     if (canceled) return;
                     setFullHtml(html || "");
-                } catch (e) {
+                } catch (error) {
                     if (canceled) return;
                     setFullHtml("");
                 } finally {
@@ -158,21 +165,18 @@
                     }
                 }
             })();
+
             return () => {
                 canceled = true;
                 if (idleHandle && typeof cancelIdleCallback === "function") {
                     try {
                         cancelIdleCallback(idleHandle);
-                    } catch (e) {
+                    } catch (error) {
                         /* ignore */
                     }
                 }
                 if (timerHandle) {
-                    try {
-                        clearTimeout(timerHandle);
-                    } catch (e) {
-                        /* ignore */
-                    }
+                    window.clearTimeout(timerHandle);
                 }
             };
         }, [props.userId]);
@@ -190,11 +194,13 @@
                 ? React.createElement("img", {
                       src: withCacheBust(safeBanner, version),
                       className: "profile-banner",
-                      alt: user?.name ? `Bannière de ${user.name}` : "Bannière",
-                      onError: (e) => {
+                      alt: user?.name ? `Banniere de ${user.name}` : "Banniere",
+                      onError: (event) => {
                           try {
-                              e.currentTarget.style.display = "none";
-                          } catch (err) {}
+                              event.currentTarget.style.display = "none";
+                          } catch (error) {
+                              /* ignore */
+                          }
                       },
                   })
                 : null,
@@ -214,79 +220,114 @@
                         style: { cursor: "pointer" },
                     }),
                 ),
-                React.createElement(
-                    "h2",
-                    {
-                        dangerouslySetInnerHTML: {
-                            __html:
-                                typeof window.renderUsernameForProfile ===
-                                "function"
-                                    ? window.renderUsernameForProfile(
-                                          user?.name || "Utilisateur",
-                                          user?.id,
-                                      )
-                                    : user?.name || "Utilisateur",
-                        },
+                React.createElement("h2", {
+                    dangerouslySetInnerHTML: {
+                        __html: Services.profiles?.renderProfileUsername
+                            ? Services.profiles.renderProfileUsername(
+                                  user?.name || "Utilisateur",
+                                  user?.id,
+                              )
+                            : user?.name || "Utilisateur",
                     },
-                    null,
-                ),
+                }),
                 user?.title
                     ? React.createElement(
                           "p",
-                          { style: { color: "var(--text-secondary)" } },
+                          {
+                              style: { color: "var(--text-secondary)" },
+                          },
                           React.createElement("strong", null, user.title),
                       )
                     : null,
                 isLoading
-                    ? React.createElement(
-                          "div",
-                          {
-                              className: "loading-state-container profile-skeleton",
-                              role: "status",
-                              "aria-busy": "true",
-                              "aria-live": "polite",
-                          },
-                          null,
-                      )
+                    ? React.createElement("div", {
+                          className:
+                              "loading-state-container profile-skeleton",
+                          role: "status",
+                          "aria-busy": "true",
+                          "aria-live": "polite",
+                      })
                     : null,
             ),
         );
     }
 
     function mountProfile(containerEl, userId, onRenderedFull) {
-        if (!canUseReact()) return false;
-        if (!containerEl) return false;
-        if (!userId) return false;
+        if (!canUseReact() || !containerEl || !userId) return false;
 
-        const React = window.React;
-        const user = typeof window.getUser === "function" ? window.getUser(userId) : null;
+        const user = Services.profiles?.getCachedUser
+            ? Services.profiles.getCachedUser(userId)
+            : null;
         if (!user) return false;
 
-        try {
-            if (
-                containerEl.__xeraProfileReactRoot &&
-                typeof containerEl.__xeraProfileReactRoot.unmount === "function"
-            ) {
-                containerEl.__xeraProfileReactRoot.unmount();
-            }
-        } catch (e) {
-            /* ignore */
+        if (ReactCore?.mountIsland) {
+            return ReactCore.mountIsland(
+                containerEl,
+                (React) =>
+                    React.createElement(ProfileIsland, {
+                        onRenderedFull,
+                        user,
+                        userId,
+                    }),
+                {
+                    captureMarkup: true,
+                    name: "profile",
+                },
+            );
         }
 
         const root = window.ReactDOM.createRoot(containerEl);
         containerEl.__xeraProfileReactRoot = root;
         root.render(
-            React.createElement(ProfileIsland, {
-                userId,
-                user,
+            window.React.createElement(ProfileIsland, {
                 onRenderedFull,
+                user,
+                userId,
             }),
         );
         return true;
     }
 
-    window.renderProfileReact = function (containerEl, userId, onRenderedFull) {
-        const el = containerEl || document.querySelector(".profile-container");
-        return mountProfile(el, userId, onRenderedFull);
+    window.renderDiscoverGridReact = function (gridEl) {
+        const element = gridEl || document.querySelector(".discover-grid");
+        return mountDiscover(element);
     };
+
+    window.renderProfileReact = function (containerEl, userId, onRenderedFull) {
+        const element =
+            containerEl || document.querySelector(".profile-container");
+        return mountProfile(element, userId, onRenderedFull);
+    };
+
+    if (ReactCore?.registerIsland) {
+        ReactCore.registerIsland("renderDiscover", () =>
+            window.renderDiscoverGridReact(),
+        );
+        ReactCore.registerIsland("renderProfile", function (
+            containerEl,
+            userId,
+            onRenderedFull,
+        ) {
+            return window.renderProfileReact(
+                containerEl,
+                userId,
+                onRenderedFull,
+            );
+        });
+    } else {
+        window.ReactIslands = window.ReactIslands || {};
+        window.ReactIslands.renderDiscover = () =>
+            window.renderDiscoverGridReact();
+        window.ReactIslands.renderProfile = function (
+            containerEl,
+            userId,
+            onRenderedFull,
+        ) {
+            return window.renderProfileReact(
+                containerEl,
+                userId,
+                onRenderedFull,
+            );
+        };
+    }
 })();

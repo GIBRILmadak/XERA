@@ -233,20 +233,28 @@ function subscribeToNotifications() {
 // Gérer une nouvelle notification
 function handleNewNotification(notification) {
     const normalized = normalizeNotification(notification);
+    const shouldQuietLiveChat = shouldQuietVisibleLiveChatNotification(normalized);
+    if (shouldQuietLiveChat) {
+        normalized.read = true;
+    }
     notifications.unshift(normalized);
     hydrateNotificationMetadata([normalized]).catch(() => {});
 
-    // Afficher une notification toast
-    showNotificationToast(normalized);
+    if (!shouldQuietLiveChat) {
+        // Afficher une notification toast
+        showNotificationToast(normalized);
 
-    // Afficher une notification navigateur si permis
-    showBrowserNotification(normalized);
+        // Afficher une notification navigateur si permis
+        showBrowserNotification(normalized);
+
+        // Jouer un son (optionnel)
+        playNotificationSound(normalized.type);
+    } else {
+        void markNotificationAsReadSilently(normalized.id);
+    }
 
     // Mettre à jour le badge
     updateNotificationBadge();
-
-    // Jouer un son (optionnel)
-    playNotificationSound(normalized.type);
 }
 
 // Afficher un toast de notification
@@ -295,6 +303,7 @@ function getNotificationIcon(type) {
         collaboration: "🤝",
         like: "❤️",
         comment: "💬",
+        live_chat: "💬",
         mention: "@",
         achievement: "🏆",
     };
@@ -315,10 +324,51 @@ function getNotificationTitle(notification) {
         collaboration: "Demande de collaboration",
         like: "Nouveau like",
         comment: "Nouveau commentaire",
+        live_chat: "Nouveau message du live",
         mention: "Mention",
         achievement: "Succès débloqué",
     };
     return titles[notification.type] || "Notification";
+}
+
+function getCurrentPageStreamId() {
+    try {
+        const currentUrl = new URL(window.location.href);
+        return currentUrl.searchParams.get("id");
+    } catch (error) {
+        return null;
+    }
+}
+
+function shouldQuietVisibleLiveChatNotification(notification) {
+    if (notification?.type !== "live_chat") return false;
+    if (typeof document !== "undefined" && document.hidden) return false;
+
+    const pathname = String(window.location.pathname || "");
+    if (!pathname.endsWith("/stream.html") && !pathname.endsWith("stream.html")) {
+        return false;
+    }
+
+    const notificationStreamId = extractStreamId(notification?.link || "");
+    const currentStreamId = getCurrentPageStreamId();
+    return Boolean(
+        notificationStreamId &&
+            currentStreamId &&
+            notificationStreamId === currentStreamId,
+    );
+}
+
+async function markNotificationAsReadSilently(notificationId) {
+    if (!notificationId || !currentUser) return;
+    try {
+        await supabase
+            .from("notifications")
+            .update({ read: true })
+            .eq("id", notificationId)
+            .eq("user_id", currentUser.id);
+    } catch (error) {
+        console.warn("Impossible de marquer la notification comme lue", error);
+    }
 }
 
 // Demander la permission de notifications navigateur (non bloquant)

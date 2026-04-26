@@ -396,6 +396,7 @@ function buildPushPayload(notification) {
         new_arc: "Nouvel ARC",
         stream: "Notification live",
         live_start: "Live en cours",
+        live_chat: "Message du live",
         collaboration: "Demande de collaboration",
         like: "Nouveau like",
         comment: "Nouveau commentaire",
