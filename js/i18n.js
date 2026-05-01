@@ -38,7 +38,7 @@
             heroFootnote:
                 "Trimmed to the essentials: Project creation → update logging → dashboard.",
             discoverTitle: "In motion",
-            discoverSub: "Tap to dive into a trajectory.",
+            discoverSub: "Live trajectories, proof first.",
             searchPlaceholder: "Search creators or projects",
         },
         fr: {
@@ -61,7 +61,7 @@
             heroFootnote:
                 "Essentiels : création projet → mise à jour → dashboard.",
             discoverTitle: "En mouvement",
-            discoverSub: "Cliquez pour plonger dans une trajectoire.",
+            discoverSub: "Trajectoires en direct, preuves d'abord.",
             searchPlaceholder: "Recherchez des créateurs ou des projets",
         },
     };

@@ -6809,19 +6809,10 @@ window.toggleDiscoverFilter = function (filter) {
     window.discoverFilter = filter;
 
     // Update UI buttons
-    document.querySelectorAll(".filter-btn").forEach((btn) => {
-        // Reset styles
-        btn.classList.toggle("active", btn.dataset.filter === filter);
-
-        if (btn.dataset.filter === filter) {
-            btn.style.color = "var(--text-primary)";
-            btn.style.borderBottomColor = "var(--accent-color)";
-            btn.style.opacity = "1";
-        } else {
-            btn.style.color = "var(--text-secondary)";
-            btn.style.borderBottomColor = "transparent";
-            btn.style.opacity = "0.7";
-        }
+    document.querySelectorAll(".discover-filter .filter-btn").forEach((btn) => {
+        const isActive = btn.dataset.filter === filter;
+        btn.classList.toggle("active", isActive);
+        btn.setAttribute("aria-pressed", isActive ? "true" : "false");
     });
 
     renderDiscoverGrid();
@@ -7210,6 +7201,13 @@ function buildMoodDiscoverMix(
     });
 
     scored.sort((a, b) => b.score - a.score);
+    scored.forEach((entry, index) => {
+        const isPreferenceAligned =
+            (entry.preferenceScore || 0) > IMMERSIVE_PREF_ALIGNMENT_THRESHOLD;
+        const isTopAlgorithmPick = index < Math.min(3, scored.length);
+        entry.item.__discoverPreferred =
+            isPreferenceAligned || isTopAlgorithmPick;
+    });
     const interleaved = interleaveDiscoverByCreator(scored);
     return interleaved.map((entry) => entry.item);
 }
@@ -7219,6 +7217,7 @@ function renderUserCard(
     isFollowing = false,
     isEncouraged = false,
     latestContentOverride = null,
+    layoutOptions = {},
 ) {
     const user = getUser(userId);
     if (!user) return "";
@@ -7234,6 +7233,18 @@ function renderUserCard(
             : dominantState === "failure"
               ? "#ef4444"
               : "#6366f1";
+    const stateClass =
+        dominantState === "success"
+            ? "is-success"
+            : dominantState === "failure"
+              ? "is-failure"
+              : "is-paused";
+    const stateLabel =
+        dominantState === "success"
+            ? "Victoire"
+            : dominantState === "failure"
+              ? "Bloqué"
+              : "Pause";
 
     const badgesHtml = renderUserBadges(userId);
     const monetizationBadgeHtml =
@@ -7277,7 +7288,7 @@ function renderUserCard(
     if (hasMedia) {
         if (latestContent.type === "video") {
             mediaHtml = `
-                <div class="card-media-wrap">
+                <div class="card-media-wrap card-media-wrap--editorial">
                     <video id="video-${userId}" class="card-media" src="${primaryMediaUrl}" muted playsinline webkit-playsinline autoplay preload="metadata" tabindex="-1" data-user-id="${userId}" data-content-id="${latestContent.contentId}" disablePictureInPicture></video>
                     <div class="video-fallback">
                         <img src="icons/play.svg" alt="Play" width="40" height="40">
@@ -7311,7 +7322,7 @@ function renderUserCard(
                     )
                     .join("")}</div>`;
                 mediaHtml = `
-                    <div class="card-media-wrap has-multi-media">
+                    <div class="card-media-wrap card-media-wrap--editorial has-multi-media">
                         <div class="xera-carousel" data-carousel>
                             <div class="xera-carousel-track">${slides}</div>
                             <button type="button" class="xera-carousel-arrow xera-carousel-arrow--prev" aria-label="Image précédente">&lsaquo;</button>
@@ -7333,7 +7344,7 @@ function renderUserCard(
                 `;
             } else {
                 mediaHtml = `
-                    <div class="card-media-wrap">
+                    <div class="card-media-wrap card-media-wrap--editorial">
                         <img class="card-media" src="${primaryMediaUrl}" alt="${latestContent.title || "Preview"}" loading="lazy" decoding="async" data-content-id="${latestContent.contentId}">
                         ${collabCornerHtml}
                         ${supportOverlayHtml}
@@ -7374,21 +7385,24 @@ function renderUserCard(
     }
 
     // Déterminer la classe CSS selon le type de média pour l'adaptation
+    const verifiedClass = isVerifiedUser ? " verified-card" : "";
+    const mediaTypeClass = latestContent?.type || "text";
+    const preferredClass = layoutOptions.isPreferred
+        ? " editorial-card--preferred"
+        : "";
     const cardClass = hasMedia
-        ? `user-card has-media ${latestContent.type}`
-        : `user-card ${isTextContent ? "text-card" : ""}${
-              isVerifiedUser ? " verified-card" : ""
-          }`;
+        ? `user-card editorial-card has-media ${mediaTypeClass}${verifiedClass}${preferredClass} editorial-card--${mediaTypeClass} editorial-card--${dominantState}`
+        : `user-card editorial-card ${isTextContent ? "text-card" : ""}${verifiedClass}${preferredClass} editorial-card--text editorial-card--${dominantState}`;
 
     // Ajout information ARC
     let arcInfo = "";
     if (latestContent && latestContent.arc) {
         arcInfo = `
-            <div class="card-arc-info" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.3rem;">
+            <div class="card-arc-info">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                 </svg>
-                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">
+                <span>
                     ${latestContent.arc.title}
                 </span>
             </div>
@@ -7440,12 +7454,12 @@ function renderUserCard(
 
     // User Info (Name, Avatar, Subscribe) - Moved to bottom
     const userInfoHtml = `
-        <div class="card-user-bottom" style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.05);">
-            <button class="profile-link" onclick="event.stopPropagation(); handleProfileClick('${userId}', this)">
-                <img src="${user.avatar || "https://placehold.co/40"}" class="card-avatar" style="width: 32px; height: 32px;" loading="lazy" decoding="async">
-                <div class="profile-link-text" style="flex: 1; min-width: 0;">
-                    <h3 class="discover-user-name" style="margin:0; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${renderUsernameWithBadge(user.name, user.id)}${monetizationBadgeHtml}</h3>
-                    <div style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${user.title || ""}</div>
+        <div class="card-user-bottom">
+            <button class="profile-link card-profile-link" onclick="event.stopPropagation(); handleProfileClick('${userId}', this)">
+                <img src="${user.avatar || "https://placehold.co/40"}" class="card-avatar" loading="lazy" decoding="async">
+                <div class="profile-link-text">
+                    <h3 class="discover-user-name">${renderUsernameWithBadge(user.name, user.id)}${monetizationBadgeHtml}</h3>
+                    <div class="card-user-title">${user.title || ""}</div>
                 </div>
             </button>
             ${collabAvatarsHtml}
@@ -7528,23 +7542,26 @@ function renderUserCard(
             : "";
 
     return `
-        <div class="${cardClass}" data-user="${userId}" data-content-id="${latestContent.contentId}" data-tags="${tagDataset}" onclick="openImmersive('${userId}', '${latestContent.contentId}')">
+        <div class="${cardClass}" style="--state-color: ${stateColor};" data-user="${userId}" data-content-id="${latestContent.contentId}" data-tags="${tagDataset}" onclick="openImmersive('${userId}', '${latestContent.contentId}')">
             ${mediaHtml}
             <div class="card-content">
                 ${arcInfo}
                 ${isAnnouncement ? '<span class="announcement-chip">Annonce</span>' : ""}
-                <div class="card-status" style="border-color: ${stateColor}20; color: ${stateColor};">
-                    ${dayBadge}
+                <div class="card-status card-status--editorial ${stateClass}" style="--state-color: ${stateColor};">
+                    <div class="status-meta-row">
+                        <span class="status-pill">${stateLabel}</span>
+                        ${dayBadge}
+                    </div>
                     <span class="status-title">${latestContent ? latestContent.title : "Aucune activité"}</span>
                 </div>
                 
                 ${textHtml}
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
-                    <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                <div class="card-action-row">
+                    <div class="card-badge-row">
                         ${badgesHtml}
                         ${supportInlineHtml}
                     </div>
-                    <button class="${courageClass}" data-content-id="${latestContent.contentId}" onclick="event.stopPropagation(); toggleCourage('${latestContent.contentId}', this)">
+                    <button class="${courageClass}" data-content-id="${latestContent.contentId}" onclick="event.stopPropagation(); toggleCourage('${latestContent.contentId}', this)" aria-label="Encourager ce contenu">
                         <img src="${courageIcon}" width="16" height="16">
                         <span class="courage-count" data-count="${Number(latestContent.encouragementsCount) || 0}" title="${(Number(latestContent.encouragementsCount) || 0).toLocaleString("fr-FR")}">${formatCompactCount(latestContent.encouragementsCount || 0)}</span>
                     </button>
@@ -7881,7 +7898,7 @@ async function getLiveStreamsForDiscover() {
     }
 }
 
-function renderLiveStreamCard(stream) {
+function renderLiveStreamCard(stream, layoutOptions = {}) {
     if (!document.getElementById("card-stats-style")) {
         const statsStyles = `
             <style>
@@ -7966,7 +7983,7 @@ function renderLiveStreamCard(stream) {
 
     const mediaHtml = thumbnail
         ? `
-            <div class="card-media-wrap">
+            <div class="card-media-wrap card-media-wrap--editorial">
                 <img class="card-media" src="${thumbnail}" alt="${title}" loading="lazy" decoding="async">
                 <div class="card-stats-overlay">
                     <div class="stat-pill">
@@ -7977,7 +7994,7 @@ function renderLiveStreamCard(stream) {
             </div>
         `
         : `
-            <div class="card-media-wrap">
+            <div class="card-media-wrap card-media-wrap--editorial">
                 <div class="video-fallback" style="opacity:1;">
                     <img src="icons/live.svg" alt="Live" width="36" height="36">
                     <span>Live en cours</span>
@@ -7992,19 +8009,22 @@ function renderLiveStreamCard(stream) {
         `;
 
     return `
-        <div class="user-card has-media live" data-stream="${stream.id}" onclick="window.location.href='stream.html?id=${stream.id}&title=${encodeURIComponent(title)}&host=${stream.user_id}'">
+        <div class="user-card editorial-card has-media live editorial-card--live${layoutOptions.isPreferred ? " editorial-card--preferred" : ""}" style="--state-color: #ef4444;" data-stream="${stream.id}" onclick="window.location.href='stream.html?id=${stream.id}&title=${encodeURIComponent(title)}&host=${stream.user_id}'">
             ${mediaHtml}
             <div class="card-content">
-                <div class="card-status" style="border-color: #ef444420; color: #ef4444;">
-                    <span class="status-title">🔴 En direct • ${title}</span>
+                <div class="card-status card-status--editorial is-live" style="--state-color: #ef4444;">
+                    <div class="status-meta-row">
+                        <span class="status-pill">En direct</span>
+                    </div>
+                    <span class="status-title">${title}</span>
                 </div>
                 ${viewerPill}
-                <div style="font-size: 0.85rem; color: var(--text-secondary);">${description}</div>
-                <div class="card-user-bottom" style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.05);">
-                    <img src="${hostAvatar}" class="card-avatar" style="width: 32px; height: 32px;" loading="lazy" decoding="async">
-                    <div class="profile-link-text" style="flex: 1; min-width: 0;">
-                        <h3 class="discover-user-name" style="margin:0; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${hostNameHtml}</h3>
-                        <div style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Streamer</div>
+                <div class="card-description">${description}</div>
+                <div class="card-user-bottom">
+                    <img src="${hostAvatar}" class="card-avatar" loading="lazy" decoding="async">
+                    <div class="profile-link-text">
+                        <h3 class="discover-user-name">${hostNameHtml}</h3>
+                        <div class="card-user-title">Streamer</div>
                     </div>
                     <button class="btn-follow-card" onclick="event.stopPropagation(); window.location.href='stream.html?id=${stream.id}&title=${encodeURIComponent(title)}&host=${stream.user_id}'" title="Rejoindre le live" style="
                         background: transparent; 
@@ -8075,6 +8095,68 @@ function createDiscoverElement(html, key, contentId, options = {}) {
     return node;
 }
 
+function hashDiscoverLayoutSeed(value) {
+    const input = String(value || "discover");
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i += 1) {
+        hash ^= input.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+}
+
+function nextDiscoverLayoutRandom(seed) {
+    let nextSeed = seed >>> 0;
+    nextSeed ^= nextSeed << 13;
+    nextSeed ^= nextSeed >>> 17;
+    nextSeed ^= nextSeed << 5;
+    return {
+        seed: nextSeed >>> 0,
+        value: (nextSeed >>> 0) / 4294967295,
+    };
+}
+
+function chooseDiscoverRowSize(remaining, seed) {
+    if (remaining <= 4) return { rowSize: remaining, seed };
+    if (remaining === 5 || remaining === 6) return { rowSize: 3, seed };
+    if (remaining === 8) return { rowSize: 4, seed };
+
+    const candidates = [3, 4].filter((size) => remaining - size !== 1);
+    const random = nextDiscoverLayoutRandom(seed);
+    return {
+        rowSize: candidates[random.value >= 0.5 ? candidates.length - 1 : 0],
+        seed: random.seed,
+    };
+}
+
+function assignDiscoverRowLayout(renderedItems) {
+    if (!Array.isArray(renderedItems) || renderedItems.length === 0) return;
+
+    let seed = hashDiscoverLayoutSeed(
+        renderedItems.map((item) => item.key).join("|"),
+    );
+    let index = 0;
+    let rowIndex = 0;
+
+    while (index < renderedItems.length) {
+        const remaining = renderedItems.length - index;
+        const choice = chooseDiscoverRowSize(remaining, seed);
+        const rowSize = Math.max(1, Math.min(choice.rowSize, remaining));
+        seed = choice.seed;
+
+        for (let position = 0; position < rowSize; position += 1) {
+            const item = renderedItems[index + position];
+            if (!item) continue;
+            item.rowSize = rowSize;
+            item.rowPosition = position;
+            item.rowIndex = rowIndex;
+        }
+
+        index += rowSize;
+        rowIndex += 1;
+    }
+}
+
 function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
     const existingMap = new Map();
     Array.from(grid.children).forEach((child) => {
@@ -8086,35 +8168,47 @@ function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
     });
 
     const fragment = document.createDocumentFragment();
-    renderedItems.forEach(({ key, html, contentId, type }) => {
-        if (!key || !html) return;
-        const existing = existingMap.get(key);
-        const shouldReplace =
-            !existing ||
-            (typeof contentId === "string" &&
-                existing.dataset.contentId &&
-                existing.dataset.contentId !== contentId) ||
-            type === "live"; // live cards change often (viewers, status)
+    renderedItems.forEach(
+        ({ key, html, contentId, type, rowSize, rowPosition }) => {
+            if (!key || !html) return;
+            const existing = existingMap.get(key);
+            const shouldReplace =
+                !existing ||
+                (typeof contentId === "string" &&
+                    existing.dataset.contentId &&
+                    existing.dataset.contentId !== contentId) ||
+                type === "live"; // live cards change often (viewers, status)
 
-        const node = shouldReplace
-            ? createDiscoverElement(html, key, contentId, {
-                  markAsNew: !existing,
-              })
-            : existing;
+            const node = shouldReplace
+                ? createDiscoverElement(html, key, contentId, {
+                      markAsNew: !existing,
+                  })
+                : existing;
 
-        if (
-            existing &&
-            !shouldReplace &&
-            contentId &&
-            !existing.dataset.contentId
-        ) {
-            existing.dataset.contentId = contentId;
-        }
+            if (
+                existing &&
+                !shouldReplace &&
+                contentId &&
+                !existing.dataset.contentId
+            ) {
+                existing.dataset.contentId = contentId;
+            }
 
-        if (node) {
-            fragment.appendChild(node);
-        }
-    });
+            if (node) {
+                node.classList.remove(
+                    "discover-row-size-1",
+                    "discover-row-size-2",
+                    "discover-row-size-3",
+                    "discover-row-size-4",
+                    "discover-row-start",
+                );
+                node.classList.add(`discover-row-size-${rowSize || 4}`);
+                if (rowPosition === 0)
+                    node.classList.add("discover-row-start");
+                fragment.appendChild(node);
+            }
+        },
+    );
 
     grid.replaceChildren(fragment);
     try {
@@ -8277,7 +8371,9 @@ async function renderDiscoverGrid() {
     );
     const renderItem = (item) => {
         if (item.type === "live") {
-            return renderLiveStreamCard(item.stream);
+            return renderLiveStreamCard(item.stream, {
+                isPreferred: Boolean(item.__discoverPreferred),
+            });
         }
         const userId = item.user?.id || item.content?.userId;
         const content = item.content || null;
@@ -8288,7 +8384,9 @@ async function renderDiscoverGrid() {
             : false;
         const respectFilter = currentFilter === "following" ? isFollowed : true;
         if (!respectFilter) return "";
-        return renderUserCard(userId, isFollowed, isEncouraged, content);
+        return renderUserCard(userId, isFollowed, isEncouraged, content, {
+            isPreferred: Boolean(item.__discoverPreferred),
+        });
     };
 
     const renderedItems = [];
@@ -8307,6 +8405,7 @@ async function renderDiscoverGrid() {
     });
 
     if (renderedItems.length > 0) {
+        assignDiscoverRowLayout(renderedItems);
         reconcileDiscoverGrid(grid, renderedItems, waitMessage);
         setupDiscoverVideoInteractions();
         initDiscoverMoodTracking();
