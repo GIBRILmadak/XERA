@@ -11865,14 +11865,23 @@ async function renderProfileIntoContainer(userId) {
 
         // Community Account Visuals
         const user = getUser(userId);
-        if (
-            user &&
-            (user.account_subtype === "community" ||
-                user.accountSubtype === "community")
-        ) {
-            profileContainer.classList.add("is-community");
-        } else {
-            profileContainer.classList.remove("is-community");
+        if (user) {
+            const preferences = getUserProfilePreferences(user);
+            const appearanceClass = getProfileAppearanceClass(preferences);
+            const appearanceStyle = getProfileAppearanceStyle(preferences);
+            
+            // Appliquer les classes et styles de personnalisation
+            profileContainer.className = `container profile-container ${appearanceClass}`;
+            profileContainer.setAttribute("style", appearanceStyle);
+
+            if (
+                user.account_subtype === "community" ||
+                user.accountSubtype === "community"
+            ) {
+                profileContainer.classList.add("is-community");
+            } else {
+                profileContainer.classList.remove("is-community");
+            }
         }
 
         profileContainer.classList.toggle("arc-view", !!window.selectedArcId);
@@ -13753,15 +13762,35 @@ async function openSettings(userId) {
                 }
 
                 if (!reminderSaveResult.success) {
-                    alert(
-                        "Profil enregistre, mais le rappel email n'a pas pu etre sauvegarde: " +
-                            reminderSaveResult.error,
-                    );
+                    if (window.ToastManager) {
+                        ToastManager.warning(
+                            "Profil enregistré",
+                            "Mais le rappel email n'a pas pu être sauvegardé : " + reminderSaveResult.error
+                        );
+                    } else {
+                        alert(
+                            "Profil enregistre, mais le rappel email n'a pas pu etre sauvegarde: " +
+                                reminderSaveResult.error,
+                        );
+                    }
                 } else {
+                    if (window.ToastManager) {
+                        ToastManager.success(
+                            "Succès",
+                            "Vos réglages ont été enregistrés avec succès."
+                        );
+                    }
                     closeSettings();
                 }
             } else {
-                alert("Erreur: " + result.error);
+                if (window.ToastManager) {
+                    ToastManager.error(
+                        "Erreur",
+                        result.error || "Une erreur est survenue lors de l'enregistrement."
+                    );
+                } else {
+                    alert("Erreur: " + result.error);
+                }
             }
 
             btnSave.disabled = false;
