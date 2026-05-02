@@ -11107,13 +11107,9 @@ async function renderProfileTimeline(userId) {
     const verificationCtaHtml = showVerificationCta
         ? `
         <div class="profile-verify-block">
-            <div class="verify-copy">
-                <strong>Envie du badge vérifié ?</strong>
-                <span>Pré-requis créateur : 1000 abonnés (actuel : ${followerCount}).</span>
-            </div>
-            <button class="profile-verify-cta" onclick="window.location.href='subscription-plans.html'">
-                Obtenir une vérification
-                <img src="icons/verify-personal.svg?v=${BADGE_ASSET_VERSION}" alt="Badge" />
+            <button class="profile-verify-cta" onclick="window.location.href='subscription-plans.html'" aria-label="Demander une vérification XERA">
+                <span>Obtenir une vérification</span>
+                <img src="icons/verify-personal.svg?v=${BADGE_ASSET_VERSION}" alt="" aria-hidden="true" />
             </button>
         </div>
         `
@@ -11129,8 +11125,16 @@ async function renderProfileTimeline(userId) {
         accountTypeValue === "community" ||
         accountTypeValue === "enterprise" ||
         accountTypeValue === "company";
-    const engagementStatsHtml = `
-        <div class="follow-section" style="margin-top: 0.5rem;">
+    const profileSignalStatsHtml = `
+        <div class="profile-signal-metrics">
+            <div class="follower-stat">
+                <div class="follower-stat-count" title="${Number(followerCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followerCount)}</div>
+                <div class="follower-stat-label">Abonnés</div>
+            </div>
+            <div class="follower-stat">
+                <div class="follower-stat-count" title="${Number(followingCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followingCount)}</div>
+                <div class="follower-stat-label">Abonnements</div>
+            </div>
             <div class="follower-stat">
                 <div class="follower-stat-count" title="${Number(engagementTotals.totalViews || 0).toLocaleString("fr-FR")}">${formatCompactCount(engagementTotals.totalViews)}</div>
                 <div class="follower-stat-label">Vues totales</div>
@@ -11313,22 +11317,12 @@ async function renderProfileTimeline(userId) {
                     </div>
                 </div>
 
-                <div class="profile-signal-panel">
+                <div class="profile-signal-panel ${isOwnProfile ? "profile-signal-panel--owner" : "profile-signal-panel--viewer"}">
                     <span class="profile-section-kicker">Signaux</span>
                     ${
                         !isOwnProfile
                             ? `
-                        <div class="follow-section">
-                            <div class="follower-stat">
-                                <div class="follower-stat-count" title="${Number(followerCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followerCount)}</div>
-                                <div class="follower-stat-label">Abonnés</div>
-                            </div>
-                            <div class="follower-stat">
-                                <div class="follower-stat-count" title="${Number(followingCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followingCount)}</div>
-                                <div class="follower-stat-label">Abonnements</div>
-                            </div>
-                        </div>
-                        ${engagementStatsHtml}
+                        ${profileSignalStatsHtml}
                         ${progressSnapshotHtml}
                         <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center; justify-content:center;">
                             ${followButtonHtml}
@@ -11338,17 +11332,7 @@ async function renderProfileTimeline(userId) {
                         ${adminInlineHtml}
                     `
                             : `
-                        <div class="follow-section">
-                            <div class="follower-stat">
-                                <div class="follower-stat-count" title="${Number(followerCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followerCount)}</div>
-                                <div class="follower-stat-label">Abonnés</div>
-                            </div>
-                            <div class="follower-stat">
-                                <div class="follower-stat-count" title="${Number(followingCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followingCount)}</div>
-                                <div class="follower-stat-label">Abonnements</div>
-                            </div>
-                        </div>
-                        ${engagementStatsHtml}
+                        ${profileSignalStatsHtml}
                         ${progressSnapshotHtml}
                         ${verificationCtaHtml}
                         <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center;">

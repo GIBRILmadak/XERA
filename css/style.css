@@ -2832,54 +2832,102 @@ html.light-mode .card-status--editorial {
 }
 
 .profile-verify-block {
-    margin: 0.75rem auto 0;
-    padding: 12px 14px;
-    border: 1px solid rgba(14, 165, 233, 0.28);
-    border-radius: 14px;
-    background: rgba(14, 165, 233, 0.08);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     display: flex;
     align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
     justify-content: center;
 }
 
 .profile-verify-block .verify-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    text-align: left;
+    display: none;
 }
 
 .profile-verify-cta {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
+    width: 100%;
+    min-height: 40px;
     border: none;
-    border-radius: 12px;
-    padding: 0.65rem 0.95rem;
-    background: linear-gradient(135deg, #0ea5e9, #6366f1);
+    border-radius: 14px;
+    padding: 0.58rem 0.88rem;
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.24), transparent 34%),
+        linear-gradient(135deg, #10b981 0%, #0ea5e9 46%, #6366f1 100%);
     color: #fff;
-    font-weight: 700;
+    font-weight: 850;
+    font-size: 0.82rem;
+    letter-spacing: 0;
     cursor: pointer;
-    box-shadow: 0 10px 24px rgba(99, 102, 241, 0.3);
+    box-shadow:
+        0 14px 30px rgba(14, 165, 233, 0.22),
+        0 7px 18px rgba(16, 185, 129, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.38),
+        inset 0 -10px 22px rgba(4, 8, 18, 0.22);
     transition:
-        transform 0.15s ease,
-        box-shadow 0.15s ease;
+        transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 0.18s ease,
+        filter 0.18s ease;
+}
+
+.profile-verify-cta::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    z-index: 0;
+    background: linear-gradient(
+        110deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.34) 42%,
+        transparent 60%
+    );
+    transform: translateX(-115%);
+    transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.profile-verify-cta::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    z-index: 0;
+    border-radius: inherit;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    pointer-events: none;
+}
+
+.profile-verify-cta span,
+.profile-verify-cta img {
+    position: relative;
+    z-index: 1;
 }
 
 .profile-verify-cta img {
     width: 18px;
     height: 18px;
+    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.22));
 }
 .profile-verify-cta:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 12px 30px rgba(99, 102, 241, 0.35);
+    filter: saturate(1.08) brightness(1.04);
+    transform: translateY(-2px);
+    box-shadow:
+        0 18px 38px rgba(14, 165, 233, 0.3),
+        0 10px 24px rgba(16, 185, 129, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.44),
+        inset 0 -10px 22px rgba(4, 8, 18, 0.18);
+}
+.profile-verify-cta:hover::before {
+    transform: translateX(115%);
 }
 .profile-verify-cta:active {
-    transform: translateY(0);
+    transform: translateY(0) scale(0.99);
 }
 
 .profile-banner {
@@ -3918,8 +3966,8 @@ html.light-mode .card-status--editorial {
     display: grid;
     grid-template-columns: minmax(0, 1.22fr) minmax(310px, 0.78fr);
     gap: clamp(1rem, 2.2vw, 1.6rem);
-    align-items: end;
-    margin-top: -48px;
+    align-items: stretch;
+    margin-top: clamp(0.95rem, 2vw, 1.25rem);
 }
 
 .profile-identity-panel,
@@ -3996,20 +4044,20 @@ html.light-mode .card-status--editorial {
 .profile-signal-panel {
     display: flex;
     flex-direction: column;
-    gap: 0.72rem;
-    padding: clamp(0.82rem, 1.8vw, 1.08rem);
+    gap: clamp(0.48rem, 1vw, 0.62rem);
+    padding: clamp(0.78rem, 1.6vw, 0.95rem);
     border-radius: 22px;
 }
 
-.profile-signal-panel .follow-section,
+.profile-signal-panel .profile-signal-metrics,
 .profile-signal-panel .profile-progress-snapshot {
     margin: 0;
 }
 
-.profile-signal-panel .follow-section {
+.profile-signal-panel .profile-signal-metrics {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.55rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.42rem;
 }
 
 .profile-signal-panel .follower-stat,
@@ -4019,18 +4067,75 @@ html.light-mode .card-status--editorial {
     border-radius: 16px;
 }
 
+.profile-signal-panel .follower-stat {
+    min-height: 56px;
+    justify-content: center;
+    padding: 0.42rem 0.38rem;
+}
+
 .profile-signal-panel .follower-stat-count {
-    font-size: clamp(1.08rem, 2vw, 1.45rem);
+    font-size: clamp(1rem, 1.5vw, 1.22rem);
+}
+
+.profile-signal-panel .follower-stat-label {
+    font-size: 0.58rem;
+    line-height: 1.15;
+    text-align: center;
 }
 
 .profile-signal-panel .profile-progress-snapshot {
+    padding: 0.34rem;
     max-width: none;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.3rem;
+}
+
+.profile-signal-panel .profile-progress-snapshot .snapshot-item {
+    padding: 0.34rem 0.38rem;
+}
+
+.profile-signal-panel .profile-progress-snapshot .snapshot-label {
+    font-size: 0.62rem;
+    line-height: 1.25;
+}
+
+.profile-signal-panel .profile-progress-snapshot .snapshot-value {
+    font-size: 0.84rem;
 }
 
 .profile-signal-panel .profile-actions {
     justify-content: flex-start !important;
     flex-wrap: wrap;
+    gap: 0.42rem !important;
+    margin-top: 0 !important;
+}
+
+.profile-signal-panel .profile-verify-block {
+    margin-top: 0.06rem;
+}
+
+.profile-signal-panel .profile-actions .btn-add {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+}
+
+.profile-signal-panel .profile-actions .btn-share-profile {
+    min-width: 38px;
+    min-height: 38px;
+    padding: 0.32rem 0.48rem;
+}
+
+.profile-signal-panel .profile-actions .profile-arc-btn {
+    min-height: 38px;
+    padding: 0.42rem 0.72rem !important;
+    font-size: 0.78rem !important;
+}
+
+.profile-signal-panel .profile-actions .settings-badge {
+    min-height: 38px;
+    padding: 0.36rem 0.68rem;
+    font-size: 0.78rem;
 }
 
 .profile-progress-board {
@@ -4271,7 +4376,7 @@ html.light-mode .profile-signal-panel {
 
     .profile-hero-grid {
         gap: 0.72rem;
-        margin-top: -34px;
+        margin-top: 0.72rem;
     }
 
     .profile-identity-panel {
@@ -4305,6 +4410,11 @@ html.light-mode .profile-signal-panel {
     .profile-signal-panel {
         padding: 0.78rem;
         border-radius: 18px;
+    }
+
+    .profile-signal-panel .profile-signal-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem;
     }
 
     .profile-signal-panel .profile-progress-snapshot {
