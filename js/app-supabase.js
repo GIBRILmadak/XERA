@@ -2995,6 +2995,7 @@ function convertSupabaseUser(supabaseUser) {
         banner: supabaseUser.banner,
         bio: supabaseUser.bio || "",
         socialLinks: supabaseUser.social_links || {},
+        profilePreferences: supabaseUser.profile_preferences || {},
         projects: userProjects[supabaseUser.id] || [],
     };
 }
@@ -5106,6 +5107,395 @@ function sanitizeUserMedia(user) {
     return sanitized;
 }
 
+const PROFILE_THEME_PRESETS = {
+    xera: {
+        label: "XERA",
+        accent: "#10b981",
+        secondary: "#f59e0b",
+    },
+    aurora: {
+        label: "Aurora",
+        accent: "#14b8a6",
+        secondary: "#8b5cf6",
+    },
+    ember: {
+        label: "Ember",
+        accent: "#f97316",
+        secondary: "#ef4444",
+    },
+    ocean: {
+        label: "Ocean",
+        accent: "#38bdf8",
+        secondary: "#2563eb",
+    },
+    mono: {
+        label: "Mono",
+        accent: "#e5e7eb",
+        secondary: "#71717a",
+    },
+};
+
+const DEFAULT_PROFILE_PREFERENCES = {
+    appearance: {
+        theme: "xera",
+        accent: "#10b981",
+        secondary: "#f59e0b",
+        layout: "balanced",
+        bannerStyle: "cover",
+        panelStyle: "glass",
+    },
+    privacy: {
+        visibility: "public",
+        discoverable: true,
+        showStats: true,
+        showSocials: true,
+        showActivity: true,
+        allowMessages: "everyone",
+    },
+};
+
+function sanitizeHexColor(value, fallback = "#10b981") {
+    const raw = String(value || "").trim();
+    return /^#[0-9a-f]{6}$/i.test(raw) ? raw.toLowerCase() : fallback;
+}
+
+function hexToRgbString(value, fallback = "#10b981") {
+    const hex = sanitizeHexColor(value, fallback).slice(1);
+    const parts = [0, 2, 4].map((index) =>
+        parseInt(hex.slice(index, index + 2), 16),
+    );
+    return parts.join(", ");
+}
+
+function normalizeProfilePreferences(rawPreferences) {
+    let raw = rawPreferences || {};
+    if (typeof raw === "string") {
+        raw = safeJsonParse(raw, {});
+    }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        raw = {};
+    }
+
+    const rawAppearance = raw.appearance || {};
+    const theme = PROFILE_THEME_PRESETS[rawAppearance.theme]
+        ? rawAppearance.theme
+        : DEFAULT_PROFILE_PREFERENCES.appearance.theme;
+    const preset = PROFILE_THEME_PRESETS[theme] || PROFILE_THEME_PRESETS.xera;
+    const layout = ["balanced", "showcase", "compact"].includes(
+        rawAppearance.layout,
+    )
+        ? rawAppearance.layout
+        : DEFAULT_PROFILE_PREFERENCES.appearance.layout;
+    const bannerStyle = ["cover", "contain", "soft"].includes(
+        rawAppearance.bannerStyle,
+    )
+        ? rawAppearance.bannerStyle
+        : DEFAULT_PROFILE_PREFERENCES.appearance.bannerStyle;
+    const panelStyle = ["glass", "solid", "minimal"].includes(
+        rawAppearance.panelStyle,
+    )
+        ? rawAppearance.panelStyle
+        : DEFAULT_PROFILE_PREFERENCES.appearance.panelStyle;
+
+    const rawPrivacy = raw.privacy || {};
+    const visibility = ["public", "followers", "private"].includes(
+        rawPrivacy.visibility,
+    )
+        ? rawPrivacy.visibility
+        : DEFAULT_PROFILE_PREFERENCES.privacy.visibility;
+    const allowMessages = ["everyone", "followers", "none"].includes(
+        rawPrivacy.allowMessages,
+    )
+        ? rawPrivacy.allowMessages
+        : DEFAULT_PROFILE_PREFERENCES.privacy.allowMessages;
+
+    return {
+        appearance: {
+            theme,
+            accent: sanitizeHexColor(rawAppearance.accent, preset.accent),
+            secondary: sanitizeHexColor(
+                rawAppearance.secondary,
+                preset.secondary,
+            ),
+            layout,
+            bannerStyle,
+            panelStyle,
+        },
+        privacy: {
+            visibility,
+            discoverable: rawPrivacy.discoverable !== false,
+            showStats: rawPrivacy.showStats !== false,
+            showSocials: rawPrivacy.showSocials !== false,
+            showActivity: rawPrivacy.showActivity !== false,
+            allowMessages,
+        },
+    };
+}
+
+function getRawProfilePreferences(user) {
+    if (!user) return {};
+    return (
+        user.profile_preferences ||
+        user.profilePreferences ||
+        user.social_links?._profile_preferences ||
+        user.socialLinks?._profile_preferences ||
+        {}
+    );
+}
+
+function getUserProfilePreferences(user) {
+    return normalizeProfilePreferences(getRawProfilePreferences(user));
+}
+
+function getProfileAppearanceClass(preferences) {
+    const appearance =
+        normalizeProfilePreferences(preferences).appearance ||
+        DEFAULT_PROFILE_PREFERENCES.appearance;
+    return [
+        `profile-theme-${appearance.theme}`,
+        `profile-layout-${appearance.layout}`,
+        `profile-banner-${appearance.bannerStyle}`,
+        `profile-panel-${appearance.panelStyle}`,
+    ].join(" ");
+}
+
+function getProfileAppearanceStyle(preferences) {
+    const appearance = normalizeProfilePreferences(preferences).appearance;
+    const accent = sanitizeHexColor(appearance.accent);
+    const secondary = sanitizeHexColor(appearance.secondary, "#f59e0b");
+    return [
+        `--profile-accent:${accent}`,
+        `--profile-accent-rgb:${hexToRgbString(accent)}`,
+        `--profile-accent-2:${secondary}`,
+        `--profile-accent-2-rgb:${hexToRgbString(secondary, "#f59e0b")}`,
+    ].join(";");
+}
+
+function getCheckedSettingValue(name, fallback) {
+    return (
+        document.querySelector(`input[name="${name}"]:checked`)?.value ||
+        fallback
+    );
+}
+
+function collectProfilePreferencesFromSettings() {
+    const current = getUserProfilePreferences(
+        getUser(window.currentUserId || window.currentUser?.id),
+    );
+    return normalizeProfilePreferences({
+        appearance: {
+            theme: getCheckedSettingValue(
+                "setting-profile-theme",
+                current.appearance.theme,
+            ),
+            accent: document.getElementById("setting-profile-accent")?.value,
+            secondary: document.getElementById("setting-profile-secondary")
+                ?.value,
+            layout: getCheckedSettingValue(
+                "setting-profile-layout",
+                current.appearance.layout,
+            ),
+            bannerStyle: getCheckedSettingValue(
+                "setting-profile-banner-style",
+                current.appearance.bannerStyle,
+            ),
+            panelStyle: getCheckedSettingValue(
+                "setting-profile-panel-style",
+                current.appearance.panelStyle,
+            ),
+        },
+        privacy: {
+            visibility: getCheckedSettingValue(
+                "setting-profile-visibility",
+                current.privacy.visibility,
+            ),
+            discoverable:
+                document.getElementById("setting-profile-discoverable")
+                    ?.checked !== false,
+            showStats:
+                document.getElementById("setting-profile-show-stats")
+                    ?.checked !== false,
+            showSocials:
+                document.getElementById("setting-profile-show-socials")
+                    ?.checked !== false,
+            showActivity:
+                document.getElementById("setting-profile-show-activity")
+                    ?.checked !== false,
+            allowMessages:
+                document.getElementById("setting-profile-allow-messages")
+                    ?.value || current.privacy.allowMessages,
+        },
+    });
+}
+
+function initializeProfileCustomizationControls(container) {
+    if (!container) return;
+    const preview = container.querySelector("#profile-customization-preview");
+    const syncPreview = () => {
+        if (!preview) return;
+        const prefs = collectProfilePreferencesFromSettings();
+        preview.className = `profile-customization-preview ${getProfileAppearanceClass(prefs)}`;
+        preview.setAttribute("style", getProfileAppearanceStyle(prefs));
+    };
+
+    container
+        .querySelectorAll(
+            'input[name^="setting-profile-"], #setting-profile-accent, #setting-profile-secondary, #setting-profile-discoverable, #setting-profile-show-stats, #setting-profile-show-socials, #setting-profile-show-activity, #setting-profile-allow-messages',
+        )
+        .forEach((control) => {
+            control.addEventListener("change", () => {
+                if (
+                    control.name === "setting-profile-theme" &&
+                    control.checked
+                ) {
+                    const preset = PROFILE_THEME_PRESETS[control.value];
+                    const accentInput = container.querySelector(
+                        "#setting-profile-accent",
+                    );
+                    const secondaryInput = container.querySelector(
+                        "#setting-profile-secondary",
+                    );
+                    if (preset && accentInput && secondaryInput) {
+                        accentInput.value = preset.accent;
+                        secondaryInput.value = preset.secondary;
+                    }
+                }
+                syncPreview();
+            });
+            control.addEventListener("input", syncPreview);
+        });
+    syncPreview();
+}
+
+function shouldShowProfileToViewerSync(user, viewerId, followedSet = new Set()) {
+    if (!user) return false;
+    if (viewerId && user.id === viewerId) return true;
+    if (typeof isSuperAdmin === "function" && isSuperAdmin()) return true;
+
+    const privacy = getUserProfilePreferences(user).privacy;
+    if (privacy.discoverable === false) return false;
+    if (privacy.visibility === "private") return false;
+    if (privacy.visibility === "followers") {
+        return viewerId ? followedSet.has(user.id) : false;
+    }
+    return true;
+}
+
+async function canViewerAccessProfile(user, viewerId) {
+    if (!user) return false;
+    if (viewerId && user.id === viewerId) return true;
+    if (typeof isSuperAdmin === "function" && isSuperAdmin()) return true;
+
+    const privacy = getUserProfilePreferences(user).privacy;
+    if (privacy.visibility === "public") return true;
+    if (privacy.visibility === "private") return false;
+    if (!viewerId) return false;
+
+    try {
+        return await isFollowing(viewerId, user.id);
+    } catch (error) {
+        console.error("Erreur verification confidentialite profil:", error);
+        return false;
+    }
+}
+
+function canCurrentUserMessageTarget(targetUserId) {
+    const target = getUser(targetUserId);
+    const viewerId = window.currentUserId || window.currentUser?.id || null;
+    if (!target || !viewerId || viewerId === targetUserId) return true;
+    const privacy = getUserProfilePreferences(target).privacy;
+    if (privacy.allowMessages === "none") return false;
+    if (privacy.allowMessages === "followers") {
+        return Boolean(followedUserIdsCache?.has?.(targetUserId));
+    }
+    return true;
+}
+
+async function canCurrentUserMessageTargetAsync(targetUserId) {
+    const target = getUser(targetUserId);
+    const viewerId = window.currentUserId || window.currentUser?.id || null;
+    if (!target || !viewerId || viewerId === targetUserId) return true;
+    const privacy = getUserProfilePreferences(target).privacy;
+    if (privacy.allowMessages === "none") return false;
+    if (privacy.allowMessages === "followers") {
+        try {
+            return await isFollowing(viewerId, targetUserId);
+        } catch (error) {
+            console.error("Erreur confidentialite messages:", error);
+            return false;
+        }
+    }
+    return true;
+}
+
+function renderProfilePrivacyNotice(user, preferences) {
+    const prefs = normalizeProfilePreferences(preferences);
+    const version = encodeURIComponent(
+        user.updated_at || user.updatedAt || Date.now(),
+    );
+    const safeBanner =
+        user.banner &&
+        (user.banner.startsWith("http") || user.banner.startsWith("data:"))
+            ? user.banner
+            : null;
+    const safeAvatar =
+        user.avatar &&
+        (user.avatar.startsWith("http") || user.avatar.startsWith("data:"))
+            ? user.avatar
+            : "https://placehold.co/150";
+    const visibilityLabel =
+        prefs.privacy.visibility === "followers"
+            ? "Reserve aux abonnes"
+            : "Profil prive";
+    const followCtaHtml =
+        prefs.privacy.visibility === "followers" &&
+        window.currentUserId &&
+        window.currentUserId !== user.id
+            ? `<button class="btn-secondary profile-privacy-follow" onclick="toggleFollow('${window.currentUserId}', '${user.id}')">Suivre pour demander l'acces</button>`
+            : "";
+
+    return `
+        <div class="profile-hero profile-hero--glam profile-privacy-locked ${getProfileAppearanceClass(prefs)}" style="${getProfileAppearanceStyle(prefs)}">
+            <div class="profile-hero-glow" aria-hidden="true"></div>
+            ${
+                safeBanner
+                    ? `<div class="profile-banner-frame"><img src="${withCacheBust(safeBanner, version)}" class="profile-banner" alt="Banniere de ${escapeHtml(user.name)}" onerror="this.style.display='none'"></div>`
+                    : `<div class="profile-banner-frame profile-banner-frame--empty"></div>`
+            }
+            <div class="profile-privacy-card">
+                <img src="${withCacheBust(safeAvatar, version)}" class="profile-avatar-img" alt="Avatar de ${escapeHtml(user.name)}">
+                <div class="profile-privacy-copy">
+                    <span class="profile-section-kicker">${visibilityLabel}</span>
+                    <h2>${renderUsernameForProfile(user.name, user.id)}</h2>
+                    <p>Ce profil limite l'acces a ses details publics.</p>
+                    ${followCtaHtml}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderProfileHiddenSection(kind = "activity") {
+    const title =
+        kind === "stats"
+            ? "Signaux masques"
+            : kind === "socials"
+              ? "Liens masques"
+              : "Activite masquee";
+    const message =
+        kind === "stats"
+            ? "Cet utilisateur ne partage pas ses statistiques publiques."
+            : kind === "socials"
+              ? "Cet utilisateur ne partage pas ses liens publics."
+              : "Cet utilisateur garde ses projets et mises a jour hors du profil public.";
+    return `
+        <div class="profile-privacy-muted">
+            <span class="profile-section-kicker">${title}</span>
+            <p>${message}</p>
+        </div>
+    `;
+}
+
 function isAmbassadorUserId(userId) {
     if (!userId) return false;
     const user = getUser(userId) || {};
@@ -6309,7 +6699,7 @@ function renderProfileSocialLinks(userId) {
     };
 
     const socialHtml = Object.entries(socialLinks)
-        .filter(([_, url]) => url)
+        .filter(([platform, url]) => platformLabels[platform] && url)
         .map(([platform, url]) => {
             const label = platformLabels[platform] || platform;
             const iconPath = platformIcons[platform] || "icons/link.svg";
@@ -8612,9 +9002,23 @@ async function renderDiscoverGrid() {
 
     let usersToDisplay = [...allUsers];
     const currentFilter = window.discoverFilter || "all";
+    let followedSet = new Set();
+    if (currentUser) {
+        followedSet = await getFollowedUserIdSet();
+    }
 
     // Tri de base par récence puis mélange pondéré vérifiés/non-vérifiés
-    usersToDisplay = sortUsersByLatestRecency(usersToDisplay);
+    usersToDisplay = sortUsersByLatestRecency(usersToDisplay).filter((user) =>
+        shouldShowProfileToViewerSync(user, currentUser?.id || null, followedSet),
+    );
+    liveStreams = liveStreams.filter((stream) => {
+        const host = getUser(stream.user_id);
+        return shouldShowProfileToViewerSync(
+            host,
+            currentUser?.id || null,
+            followedSet,
+        );
+    });
 
     const discoverArcCards = buildDiscoverArcCardEntries(usersToDisplay);
     const arcIdsForDiscover = discoverArcCards
@@ -8630,9 +9034,7 @@ async function renderDiscoverGrid() {
         .filter(Boolean);
 
     let encouragedContentIds = new Set();
-    let followedSet = new Set();
     if (currentUser) {
-        followedSet = await getFollowedUserIdSet();
         if (contentIds.length > 0) {
             const { data } = await supabase
                 .from("content_encouragements")
@@ -10723,6 +11125,20 @@ async function renderProfileTimeline(userId) {
     const isOwnProfile = userId === currentUserId;
     const isAdminViewer = isSuperAdmin();
     const adminReasonInputId = `profile-admin-reason-${userId}`;
+    const profilePreferences = getUserProfilePreferences(user);
+    const canAccessProfile = await canViewerAccessProfile(user, currentUserId);
+
+    if (!canAccessProfile) {
+        return renderProfilePrivacyNotice(user, profilePreferences);
+    }
+
+    const profilePrivacy = profilePreferences.privacy;
+    const showPublicStats = isOwnProfile || profilePrivacy.showStats !== false;
+    const showPublicSocials =
+        isOwnProfile || profilePrivacy.showSocials !== false;
+    const showPublicActivity =
+        isOwnProfile || profilePrivacy.showActivity !== false;
+
     // Récupérer les contenus
     const contents = getUserContentLocal(userId);
     const userBadgesHtml = renderUserBadges(userId);
@@ -11054,8 +11470,15 @@ async function renderProfileTimeline(userId) {
         }
     }
 
+    const canMessageThisUser =
+        !isOwnProfile &&
+        currentUserId &&
+        (profilePrivacy.allowMessages === "everyone" ||
+            (profilePrivacy.allowMessages === "followers" &&
+                isFollowingThisUser));
+
     const messageButtonHtml =
-        !isOwnProfile && currentUserId
+        canMessageThisUser
             ? `
                 <button
                     class="btn-secondary profile-message-btn"
@@ -11145,6 +11568,9 @@ async function renderProfileTimeline(userId) {
             </div>
         </div>
     `;
+    const publicSignalHtml = showPublicStats
+        ? `${profileSignalStatsHtml}${progressSnapshotHtml}`
+        : renderProfileHiddenSection("stats");
 
     const timelinesHtml =
         window.selectedArcId && selectedArc
@@ -11291,71 +11717,7 @@ async function renderProfileTimeline(userId) {
     const profileBioHtml = escapeHtml(
         user.bio || "Progression, preuves et projets publics.",
     ).replace(/\n/g, "<br>");
-
-    const profileHtml = `
-        <div class="profile-hero profile-hero--glam">
-            <div class="profile-hero-glow" aria-hidden="true"></div>
-            ${
-                bannerHtml
-                    ? `<div class="profile-banner-frame">${bannerHtml}</div>`
-                    : `<div class="profile-banner-frame profile-banner-frame--empty"></div>`
-            }
-            <div class="profile-hero-grid">
-                <div class="profile-identity-panel">
-                    <div class="profile-avatar-wrapper">
-                        <img src="${user.avatar && (user.avatar.startsWith("http") || user.avatar.startsWith("data:")) ? withCacheBust(user.avatar) : "https://placehold.co/150"}" class="profile-avatar-img" alt="Avatar de ${user.name}" onclick="navigateToUserProfile('${userId}')" style="cursor: pointer;">
-                    </div>
-                    <div class="profile-name-block">
-                        <span class="profile-section-kicker">Profil XERA</span>
-                        <h2>${renderUsernameForProfile(user.name, user.id)}${monetizationBadgeHtml}</h2>
-                        ${profileRoleBadgeHtml}
-                        <p class="profile-title"><strong>${profileTitleHtml}</strong></p>
-                        <p class="profile-bio">${profileBioHtml}</p>
-                        ${userBadgesHtml}
-                        ${renderProfileSocialLinks(userId)}
-                        ${supportProfileHtml}
-                    </div>
-                </div>
-
-                <div class="profile-signal-panel ${isOwnProfile ? "profile-signal-panel--owner" : "profile-signal-panel--viewer"}">
-                    <span class="profile-section-kicker">Signaux</span>
-                    ${
-                        !isOwnProfile
-                            ? `
-                        ${profileSignalStatsHtml}
-                        ${progressSnapshotHtml}
-                        <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center; justify-content:center;">
-                            ${followButtonHtml}
-                            ${messageButtonHtml}
-                            ${shareButtonHtml}
-                        </div>
-                        ${adminInlineHtml}
-                    `
-                            : `
-                        ${profileSignalStatsHtml}
-                        ${progressSnapshotHtml}
-                        ${verificationCtaHtml}
-                        <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center;">
-                            <button class="btn-add" onclick="openCreateMenu('${userId}')" title="Ajouter une mise à jour">
-                                <img src="icons/plus.svg" alt="Ajouter" style="width:18px;height:18px">
-                            </button>
-                            ${shareButtonHtml}
-                            <button class="btn-secondary profile-arc-btn" onclick="window.openCreateModal ? window.openCreateModal() : console.error('openCreateModal function not found')" title="Démarrer un projet" style="padding: 0.5rem 1rem; border-radius: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                                Nouveau projet
-                            </button>
-                            ${settingsButtonHtml}
-                        </div>
-                    `
-                    }
-                </div>
-            </div>
-        </div>
-        ${projectProgressBoardHtml}
-        ${arcsHtml}
-        ${collabRequestsHtml}
-        ${projectsHtml}
-        ${hasArcs ? weeklyChartHtml : noArcNoticeHtml}
+    const influenceSectionHtml = `
         <section class="influence-section">
             <h3 class="section-title">Influence & Reach</h3>
             <div class="influence-grid">
@@ -11386,10 +11748,80 @@ async function renderProfileTimeline(userId) {
                 </div>
             </div>
         </section>
-        ${analyticsSectionHtml}
+    `;
+    const publicActivityHtml = showPublicActivity
+        ? `
+        ${projectProgressBoardHtml}
+        ${arcsHtml}
+        ${collabRequestsHtml}
+        ${projectsHtml}
+        ${hasArcs ? weeklyChartHtml : noArcNoticeHtml}
+        ${showPublicStats ? influenceSectionHtml : ""}
+        ${showPublicStats ? analyticsSectionHtml : ""}
         <div class="timeline profile-content-shell">
             ${timelinesHtml}
         </div>
+    `
+        : renderProfileHiddenSection("activity");
+
+    const profileHtml = `
+        <div class="profile-hero profile-hero--glam ${getProfileAppearanceClass(profilePreferences)}" style="${getProfileAppearanceStyle(profilePreferences)}">
+            <div class="profile-hero-glow" aria-hidden="true"></div>
+            ${
+                bannerHtml
+                    ? `<div class="profile-banner-frame">${bannerHtml}</div>`
+                    : `<div class="profile-banner-frame profile-banner-frame--empty"></div>`
+            }
+            <div class="profile-hero-grid">
+                <div class="profile-identity-panel">
+                    <div class="profile-avatar-wrapper">
+                        <img src="${user.avatar && (user.avatar.startsWith("http") || user.avatar.startsWith("data:")) ? withCacheBust(user.avatar) : "https://placehold.co/150"}" class="profile-avatar-img" alt="Avatar de ${user.name}" onclick="navigateToUserProfile('${userId}')" style="cursor: pointer;">
+                    </div>
+                    <div class="profile-name-block">
+                        <span class="profile-section-kicker">Profil XERA</span>
+                        <h2>${renderUsernameForProfile(user.name, user.id)}${monetizationBadgeHtml}</h2>
+                        ${profileRoleBadgeHtml}
+                        <p class="profile-title"><strong>${profileTitleHtml}</strong></p>
+                        <p class="profile-bio">${profileBioHtml}</p>
+                        ${userBadgesHtml}
+                        ${showPublicSocials ? renderProfileSocialLinks(userId) : renderProfileHiddenSection("socials")}
+                        ${supportProfileHtml}
+                    </div>
+                </div>
+
+                <div class="profile-signal-panel ${isOwnProfile ? "profile-signal-panel--owner" : "profile-signal-panel--viewer"}">
+                    <span class="profile-section-kicker">Signaux</span>
+                    ${
+                        !isOwnProfile
+                            ? `
+                        ${publicSignalHtml}
+                        <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center; justify-content:center;">
+                            ${followButtonHtml}
+                            ${messageButtonHtml}
+                            ${shareButtonHtml}
+                        </div>
+                        ${adminInlineHtml}
+                    `
+                            : `
+                        ${publicSignalHtml}
+                        ${verificationCtaHtml}
+                        <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center;">
+                            <button class="btn-add" onclick="openCreateMenu('${userId}')" title="Ajouter une mise à jour">
+                                <img src="icons/plus.svg" alt="Ajouter" style="width:18px;height:18px">
+                            </button>
+                            ${shareButtonHtml}
+                            <button class="btn-secondary profile-arc-btn" onclick="window.openCreateModal ? window.openCreateModal() : console.error('openCreateModal function not found')" title="Démarrer un projet" style="padding: 0.5rem 1rem; border-radius: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                                Nouveau projet
+                            </button>
+                            ${settingsButtonHtml}
+                        </div>
+                    `
+                    }
+                </div>
+            </div>
+        </div>
+        ${publicActivityHtml}
         
         <!-- Footer uniquement sur la page profil -->
         <footer style="background: var(--bg-secondary); border-top: 1px solid var(--border-color); padding: 2rem; margin-top: 4rem; text-align: center;">
@@ -12403,6 +12835,82 @@ async function openSettings(userId) {
 
     // Social links preparation
     const socialLinks = user.social_links || user.socialLinks || {};
+    const profilePreferences = getUserProfilePreferences(user);
+    const { appearance, privacy } = profilePreferences;
+    const themeOptionsHtml = Object.entries(PROFILE_THEME_PRESETS)
+        .map(([key, preset]) => {
+            const checked = appearance.theme === key ? "checked" : "";
+            return `
+                <label class="profile-choice-card profile-theme-choice">
+                    <input type="radio" name="setting-profile-theme" value="${key}" ${checked}>
+                    <span class="theme-swatch" style="--swatch-a:${preset.accent};--swatch-b:${preset.secondary};"></span>
+                    <span>${preset.label}</span>
+                </label>
+            `;
+        })
+        .join("");
+    const layoutOptionsHtml = [
+        ["balanced", "Equilibre", "Profil et signaux cote a cote."],
+        ["showcase", "Showcase", "Identite large, signaux en second plan."],
+        ["compact", "Compact", "Vue dense pour profils tres actifs."],
+    ]
+        .map(
+            ([value, label, description]) => `
+                <label class="profile-choice-card">
+                    <input type="radio" name="setting-profile-layout" value="${value}" ${appearance.layout === value ? "checked" : ""}>
+                    <span>
+                        <strong>${label}</strong>
+                        <small>${description}</small>
+                    </span>
+                </label>
+            `,
+        )
+        .join("");
+    const bannerStyleOptionsHtml = [
+        ["cover", "Cover"],
+        ["contain", "Contain"],
+        ["soft", "Soft"],
+    ]
+        .map(
+            ([value, label]) => `
+                <label class="segmented-option">
+                    <input type="radio" name="setting-profile-banner-style" value="${value}" ${appearance.bannerStyle === value ? "checked" : ""}>
+                    <span>${label}</span>
+                </label>
+            `,
+        )
+        .join("");
+    const panelStyleOptionsHtml = [
+        ["glass", "Glass"],
+        ["solid", "Solid"],
+        ["minimal", "Minimal"],
+    ]
+        .map(
+            ([value, label]) => `
+                <label class="segmented-option">
+                    <input type="radio" name="setting-profile-panel-style" value="${value}" ${appearance.panelStyle === value ? "checked" : ""}>
+                    <span>${label}</span>
+                </label>
+            `,
+        )
+        .join("");
+    const visibilityOptionsHtml = [
+        ["public", "Public", "Visible par tous."],
+        ["followers", "Abonnes", "Visible par les abonnes."],
+        ["private", "Prive", "Visible par vous seul."],
+    ]
+        .map(
+            ([value, label, description]) => `
+                <label class="profile-choice-card">
+                    <input type="radio" name="setting-profile-visibility" value="${value}" ${privacy.visibility === value ? "checked" : ""}>
+                    <span>
+                        <strong>${label}</strong>
+                        <small>${description}</small>
+                    </span>
+                </label>
+            `,
+        )
+        .join("");
     const accountEmail = String(
         window.currentUser?.email || user.email || "",
     ).trim();
@@ -12477,6 +12985,77 @@ async function openSettings(userId) {
                     </div>
                 </div>
 
+                <!-- Apparence du profil -->
+                <div class="accordion-section">
+                    <button type="button" class="accordion-header">
+                        <div class="accordion-title">
+                            <span>Apparence du profil</span>
+                        </div>
+                        <div class="accordion-arrow">
+                            <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="accordion-body">
+                            <div id="profile-customization-preview" class="profile-customization-preview ${getProfileAppearanceClass(profilePreferences)}" style="${getProfileAppearanceStyle(profilePreferences)}">
+                                <div class="profile-customization-preview-banner"></div>
+                                <div class="profile-customization-preview-grid">
+                                    <div class="profile-customization-preview-card">
+                                        <span class="profile-section-kicker">Profil XERA</span>
+                                        <strong>${escapeHtml(user.name || "Utilisateur")}</strong>
+                                    </div>
+                                    <div class="profile-customization-preview-card is-signal">
+                                        <span></span>
+                                        <span></span>
+                                        <span></span>
+                                        <span></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Theme du profil</label>
+                                <div class="profile-choice-grid theme-choice-grid">
+                                    ${themeOptionsHtml}
+                                </div>
+                            </div>
+
+                            <div class="settings-duo-grid">
+                                <div class="form-group">
+                                    <label for="setting-profile-accent">Couleur principale</label>
+                                    <input type="color" id="setting-profile-accent" class="profile-color-input" value="${appearance.accent}">
+                                </div>
+                                <div class="form-group">
+                                    <label for="setting-profile-secondary">Couleur secondaire</label>
+                                    <input type="color" id="setting-profile-secondary" class="profile-color-input" value="${appearance.secondary}">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Layout</label>
+                                <div class="profile-choice-grid">
+                                    ${layoutOptionsHtml}
+                                </div>
+                            </div>
+
+                            <div class="settings-duo-grid">
+                                <div class="form-group">
+                                    <label>Banniere</label>
+                                    <div class="settings-segmented-control">
+                                        ${bannerStyleOptionsHtml}
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Cartes</label>
+                                    <div class="settings-segmented-control">
+                                        ${panelStyleOptionsHtml}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Identité -->
                 <div class="accordion-section">
                     <button type="button" class="accordion-header">
@@ -12494,13 +13073,13 @@ async function openSettings(userId) {
                                 <div style="display: flex; flex-direction: column; align-items: center;">
                                     <label class="form-hint" style="margin-bottom:0.5rem; display:block;">Avatar</label>
                                     <div style="position: relative; cursor: pointer;" onclick="document.getElementById('setting-avatar-file').click()">
-                                        <img src="${user.avatar && user.avatar.startsWith("http") ? user.avatar : "https://placehold.co/150"}" class="preview-avatar-circle" id="preview-avatar" alt="Avatar" style="object-fit: cover;">
+                                        <img src="${user.avatar && user.avatar.startsWith("http") ? escapeHtml(user.avatar) : "https://placehold.co/150"}" class="preview-avatar-circle" id="preview-avatar" alt="Avatar" style="object-fit: cover;">
                                         <div style="position: absolute; bottom: 0; right: 0; background: #fff; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 10px rgba(0,0,0,0.5);">
                                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#000" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                         </div>
                                     </div>
                                     <input type="file" id="setting-avatar-file" accept="image/*" style="display: none;">
-                                    <input type="hidden" id="setting-avatar" value="${user.avatar || ""}">
+                                    <input type="hidden" id="setting-avatar" value="${escapeHtml(user.avatar || "")}">
                                     <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">Cliquez pour changer</p>
                                 </div>
 
@@ -12508,29 +13087,29 @@ async function openSettings(userId) {
                                 <div>
                                     <label class="form-hint" style="margin-bottom:0.5rem; display:block;">Bannière</label>
                                     <div style="position: relative; cursor: pointer;" onclick="document.getElementById('setting-banner-file').click()">
-                                        <img src="${user.banner && user.banner.startsWith("http") ? user.banner : "https://placehold.co/1200x300/1a1a2e/00ff88?text=Ma+Trajectoire"}" class="preview-banner-rect" id="preview-banner" alt="Bannière" style="object-fit: cover;">
+                                        <img src="${user.banner && user.banner.startsWith("http") ? escapeHtml(user.banner) : "https://placehold.co/1200x300/1a1a2e/00ff88?text=Ma+Trajectoire"}" class="preview-banner-rect" id="preview-banner" alt="Bannière" style="object-fit: cover;">
                                         <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; border-radius: 14px;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
                                             <span style="background: rgba(0,0,0,0.6); color: white; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.9rem;">Changer la bannière</span>
                                         </div>
                                     </div>
                                     <input type="file" id="setting-banner-file" accept="image/*" style="display: none;">
-                                    <input type="hidden" id="setting-banner" value="${user.banner || ""}">
+                                    <input type="hidden" id="setting-banner" value="${escapeHtml(user.banner || "")}">
                                 </div>
                             </div>
 
                             <div class="form-group">
                                 <label>Nom d'affichage</label>
-                                <input type="text" id="setting-name" class="form-input" value="${user.name}" required>
+                                <input type="text" id="setting-name" class="form-input" value="${escapeHtml(user.name || "")}" required>
                             </div>
 
                             <div class="form-group">
                                 <label>Titre / Rôle</label>
-                                <input type="text" id="setting-title" class="form-input" value="${user.title}" required>
+                                <input type="text" id="setting-title" class="form-input" value="${escapeHtml(user.title || "")}" required>
                             </div>
 
                             <div class="form-group">
                                 <label>Bio</label>
-                                <textarea id="setting-bio" class="form-input" rows="4">${user.bio || ""}</textarea>
+                                <textarea id="setting-bio" class="form-input" rows="4">${escapeHtml(user.bio || "")}</textarea>
                             </div>
                         </div>
                     </div>
@@ -12654,6 +13233,80 @@ async function openSettings(userId) {
                                     <img src="icons/link.svg" alt="Site">
                                     <input type="text" class="form-input" data-social="site" placeholder="https://example.com" value="${socialLinks.site || ""}">
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Confidentialite du profil -->
+                <div class="accordion-section">
+                    <button type="button" class="accordion-header">
+                        <div class="accordion-title">
+                            <span>Confidentialite du profil</span>
+                        </div>
+                        <div class="accordion-arrow">
+                            <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="accordion-body">
+                            <div class="form-group">
+                                <label>Visibilite</label>
+                                <div class="profile-choice-grid">
+                                    ${visibilityOptionsHtml}
+                                </div>
+                            </div>
+
+                            <div class="privacy-toggle-list">
+                                <label class="privacy-toggle-row">
+                                    <span>
+                                        <strong>Apparaitre dans Discover</strong>
+                                        <small>Votre profil peut etre recommande dans le flux public.</small>
+                                    </span>
+                                    <span class="toggle-switch">
+                                        <input type="checkbox" id="setting-profile-discoverable" ${privacy.discoverable ? "checked" : ""}>
+                                        <span class="toggle-slider"></span>
+                                    </span>
+                                </label>
+                                <label class="privacy-toggle-row">
+                                    <span>
+                                        <strong>Afficher les signaux</strong>
+                                        <small>Abonnes, vues, updates et progression.</small>
+                                    </span>
+                                    <span class="toggle-switch">
+                                        <input type="checkbox" id="setting-profile-show-stats" ${privacy.showStats ? "checked" : ""}>
+                                        <span class="toggle-slider"></span>
+                                    </span>
+                                </label>
+                                <label class="privacy-toggle-row">
+                                    <span>
+                                        <strong>Afficher les liens sociaux</strong>
+                                        <small>Email, portfolio et reseaux publics.</small>
+                                    </span>
+                                    <span class="toggle-switch">
+                                        <input type="checkbox" id="setting-profile-show-socials" ${privacy.showSocials ? "checked" : ""}>
+                                        <span class="toggle-slider"></span>
+                                    </span>
+                                </label>
+                                <label class="privacy-toggle-row">
+                                    <span>
+                                        <strong>Afficher l'activite</strong>
+                                        <small>Projets, updates, analytics et timeline.</small>
+                                    </span>
+                                    <span class="toggle-switch">
+                                        <input type="checkbox" id="setting-profile-show-activity" ${privacy.showActivity ? "checked" : ""}>
+                                        <span class="toggle-slider"></span>
+                                    </span>
+                                </label>
+                            </div>
+
+                            <div class="form-group" style="margin-top:1.25rem;">
+                                <label for="setting-profile-allow-messages">Messages</label>
+                                <select id="setting-profile-allow-messages" class="form-input">
+                                    <option value="everyone" ${privacy.allowMessages === "everyone" ? "selected" : ""}>Tout le monde</option>
+                                    <option value="followers" ${privacy.allowMessages === "followers" ? "selected" : ""}>Abonnes uniquement</option>
+                                    <option value="none" ${privacy.allowMessages === "none" ? "selected" : ""}>Personne</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -12787,6 +13440,8 @@ async function openSettings(userId) {
     if (window.refreshLanguageControl) {
         window.refreshLanguageControl();
     }
+
+    initializeProfileCustomizationControls(container);
 
     container.dataset.accountRoleTouched = "0";
     const accountRoleButtons = container.querySelectorAll(".account-role-btn");
@@ -12962,6 +13617,7 @@ async function openSettings(userId) {
             const subtypeToSave = shouldOverwriteSubtype
                 ? normalizeDiscoveryAccountRole(selectedRoleValue)
                 : existingSubtypeRaw;
+            const profilePreferences = collectProfilePreferencesFromSettings();
 
             const profileData = {
                 name: document.getElementById("setting-name").value,
@@ -12972,6 +13628,7 @@ async function openSettings(userId) {
                 socialLinks: newSocialLinks,
                 account_type: accountType || "personal",
                 account_subtype: subtypeToSave,
+                profilePreferences,
             };
 
             const okOnline = await ensureOnlineOrNotify();
@@ -13023,6 +13680,9 @@ async function openSettings(userId) {
                     allUsers[userIndex] = {
                         ...allUsers[userIndex],
                         ...result.data,
+                        profile_preferences:
+                            result.data?.profile_preferences ||
+                            profilePreferences,
                         ...(reminderSaveResult.success
                             ? {
                                   email_reminder_enabled:
@@ -13042,6 +13702,9 @@ async function openSettings(userId) {
                         window.currentUser = {
                             ...window.currentUser,
                             ...result.data,
+                            profile_preferences:
+                                result.data?.profile_preferences ||
+                                profilePreferences,
                         };
                         currentUser = window.currentUser;
                     }
@@ -15514,6 +16177,9 @@ window.blockDmUser = blockDmUser;
 window.unblockDmUser = unblockDmUser;
 window.fetchBlockedUsersForSettings = fetchBlockedUsersForSettings;
 window.handleUnblockUserFromSettings = handleUnblockUserFromSettings;
+window.getUserProfilePreferences = getUserProfilePreferences;
+window.canCurrentUserMessageTarget = canCurrentUserMessageTarget;
+window.canCurrentUserMessageTargetAsync = canCurrentUserMessageTargetAsync;
 window.openCreateMenu = openCreateMenu;
 window.closeCreateMenu = closeCreateMenu;
 window.setPendingCreatePostAfterArc = setPendingCreatePostAfterArc;
