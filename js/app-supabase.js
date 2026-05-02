@@ -6797,6 +6797,153 @@ function renderProfileSelectedArcContent(
     `;
 }
 
+function buildProfileArcProgressSummaries(arcs = [], contents = []) {
+    const groupedContent = new Map();
+
+    (contents || []).forEach((content) => {
+        const arcId = content?.arcId || content?.arc?.id || null;
+        if (!arcId) return;
+
+        if (!groupedContent.has(arcId)) {
+            groupedContent.set(arcId, {
+                updates: 0,
+                uniqueDays: new Set(),
+                latestMs: 0,
+            });
+        }
+
+        const entry = groupedContent.get(arcId);
+        entry.updates += 1;
+
+        const dayNumber = Number(content.dayNumber || content.day_number || 0);
+        if (Number.isFinite(dayNumber) && dayNumber > 0) {
+            entry.uniqueDays.add(dayNumber);
+        }
+
+        entry.latestMs = Math.max(
+            entry.latestMs,
+            getProfileContentTimeValue(content),
+        );
+    });
+
+    const statusRank = {
+        in_progress: 0,
+        active: 0,
+        completed: 1,
+        abandoned: 2,
+    };
+
+    return (arcs || [])
+        .map((arc) => {
+            const stats = groupedContent.get(arc.id) || {
+                updates: 0,
+                uniqueDays: new Set(),
+                latestMs: 0,
+            };
+            const duration = Number(arc.duration_days || 0);
+            const completedDays = stats.uniqueDays.size;
+            const fallbackProgress = Math.min(100, stats.updates * 8);
+            const progress =
+                duration > 0
+                    ? Math.min(
+                          100,
+                          Math.round((completedDays / duration) * 100),
+                      )
+                    : fallbackProgress;
+
+            return {
+                arc,
+                updates: stats.updates,
+                completedDays,
+                duration,
+                latestMs: stats.latestMs,
+                latestLabel: stats.latestMs
+                    ? timeAgo(new Date(stats.latestMs).toISOString())
+                    : "Aucune update",
+                progress,
+            };
+        })
+        .sort((left, right) => {
+            const leftRank = statusRank[left.arc?.status] ?? 1;
+            const rightRank = statusRank[right.arc?.status] ?? 1;
+            if (leftRank !== rightRank) return leftRank - rightRank;
+            return right.latestMs - left.latestMs;
+        });
+}
+
+function renderProfileProjectProgressBoard(arcs, contents, profileUserId) {
+    const summaries = buildProfileArcProgressSummaries(arcs, contents);
+    if (summaries.length === 0) return "";
+
+    const activeCount = summaries.filter(
+        (item) => item.arc?.status !== "completed" && item.arc?.status !== "abandoned",
+    ).length;
+    const totalUpdates = summaries.reduce(
+        (sum, item) => sum + Number(item.updates || 0),
+        0,
+    );
+    const averageProgress = Math.round(
+        summaries.reduce((sum, item) => sum + Number(item.progress || 0), 0) /
+            Math.max(1, summaries.length),
+    );
+
+    const statusLabels = {
+        in_progress: "En cours",
+        completed: "Terminé",
+        abandoned: "Abandonné",
+    };
+
+    return `
+        <section class="profile-progress-board">
+            <div class="profile-progress-board-head">
+                <div>
+                    <span class="profile-section-kicker">Suivi de projet</span>
+                    <h3>Avancement visible</h3>
+                    <p>Un aperçu clair des projets, de leurs updates et de leur dernière activité.</p>
+                </div>
+                <div class="profile-progress-board-stats">
+                    <span>${activeCount} actif${activeCount > 1 ? "s" : ""}</span>
+                    <span>${totalUpdates} update${totalUpdates > 1 ? "s" : ""}</span>
+                    <span>${averageProgress}% moyen</span>
+                </div>
+            </div>
+
+            <div class="profile-progress-board-grid">
+                ${summaries
+                    .slice(0, 4)
+                    .map((item) => {
+                        const arc = item.arc || {};
+                        const isActive = window.selectedArcId === arc.id;
+                        const statusLabel =
+                            statusLabels[arc.status] || arc.status || "Projet";
+                        const dayLabel = item.duration
+                            ? `${item.completedDays}/${item.duration} jours documentés`
+                            : `${item.updates} update${item.updates > 1 ? "s" : ""}`;
+                        return `
+                            <button
+                                type="button"
+                                class="profile-progress-project ${isActive ? "is-active" : ""}"
+                                onclick="selectArc('${arc.id}', '${profileUserId}')"
+                            >
+                                <span class="profile-progress-project-status">${escapeHtml(statusLabel)}</span>
+                                <strong>${escapeHtml(arc.title || "Projet")}</strong>
+                                <span class="profile-progress-project-goal">${escapeHtml(arc.goal || "Progression en cours")}</span>
+                                <span class="profile-progress-track" aria-hidden="true">
+                                    <span style="width:${item.progress}%"></span>
+                                </span>
+                                <span class="profile-progress-project-meta">
+                                    <span>${dayLabel}</span>
+                                    <span>${item.latestLabel}</span>
+                                </span>
+                            </button>
+                        `;
+                    })
+                    .join("")}
+            </div>
+        </section>
+    `;
+}
+
 window.toggleProfileAnnouncementReplies = toggleProfileAnnouncementReplies;
 
 /* ========================================
@@ -10963,70 +11110,98 @@ async function renderProfileTimeline(userId) {
     `
         : "";
 
+    const projectProgressBoardHtml = renderProfileProjectProgressBoard(
+        allArcs,
+        contents,
+        userId,
+    );
+    const profileTitleHtml = escapeHtml(
+        user.title || "Trajectoire en construction",
+    );
+    const profileBioHtml = escapeHtml(
+        user.bio || "Progression, preuves et projets publics.",
+    ).replace(/\n/g, "<br>");
+
     const profileHtml = `
-        ${bannerHtml}
-        <div class="profile-hero">
-            <div class="profile-avatar-wrapper">
-                <img src="${user.avatar && (user.avatar.startsWith("http") || user.avatar.startsWith("data:")) ? withCacheBust(user.avatar) : "https://placehold.co/150"}" class="profile-avatar-img" alt="Avatar de ${user.name}" onclick="navigateToUserProfile('${userId}')" style="cursor: pointer;">
-            </div>
-            <h2>${renderUsernameForProfile(user.name, user.id)}${monetizationBadgeHtml}</h2>
-            ${profileRoleBadgeHtml}
-            <p style="color: var(--text-secondary);"><strong>${user.title}</strong></p>
-            <p class="profile-bio" style="max-width: 600px; margin: 0.5rem auto; line-height: 1.5;">${user.bio || ""}</p>
-            ${userBadgesHtml}
-            ${renderProfileSocialLinks(userId)}
-            ${supportProfileHtml}
-            
+        <div class="profile-hero profile-hero--glam">
+            <div class="profile-hero-glow" aria-hidden="true"></div>
             ${
-                !isOwnProfile
-                    ? `
-                <div class="follow-section">
-                    <div class="follower-stat">
-                        <div class="follower-stat-count" title="${Number(followerCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followerCount)}</div>
-                        <div class="follower-stat-label">Abonnés</div>
-                    </div>
-                    <div class="follower-stat">
-                        <div class="follower-stat-count" title="${Number(followingCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followingCount)}</div>
-                        <div class="follower-stat-label">Abonnements</div>
-                    </div>
-                </div>
-                ${engagementStatsHtml}
-                ${progressSnapshotHtml}
-                <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center; justify-content:center;">
-                    ${followButtonHtml}
-                    ${messageButtonHtml}
-                    ${shareButtonHtml}
-                </div>
-                ${adminInlineHtml}
-            `
-                    : `
-                <div class="follow-section">
-                    <div class="follower-stat">
-                        <div class="follower-stat-count" title="${Number(followerCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followerCount)}</div>
-                        <div class="follower-stat-label">Abonnés</div>
-                    </div>
-                    <div class="follower-stat">
-                        <div class="follower-stat-count" title="${Number(followingCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followingCount)}</div>
-                        <div class="follower-stat-label">Abonnements</div>
-                    </div>
-                </div>
-                ${engagementStatsHtml}
-                ${progressSnapshotHtml}
-                ${verificationCtaHtml}
-                <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center;"> 
-                    <button class="btn-add" onclick="openCreateMenu('${userId}')" title="Ajouter une mise à jour">
-                        <img src="icons/plus.svg" alt="Ajouter" style="width:18px;height:18px">
-                    </button>
-                    ${shareButtonHtml}
-                    <button class="btn-secondary profile-arc-btn" onclick="window.openCreateModal ? window.openCreateModal() : console.error('openCreateModal function not found')" title="Démarrer un projet" style="padding: 0.5rem 1rem; border-radius: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                        Nouveau projet
-                    </button>
-                    ${settingsButtonHtml}
-                </div>
-            `
+                bannerHtml
+                    ? `<div class="profile-banner-frame">${bannerHtml}</div>`
+                    : `<div class="profile-banner-frame profile-banner-frame--empty"></div>`
             }
+            <div class="profile-hero-grid">
+                <div class="profile-identity-panel">
+                    <div class="profile-avatar-wrapper">
+                        <img src="${user.avatar && (user.avatar.startsWith("http") || user.avatar.startsWith("data:")) ? withCacheBust(user.avatar) : "https://placehold.co/150"}" class="profile-avatar-img" alt="Avatar de ${user.name}" onclick="navigateToUserProfile('${userId}')" style="cursor: pointer;">
+                    </div>
+                    <div class="profile-name-block">
+                        <span class="profile-section-kicker">Profil XERA</span>
+                        <h2>${renderUsernameForProfile(user.name, user.id)}${monetizationBadgeHtml}</h2>
+                        ${profileRoleBadgeHtml}
+                        <p class="profile-title"><strong>${profileTitleHtml}</strong></p>
+                        <p class="profile-bio">${profileBioHtml}</p>
+                        ${userBadgesHtml}
+                        ${renderProfileSocialLinks(userId)}
+                        ${supportProfileHtml}
+                    </div>
+                </div>
+
+                <div class="profile-signal-panel">
+                    <span class="profile-section-kicker">Signaux</span>
+                    ${
+                        !isOwnProfile
+                            ? `
+                        <div class="follow-section">
+                            <div class="follower-stat">
+                                <div class="follower-stat-count" title="${Number(followerCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followerCount)}</div>
+                                <div class="follower-stat-label">Abonnés</div>
+                            </div>
+                            <div class="follower-stat">
+                                <div class="follower-stat-count" title="${Number(followingCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followingCount)}</div>
+                                <div class="follower-stat-label">Abonnements</div>
+                            </div>
+                        </div>
+                        ${engagementStatsHtml}
+                        ${progressSnapshotHtml}
+                        <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center; justify-content:center;">
+                            ${followButtonHtml}
+                            ${messageButtonHtml}
+                            ${shareButtonHtml}
+                        </div>
+                        ${adminInlineHtml}
+                    `
+                            : `
+                        <div class="follow-section">
+                            <div class="follower-stat">
+                                <div class="follower-stat-count" title="${Number(followerCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followerCount)}</div>
+                                <div class="follower-stat-label">Abonnés</div>
+                            </div>
+                            <div class="follower-stat">
+                                <div class="follower-stat-count" title="${Number(followingCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followingCount)}</div>
+                                <div class="follower-stat-label">Abonnements</div>
+                            </div>
+                        </div>
+                        ${engagementStatsHtml}
+                        ${progressSnapshotHtml}
+                        ${verificationCtaHtml}
+                        <div class="profile-actions" style="margin-top:6px; display:flex; gap:8px; align-items:center;">
+                            <button class="btn-add" onclick="openCreateMenu('${userId}')" title="Ajouter une mise à jour">
+                                <img src="icons/plus.svg" alt="Ajouter" style="width:18px;height:18px">
+                            </button>
+                            ${shareButtonHtml}
+                            <button class="btn-secondary profile-arc-btn" onclick="window.openCreateModal ? window.openCreateModal() : console.error('openCreateModal function not found')" title="Démarrer un projet" style="padding: 0.5rem 1rem; border-radius: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                                Nouveau projet
+                            </button>
+                            ${settingsButtonHtml}
+                        </div>
+                    `
+                    }
+                </div>
+            </div>
         </div>
+        ${projectProgressBoardHtml}
         ${arcsHtml}
         ${collabRequestsHtml}
         ${projectsHtml}
