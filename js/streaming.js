@@ -224,6 +224,18 @@ function getModeratorRoleTemplate(roleId = 'chat') {
     return MODERATOR_ROLE_TEMPLATES[roleId] || MODERATOR_ROLE_TEMPLATES.chat;
 }
 
+function fallbackCopy(url) {
+    navigator.clipboard.writeText(url).then(() => {
+        if (window.ToastManager) {
+            ToastManager.success('Lien copié', 'Le lien a été copié dans le presse-papiers');
+        }
+    }).catch(() => {
+        if (window.ToastManager) {
+            ToastManager.error('Erreur', 'Impossible de copier le lien');
+        }
+    });
+}
+
 function createModeratorConfig(userId, base = {}) {
     const role = String(base.role || 'chat');
     const template = getModeratorRoleTemplate(role);
@@ -4104,6 +4116,63 @@ function buildHostControlRegistry() {
             status: () => (isCameraEnabled ? 'Disponible' : 'Reactivez la camera'),
             isDisabled: () => !isCameraEnabled,
             run: () => switchCamera()
+        },
+    );
+    registerHostPanelTool(
+        {
+            id: 'broadcast',
+            title: 'Diffusion',
+            description: 'Commandes critiques du direct'
+        },
+        {
+            id: 'end-stream',
+            label: 'Arrêter le live',
+            description: 'Terminer le stream immédiatement',
+            run: async () => {
+                if (confirm('Voulez-vous vraiment arrêter le live ?')) {
+                    const result = await endStream();
+                    if (result && result.success) {
+                        window.location.href = 'index.html';
+                    } else {
+                        if (window.ToastManager) {
+                            ToastManager.error('Erreur', result?.error || 'Impossible de terminer le live');
+                        }
+                    }
+                }
+            }
+        },
+    );
+    registerHostPanelTool(
+        {
+            id: 'broadcast',
+            title: 'Diffusion',
+            description: 'Commandes critiques du direct'
+        },
+        {
+            id: 'share-link',
+            label: 'Partager lien',
+            description: 'Copier le lien du stream dans le presse-papier',
+            run: async () => {
+                const url = window.location.href;
+                if (navigator.share) {
+                    try {
+                        await navigator.share({
+                            title: 'Live Stream sur XERA',
+                            text: 'Regardez ce live stream sur XERA !',
+                            url: url
+                        });
+                        if (window.ToastManager) {
+                            ToastManager.success('Partagé', 'Merci de faire connaître XERA !');
+                        }
+                    } catch (err) {
+                        if (err.name !== 'AbortError') {
+                            fallbackCopy(url);
+                        }
+                    }
+                } else {
+                    fallbackCopy(url);
+                }
+            }
         },
     );
 
