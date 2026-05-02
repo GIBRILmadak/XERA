@@ -7,7 +7,7 @@ ALTER TABLE notifications
 
 ALTER TABLE notifications
     ADD CONSTRAINT notifications_type_check
-    CHECK (type IN ('follow','like','comment','mention','achievement','stream','support','encouragement','arc_follow','new_arc'));
+    CHECK (type IN ('follow','like','comment','mention','achievement','stream','support','encouragement','arc_follow','new_arc','new_update','live_start','live_chat','collaboration','announcement_reply'));
 
 -- 2) Politique INSERT pour laisser passer les triggers de stream/follow
 DROP POLICY IF EXISTS "Les utilisateurs peuvent créer des notifications" ON notifications;

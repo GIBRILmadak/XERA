@@ -2194,6 +2194,32 @@ function getReplyCount(contentId) {
     return list.length;
 }
 
+function getReplySelector(contentId, attributeName) {
+    const safeId = String(contentId ?? "")
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"');
+    return `[${attributeName}="${safeId}"]`;
+}
+
+function shortenReplyNotificationText(value, maxLength = 90) {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, maxLength - 1).trim()}…`;
+}
+
+function findContentByReplyId(contentId) {
+    if (!contentId) return null;
+    const collections = Object.values(window.userContents || {});
+    for (const contents of collections) {
+        const match = (contents || []).find(
+            (content) =>
+                content?.contentId === contentId || content?.id === contentId,
+        );
+        if (match) return match;
+    }
+    return null;
+}
+
 function renderAnnouncementReplies(contentId) {
     const store = loadAnnouncementReplies();
     const list = store[contentId] || [];
@@ -2229,36 +2255,110 @@ function renderAnnouncementReplies(contentId) {
     `;
 }
 
-function toggleProfileAnnouncementReplies(contentId) {
+function setAnnouncementReplyPanelState(contentId, isOpen) {
     if (!contentId) return;
     document
-        .querySelectorAll(`[data-profile-reply-panel="${contentId}"]`)
+        .querySelectorAll(getReplySelector(contentId, "data-profile-reply-panel"))
         .forEach((panel) => {
-            const nextHidden = !panel.hidden;
-            panel.hidden = nextHidden;
-            panel.classList.toggle("is-open", !nextHidden);
+            panel.hidden = !isOpen;
+            panel.classList.toggle("is-open", isOpen);
+            panel.setAttribute("aria-hidden", isOpen ? "false" : "true");
         });
+    document
+        .querySelectorAll(getReplySelector(contentId, "data-reply-toggle"))
+        .forEach((button) => {
+            button.classList.toggle("is-open", isOpen);
+            button.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        });
+    document
+        .querySelectorAll(getReplySelector(contentId, "data-reply-toggle-label"))
+        .forEach((label) => {
+            label.textContent = isOpen ? "Masquer" : "Répondre";
+        });
+}
+
+function toggleProfileAnnouncementReplies(contentId, forceOpen = null) {
+    if (!contentId) return;
+    const panel = document.querySelector(
+        getReplySelector(contentId, "data-profile-reply-panel"),
+    );
+    const shouldOpen =
+        typeof forceOpen === "boolean" ? forceOpen : panel ? panel.hidden : true;
+    setAnnouncementReplyPanelState(contentId, shouldOpen);
+    if (shouldOpen) refreshRepliesUI(contentId);
 }
 
 function refreshRepliesUI(contentId) {
     document
-        .querySelectorAll(`[data-replies-container="${contentId}"]`)
+        .querySelectorAll(getReplySelector(contentId, "data-replies-container"))
         .forEach((el) => {
             el.innerHTML = renderAnnouncementReplies(contentId);
         });
     const count = getReplyCount(contentId);
     document
-        .querySelectorAll(`[data-reply-count="${contentId}"]`)
+        .querySelectorAll(getReplySelector(contentId, "data-reply-count"))
         .forEach((el) => (el.textContent = count));
 }
 
-function submitAnnouncementReply(contentId, inputId) {
+async function notifyAnnouncementOwnerOfReply(contentId, ownerId, title, reply) {
+    const current = window.currentUser;
+    if (
+        !contentId ||
+        !ownerId ||
+        !current?.id ||
+        ownerId === current.id ||
+        typeof createNotification !== "function"
+    ) {
+        return;
+    }
+
+    const actorName =
+        (typeof getCurrentUserDisplayName === "function" &&
+            getCurrentUserDisplayName()) ||
+        current.name ||
+        "Un membre XERA";
+    const announcementTitle = shortenReplyNotificationText(
+        title || "votre annonce",
+        70,
+    );
+    const replyPreview = shortenReplyNotificationText(reply, 85);
+    const message = `${actorName} a répondu à votre annonce "${announcementTitle}"${
+        replyPreview ? ` : ${replyPreview}` : "."
+    }`;
+    const link = buildProfileUrl(ownerId);
+
+    try {
+        const result = await createNotification(
+            ownerId,
+            "announcement_reply",
+            message,
+            link,
+        );
+        if (!result?.success) {
+            await createNotification(ownerId, "comment", message, link);
+        }
+    } catch (error) {
+        console.warn("notifyAnnouncementOwnerOfReply error", error);
+    }
+}
+
+async function submitAnnouncementReply(
+    contentId,
+    inputRef,
+    ownerId = "",
+    announcementTitle = "",
+) {
     if (!contentId) return;
-    if (!currentUser) {
+    if (!window.currentUser) {
         alert("Connectez-vous pour répondre à une annonce.");
         return;
     }
-    const textarea = document.getElementById(inputId);
+    const textarea =
+        inputRef && typeof inputRef !== "string" && inputRef.closest
+            ? inputRef
+                  .closest(".profile-update-reply-block")
+                  ?.querySelector(".reply-input")
+            : document.getElementById(inputRef);
     const reply =
         textarea && textarea.value
             ? textarea.value.trim()
@@ -2267,7 +2367,7 @@ function submitAnnouncementReply(contentId, inputId) {
     const store = loadAnnouncementReplies();
     const list = store[contentId] || [];
     list.push({
-        userId: currentUser.id,
+        userId: window.currentUser.id,
         body: reply,
         createdAt: new Date().toISOString(),
     });
@@ -2275,7 +2375,27 @@ function submitAnnouncementReply(contentId, inputId) {
     saveAnnouncementReplies(store);
     if (textarea) textarea.value = "";
     refreshRepliesUI(contentId);
-    ToastManager?.success?.("Réponse envoyée", "Merci pour votre retour !");
+    setAnnouncementReplyPanelState(contentId, true);
+    const contentMeta = !ownerId || !announcementTitle
+        ? findContentByReplyId(contentId)
+        : null;
+    const resolvedOwnerId = ownerId || contentMeta?.userId || "";
+    const resolvedTitle =
+        announcementTitle || contentMeta?.title || "votre annonce";
+    const willNotifyOwner =
+        resolvedOwnerId && resolvedOwnerId !== window.currentUser.id;
+    await notifyAnnouncementOwnerOfReply(
+        contentId,
+        resolvedOwnerId,
+        resolvedTitle,
+        reply,
+    );
+    window.ToastManager?.success?.(
+        "Réponse envoyée",
+        willNotifyOwner
+            ? "Le créateur de l'annonce sera notifié."
+            : "Elle est ajoutée à l'annonce.",
+    );
 }
 
 function openReplyPrompt(contentId) {
@@ -3591,6 +3711,10 @@ function escapeHtml(value) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
+}
+
+function inlineJsString(value) {
+    return escapeHtml(JSON.stringify(String(value ?? "")));
 }
 
 async function fetchAdminAnnouncements() {
@@ -6419,7 +6543,13 @@ function renderProfileUpdateCard(
         : "";
 
     const isAnnouncement = isAnnouncementContent(content);
-    const replyCount = isAnnouncement ? getReplyCount(content.contentId) : 0;
+    const replyContentId = content.contentId || content.id || "";
+    const replyOwnerId = content.userId || profileUserId || "";
+    const replyInputId = replyContentId
+        ? `profile-reply-input-${replyContentId}`
+        : "";
+    const replyCount =
+        isAnnouncement && replyContentId ? getReplyCount(replyContentId) : 0;
     const viewerCanEncourage =
         !!content.contentId &&
         currentUserId &&
@@ -6443,22 +6573,26 @@ function renderProfileUpdateCard(
             </div>
         `;
 
-    const replyPanelHtml = isAnnouncement
+    const replyPanelHtml = isAnnouncement && replyContentId
         ? `
             <div class="profile-update-reply-block">
-                <button type="button" class="reply-btn" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies('${content.contentId}')">
-                    Repondre
-                    <span class="reply-count" data-reply-count="${content.contentId}">${replyCount}</span>
+                <button type="button" class="reply-btn" data-reply-toggle="${escapeHtml(replyContentId)}" aria-expanded="false" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)})">
+                    <span data-reply-toggle-label="${escapeHtml(replyContentId)}">Répondre</span>
+                    <span class="reply-count" data-reply-count="${escapeHtml(replyContentId)}">${replyCount}</span>
                 </button>
-                <div class="profile-reply-panel" data-profile-reply-panel="${content.contentId}" hidden>
+                <div class="profile-reply-panel" data-profile-reply-panel="${escapeHtml(replyContentId)}" aria-hidden="true" hidden>
+                    <div class="reply-panel-head">
+                        <strong>Réponses</strong>
+                        <button type="button" class="reply-close-btn" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)}, false)">Fermer</button>
+                    </div>
                     <div class="reply-inline">
-                        <textarea id="profile-reply-input-${content.contentId}" class="reply-input" placeholder="Votre reponse..."></textarea>
+                        <textarea id="${escapeHtml(replyInputId)}" class="reply-input" placeholder="Votre réponse..."></textarea>
                         <div class="reply-actions">
-                            <button class="btn-primary" onclick="event.stopPropagation(); submitAnnouncementReply('${content.contentId}', 'profile-reply-input-${content.contentId}')">Envoyer</button>
+                            <button class="btn-primary" onclick="event.stopPropagation(); submitAnnouncementReply(${inlineJsString(replyContentId)}, this, ${inlineJsString(replyOwnerId)}, ${inlineJsString(content.title || "votre annonce")})">Envoyer</button>
                         </div>
                     </div>
-                    <div data-replies-container="${content.contentId}">
-                        ${renderAnnouncementReplies(content.contentId)}
+                    <div data-replies-container="${escapeHtml(replyContentId)}">
+                        ${renderAnnouncementReplies(replyContentId)}
                     </div>
                 </div>
             </div>
@@ -6945,6 +7079,7 @@ function renderProfileProjectProgressBoard(arcs, contents, profileUserId) {
 }
 
 window.toggleProfileAnnouncementReplies = toggleProfileAnnouncementReplies;
+window.submitAnnouncementReply = submitAnnouncementReply;
 
 /* ========================================
    RENDERING - DISCOVER GRID
@@ -9268,8 +9403,12 @@ async function renderImmersiveFeed(contents) {
                     : null;
             const isAnnouncement = isAnnouncementContent(content);
             const timeLabel = timeAgo(content.createdAt || content.created_at);
-            const replyCount = isAnnouncement
-                ? getReplyCount(content.contentId)
+            const replyContentId = content.contentId || content.id || "";
+            const replyInputId = replyContentId
+                ? `immersive-reply-input-${replyContentId}`
+                : "";
+            const replyCount = isAnnouncement && replyContentId
+                ? getReplyCount(replyContentId)
                 : 0;
             // Defensive: some cached/local items may still carry the tag payload inside
             // `description` (e.g. "\n\n#hashtags: ..."). Keep immersive copy clean.
@@ -9432,6 +9571,32 @@ async function renderImmersiveFeed(contents) {
             `
                 : liveJoinHtml;
 
+            const immersiveReplyHtml = isAnnouncement && replyContentId
+                ? `
+                <div class="profile-update-reply-block immersive-reply-block">
+                    <button type="button" class="reply-btn reply-btn-immersive" data-reply-toggle="${escapeHtml(replyContentId)}" aria-expanded="false" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)})">
+                        <span data-reply-toggle-label="${escapeHtml(replyContentId)}">Répondre</span>
+                        <span class="reply-count" data-reply-count="${escapeHtml(replyContentId)}">${replyCount}</span>
+                    </button>
+                    <div class="profile-reply-panel" data-profile-reply-panel="${escapeHtml(replyContentId)}" aria-hidden="true" hidden>
+                        <div class="reply-panel-head">
+                            <strong>Réponses</strong>
+                            <button type="button" class="reply-close-btn" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)}, false)">Fermer</button>
+                        </div>
+                        <div class="reply-inline">
+                            <textarea id="${escapeHtml(replyInputId)}" class="reply-input" placeholder="Votre réponse..."></textarea>
+                            <div class="reply-actions">
+                                <button class="btn-primary" onclick="event.stopPropagation(); submitAnnouncementReply(${inlineJsString(replyContentId)}, this, ${inlineJsString(content.userId || "")}, ${inlineJsString(content.title || "votre annonce")})">Envoyer</button>
+                            </div>
+                        </div>
+                        <div data-replies-container="${escapeHtml(replyContentId)}">
+                            ${renderAnnouncementReplies(replyContentId)}
+                        </div>
+                    </div>
+                </div>
+            `
+                : "";
+
             return `
             <div class="immersive-post" data-content-id="${content.contentId}" data-user-id="${content.userId}">
                 <div class="post-content-wrap">
@@ -9465,6 +9630,7 @@ async function renderImmersiveFeed(contents) {
                         
                         <p>${immersiveDescription}</p>
                         ${moodActionsHtml}
+                        ${immersiveReplyHtml}
                         <div class="immersive-post-user">
                             <button class="profile-link immersive-profile-link" onclick="event.stopPropagation(); handleProfileClick('${content.userId}', this, true)">
                                 <img src="${contentUserAvatar}" alt="Avatar de ${contentUserName}" class="immersive-post-user-avatar">
