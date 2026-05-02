@@ -2504,6 +2504,19 @@
             return;
         }
 
+        if (
+            typeof window.canCurrentUserMessageTargetAsync === "function" &&
+            !(await window.canCurrentUserMessageTargetAsync(targetUserId))
+        ) {
+            if (window.ToastManager?.info) {
+                ToastManager.info(
+                    "Messages limites",
+                    "Cet utilisateur limite les nouvelles conversations.",
+                );
+            }
+            return;
+        }
+
         if (!hasDmPage()) {
             const url = new URL("index.html", window.location.href);
             url.searchParams.set("messages", "1");

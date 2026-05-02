@@ -187,23 +187,62 @@ async function upsertUserProfile(userId, profileData) {
             };
         }
 
-        const { data, error } = await supabase
+        const socialLinksPayload = profileData.socialLinks || {};
+        const profilePreferencesPayload =
+            profileData.profile_preferences || profileData.profilePreferences;
+        const profilePayload = {
+            id: userId,
+            name: profileData.name,
+            title: profileData.title,
+            bio: profileData.bio,
+            avatar: profileData.avatar,
+            banner: profileData.banner,
+            account_type: profileData.account_type,
+            account_subtype: profileData.account_subtype,
+            badge: profileData.badge,
+            social_links: socialLinksPayload,
+            updated_at: new Date().toISOString(),
+        };
+
+        if (profilePreferencesPayload) {
+            profilePayload.profile_preferences = profilePreferencesPayload;
+        }
+
+        let { data, error } = await supabase
             .from("users")
-            .upsert({
-                id: userId,
-                name: profileData.name,
-                title: profileData.title,
-                bio: profileData.bio,
-                avatar: profileData.avatar,
-                banner: profileData.banner,
-                account_type: profileData.account_type,
-                account_subtype: profileData.account_subtype,
-                badge: profileData.badge,
-                social_links: profileData.socialLinks,
-                updated_at: new Date().toISOString(),
-            })
+            .upsert(profilePayload)
             .select()
             .single();
+
+        const missingPreferencesColumn =
+            error &&
+            profilePreferencesPayload &&
+            (String(error.message || "")
+                .toLowerCase()
+                .includes("profile_preferences") ||
+                error.code === "PGRST204");
+
+        if (missingPreferencesColumn) {
+            const fallbackPayload = {
+                ...profilePayload,
+                social_links: {
+                    ...socialLinksPayload,
+                    _profile_preferences: profilePreferencesPayload,
+                },
+            };
+            delete fallbackPayload.profile_preferences;
+
+            const fallbackResult = await supabase
+                .from("users")
+                .upsert(fallbackPayload)
+                .select()
+                .single();
+            data = fallbackResult.data;
+            error = fallbackResult.error;
+            if (data) {
+                data.profile_preferences = profilePreferencesPayload;
+            }
+        }
 
         if (error) {
             console.error("Erreur upsert profil:", error);
