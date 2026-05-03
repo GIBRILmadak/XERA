@@ -912,7 +912,8 @@ function normalizeSubscriptionRecord(row) {
         ...row,
         currentPeriodStart:
             row.currentPeriodStart || row.current_period_start || null,
-        currentPeriodEnd: row.currentPeriodEnd || row.current_period_end || null,
+        currentPeriodEnd:
+            row.currentPeriodEnd || row.current_period_end || null,
         cancelAtPeriodEnd:
             row.cancelAtPeriodEnd || row.cancel_at_period_end || false,
         canceledAt: row.canceledAt || row.canceled_at || null,
@@ -1071,7 +1072,9 @@ async function fetchProfileRecordById(userId, options = {}) {
 
     const { data, error } = await supabase
         .from("users")
-        .select("*")
+        .select(
+            "id,name,avatar,banner,bio,title,social_links,email,followers_count,updated_at,plan,plan_status,plan_ends_at,badge,is_monetized,account_type,account_subtype",
+        )
         .eq("id", safeUserId)
         .maybeSingle();
 
@@ -1118,8 +1121,9 @@ async function fetchDiscoverUsers(options = {}) {
 
     const { data, error } = await supabase
         .from("users")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .select("id,name,avatar,followers_count,title,bio,plan,updated_at")
+        .order("created_at", { ascending: false })
+        .limit(100); // Limit discover results to reduce egress
 
     if (error) {
         return {
@@ -1180,10 +1184,8 @@ async function fetchCurrentSubscriptionState(userId, options = {}) {
         return profileResult;
     }
 
-    const {
-        data: subscriptions,
-        error: subscriptionError,
-    } = subscriptionResult;
+    const { data: subscriptions, error: subscriptionError } =
+        subscriptionResult;
 
     if (subscriptionError) {
         return {
@@ -1203,11 +1205,7 @@ async function fetchCurrentSubscriptionState(userId, options = {}) {
         ),
     };
 
-    setCachedAppQueryValue(
-        cacheKey,
-        normalizedState,
-        APP_PROFILE_CACHE_TTL_MS,
-    );
+    setCachedAppQueryValue(cacheKey, normalizedState, APP_PROFILE_CACHE_TTL_MS);
 
     return {
         success: true,
@@ -4977,7 +4975,8 @@ app.get("/api/app/profiles/:userId", async (req, res) => {
         if (!profileResult.success) {
             return res.status(profileResult.status || 500).json({
                 success: false,
-                error: profileResult.error || "Impossible de charger le profil.",
+                error:
+                    profileResult.error || "Impossible de charger le profil.",
                 code: profileResult.code || "UNKNOWN",
             });
         }
@@ -5025,9 +5024,12 @@ app.put("/api/app/profiles/:userId", async (req, res) => {
             });
         }
 
-        const existingProfileResult = await fetchProfileRecordById(targetUserId, {
-            useCache: false,
-        });
+        const existingProfileResult = await fetchProfileRecordById(
+            targetUserId,
+            {
+                useCache: false,
+            },
+        );
         const existingProfile = existingProfileResult.success
             ? existingProfileResult.data
             : null;
@@ -5667,9 +5669,7 @@ app.post("/api/admin/bots/set-force-posts", async (req, res) => {
 app.post("/api/admin/bots/delete-all", async (req, res) => {
     const adminAuth = await authenticateSuperAdmin(req);
     if (adminAuth.error) {
-        return res
-            .status(adminAuth.error.status)
-            .send(adminAuth.error.message);
+        return res.status(adminAuth.error.status).send(adminAuth.error.message);
     }
 
     try {
@@ -5682,7 +5682,7 @@ app.post("/api/admin/bots/delete-all", async (req, res) => {
             throw botsErr;
         }
 
-        const botUserIds = (bots || []).map(b => b.user_id).filter(Boolean);
+        const botUserIds = (bots || []).map((b) => b.user_id).filter(Boolean);
         console.log("delete-all: found", botUserIds.length, "bots");
 
         let deleted = { bots: 0, users: 0 };
@@ -5718,19 +5718,19 @@ app.post("/api/admin/bots/delete-all", async (req, res) => {
         // 4. Also delete related content
         if (botUserIds.length > 0) {
             for (const userId of botUserIds) {
-                await supabase
-                    .from("content")
-                    .delete()
-                    .eq("user_id", userId);
+                await supabase.from("content").delete().eq("user_id", userId);
             }
         }
 
         // 5. Reset bot_control count
-        await supabase.from("bot_control").upsert({
-            key: "bots.active_count",
-            value: { count: 0 },
-            updated_at: new Date().toISOString(),
-        }, { onConflict: "key" });
+        await supabase.from("bot_control").upsert(
+            {
+                key: "bots.active_count",
+                value: { count: 0 },
+                updated_at: new Date().toISOString(),
+            },
+            { onConflict: "key" },
+        );
 
         console.log("delete-all: success", deleted);
         return res.json({ success: true, deleted });
@@ -5752,18 +5752,24 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         return res.status(401).send("Unauthorized cron request.");
     }
 
-	    const force = req.body?.force === true;
-	    const limitRaw = Number(
-	        req.body?.limit ??
-	            req.query?.limit ??
-	            process.env.BOT_RUN_ONCE_BATCH ??
-	            20,
-	    );
-	    const limit = Math.max(1, Math.min(500, Number.isFinite(limitRaw) ? limitRaw : 20));
-	    const offsetRaw = Number(req.body?.offset ?? req.query?.offset ?? 0);
-	    const offset = Math.max(0, Number.isFinite(offsetRaw) ? Math.floor(offsetRaw) : 0);
-	    const FOLLOW_DAILY_LIMIT = Number(process.env.BOT_FOLLOW_DAILY_LIMIT) || 3;
-	    const MAX_POSTS_PER_RUN = Number(process.env.BOT_MAX_POSTS_PER_RUN) || 50;
+    const force = req.body?.force === true;
+    const limitRaw = Number(
+        req.body?.limit ??
+            req.query?.limit ??
+            process.env.BOT_RUN_ONCE_BATCH ??
+            20,
+    );
+    const limit = Math.max(
+        1,
+        Math.min(500, Number.isFinite(limitRaw) ? limitRaw : 20),
+    );
+    const offsetRaw = Number(req.body?.offset ?? req.query?.offset ?? 0);
+    const offset = Math.max(
+        0,
+        Number.isFinite(offsetRaw) ? Math.floor(offsetRaw) : 0,
+    );
+    const FOLLOW_DAILY_LIMIT = Number(process.env.BOT_FOLLOW_DAILY_LIMIT) || 3;
+    const MAX_POSTS_PER_RUN = Number(process.env.BOT_MAX_POSTS_PER_RUN) || 50;
     const BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY = Math.max(
         15,
         Number(process.env.BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY) || 15,
@@ -5774,10 +5780,14 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
     );
     const BOT_DAILY_VIEWS_TARGET =
         Number(process.env.BOT_DAILY_VIEWS_TARGET) || 30;
-    const BOT_MIN_POSTS_PER_DAY =
-        Math.max(1, Number(process.env.BOT_MIN_POSTS_PER_DAY) || 1);
-    const BOT_POST_WINDOW_START_MINUTE =
-        Math.max(0, Number(process.env.BOT_POST_WINDOW_START_MINUTE) || 6 * 60);
+    const BOT_MIN_POSTS_PER_DAY = Math.max(
+        1,
+        Number(process.env.BOT_MIN_POSTS_PER_DAY) || 1,
+    );
+    const BOT_POST_WINDOW_START_MINUTE = Math.max(
+        0,
+        Number(process.env.BOT_POST_WINDOW_START_MINUTE) || 6 * 60,
+    );
     const BOT_POST_WINDOW_END_MINUTE = Math.min(
         23 * 60 + 30,
         Number(process.env.BOT_POST_WINDOW_END_MINUTE) || 22 * 60 + 30,
@@ -5795,36 +5805,36 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         return now.getUTCHours() * 60 + now.getUTCMinutes();
     }
 
-	    function getElapsedWindowEnd(currentMinutes, startMinute, endMinute) {
-	        return Math.max(startMinute, Math.min(endMinute, currentMinutes));
-	    }
+    function getElapsedWindowEnd(currentMinutes, startMinute, endMinute) {
+        return Math.max(startMinute, Math.min(endMinute, currentMinutes));
+    }
 
-	    function clampMinute(value, min, max) {
-	        const v = Math.floor(Number(value) || 0);
-	        return Math.max(min, Math.min(max, v));
-	    }
+    function clampMinute(value, min, max) {
+        const v = Math.floor(Number(value) || 0);
+        return Math.max(min, Math.min(max, v));
+    }
 
-	    function getBotScheduledPostMinute(bot, dayKey, fallbackMinute = 0) {
-	        const rawHour = Number(bot?.schedule_hour);
-	        const hour = Number.isFinite(rawHour)
-	            ? clampMinute(rawHour, 0, 23)
-	            : getDeterministicRandom(`${bot?.user_id}:${dayKey}:postHour`, 24);
-	        const minuteInHour = getDeterministicRandom(
-	            `${bot?.user_id}:${dayKey}:postMinute`,
-	            60,
-	        );
-	        const minuteOfDay = hour * 60 + minuteInHour;
-	        return clampMinute(
-	            Number.isFinite(minuteOfDay) ? minuteOfDay : fallbackMinute,
-	            BOT_POST_WINDOW_START_MINUTE,
-	            BOT_POST_WINDOW_END_MINUTE,
-	        );
-	    }
+    function getBotScheduledPostMinute(bot, dayKey, fallbackMinute = 0) {
+        const rawHour = Number(bot?.schedule_hour);
+        const hour = Number.isFinite(rawHour)
+            ? clampMinute(rawHour, 0, 23)
+            : getDeterministicRandom(`${bot?.user_id}:${dayKey}:postHour`, 24);
+        const minuteInHour = getDeterministicRandom(
+            `${bot?.user_id}:${dayKey}:postMinute`,
+            60,
+        );
+        const minuteOfDay = hour * 60 + minuteInHour;
+        return clampMinute(
+            Number.isFinite(minuteOfDay) ? minuteOfDay : fallbackMinute,
+            BOT_POST_WINDOW_START_MINUTE,
+            BOT_POST_WINDOW_END_MINUTE,
+        );
+    }
 
-	    function parseBotMeta(metaValue) {
-	        try {
-	            if (!metaValue) return {};
-	            if (typeof metaValue === "object" && !Array.isArray(metaValue)) {
+    function parseBotMeta(metaValue) {
+        try {
+            if (!metaValue) return {};
+            if (typeof metaValue === "object" && !Array.isArray(metaValue)) {
                 return { ...metaValue };
             }
             return JSON.parse(metaValue);
@@ -5847,7 +5857,11 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         }
     }
 
-    async function persistMergedBotMeta(userId, metaUpdater, extraPayload = {}) {
+    async function persistMergedBotMeta(
+        userId,
+        metaUpdater,
+        extraPayload = {},
+    ) {
         const currentMeta = await fetchCurrentBotMeta(userId);
         const nextMeta =
             typeof metaUpdater === "function"
@@ -5864,7 +5878,9 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
     }
 
     async function fetchAlreadyEncouragedIds(botUserId, contentIds = []) {
-        const uniqueIds = Array.from(new Set((contentIds || []).filter(Boolean)));
+        const uniqueIds = Array.from(
+            new Set((contentIds || []).filter(Boolean)),
+        );
         if (!botUserId || uniqueIds.length === 0) return new Set();
 
         try {
@@ -5884,22 +5900,22 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         }
     }
 
-	    function resolveDailyPostCreatedAt(bot, postMinuteMap, now) {
-	        const dayKey = now.toISOString().slice(0, 10);
-	        const fallbackMinute = getElapsedWindowEnd(
-	            getCurrentUtcMinute(now),
-	            BOT_POST_WINDOW_START_MINUTE,
-	            BOT_POST_WINDOW_END_MINUTE,
-	        );
-	        const assignedMinute = Number.isFinite(Number(bot?.schedule_hour))
-	            ? getBotScheduledPostMinute(bot, dayKey, fallbackMinute)
-	            : postMinuteMap.get(String(bot.user_id)) ?? fallbackMinute;
-	        return buildIsoFromMinuteOfDay(
-	            dayKey,
-	            assignedMinute,
-	            `${bot.user_id}:post`,
-	        );
-	    }
+    function resolveDailyPostCreatedAt(bot, postMinuteMap, now) {
+        const dayKey = now.toISOString().slice(0, 10);
+        const fallbackMinute = getElapsedWindowEnd(
+            getCurrentUtcMinute(now),
+            BOT_POST_WINDOW_START_MINUTE,
+            BOT_POST_WINDOW_END_MINUTE,
+        );
+        const assignedMinute = Number.isFinite(Number(bot?.schedule_hour))
+            ? getBotScheduledPostMinute(bot, dayKey, fallbackMinute)
+            : (postMinuteMap.get(String(bot.user_id)) ?? fallbackMinute);
+        return buildIsoFromMinuteOfDay(
+            dayKey,
+            assignedMinute,
+            `${bot.user_id}:post`,
+        );
+    }
 
     function getBotEncouragementBacklog(bot, meta, todayStr, currentMinutes) {
         const dailyTarget = getBotDailyEncourageTarget(
@@ -6055,7 +6071,10 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                 .eq("user_id", bot.user_id);
             return data;
         } catch (error) {
-            console.warn(`postAsBot error for ${bot.user_id}:`, error?.message || error);
+            console.warn(
+                `postAsBot error for ${bot.user_id}:`,
+                error?.message || error,
+            );
             return null;
         }
     }
@@ -6077,12 +6096,15 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                 candidates.map((item) => item.id),
             );
             const availableCandidates = candidates.filter(
-                (item) => item?.id && !alreadyEncouragedIds.has(String(item.id)),
+                (item) =>
+                    item?.id && !alreadyEncouragedIds.has(String(item.id)),
             );
             if (availableCandidates.length === 0) return null;
 
             const userIds = Array.from(
-                new Set(availableCandidates.map((c) => c.user_id).filter(Boolean)),
+                new Set(
+                    availableCandidates.map((c) => c.user_id).filter(Boolean),
+                ),
             );
             const usersMap = {};
             if (userIds.length > 0) {
@@ -6100,8 +6122,12 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             const prioritized = availableCandidates.filter(
                 (item) => !usersMap[item.user_id],
             );
-            const pickFrom = prioritized.length > 0 ? prioritized : availableCandidates;
-            const freshnessPool = pickFrom.slice(0, Math.min(40, pickFrom.length));
+            const pickFrom =
+                prioritized.length > 0 ? prioritized : availableCandidates;
+            const freshnessPool = pickFrom.slice(
+                0,
+                Math.min(40, pickFrom.length),
+            );
             const target =
                 freshnessPool[
                     getDeterministicRandom(
@@ -6218,7 +6244,9 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             if (error) throw error;
             if (!candidates || candidates.length === 0) return 0;
 
-            const realUsers = candidates.filter((candidate) => !candidate.is_bot);
+            const realUsers = candidates.filter(
+                (candidate) => !candidate.is_bot,
+            );
             const botUsers = candidates.filter((candidate) => candidate.is_bot);
             realUsers.sort(
                 (a, b) => (b.followers_count || 0) - (a.followers_count || 0),
@@ -6241,18 +6269,22 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                             following_id: candidate.id,
                         });
                     if (insertError) {
-                        console.warn("follow insert err", insertError?.message || insertError);
+                        console.warn(
+                            "follow insert err",
+                            insertError?.message || insertError,
+                        );
                         continue;
                     }
                     followingIds.add(candidate.id);
                     followed += 1;
                     try {
-                        const { data: recent, error: recentErr } = await supabase
-                            .from("content")
-                            .select("id")
-                            .eq("user_id", candidate.id)
-                            .order("created_at", { ascending: false })
-                            .limit(3);
+                        const { data: recent, error: recentErr } =
+                            await supabase
+                                .from("content")
+                                .select("id")
+                                .eq("user_id", candidate.id)
+                                .order("created_at", { ascending: false })
+                                .limit(3);
                         if (!recentErr && Array.isArray(recent)) {
                             for (const row of recent) {
                                 try {
@@ -6270,7 +6302,10 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                     }
                     await sleep(150 + Math.random() * 500);
                 } catch (error) {
-                    console.warn("followAsBot insert error", error?.message || error);
+                    console.warn(
+                        "followAsBot insert error",
+                        error?.message || error,
+                    );
                 }
             }
 
@@ -6286,7 +6321,10 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             );
             return followed;
         } catch (error) {
-            console.warn(`followAsBot error for ${bot.user_id}:`, error?.message || error);
+            console.warn(
+                `followAsBot error for ${bot.user_id}:`,
+                error?.message || error,
+            );
             return 0;
         }
     }
@@ -6339,7 +6377,9 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             const viewedIds = [];
             for (const target of targets) {
                 try {
-                    await supabase.rpc("increment_views", { row_id: target.id });
+                    await supabase.rpc("increment_views", {
+                        row_id: target.id,
+                    });
                     viewed += 1;
                     viewedIds.push(String(target.id));
                 } catch (_error) {
@@ -6375,7 +6415,10 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
 
             return viewed;
         } catch (error) {
-            console.warn(`viewAsBot error for ${bot.user_id}:`, error?.message || error);
+            console.warn(
+                `viewAsBot error for ${bot.user_id}:`,
+                error?.message || error,
+            );
             return 0;
         }
     }
@@ -6389,15 +6432,15 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         const activeCountValue =
             (control && control.value && Number(control.value.count)) || 0;
 
-	        const query = supabase
-	            .from("bots")
-	            .select("*")
-	            .eq("active", true)
-	            .order("last_action_at", { ascending: true });
-	        query.range(offset, offset + limit - 1);
-	        const { data: bots, error: botsErr } = await query;
-	        if (botsErr) throw botsErr;
-	        const usedVideoUrlsThisRun = new Set();
+        const query = supabase
+            .from("bots")
+            .select("*")
+            .eq("active", true)
+            .order("last_action_at", { ascending: true });
+        query.range(offset, offset + limit - 1);
+        const { data: bots, error: botsErr } = await query;
+        if (botsErr) throw botsErr;
+        const usedVideoUrlsThisRun = new Set();
 
         const now = new Date();
         const currentMinutes = getCurrentUtcMinute(now);
@@ -6412,7 +6455,9 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         let follows = 0;
         let views = 0;
 
-        const botUserIds = (bots || []).map((bot) => bot.user_id).filter(Boolean);
+        const botUserIds = (bots || [])
+            .map((bot) => bot.user_id)
+            .filter(Boolean);
         const { data: postsToday } = await supabase
             .from("content")
             .select("user_id")
@@ -6421,44 +6466,50 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
 
         const postsCountMap = {};
         (postsToday || []).forEach((post) => {
-            postsCountMap[post.user_id] = (postsCountMap[post.user_id] || 0) + 1;
+            postsCountMap[post.user_id] =
+                (postsCountMap[post.user_id] || 0) + 1;
         });
 
-	        const postMinuteMap = buildDistributedMinuteSlots(bots || [], {
-	            dayKey: todayStr,
-	            actionKey: "post",
-	            startMinute: BOT_POST_WINDOW_START_MINUTE,
-	            endMinute: getElapsedWindowEnd(
-	                currentMinutes,
-	                BOT_POST_WINDOW_START_MINUTE,
-	                BOT_POST_WINDOW_END_MINUTE,
-	            ),
-	        });
+        const postMinuteMap = buildDistributedMinuteSlots(bots || [], {
+            dayKey: todayStr,
+            actionKey: "post",
+            startMinute: BOT_POST_WINDOW_START_MINUTE,
+            endMinute: getElapsedWindowEnd(
+                currentMinutes,
+                BOT_POST_WINDOW_START_MINUTE,
+                BOT_POST_WINDOW_END_MINUTE,
+            ),
+        });
 
-	        for (const bot of bots || []) {
-	            const meta = parseBotMeta(bot.meta);
-	            const currentPosts = postsCountMap[bot.user_id] || 0;
+        for (const bot of bots || []) {
+            const meta = parseBotMeta(bot.meta);
+            const currentPosts = postsCountMap[bot.user_id] || 0;
 
-	            if (posts < MAX_POSTS_PER_RUN && currentPosts < BOT_MIN_POSTS_PER_DAY) {
-	                const scheduledMinute = Number.isFinite(Number(bot?.schedule_hour))
-	                    ? getBotScheduledPostMinute(bot, todayStr)
-	                    : postMinuteMap.get(String(bot.user_id));
-	                const isDue =
-	                    Number.isFinite(Number(scheduledMinute)) &&
-	                    currentMinutes >= Number(scheduledMinute);
-	                if (!shouldForcePostsForRun && !isDue) {
-	                    // Not time yet for this bot today.
-	                    continue;
-	                }
-	                const createdAt = shouldForcePostsForRun
-	                    ? new Date().toISOString()
-	                    : resolveDailyPostCreatedAt(bot, postMinuteMap, now);
-	                const result = await postAsBot(bot, { createdAt });
-	                if (result) {
-	                    posts += 1;
-	                    postsCountMap[bot.user_id] = currentPosts + 1;
-	                }
-	            }
+            if (
+                posts < MAX_POSTS_PER_RUN &&
+                currentPosts < BOT_MIN_POSTS_PER_DAY
+            ) {
+                const scheduledMinute = Number.isFinite(
+                    Number(bot?.schedule_hour),
+                )
+                    ? getBotScheduledPostMinute(bot, todayStr)
+                    : postMinuteMap.get(String(bot.user_id));
+                const isDue =
+                    Number.isFinite(Number(scheduledMinute)) &&
+                    currentMinutes >= Number(scheduledMinute);
+                if (!shouldForcePostsForRun && !isDue) {
+                    // Not time yet for this bot today.
+                    continue;
+                }
+                const createdAt = shouldForcePostsForRun
+                    ? new Date().toISOString()
+                    : resolveDailyPostCreatedAt(bot, postMinuteMap, now);
+                const result = await postAsBot(bot, { createdAt });
+                if (result) {
+                    posts += 1;
+                    postsCountMap[bot.user_id] = currentPosts + 1;
+                }
+            }
 
             if (encourages < MAX_ENCOURAGES_PER_RUN) {
                 const encouragedToday =
@@ -6469,7 +6520,10 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                     bot,
                     BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY,
                 );
-                const remainingToday = Math.max(0, dailyTarget - encouragedToday);
+                const remainingToday = Math.max(
+                    0,
+                    dailyTarget - encouragedToday,
+                );
                 const backlog = shouldForcePostsForRun
                     ? remainingToday
                     : getBotEncouragementBacklog(
@@ -6502,24 +6556,23 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             }
         }
 
-	        return res.json({
-	            success: true,
-	            processed: (bots || []).length,
-	            offset,
-	            nextOffset: offset + (bots || []).length,
-	            posts,
-	            encourages,
-	            follows,
-	            views,
-	            activeCount: activeCountValue,
-	        });
-	    } catch (error) {
+        return res.json({
+            success: true,
+            processed: (bots || []).length,
+            offset,
+            nextOffset: offset + (bots || []).length,
+            posts,
+            encourages,
+            follows,
+            views,
+            activeCount: activeCountValue,
+        });
+    } catch (error) {
         console.error("/api/admin/bots/run-now error", error);
         if (error && error.stack) console.error(error.stack);
         return res.status(500).send("Erreur interne");
     }
 });
-
 
 if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {
     sweepExpiredSubscriptions();
