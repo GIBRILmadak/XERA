@@ -124,7 +124,8 @@ function formatDays(days) {
 
 async function deleteAllBots() {
     try {
-        const confirmMsg = "Êtes-vous sûr de vouloir SUPPRIMER TOUS les bots ?\n\nCette action est irréversible !\n\nCliquez sur OK pour confirmer.";
+        const confirmMsg =
+            "Êtes-vous sûr de vouloir SUPPRIMER TOUS les bots ?\n\nCette action est irréversible !\n\nCliquez sur OK pour confirmer.";
         if (!confirm(confirmMsg)) return null;
 
         const {
@@ -383,7 +384,8 @@ async function renderSuperAdminPage() {
             // Le backend run-now est limite par batch (20 par defaut).
             // On enchaine les batches pour couvrir tous les bots actifs.
             const activeFromLabel = parseInt(
-                document.getElementById("bots-active-count")?.textContent || "0",
+                document.getElementById("bots-active-count")?.textContent ||
+                    "0",
                 10,
             );
             const targetActive = Math.max(
@@ -401,7 +403,10 @@ async function renderSuperAdminPage() {
             let offset = 0;
 
             while (remaining > 0 && batchIndex < 300) {
-                const currentLimit = Math.max(1, Math.min(BATCH_SIZE, remaining));
+                const currentLimit = Math.max(
+                    1,
+                    Math.min(BATCH_SIZE, remaining),
+                );
                 runResultSpan.textContent = `Batch ${batchIndex + 1} en cours... (${Math.max(remaining, 0)} restant)`;
 
                 const res = await apiFetch("/api/admin/bots/run-now", {
@@ -474,8 +479,8 @@ async function renderSuperAdminPage() {
 
     // Initial load
     await refresh();
-    // Auto refresh every 60s
-    setInterval(refresh, 60 * 1000);
+    // Auto refresh DISABLED: bots are now stopped. Users can manually refresh or relay on realtime.
+    // setInterval(refresh, 60 * 1000);
 }
 
 window.renderSuperAdminPage = renderSuperAdminPage;

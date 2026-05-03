@@ -2202,7 +2202,9 @@ function getReplySelector(contentId, attributeName) {
 }
 
 function shortenReplyNotificationText(value, maxLength = 90) {
-    const text = String(value || "").replace(/\s+/g, " ").trim();
+    const text = String(value || "")
+        .replace(/\s+/g, " ")
+        .trim();
     if (text.length <= maxLength) return text;
     return `${text.slice(0, maxLength - 1).trim()}…`;
 }
@@ -2258,7 +2260,9 @@ function renderAnnouncementReplies(contentId) {
 function setAnnouncementReplyPanelState(contentId, isOpen) {
     if (!contentId) return;
     document
-        .querySelectorAll(getReplySelector(contentId, "data-profile-reply-panel"))
+        .querySelectorAll(
+            getReplySelector(contentId, "data-profile-reply-panel"),
+        )
         .forEach((panel) => {
             panel.hidden = !isOpen;
             panel.classList.toggle("is-open", isOpen);
@@ -2271,7 +2275,9 @@ function setAnnouncementReplyPanelState(contentId, isOpen) {
             button.setAttribute("aria-expanded", isOpen ? "true" : "false");
         });
     document
-        .querySelectorAll(getReplySelector(contentId, "data-reply-toggle-label"))
+        .querySelectorAll(
+            getReplySelector(contentId, "data-reply-toggle-label"),
+        )
         .forEach((label) => {
             label.textContent = isOpen ? "Masquer" : "Répondre";
         });
@@ -2283,7 +2289,11 @@ function toggleProfileAnnouncementReplies(contentId, forceOpen = null) {
         getReplySelector(contentId, "data-profile-reply-panel"),
     );
     const shouldOpen =
-        typeof forceOpen === "boolean" ? forceOpen : panel ? panel.hidden : true;
+        typeof forceOpen === "boolean"
+            ? forceOpen
+            : panel
+              ? panel.hidden
+              : true;
     setAnnouncementReplyPanelState(contentId, shouldOpen);
     if (shouldOpen) refreshRepliesUI(contentId);
 }
@@ -2300,7 +2310,12 @@ function refreshRepliesUI(contentId) {
         .forEach((el) => (el.textContent = count));
 }
 
-async function notifyAnnouncementOwnerOfReply(contentId, ownerId, title, reply) {
+async function notifyAnnouncementOwnerOfReply(
+    contentId,
+    ownerId,
+    title,
+    reply,
+) {
     const current = window.currentUser;
     if (
         !contentId ||
@@ -2376,9 +2391,8 @@ async function submitAnnouncementReply(
     if (textarea) textarea.value = "";
     refreshRepliesUI(contentId);
     setAnnouncementReplyPanelState(contentId, true);
-    const contentMeta = !ownerId || !announcementTitle
-        ? findContentByReplyId(contentId)
-        : null;
+    const contentMeta =
+        !ownerId || !announcementTitle ? findContentByReplyId(contentId) : null;
     const resolvedOwnerId = ownerId || contentMeta?.userId || "";
     const resolvedTitle =
         announcementTitle || contentMeta?.title || "votre annonce";
@@ -3200,7 +3214,8 @@ async function toggleFollow(viewerId, targetUserId) {
                 ".follower-stat-count",
             );
             if (followerStats[0]) {
-                followerStats[0].textContent = formatCompactCount(followerCount);
+                followerStats[0].textContent =
+                    formatCompactCount(followerCount);
             } else if (followerStats.length > 0) {
                 followerStats.forEach(
                     (stat) =>
@@ -3215,7 +3230,8 @@ async function toggleFollow(viewerId, targetUserId) {
                 ".follower-stat-count",
             );
             if (followerStats[1]) {
-                followerStats[1].textContent = formatCompactCount(followingCount);
+                followerStats[1].textContent =
+                    formatCompactCount(followingCount);
             }
         }
 
@@ -5367,7 +5383,11 @@ function initializeProfileCustomizationControls(container) {
     syncPreview();
 }
 
-function shouldShowProfileToViewerSync(user, viewerId, followedSet = new Set()) {
+function shouldShowProfileToViewerSync(
+    user,
+    viewerId,
+    followedSet = new Set(),
+) {
     if (!user) return false;
     if (viewerId && user.id === viewerId) return true;
     if (typeof isSuperAdmin === "function" && isSuperAdmin()) return true;
@@ -6963,8 +6983,9 @@ function renderProfileUpdateCard(
             </div>
         `;
 
-    const replyPanelHtml = isAnnouncement && replyContentId
-        ? `
+    const replyPanelHtml =
+        isAnnouncement && replyContentId
+            ? `
             <div class="profile-update-reply-block">
                 <button type="button" class="reply-btn" data-reply-toggle="${escapeHtml(replyContentId)}" aria-expanded="false" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)})">
                     <span data-reply-toggle-label="${escapeHtml(replyContentId)}">Répondre</span>
@@ -6987,7 +7008,7 @@ function renderProfileUpdateCard(
                 </div>
             </div>
         `
-        : "";
+            : "";
 
     let managementHtml = "";
     if (currentUser && currentUser.id === profileUserId) {
@@ -7400,7 +7421,9 @@ function renderProfileProjectProgressBoard(arcs, contents, profileUserId) {
     if (summaries.length === 0) return "";
 
     const activeCount = summaries.filter(
-        (item) => item.arc?.status !== "completed" && item.arc?.status !== "abandoned",
+        (item) =>
+            item.arc?.status !== "completed" &&
+            item.arc?.status !== "abandoned",
     ).length;
     const totalUpdates = summaries.reduce(
         (sum, item) => sum + Number(item.updates || 0),
@@ -8875,8 +8898,7 @@ function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
                     "discover-row-start",
                 );
                 node.classList.add(`discover-row-size-${rowSize || 4}`);
-                if (rowPosition === 0)
-                    node.classList.add("discover-row-start");
+                if (rowPosition === 0) node.classList.add("discover-row-start");
                 fragment.appendChild(node);
             }
         },
@@ -9009,7 +9031,11 @@ async function renderDiscoverGrid() {
 
     // Tri de base par récence puis mélange pondéré vérifiés/non-vérifiés
     usersToDisplay = sortUsersByLatestRecency(usersToDisplay).filter((user) =>
-        shouldShowProfileToViewerSync(user, currentUser?.id || null, followedSet),
+        shouldShowProfileToViewerSync(
+            user,
+            currentUser?.id || null,
+            followedSet,
+        ),
     );
     liveStreams = liveStreams.filter((stream) => {
         const host = getUser(stream.user_id);
@@ -9809,9 +9835,10 @@ async function renderImmersiveFeed(contents) {
             const replyInputId = replyContentId
                 ? `immersive-reply-input-${replyContentId}`
                 : "";
-            const replyCount = isAnnouncement && replyContentId
-                ? getReplyCount(replyContentId)
-                : 0;
+            const replyCount =
+                isAnnouncement && replyContentId
+                    ? getReplyCount(replyContentId)
+                    : 0;
             // Defensive: some cached/local items may still carry the tag payload inside
             // `description` (e.g. "\n\n#hashtags: ..."). Keep immersive copy clean.
             const immersiveDescription = extractTagsFromDescription(
@@ -9973,8 +10000,9 @@ async function renderImmersiveFeed(contents) {
             `
                 : liveJoinHtml;
 
-            const immersiveReplyHtml = isAnnouncement && replyContentId
-                ? `
+            const immersiveReplyHtml =
+                isAnnouncement && replyContentId
+                    ? `
                 <div class="profile-update-reply-block immersive-reply-block">
                     <button type="button" class="reply-btn reply-btn-immersive" data-reply-toggle="${escapeHtml(replyContentId)}" aria-expanded="false" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)})">
                         <span data-reply-toggle-label="${escapeHtml(replyContentId)}">Répondre</span>
@@ -9997,7 +10025,7 @@ async function renderImmersiveFeed(contents) {
                     </div>
                 </div>
             `
-                : "";
+                    : "";
 
             return `
             <div class="immersive-post" data-content-id="${content.contentId}" data-user-id="${content.userId}">
@@ -11477,9 +11505,8 @@ async function renderProfileTimeline(userId) {
             (profilePrivacy.allowMessages === "followers" &&
                 isFollowingThisUser));
 
-    const messageButtonHtml =
-        canMessageThisUser
-            ? `
+    const messageButtonHtml = canMessageThisUser
+        ? `
                 <button
                     class="btn-secondary profile-message-btn"
                     onclick="window.openMessagesWithUser && window.openMessagesWithUser('${userId}')"
@@ -11490,7 +11517,7 @@ async function renderProfileTimeline(userId) {
                     Message
                 </button>
             `
-            : "";
+        : "";
 
     const followerCount = await getFollowerCount(userId);
     const followingCount = await getFollowingCount(userId);
@@ -11869,7 +11896,7 @@ async function renderProfileIntoContainer(userId) {
             const preferences = getUserProfilePreferences(user);
             const appearanceClass = getProfileAppearanceClass(preferences);
             const appearanceStyle = getProfileAppearanceStyle(preferences);
-            
+
             // Appliquer les classes et styles de personnalisation
             profileContainer.className = `container profile-container ${appearanceClass}`;
             profileContainer.setAttribute("style", appearanceStyle);
@@ -13765,7 +13792,8 @@ async function openSettings(userId) {
                     if (window.ToastManager) {
                         ToastManager.warning(
                             "Profil enregistré",
-                            "Mais le rappel email n'a pas pu être sauvegardé : " + reminderSaveResult.error
+                            "Mais le rappel email n'a pas pu être sauvegardé : " +
+                                reminderSaveResult.error,
                         );
                     } else {
                         alert(
@@ -13777,7 +13805,7 @@ async function openSettings(userId) {
                     if (window.ToastManager) {
                         ToastManager.success(
                             "Succès",
-                            "Vos réglages ont été enregistrés avec succès."
+                            "Vos réglages ont été enregistrés avec succès.",
                         );
                     }
                     closeSettings();
@@ -13786,7 +13814,8 @@ async function openSettings(userId) {
                 if (window.ToastManager) {
                     ToastManager.error(
                         "Erreur",
-                        result.error || "Une erreur est survenue lors de l'enregistrement."
+                        result.error ||
+                            "Une erreur est survenue lors de l'enregistrement.",
                     );
                 } else {
                     alert("Erreur: " + result.error);
@@ -16269,7 +16298,8 @@ document.addEventListener("DOMContentLoaded", function () {
 window.openCreateMenu = openCreateMenu;
 
 // Rafraîchissement périodique du feed (inclut les lives) pour compenser toute latence realtime
-const LIVE_REFRESH_MS = 20000;
+// MINIMIZED: Realtime subscriptions should handle most updates. Fallback to 5-minute refresh only.
+const LIVE_REFRESH_MS = 5 * 60 * 1000; // was 20000ms (20s), now 300000ms (5 min)
 let liveRefreshTimer = null;
 
 function startLiveAutoRefresh() {
@@ -16342,11 +16372,52 @@ function subscribeToRealtime() {
                         // fallback ci-dessous via refetch complet
                     }
 
-                    // Recharger en fond pour garder un etat exact (tags, arcs, etc.)
-                    const contentResult = await getUserContent(userId);
-                    if (contentResult.success) {
-                        userContents[userId] = contentResult.data.map(
-                            convertSupabaseContent,
+                    // Schedule a debounced background re-fetch to avoid
+                    // repeated heavy SELECTs on every realtime event.
+                    try {
+                        if (!window.__userContentRefetchTimers) {
+                            window.__userContentRefetchTimers = new Map();
+                        }
+                        // If a refetch is already scheduled for this user, skip.
+                        if (!window.__userContentRefetchTimers.has(userId)) {
+                            const timerId = setTimeout(async () => {
+                                try {
+                                    const contentResult =
+                                        await getUserContent(userId);
+                                    if (
+                                        contentResult &&
+                                        contentResult.success
+                                    ) {
+                                        userContents[userId] =
+                                            contentResult.data.map(
+                                                convertSupabaseContent,
+                                            );
+                                    }
+                                } catch (e) {
+                                    console.warn(
+                                        "Background getUserContent failed:",
+                                        e?.message || e,
+                                    );
+                                } finally {
+                                    const t =
+                                        window.__userContentRefetchTimers.get(
+                                            userId,
+                                        );
+                                    if (t) clearTimeout(t);
+                                    window.__userContentRefetchTimers.delete(
+                                        userId,
+                                    );
+                                }
+                            }, 3000); // 3s debounce window
+                            window.__userContentRefetchTimers.set(
+                                userId,
+                                timerId,
+                            );
+                        }
+                    } catch (e) {
+                        console.warn(
+                            "Scheduling background refetch failed:",
+                            e,
                         );
                     }
 
@@ -16369,7 +16440,11 @@ function subscribeToRealtime() {
                 } else if (eventType === "DELETE") {
                     const userId = oldRecord?.user_id;
                     const contentId = oldRecord?.id;
-                    if (userId && contentId && Array.isArray(userContents[userId])) {
+                    if (
+                        userId &&
+                        contentId &&
+                        Array.isArray(userContents[userId])
+                    ) {
                         userContents[userId] = userContents[userId].filter(
                             (item) => item?.contentId !== contentId,
                         );

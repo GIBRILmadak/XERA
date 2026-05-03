@@ -352,13 +352,17 @@ function startDashboardAutoRefresh(userId) {
     }
     if (!userId) return;
 
-    window.creatorDashboardPollingTimer = setInterval(() => {
-        // Pause du polling si hors ligne
-        if (typeof navigator !== "undefined" && navigator.onLine === false)
-            return;
-        scheduleDashboardRealtimeRefresh(userId);
-        syncDashboardSupportNotification(userId);
-    }, 30000);
+    // Polling reduced: realtime should handle most updates. Fallback refresh every 10 minutes.
+    window.creatorDashboardPollingTimer = setInterval(
+        () => {
+            // Pause du polling si hors ligne
+            if (typeof navigator !== "undefined" && navigator.onLine === false)
+                return;
+            scheduleDashboardRealtimeRefresh(userId);
+            syncDashboardSupportNotification(userId);
+        },
+        10 * 60 * 1000,
+    );
 }
 
 window.addEventListener("beforeunload", cleanupDashboardRealtime);

@@ -465,7 +465,23 @@ async function updateContent(contentId, contentData) {
 // Récupérer le contenu d'un utilisateur
 async function getUserContent(userId) {
     const selectWithArcMetadata = `
-            *,
+            id,
+            user_id,
+            project_id,
+            arc_id,
+            day_number,
+            type,
+            state,
+            title,
+            description,
+            media_url,
+            media_urls,
+            views,
+            encouragements_count,
+            created_at,
+            is_deleted,
+            deleted_at,
+            deleted_reason,
             arcs (
                 id,
                 title,
@@ -480,7 +496,23 @@ async function getUserContent(userId) {
             )
         `;
     const selectLegacy = `
-            *,
+            id,
+            user_id,
+            project_id,
+            arc_id,
+            day_number,
+            type,
+            state,
+            title,
+            description,
+            media_url,
+            media_urls,
+            views,
+            encouragements_count,
+            created_at,
+            is_deleted,
+            deleted_at,
+            deleted_reason,
             arcs (
                 id,
                 title,
@@ -537,7 +569,23 @@ async function fetchUsersByIds(ids = []) {
 // Récupérer le contenu public d'un utilisateur (sans jointures)
 async function getUserContentPublic(userId) {
     const selectWithArcMetadata = `
-            *,
+            id,
+            user_id,
+            project_id,
+            arc_id,
+            day_number,
+            type,
+            state,
+            title,
+            description,
+            media_url,
+            media_urls,
+            views,
+            encouragements_count,
+            created_at,
+            is_deleted,
+            deleted_at,
+            deleted_reason,
             arcs (
                 id,
                 title,
@@ -548,7 +596,23 @@ async function getUserContentPublic(userId) {
             )
         `;
     const selectLegacy = `
-            *,
+            id,
+            user_id,
+            project_id,
+            arc_id,
+            day_number,
+            type,
+            state,
+            title,
+            description,
+            media_url,
+            media_urls,
+            views,
+            encouragements_count,
+            created_at,
+            is_deleted,
+            deleted_at,
+            deleted_reason,
             arcs (
                 id,
                 title,
