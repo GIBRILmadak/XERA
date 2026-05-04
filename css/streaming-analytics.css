@@ -2154,3 +2154,150 @@ body.stream-page .stream-chat-send:hover {
         width: auto;
     }
 }
+
+/* --- STREAM ENDED MESSAGE & MOBILE HOST PANEL --- */
+
+.stream-waiting-icon {
+    font-size: 2.4rem;
+    margin-bottom: 0.5rem;
+    line-height: 1;
+}
+
+.stream-ended-cta {
+    margin-top: 1.2rem;
+    display: flex;
+    gap: 0.8rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.stream-ended-cta .btn-primary,
+.stream-ended-cta a.btn-primary {
+    display: inline-block;
+    padding: 0.7rem 1.5rem;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+}
+
+.stream-ended-cta .btn-primary:hover,
+.stream-ended-cta a.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.45);
+}
+
+.stream-ended-cta .btn-primary:active,
+.stream-ended-cta a.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* Mobile host panel improvements */
+.mobile-host-panel .stream-host-tool {
+    min-height: 3rem;
+    padding: 0.8rem 1rem;
+}
+
+.mobile-host-panel .stream-host-section-tools {
+    gap: 0.6rem;
+}
+
+@media (max-width: 640px) {
+    .mobile-host-panel {
+        max-height: min(48vh, 420px) !important;
+    }
+
+    .mobile-host-panel .stream-host-tool {
+        min-height: 3.2rem;
+        padding: 1rem;
+        font-size: 0.95rem;
+    }
+
+    .mobile-host-panel .stream-host-tool-label {
+        display: block;
+    }
+
+    .mobile-host-panel .stream-host-section {
+        padding: 0.8rem 0;
+    }
+
+    .stream-waiting-card {
+        padding: 1.5rem 1.2rem;
+        max-width: 90vw;
+    }
+
+    .stream-ended-cta .btn-primary,
+    .stream-ended-cta a.btn-primary {
+        width: 100%;
+        max-width: 220px;
+    }
+
+    /* Host admin panel mobile layout improvements */
+    .stream-host-panel-grid {
+        display: grid !important;
+        grid-template-columns: 1fr;
+    }
+
+    .stream-host-section {
+        border-radius: 8px;
+        margin-bottom: 0.6rem;
+        background: rgba(255, 255, 255, 0.02);
+        padding: 0.8rem;
+    }
+
+    .stream-host-section-tools {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.6rem;
+    }
+
+    .stream-host-tool {
+        min-height: 2.8rem;
+        font-size: 0.85rem;
+        padding: 0.8rem;
+    }
+
+    /* Ensure both admin panel and chat are accessible on mobile */
+    .stream-container {
+        flex-direction: column;
+    }
+
+    .stream-main {
+        width: 100%;
+        order: 1;
+    }
+
+    .stream-chat {
+        width: 100%;
+        order: 2;
+        margin-top: 1rem;
+    }
+
+    .stream-info {
+        order: 1.5;
+    }
+
+    /* Improve host message visibility */
+    .stream-chat-enhanced {
+        max-height: 50vh;
+    }
+
+    .stream-chat-messages {
+        max-height: 36vh;
+    }
+
+    .stream-chat-header {
+        padding: 0.7rem 0.8rem;
+    }
+
+    .chat-message {
+        padding: 0.6rem 0.75rem;
+        font-size: 0.9rem;
+    }
+}

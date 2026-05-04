@@ -1467,6 +1467,9 @@ async function joinStream(streamId) {
         startViewerHeartbeat(streamId);
         startViewerCountSync(streamId);
         
+        // Auto-enable audio+video on stream startup
+        await tryAutoEnableStreamAudio();
+        
         return { success: true, stream: stream };
         
     } catch (error) {
@@ -2412,6 +2415,30 @@ function showUnmuteOverlay() {
 function hideUnmuteOverlay() {
     const overlay = document.getElementById('unmute-overlay');
     if (overlay) overlay.style.display = 'none';
+}
+
+async function tryAutoEnableStreamAudio() {
+    const video = document.getElementById('stream-video');
+    if (!video) return false;
+    
+    try {
+        // Try to auto-enable audio if browser allows it
+        video.muted = false;
+        const playPromise = video.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+            await playPromise;
+            syncAudioButtonState(false);
+            hideUnmuteOverlay();
+            return true;
+        }
+    } catch (error) {
+        console.warn('Auto audio enable failed (browser policy):', error);
+        // Fallback: show unmute overlay
+        video.muted = true;
+        syncAudioButtonState(true);
+        showUnmuteOverlay();
+        return false;
+    }
 }
 
 function enableStreamAudio() {
@@ -4294,6 +4321,10 @@ function renderHostControlPanel() {
     }
 
     panel.hidden = false;
+    // Ensure mobile accessibility: use larger touch targets and better spacing
+    if (isMobileDevice()) {
+        panel.classList.add('mobile-host-panel');
+    }
     buildHostControlRegistry();
 
     let pulse = document.getElementById('stream-host-panel-pulse');
@@ -5140,8 +5171,12 @@ function showStreamEndedMessage() {
         ended.className = 'stream-waiting stream-ended';
         ended.innerHTML = `
             <div class="stream-waiting-card">
-                <div class="stream-waiting-title">Live terminé</div>
-                <div class="stream-waiting-subtitle">L'hôte a arrêté le live.</div>
+                <div class="stream-waiting-icon">🎬</div>
+                <div class="stream-waiting-title">Live fini pour cette fois!</div>
+                <div class="stream-waiting-subtitle">Merci de nous avoir regardé. L'hôte reviendra bientôt.</div>
+                <div class="stream-ended-cta">
+                    <a href="index.html#discover" class="btn-primary">Voir d'autres lives</a>
+                </div>
             </div>
         `;
         container.appendChild(ended);
@@ -5156,8 +5191,8 @@ function showStreamEndedMessage() {
             note.id = 'stream-ended-note';
             note.className = 'stream-waiting-note stream-ended-note';
             note.innerHTML = `
-                <strong>Live terminé</strong>
-                <span>L'hôte a arrêté le live.</span>
+                <strong>✨ Live fini!</strong>
+                <span>Merci d'avoir regardé. N'hésitez pas à suivre cet hôte pour ses prochains lives.</span>
             `;
             info.prepend(note);
         }

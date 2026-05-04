@@ -3199,6 +3199,7 @@ html.light-mode .card-status--editorial {
     background: transparent;
     border: none;
     padding: 0;
+    padding-left: 1rem;
 }
 
 .timeline-item-latest .timeline-card h4 {
