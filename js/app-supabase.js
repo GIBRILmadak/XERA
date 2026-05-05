@@ -153,62 +153,11 @@ function clearPaymentReturnResumeState() {
         url.searchParams.delete(APP_PAYMENT_RETURN_IMMERSIVE_USER_PARAM);
         url.searchParams.delete(APP_PAYMENT_RETURN_IMMERSIVE_CONTENT_PARAM);
         window.history.replaceState({}, document.title, url.toString());
-    } catch (error) {async function openSettings(userId) {
-    if (!currentUser || currentUser.id !== userId) return;
-    ensureSettingsModal();
-
-    const user = getUser(userId);
-    const modal = document.getElementById("settings-modal");
-    const container = modal.querySelector(".settings-container");
-
-    // Show skeleton immediately
-    container.innerHTML = getSettingsSkeletonMarkup();
-    modal.style.display = "block";
-    // Force reflow
-    modal.offsetHeight;
-    modal.classList.add("active");
-
-    try {
-        // Load data asynchronously
-        const followerCount = await getFollowerCount(userId);
-        const accountType = user.account_type || "personal";
-        const accountRole = normalizeDiscoveryAccountRole(
-            user.account_subtype ||
-                user.accountSubtype ||
-                user.user_metadata?.account_subtype ||
-                "fan",
-        );
-        const isCreatorVerified = isVerifiedCreatorUserId(userId);
-        const isStaffVerified = isVerifiedStaffUserId(userId);
-        const isCreatorEligible = followerCount >= 1000;
-        const pendingTypes = await fetchUserPendingRequests(userId);
-        const creatorRequestPending = pendingTypes.has("creator");
-        const staffRequestPending = pendingTypes.has("staff");
-        const pendingRequests = isVerificationAdmin()
-            ? await fetchVerificationRequests()
-            : [];
-        const blockedUsers = await fetchBlockedUsersForSettings(userId).catch(
-            (error) => {
-                console.error("Blocked users fetch error:", error);
-                return [];
-            },
-        );
-
-        // ... rest of HTML building (same as before)
-        // Build final HTML
-        const finalHtml = `...`; // I need to capture the entire HTML string
-
-        // Replace skeleton with final content
-        container.innerHTML = finalHtml;
-
-        // Initialize event listeners, accordions, etc. (same as before)
-        // ... rest of initialization code
-
     } catch (error) {
-        console.error("Failed to load settings:", error);
-        container.innerHTML = `<div class="empty-state">Erreur de chargement des réglages. Veuillez réessayer.</div>`;
+        // ignore
     }
 }
+
 async function openSettings(userId) {
     if (!currentUser || currentUser.id !== userId) return;
     ensureSettingsModal();
@@ -259,13 +208,9 @@ async function openSettings(userId) {
 
         // Initialize event listeners, accordions, etc. (same as before)
         // ... rest of initialization code
-
     } catch (error) {
         console.error("Failed to load settings:", error);
         container.innerHTML = `<div class="empty-state">Erreur de chargement des réglages. Veuillez réessayer.</div>`;
-    }
-}
-
     }
 }
 
@@ -335,7 +280,7 @@ function injectVerificationNavButton() {
         btn.innerHTML = `
             Obtenir une vérification
             <img src="icons/verify-personal.svg?v=${BADGE_ASSET_VERSION}" alt="Badge" class="nav-verify-icon">
-        `;
+`;
         navLinks.appendChild(btn);
     } catch (error) {
         console.warn("Nav verification CTA not injected:", error);
@@ -376,8 +321,8 @@ function ensureMonetizationNavButton() {
     button.title = "Monétisation";
     button.setAttribute("aria-label", "Monétisation");
     button.innerHTML = `
-        <i class="fas fa-wallet" aria-hidden="true"></i>
-        <span class="nav-monetization-label">Monétisation</span>
+<i class="fas fa-wallet" aria-hidden="true"></i>
+<span class="nav-monetization-label">Monétisation</span>
     `;
 
     const navAuth = document.getElementById("nav-auth");
@@ -784,14 +729,14 @@ function buildArcCollaboratorAvatars(content, options = {}) {
             <button type="button" onclick="event.stopPropagation(); handleProfileClick('${user.id}', this, ${fromImmersive})" aria-label="Voir le profil de ${safeName}">
                 <img src="${user.avatar || "https://placehold.co/32"}" alt="Avatar ${safeName}" style="width:${size}px; height:${size}px;">
             </button>
-        `;
+`;
     };
 
     return `
-        <div class="arc-collab-avatars ${className}" title="${label}">
+<div class="arc-collab-avatars ${className}" title="${label}">
             ${renderAvatarButton(ownerUser, "Créateur")}
             ${renderAvatarButton(collaborator, "Collaborateur")}
-        </div>
+</div>
     `;
 }
 
@@ -846,10 +791,10 @@ function buildArcCollaboratorCornerAvatars(content, options = {}) {
             : "";
 
     return `
-        <div class="arc-collab-avatars arc-collab-avatars--corner ${className}" title="${label}">
+<div class="arc-collab-avatars arc-collab-avatars--corner ${className}" title="${label}">
             ${avatarsHtml}
             ${moreHtml}
-        </div>
+</div>
     `;
 }
 
@@ -1348,15 +1293,17 @@ async function updateHeroVisibilityForUser(userId) {
         return cached;
     }
 
-    setHeroState(HERO_STATE.LOADING);
+    // Don't show LOADING state for logged-in users; they should see discover content directly
+    // Query arc count without triggering skeleton display
     const count = await getUserArcCount(userId);
 
     if (count === null) {
-        // Keep content visible rather than flashing black if the count fails to load
+        // If count fetch fails, show hero (user probably new or network issue)
         setHeroState(HERO_STATE.VISIBLE);
         return null;
     }
 
+    // If user has projects, hide hero immediately without LOADING state
     setHeroState(count > 0 ? HERO_STATE.HIDDEN : HERO_STATE.VISIBLE);
     return count;
 }
@@ -1387,7 +1334,7 @@ function ensureLoginPromptElements() {
     const style = document.createElement("style");
     style.id = "login-prompt-style";
     style.textContent = `
-        .login-prompt-overlay {
+.login-prompt-overlay {
             position: fixed;
             inset: 0;
             display: none;
@@ -1396,11 +1343,11 @@ function ensureLoginPromptElements() {
             background: rgba(0, 0, 0, 0.65);
             z-index: 2000;
             padding: 24px;
-        }
-        .login-prompt-overlay.active {
+}
+.login-prompt-overlay.active {
             display: flex;
-        }
-        .login-prompt-card {
+}
+.login-prompt-card {
             width: min(420px, 92vw);
             background: #0f1115;
             color: #fff;
@@ -1410,18 +1357,18 @@ function ensureLoginPromptElements() {
             text-align: center;
             border: 1px solid rgba(255, 255, 255, 0.08);
             position: relative;
-        }
-        .login-prompt-title {
+}
+.login-prompt-title {
             font-size: 1.25rem;
             font-weight: 700;
             margin: 0 0 8px 0;
-        }
-        .login-prompt-text {
+}
+.login-prompt-text {
             margin: 0 0 16px 0;
             color: rgba(255, 255, 255, 0.8);
             font-size: 0.95rem;
-        }
-        .login-prompt-cta {
+}
+.login-prompt-cta {
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -1435,12 +1382,12 @@ function ensureLoginPromptElements() {
             font-weight: 700;
             cursor: pointer;
             transition: transform 0.15s ease, box-shadow 0.15s ease;
-        }
-        .login-prompt-cta:hover {
+}
+.login-prompt-cta:hover {
             transform: translateY(-1px);
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-        }
-        .login-prompt-close {
+}
+.login-prompt-close {
             position: absolute;
             top: 10px;
             right: 10px;
@@ -1455,11 +1402,11 @@ function ensureLoginPromptElements() {
             align-items: center;
             justify-content: center;
             transition: transform 0.12s ease, background 0.12s ease;
-        }
-        .login-prompt-close:hover {
+}
+.login-prompt-close:hover {
             transform: scale(1.05);
             background: rgba(255,255,255,0.08);
-        }
+}
     `;
     document.head.appendChild(style);
 
@@ -1470,7 +1417,7 @@ function ensureLoginPromptElements() {
     overlay.setAttribute("aria-modal", "true");
     overlay.setAttribute("aria-hidden", "true");
     overlay.innerHTML = `
-        <div class="login-prompt-card">
+<div class="login-prompt-card">
             <button class="login-prompt-close" aria-label="Fermer">✕</button>
             <h3 class="login-prompt-title">Vous aimez XERA ?</h3>
             <p class="login-prompt-text">
@@ -1479,7 +1426,7 @@ function ensureLoginPromptElements() {
             <button class="login-prompt-cta" data-login-action="true">
                 Se connecter / Créer un compte
             </button>
-        </div>
+</div>
     `;
     overlay.addEventListener("click", () => {
         window.location.href = "login.html";
@@ -2057,7 +2004,7 @@ async function preloadUserContents(users, { publicOnly = false } = {}) {
                 status,
                 user_id
             )
-        `
+`
         : `
             *,
             arcs (
@@ -2070,7 +2017,7 @@ async function preloadUserContents(users, { publicOnly = false } = {}) {
                 id,
                 name
             )
-        `;
+`;
 
     // Traitement par batch sur user_id pour limiter les requêtes.
     for (let i = 0; i < safeUsers.length; i += CONTENT_FETCH_BATCH_SIZE) {
@@ -2339,7 +2286,7 @@ function renderAnnouncementReplies(contentId) {
         return `<div class="reply-empty">Aucune réponse pour le moment.</div>`;
     }
     return `
-        <div class="reply-list">
+<div class="reply-list">
             ${list
                 .slice(-20)
                 .map((r) => {
@@ -2363,7 +2310,7 @@ function renderAnnouncementReplies(contentId) {
                     `;
                 })
                 .join("")}
-        </div>
+</div>
     `;
 }
 
@@ -2862,7 +2809,7 @@ function showMobileArcOnboardingNotification(userId) {
     ].join(";");
 
     host.innerHTML = `
-        <div style="display:flex; gap:10px; align-items:flex-start;">
+<div style="display:flex; gap:10px; align-items:flex-start;">
             <div style="font-size:1.1rem; line-height:1;">🚀</div>
             <div style="flex:1; min-width:0;">
                 <div style="font-weight:700; font-size:0.95rem; margin-bottom:4px;">Démarrez votre premier projet</div>
@@ -2870,15 +2817,15 @@ function showMobileArcOnboardingNotification(userId) {
                     Sur XERA, un projet est votre trajectoire. Créez-le pour publier vos mises à jour et suivre votre progression.
                 </div>
             </div>
-        </div>
-        <div style="display:flex; gap:8px; margin-top:10px;">
+</div>
+<div style="display:flex; gap:8px; margin-top:10px;">
             <button type="button" data-action="create" style="flex:1; border:none; border-radius:10px; padding:9px 10px; font-weight:700; font-size:0.86rem; background:#10b981; color:#072018; cursor:pointer;">
                 Créer un projet
             </button>
             <button type="button" data-action="close" style="border:1px solid rgba(255,255,255,0.16); border-radius:10px; padding:9px 12px; font-weight:700; font-size:0.84rem; background:transparent; color:#f5f5f5; cursor:pointer;">
                 Fermer
             </button>
-        </div>
+</div>
     `;
 
     host.querySelector('[data-action="create"]')?.addEventListener(
@@ -2957,7 +2904,9 @@ async function maybeStartFirstPostFlow() {
     }
     if (!shouldStartArc) return;
 
-    setPendingCreatePostAfterArc(userId, { reason: "first-post-onboarding" });
+    setPendingCreatePostAfterArc(userId, {
+        reason: "first-post-onboarding",
+    });
     if (typeof window.openCreateModal === "function") {
         window.openCreateModal();
     }
@@ -3074,11 +3023,16 @@ function initXeraCarousels(root = document) {
             if (slideCount <= 0) return;
             const safeIndex = Math.max(0, Math.min(slideCount - 1, index));
             const width = track.clientWidth || 0;
-            track.scrollTo({ left: width * safeIndex, behavior: "smooth" });
+            track.scrollTo({
+                left: width * safeIndex,
+                behavior: "smooth",
+            });
             setActive(safeIndex);
         };
 
-        track.addEventListener("scroll", updateFromScroll, { passive: true });
+        track.addEventListener("scroll", updateFromScroll, {
+            passive: true,
+        });
         if (dots.length > 0) {
             dots.forEach((dot) => {
                 dot.addEventListener("click", () => {
@@ -3918,7 +3872,7 @@ function renderAnnouncements() {
                 <p class="announcement-body">${body}</p>
                 <div class="announcement-meta">${timeLabel}</div>
             </div>
-        `;
+`;
         })
         .join("");
 }
@@ -4132,7 +4086,7 @@ function renderAdminAnnouncementsList() {
                     <button type="button" class="btn-cancel" onclick="deleteAdminAnnouncement('${safeId}')">Supprimer</button>
                 </div>
             </div>
-        `;
+`;
         })
         .join("");
 }
@@ -4140,7 +4094,7 @@ function renderAdminAnnouncementsList() {
 function getSuperAdminPanelHtml() {
     if (!isSuperAdmin()) return "";
     return `
-        <div class="settings-section">
+<div class="settings-section">
             <h3>Super admin</h3>
             <p style="color: var(--text-secondary); margin-bottom: 1rem;">Section dédiée aux annonces officielles.</p>
 
@@ -4266,7 +4220,7 @@ function getSuperAdminPanelHtml() {
                     </button>
                 </div>
             </div>
-        </div>
+</div>
     `;
 }
 
@@ -4422,7 +4376,7 @@ function renderSuperAdminPage() {
     const container = document.getElementById("admin-dashboard");
     if (!container) return;
     container.innerHTML = `
-        <div class="settings-section">
+<div class="settings-section">
             <div class="settings-header" style="border:none; margin-bottom:1rem; padding-bottom:0;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap: 1rem; flex-wrap: wrap;">
                     <div style="display:flex; align-items:center; gap: 0.75rem;">
@@ -4432,8 +4386,8 @@ function renderSuperAdminPage() {
                 </div>
                 <p>Gestion complète du compte et des annonces officielles.</p>
             </div>
-        </div>
-        ${getSuperAdminPanelHtml()}
+</div>
+${getSuperAdminPanelHtml()}
     `;
     // Précharge les stats temps réel si visible
     setTimeout(() => refreshAppPulse(), 150);
@@ -4526,7 +4480,7 @@ function renderAdminSubscriptionPaymentsList(items) {
             <div class="verification-empty">
                 Aucun paiement d'abonnement en attente.
             </div>
-        `;
+`;
         return;
     }
 
@@ -4662,7 +4616,7 @@ async function fetchAdminSubscriptionPayments() {
             <div class="verification-empty">
                 ${escapeHtml(error?.message || "Impossible de charger les paiements.")}
             </div>
-        `;
+`;
     }
 }
 
@@ -4749,7 +4703,7 @@ function renderAdminWithdrawalRequestsList(items) {
             <div class="verification-empty">
                 Aucune demande de retrait en attente.
             </div>
-        `;
+`;
         return;
     }
 
@@ -4856,7 +4810,7 @@ async function fetchAdminWithdrawalRequests() {
             <div class="verification-empty">
                 ${escapeHtml(error?.message || "Impossible de charger les retraits.")}
             </div>
-        `;
+`;
     }
 }
 
@@ -5585,7 +5539,7 @@ function renderProfilePrivacyNotice(user, preferences) {
             : "";
 
     return `
-        <div class="profile-hero profile-hero--glam profile-privacy-locked ${getProfileAppearanceClass(prefs)}" style="${getProfileAppearanceStyle(prefs)}">
+<div class="profile-hero profile-hero--glam profile-privacy-locked ${getProfileAppearanceClass(prefs)}" style="${getProfileAppearanceStyle(prefs)}">
             <div class="profile-hero-glow" aria-hidden="true"></div>
             ${
                 safeBanner
@@ -5601,7 +5555,7 @@ function renderProfilePrivacyNotice(user, preferences) {
                     ${followCtaHtml}
                 </div>
             </div>
-        </div>
+</div>
     `;
 }
 
@@ -5619,10 +5573,10 @@ function renderProfileHiddenSection(kind = "activity") {
               ? "Cet utilisateur ne partage pas ses liens publics."
               : "Cet utilisateur garde ses projets et mises a jour hors du profil public.";
     return `
-        <div class="profile-privacy-muted">
+<div class="profile-privacy-muted">
             <span class="profile-section-kicker">${title}</span>
             <p>${message}</p>
-        </div>
+</div>
     `;
 }
 
@@ -5871,10 +5825,10 @@ function renderProfileRoleBadgeByUser(user) {
     );
     if (!roleMeta.icon) return "";
     return `
-        <div class="profile-role-badge profile-role-badge--${roleMeta.role}" title="Type de compte: ${roleMeta.label}">
+<div class="profile-role-badge profile-role-badge--${roleMeta.role}" title="Type de compte: ${roleMeta.label}">
             <img src="${roleMeta.icon}?v=${BADGE_ASSET_VERSION}" alt="${roleMeta.label}">
             <span>${roleMeta.label}</span>
-        </div>
+</div>
     `;
 }
 
@@ -6678,7 +6632,7 @@ function generateBadge(badgeType, label) {
             <div class="badge" title="${label}">
                 <img src="${iconPath}" alt="${label}" class="badge-icon" />
             </div>
-        `;
+`;
     }
 
     const svg = badgeSVGs[badgeType];
@@ -6694,10 +6648,10 @@ function generateBadge(badgeType, label) {
     else cssClass += "";
 
     return `
-        <div class="${cssClass}" title="${label}">
+<div class="${cssClass}" title="${label}">
             <div class="badge-icon">${svg}</div>
             <span>${label}</span>
-        </div>
+</div>
     `;
 }
 
@@ -6712,7 +6666,10 @@ function getUserBadges(userId) {
             creative: "Créatif",
             tech: "Tech",
         };
-        badges.push({ type: trajectoryType, label: labels[trajectoryType] });
+        badges.push({
+            type: trajectoryType,
+            label: labels[trajectoryType],
+        });
     }
 
     const consistency = calculateConsistency(userId);
@@ -6744,7 +6701,10 @@ function getContentBadges(content) {
         empty: "Vide",
     };
 
-    badges.push({ type: content.state, label: stateLabels[content.state] });
+    badges.push({
+        type: content.state,
+        label: stateLabels[content.state],
+    });
 
     return badges;
 }
@@ -6753,9 +6713,9 @@ function renderBadges(badgesList) {
     if (badgesList.length === 0) return "";
 
     return `
-        <div class="badge-container">
+<div class="badge-container">
             ${badgesList.map((b) => generateBadge(b.type, b.label)).join("")}
-        </div>
+</div>
     `;
 }
 
@@ -6764,10 +6724,10 @@ function renderUserBadges(userId) {
     const userBadges = getUserBadges(userId);
     if (!verificationHtml && userBadges.length === 0) return "";
     return `
-        <div class="badge-container">
+<div class="badge-container">
             ${verificationHtml || ""}
             ${userBadges.map((b) => generateBadge(b.type, b.label)).join("")}
-        </div>
+</div>
     `;
 }
 
@@ -6961,7 +6921,7 @@ function renderProfileContentMedia(content, options = {}) {
                 <video src="${primaryMediaUrl}" controls playsinline preload="metadata"></video>
                 ${extraCount}
             </div>
-        `;
+`;
     }
 
     if (content?.type === "image") {
@@ -6970,7 +6930,7 @@ function renderProfileContentMedia(content, options = {}) {
                 <img src="${primaryMediaUrl}" alt="${escapeHtml(content?.title || "Media update")}" loading="lazy" decoding="async">
                 ${extraCount}
             </div>
-        `;
+`;
     }
 
     if (content?.type === "live" || content?.type === "gif") {
@@ -6978,7 +6938,7 @@ function renderProfileContentMedia(content, options = {}) {
             <div class="timeline-media profile-update-media-link">
                 <a href="${primaryMediaUrl}" target="_blank" rel="noopener noreferrer">Voir le media</a>
             </div>
-        `;
+`;
     }
 
     return "";
@@ -7059,7 +7019,7 @@ function renderProfileUpdateCard(
                 <span class="profile-update-author-label">par</span>
                 <span class="profile-update-author-name">${renderUsernameWithBadge(contentAuthor.name, contentAuthor.id)}</span>
             </div>
-        `
+`
         : "";
 
     const isAnnouncement = isAnnouncementContent(content);
@@ -7085,13 +7045,13 @@ function renderProfileUpdateCard(
                 <span>Encourager</span>
                 <span class="courage-count profile-encourage-count" data-count="${Number(content.encouragementsCount) || 0}" title="${(Number(content.encouragementsCount) || 0).toLocaleString("fr-FR")}">${formatCompactCount(content.encouragementsCount || 0)}</span>
             </button>
-        `
+`
         : `
             <div class="profile-update-stat-pill">
                 <img src="icons/courage-blue.svg" width="16" height="16" alt="">
                 <span>${formatCompactCount(content.encouragementsCount || 0)} encouragement${Number(content.encouragementsCount || 0) > 1 ? "s" : ""}</span>
             </div>
-        `;
+`;
 
     const replyPanelHtml =
         isAnnouncement && replyContentId
@@ -7117,7 +7077,7 @@ function renderProfileUpdateCard(
                     </div>
                 </div>
             </div>
-        `
+`
             : "";
 
     let managementHtml = "";
@@ -7127,7 +7087,7 @@ function renderProfileUpdateCard(
                 <button class="btn-action" onclick="editContent('${content.contentId || content.id}')">Modifier</button>
                 <button class="btn-action btn-action-danger" onclick="deleteContent('${content.contentId || content.id}')">Supprimer</button>
             </div>
-        `;
+`;
     }
     if (isAdminViewer && currentUserId !== profileUserId) {
         managementHtml += `
@@ -7136,7 +7096,7 @@ function renderProfileUpdateCard(
                 <button class="btn-action" onclick="moderateContentFromProfile('${content.contentId || content.id}', 'restore', '${profileUserId}')">Restaurer</button>
                 <button class="btn-action btn-action-danger" onclick="moderateContentFromProfile('${content.contentId || content.id}', 'hard', '${profileUserId}')">Supprimer definitivement</button>
             </div>
-        `;
+`;
     }
 
     const viewsCount = Number(content.views) || 0;
@@ -7151,7 +7111,7 @@ function renderProfileUpdateCard(
         .join(" ");
 
     return `
-        <article class="${cardClasses}">
+<article class="${cardClasses}">
             <div class="profile-update-top">
                 <div class="profile-update-badges">
                     <span class="profile-update-state" style="--profile-update-accent:${stateMeta.accent};">${stateMeta.label}</span>
@@ -7181,7 +7141,7 @@ function renderProfileUpdateCard(
             </div>
             ${replyPanelHtml}
             ${managementHtml}
-        </article>
+</article>
     `;
 }
 
@@ -7243,7 +7203,7 @@ function renderProfileOverviewContent(
                 <h3>Aucune update publiee</h3>
                 <p>Ce profil n'a pas encore partage de progression visible.</p>
             </section>
-        `;
+`;
     }
 
     const featuredContent = safeContents[0];
@@ -7302,7 +7262,7 @@ function renderProfileOverviewContent(
         .join("");
 
     return `
-        <section class="profile-content-overview">
+<section class="profile-content-overview">
             <div class="profile-content-heading">
                 <div>
                     <h3>Contenu publie</h3>
@@ -7333,7 +7293,7 @@ function renderProfileOverviewContent(
             <div class="profile-update-groups">
                 ${groupsHtml}
             </div>
-        </section>
+</section>
     `;
 }
 
@@ -7360,7 +7320,7 @@ function renderProfileSelectedArcContent(
                     <button class="btn btn-secondary profile-update-link-btn" onclick="selectArc(null, '${profileUserId}')">Voir tout</button>
                 </div>
             </section>
-        `;
+`;
     }
 
     const uniqueUsers = new Set(
@@ -7405,7 +7365,7 @@ function renderProfileSelectedArcContent(
     ];
 
     return `
-        <section class="profile-project-focus">
+<section class="profile-project-focus">
             <div class="profile-arc-focus-header">
                 <div>
                     <span class="profile-section-kicker">Projet selectionne</span>
@@ -7448,7 +7408,7 @@ function renderProfileSelectedArcContent(
                     )
                     .join("")}
             </div>
-        </section>
+</section>
     `;
 }
 
@@ -7551,7 +7511,7 @@ function renderProfileProjectProgressBoard(arcs, contents, profileUserId) {
     };
 
     return `
-        <section class="profile-progress-board">
+<section class="profile-progress-board">
             <div class="profile-progress-board-head">
                 <div>
                     <span class="profile-section-kicker">Suivi de projet</span>
@@ -7597,7 +7557,7 @@ function renderProfileProjectProgressBoard(arcs, contents, profileUserId) {
                     })
                     .join("")}
             </div>
-        </section>
+</section>
     `;
 }
 
@@ -8186,7 +8146,7 @@ function renderUserCard(
             <div class="card-text">
                 <p class="card-text-body">${textBody}</p>
             </div>
-        `;
+`;
     }
 
     // Déterminer la classe CSS selon le type de média pour l'adaptation
@@ -8211,7 +8171,7 @@ function renderUserCard(
                     ${latestContent.arc.title}
                 </span>
             </div>
-        `;
+`;
     }
 
     // Subscribe Button
@@ -8240,7 +8200,7 @@ function renderUserCard(
             ">
                 <img src="${iconSrc}" class="btn-icon" style="width: 24px; height: 24px;">
             </button>
-        `;
+`;
     }
 
     // Courage Button
@@ -8259,7 +8219,7 @@ function renderUserCard(
 
     // User Info (Name, Avatar, Subscribe) - Moved to bottom
     const userInfoHtml = `
-        <div class="card-user-bottom">
+<div class="card-user-bottom">
             <button class="profile-link card-profile-link" onclick="event.stopPropagation(); handleProfileClick('${userId}', this)">
                 <img src="${user.avatar || "https://placehold.co/40"}" class="card-avatar" loading="lazy" decoding="async">
                 <div class="profile-link-text">
@@ -8269,21 +8229,21 @@ function renderUserCard(
             </button>
             ${collabAvatarsHtml}
             ${subscribeBtn}
-        </div>
+</div>
     `;
 
     // Add stats overlay CSS if needed (inline for now)
     const statsStyles = `
-        <style>
-        .card-stats-overlay {
+<style>
+.card-stats-overlay {
             position: absolute;
             top: 10px;
             right: 10px;
             display: flex;
             gap: 5px;
             pointer-events: none;
-        }
-        .stat-pill {
+}
+.stat-pill {
             background: rgba(0,0,0,0.6);
             backdrop-filter: blur(4px);
             padding: 4px 8px;
@@ -8294,8 +8254,8 @@ function renderUserCard(
             font-size: 0.75rem;
             color: white;
             font-weight: 600;
-        }
-        .courage-btn {
+}
+.courage-btn {
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,255,255,0.1);
             border-radius: 20px;
@@ -8308,16 +8268,16 @@ function renderUserCard(
             color: var(--text-secondary);
             font-size: 0.8rem;
             margin-top: 0.5rem;
-        }
-        .courage-btn:hover {
+}
+.courage-btn:hover {
             background: rgba(255,255,255,0.1);
-        }
-        .courage-btn.encouraged {
+}
+.courage-btn.encouraged {
             background: rgba(16, 185, 129, 0.1);
             border-color: rgba(16, 185, 129, 0.3);
             color: #10b981;
-        }
-        </style>
+}
+</style>
     `;
 
     // Only inject style once
@@ -8347,7 +8307,7 @@ function renderUserCard(
             : "";
 
     return `
-        <div class="${cardClass}" style="--state-color: ${stateColor};" data-user="${userId}" data-content-id="${latestContent.contentId}" data-tags="${tagDataset}" onclick="openImmersive('${userId}', '${latestContent.contentId}')">
+<div class="${cardClass}" style="--state-color: ${stateColor};" data-user="${userId}" data-content-id="${latestContent.contentId}" data-tags="${tagDataset}" onclick="openImmersive('${userId}', '${latestContent.contentId}')">
             ${mediaHtml}
             <div class="card-content">
                 ${arcInfo}
@@ -8374,7 +8334,7 @@ function renderUserCard(
                 ${liveCta}
                 ${userInfoHtml}
             </div>
-        </div>
+</div>
     `;
 
     // Plus de recherche ici (panneau réduit aux annonces)
@@ -8408,7 +8368,7 @@ function selectAdminVerifyTarget(userId, userName) {
                 </div>
                 <span style="color: var(--accent-color); font-weight:600;">Sélectionné</span>
             </div>
-        `;
+`;
     }
 }
 
@@ -8432,7 +8392,7 @@ function selectAdminBanTarget(userId, userName) {
                 </div>
                 <span style="color: #ef4444; font-weight:600;">Sélectionné</span>
             </div>
-        `;
+`;
     }
 }
 
@@ -8463,7 +8423,7 @@ function selectAdminContentUser(userId, userName) {
                 </div>
                 <span style="color: #f59e0b; font-weight:600;">Sélectionné</span>
             </div>
-        `;
+`;
     }
 }
 
@@ -8754,7 +8714,7 @@ function renderLiveStreamCard(stream, layoutOptions = {}) {
                 color: #0ea5e9;
             }
             </style>
-        `;
+`;
         document.head.insertAdjacentHTML(
             "beforeend",
             statsStyles.replace("<style>", '<style id="card-stats-style">'),
@@ -8778,12 +8738,12 @@ function renderLiveStreamCard(stream, layoutOptions = {}) {
             : hostName;
 
     const viewerPill = `
-        <div class="card-meta">
+<div class="card-meta">
             <span class="pill">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 ${viewers} en direct
             </span>
-        </div>
+</div>
     `;
 
     const mediaHtml = thumbnail
@@ -8797,7 +8757,7 @@ function renderLiveStreamCard(stream, layoutOptions = {}) {
                     </div>
                 </div>
             </div>
-        `
+`
         : `
             <div class="card-media-wrap card-media-wrap--editorial">
                 <div class="video-fallback" style="opacity:1;">
@@ -8811,10 +8771,10 @@ function renderLiveStreamCard(stream, layoutOptions = {}) {
                     </div>
                 </div>
             </div>
-        `;
+`;
 
     return `
-        <div class="user-card editorial-card has-media live editorial-card--live${layoutOptions.isPreferred ? " editorial-card--preferred" : ""}" style="--state-color: #ef4444;" data-stream="${stream.id}" onclick="window.location.href='stream.html?id=${stream.id}&title=${encodeURIComponent(title)}&host=${stream.user_id}'">
+<div class="user-card editorial-card has-media live editorial-card--live${layoutOptions.isPreferred ? " editorial-card--preferred" : ""}" style="--state-color: #ef4444;" data-stream="${stream.id}" onclick="window.location.href='stream.html?id=${stream.id}&title=${encodeURIComponent(title)}&host=${stream.user_id}'">
             ${mediaHtml}
             <div class="card-content">
                 <div class="card-status card-status--editorial is-live" style="--state-color: #ef4444;">
@@ -8846,7 +8806,7 @@ function renderLiveStreamCard(stream, layoutOptions = {}) {
                     </button>
                 </div>
             </div>
-        </div>
+</div>
     `;
 }
 
@@ -9250,7 +9210,7 @@ async function renderDiscoverGrid() {
                 <h3>Aucune trajectoire à explorer</h3>
                 <p>Revenez plus tard pour découvrir de nouvelles trajectoires.</p>
             </div>
-        `;
+`;
     }
     if (waitMessage) waitMessage.classList.add("is-hidden");
 }
@@ -9284,6 +9244,10 @@ function getDefaultImmersivePrefs() {
         queries: {},
         seen: {},
         updatedAt: Date.now(),
+        // Améliorations: suivi des changements d'intérêts et de la diversité
+        lastInteractionTime: Date.now(),
+        interactionCount: 0,
+        diversityScore: 0.5, // 0-1: 0 = très spécialisé, 1 = très diversifié
     };
 }
 
@@ -9346,24 +9310,46 @@ function applyTemporalDecayToPrefs(prefs) {
     const now = Date.now();
     const updatedAt = Number(prefs?.updatedAt) || now;
     const elapsedMs = Math.max(0, now - updatedAt);
-    const minDecayIntervalMs = 1000 * 60 * 60 * 6;
+    const minDecayIntervalMs = 1000 * 60 * 60 * 3; // Réduit à 3 heures au lieu de 6
 
     if (elapsedMs < minDecayIntervalMs) {
         return { prefs, changed: false };
     }
 
     const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24);
-    const halfLifeDays = 30;
+
+    // Utiliser une demi-vie plus courte pour mieux détecter les changements
+    // 20 jours au lieu de 30 pour les utilisateurs with les intérêts qui changent
+    const diversityScore = (prefs && prefs.diversityScore) || 0.5;
+    const interactionCount = (prefs && prefs.interactionCount) || 0;
+
+    // Les utilisateurs très engagés et diversifiés méritent une demi-vie plus courte
+    // pour que les changements d'intérêts soient détectés rapidement
+    let halfLifeDays = 25; // Base
+
+    if (diversityScore > 0.7 && interactionCount > 100) {
+        halfLifeDays = 16; // Plus court pour les utilisateurs engagés
+    } else if (interactionCount < 20) {
+        halfLifeDays = 28; // Plus long pour les nouveaux utilisateurs
+    } else if (interactionCount > 300) {
+        halfLifeDays = 18; // Court pour les utilisateurs très actifs
+    }
+
     const factor = Math.pow(0.5, elapsedDays / halfLifeDays);
+
+    // Appliquer la décroissance avec un plancher plus bas pour mieux oublier les préférences anciennes
+    const floor = 0.008; // Plus bas que 0.02 pour oublier plus vite les anciennes préfs
+
     const decayed = {
         ...prefs,
-        types: applyDecayToMap(prefs.types, factor),
-        states: applyDecayToMap(prefs.states, factor),
-        users: applyDecayToMap(prefs.users, factor),
-        tags: applyDecayToMap(prefs.tags, factor),
-        queries: applyDecayToMap(prefs.queries, factor),
+        types: applyDecayToMap(prefs.types, factor, floor),
+        states: applyDecayToMap(prefs.states, factor, floor),
+        users: applyDecayToMap(prefs.users, factor, floor),
+        tags: applyDecayToMap(prefs.tags, factor, floor),
+        queries: applyDecayToMap(prefs.queries, factor, floor),
         updatedAt: now,
     };
+
     return { prefs: decayed, changed: true };
 }
 
@@ -9437,20 +9423,52 @@ function pruneSeen(seenMap, maxEntries = 600) {
     return trimmed;
 }
 
+// Calcule les poids adaptatifs basés sur la récence et la fréquence
+function computeAdaptiveWeights(prefs, action) {
+    const baseWeights = {
+        like: 2.8, // Poids augmenté pour les likes
+        dislike: -2.0, // Poids augmenté négatif pour les dislikes
+        view: 0.5, // Poids augmenté pour les vues
+        default: 0.8, // Default augmenté
+    };
+
+    const weight = baseWeights[action] || baseWeights.default;
+
+    // Ajuster les poids en fonction du nombre d'interactions (engagement)
+    const interactionCount = prefs.interactionCount || 0;
+    const recentInteractionTime = prefs.lastInteractionTime || Date.now();
+    const timeSinceLastMs = Date.now() - recentInteractionTime;
+    const timeSinceLastDays = timeSinceLastMs / (1000 * 60 * 60 * 24);
+
+    // Multiplicateur de récence: interactions récentes sont plus importantes
+    let recencyMultiplier = 1;
+    if (timeSinceLastDays < 1) {
+        recencyMultiplier = 1.2; // 20% boost si interagit aujourd'hui
+    } else if (timeSinceLastDays < 7) {
+        recencyMultiplier = 1.1; // 10% boost si dans la dernière semaine
+    } else if (timeSinceLastDays > 30) {
+        recencyMultiplier = 0.9; // 10% réduction si > 30 jours
+    }
+
+    // Multiplicateur d'engagement: plus l'utilisateur interagit, plus les poids sont influents
+    let engagementMultiplier = Math.min(1.3, 1.0 + interactionCount / 500);
+
+    return weight * recencyMultiplier * engagementMultiplier;
+}
+
 function updateImmersivePrefs(content, action) {
     if (!content) return;
     const prefs = loadImmersivePrefs();
-    const weight =
-        action === "like"
-            ? 2.4
-            : action === "dislike"
-              ? -1.8
-              : action === "view"
-                ? 0.35
-                : 0.6;
+
+    // Calculer les poids adaptatifs au lieu d'utiliser des poids statiques
+    const weight = computeAdaptiveWeights(prefs, action);
+
+    // Mise à jour avec poids adaptatifs
     bumpPref(prefs.types, content.type, weight);
-    bumpPref(prefs.states, content.state, weight * 0.6);
-    bumpPref(prefs.users, content.userId, weight * 0.9);
+    bumpPref(prefs.states, content.state, weight * 0.7);
+    bumpPref(prefs.users, content.userId, weight * 1.0);
+
+    // Augmenter l'importance des tags pour mieux détecter les catégories
     if (Array.isArray(content.tags)) {
         content.tags
             .map((tag) =>
@@ -9459,16 +9477,68 @@ function updateImmersivePrefs(content, action) {
                     .toLowerCase(),
             )
             .filter(Boolean)
-            .forEach((tag) => bumpPref(prefs.tags, tag, weight * 0.75));
+            .forEach((tag) => bumpPref(prefs.tags, tag, weight * 1.0));
     }
+
+    // Enregistrer le contenu comme vu
     prefs.seen[content.contentId] = Date.now();
-    prefs.types = prunePrefsObject(prefs.types, 80);
-    prefs.states = prunePrefsObject(prefs.states, 30);
-    prefs.users = prunePrefsObject(prefs.users, 120);
-    prefs.tags = prunePrefsObject(prefs.tags, 120);
-    prefs.queries = prunePrefsObject(prefs.queries, 120);
+
+    // Mettre à jour les statistiques de suivi pour la détection de changements
+    prefs.interactionCount = (prefs.interactionCount || 0) + 1;
+    prefs.lastInteractionTime = Date.now();
+
+    // Calculer le score de diversité pour adapter le ratio d'exploration
+    updateDiversityScore(prefs);
+
+    // Élagage plus agressif des préférences anciennes
+    prefs.types = prunePrefsObject(prefs.types, 100);
+    prefs.states = prunePrefsObject(prefs.states, 40);
+    prefs.users = prunePrefsObject(prefs.users, 150);
+    prefs.tags = prunePrefsObject(prefs.tags, 150);
+    prefs.queries = prunePrefsObject(prefs.queries, 150);
     prefs.seen = pruneSeen(prefs.seen, 600);
+
     saveImmersivePrefs(prefs);
+}
+
+// Calcule un score de diversité pour adapter l'exploration
+function updateDiversityScore(prefs) {
+    if (!prefs) return;
+
+    const countCategories = (obj) => Object.keys(obj || {}).length;
+
+    const typeCount = countCategories(prefs.types);
+    const stateCount = countCategories(prefs.states);
+    const userCount = countCategories(prefs.users);
+    const tagCount = countCategories(prefs.tags);
+
+    // Score basé sur la variété des catégories préférées
+    // 0 = très spécialisé (peu de catégories), 1 = très diversifié (beaucoup de catégories)
+    const maxScore = (30 + 20 + 100 + 100) / 250; // Normalisé
+    const actualScore =
+        (typeCount / 30 + stateCount / 20 + userCount / 100 + tagCount / 100) /
+        4;
+
+    prefs.diversityScore = Math.min(1, Math.max(0, actualScore));
+}
+
+// Ratio d'exploration adaptatif basé sur la diversité des intérêts
+function getAdaptiveExplorationRatio(prefs) {
+    const diversityScore = (prefs && prefs.diversityScore) || 0.5;
+    const interactionCount = (prefs && prefs.interactionCount) || 0;
+
+    // Utilisateurs très spécialisés explorent moins (moins de nouveauté)
+    // Utilisateurs diversifiés explorent plus (plus curieux)
+    let baseRatio = 0.08 + diversityScore * 0.12; // Entre 8% et 20%
+
+    // Utilisateurs avec peu d'interactions explorent plus (pour apprendre les préférences)
+    if (interactionCount < 50) {
+        baseRatio += 0.1; // +10% pour les nouveaux utilisateurs
+    } else if (interactionCount > 500) {
+        baseRatio -= 0.02; // -2% pour les utilisateurs très engagés
+    }
+
+    return Math.min(0.4, Math.max(0.08, baseRatio)); // Clamper entre 8% et 40%
 }
 
 function extractSearchTokens(query) {
@@ -9495,6 +9565,204 @@ function recordSearchPreference(query) {
     saveImmersivePrefs(prefs);
 }
 window.recordSearchPreference = recordSearchPreference;
+
+/**
+ * Retourne le multiplicateur de boost basé sur le plan du créateur
+ * Free: 1.0 (pas de boost)
+ * Standard: 1.125 (+12.5% en moyenne)
+ * Medium: 1.275 (+27.5% en moyenne)
+ * Pro: 1.50 (+50%)
+ */
+function getPlanBoostMultiplier(userId) {
+    if (!userId || typeof allUsers === "undefined") return 1.0;
+
+    const creator = Array.isArray(allUsers)
+        ? allUsers.find((u) => u.id === userId)
+        : null;
+
+    if (!creator) return 1.0;
+
+    const plan = String(creator.plan || "")
+        .toLowerCase()
+        .trim();
+
+    switch (plan) {
+        case "pro":
+            return 1.5; // +50%
+        case "medium":
+            return 1.275; // +27.5%
+        case "standard":
+            return 1.125; // +12.5%
+        default:
+            return 1.0; // Pas de boost pour Free
+    }
+}
+
+/**
+ * Score le contenu basé sur les préférences de l'utilisateur
+ * Retourne un score entre -1 et 5+
+ * Les scores plus élevés indiquent une meilleure correspondance avec les préférences
+ * Inclut les boosts basés sur le plan du créateur
+ */
+function scoreContentForRecommendation(content, prefs) {
+    if (!content || !prefs) return 0;
+
+    let score = 0;
+
+    // Score basé sur le type de contenu
+    if (content.type && prefs.types && prefs.types[content.type]) {
+        const typeScore = Math.min(
+            2,
+            Math.abs(prefs.types[content.type]) * 0.5,
+        );
+        score += prefs.types[content.type] > 0 ? typeScore : -typeScore * 0.5;
+    }
+
+    // Score basé sur l'état du contenu
+    if (content.state && prefs.states && prefs.states[content.state]) {
+        const stateScore = Math.min(
+            1.5,
+            Math.abs(prefs.states[content.state]) * 0.4,
+        );
+        score +=
+            prefs.states[content.state] > 0 ? stateScore : -stateScore * 0.5;
+    }
+
+    // Score basé sur l'utilisateur/créateur
+    if (content.userId && prefs.users && prefs.users[content.userId]) {
+        const userScore = Math.min(
+            1.8,
+            Math.abs(prefs.users[content.userId]) * 0.6,
+        );
+        score += prefs.users[content.userId] > 0 ? userScore : -userScore * 0.3;
+    }
+
+    // Score basé sur les tags
+    if (Array.isArray(content.tags) && prefs.tags) {
+        let tagScore = 0;
+        let matchingTags = 0;
+
+        content.tags.forEach((tag) => {
+            const normalizedTag = String(tag || "")
+                .trim()
+                .toLowerCase();
+            if (prefs.tags[normalizedTag]) {
+                const tagValue = Math.abs(prefs.tags[normalizedTag]) * 0.3;
+                tagScore +=
+                    prefs.tags[normalizedTag] > 0 ? tagValue : -tagValue * 0.4;
+                matchingTags++;
+            }
+        });
+
+        if (matchingTags > 0) {
+            score += Math.min(2, tagScore);
+        }
+    }
+
+    // Pénalité si déjà vu
+    if (content.contentId && prefs.seen && prefs.seen[content.contentId]) {
+        score *= 0.3; // Réduire drastiquement le score du contenu déjà vu
+    }
+
+    // Appliquer le boost basé sur le plan du créateur
+    const planBoost = getPlanBoostMultiplier(content.userId);
+    score *= planBoost;
+
+    return score;
+}
+
+/**
+ * Retourne le niveau du plan (0-3) pour le tri par priorité
+ */
+function getPlanTier(userId) {
+    if (!userId || typeof allUsers === "undefined") return 0;
+
+    const creator = Array.isArray(allUsers)
+        ? allUsers.find((u) => u.id === userId)
+        : null;
+
+    if (!creator) return 0;
+
+    const plan = String(creator.plan || "")
+        .toLowerCase()
+        .trim();
+
+    switch (plan) {
+        case "pro":
+            return 3; // Priorité maximale
+        case "medium":
+            return 2; // Priorité haute
+        case "standard":
+            return 1; // Priorité moyenne
+        default:
+            return 0; // Priorité basse (Free)
+    }
+}
+
+/**
+ * Filtre et trie le contenu basé sur les préférences avec exploration adaptative
+ * et priorité par plan d'abonnement
+ */
+function filterAndSortContentByPreferences(contentList, prefs) {
+    if (!Array.isArray(contentList) || !prefs) {
+        return contentList;
+    }
+
+    // Calculer le ratio d'exploration adaptatif
+    const explorationRatio = getAdaptiveExplorationRatio(prefs);
+
+    // Diviser le contenu en contenu préféré et contenu d'exploration
+    const scoredContent = contentList.map((content) => ({
+        content,
+        score: scoreContentForRecommendation(content, prefs),
+        planTier: getPlanTier(content.userId),
+    }));
+
+    // Trier par: 1) Plan (pro > medium > standard > free), 2) Score (décroissant)
+    scoredContent.sort((a, b) => {
+        // D'abord comparer par niveau de plan (décroissant: 3, 2, 1, 0)
+        if (b.planTier !== a.planTier) {
+            return b.planTier - a.planTier;
+        }
+        // Si même plan, trier par score
+        return b.score - a.score;
+    });
+
+    // Diviser entre contenu préféré et contenu d'exploration
+    const preferredCount = Math.ceil(
+        scoredContent.length * (1 - explorationRatio),
+    );
+    const preferred = scoredContent.slice(0, preferredCount);
+    const exploration = scoredContent.slice(preferredCount);
+
+    // Mélanger légèrement le contenu d'exploration pour plus de découverte
+    exploration.sort(() => Math.random() - 0.5);
+
+    // Créer un ordre entrelacé: recommandations, puis exploration
+    // Cela maintient la priorité des plans tout en introduisant de la diversité
+    const finalOrder = [];
+    const chunkSize = Math.max(
+        3,
+        Math.floor(preferred.length / Math.max(1, exploration.length)),
+    );
+
+    for (let i = 0; i < preferred.length; i += chunkSize) {
+        finalOrder.push(...preferred.slice(i, i + chunkSize));
+        if (exploration.length > 0) {
+            finalOrder.push(exploration.shift());
+        }
+    }
+
+    // Ajouter le contenu d'exploration restant
+    finalOrder.push(...exploration);
+
+    return finalOrder.map((item) => item.content);
+}
+
+window.scoreContentForRecommendation = scoreContentForRecommendation;
+window.filterAndSortContentByPreferences = filterAndSortContentByPreferences;
+window.getPlanTier = getPlanTier;
+window.getPlanBoostMultiplier = getPlanBoostMultiplier;
 
 function findContentById(contentId) {
     if (!contentId || typeof userContents === "undefined") return null;
@@ -9838,13 +10106,13 @@ async function renderImmersiveHeader(user) {
     }
 
     return `
-        <div class="immersive-header" id="immersive-header-content">
+<div class="immersive-header" id="immersive-header-content">
             <button class="profile-link immersive-profile-link" onclick="event.stopPropagation(); handleProfileClick('${user.id}', this, true)">
                 <img src="${user.avatar || "https://placehold.co/40"}" class="immersive-user-avatar">
                 <span class="immersive-user-name">${renderUsernameWithBadge(user.name, user.id)}</span>
             </button>
             ${subscribeBtnHtml}
-        </div>
+</div>
     `;
 }
 
@@ -10193,7 +10461,7 @@ async function renderImmersiveFeed(contents) {
                     </div>
                 </div>
             </div>
-        `;
+`;
         })
         .join("");
 }
@@ -10211,7 +10479,7 @@ function renderImmersiveSkeleton(count = 3) {
                     <div class="skeleton-line"></div>
                 </div>
             </div>
-        `);
+`);
     }
     return items.join("");
 }
@@ -10247,10 +10515,10 @@ async function openImmersive(startUserId, startContentId = null) {
 
     // Initial loading state
     overlay.innerHTML = `
-        <div class="close-immersive" onclick="closeImmersive()">✕</div>
-        <div id="immersive-content-container" class="immersive-skeleton-container">
+<div class="close-immersive" onclick="closeImmersive()">✕</div>
+<div id="immersive-content-container" class="immersive-skeleton-container">
             ${renderImmersiveSkeleton(4)}
-        </div>
+</div>
     `;
     overlay.style.display = "block";
     document.body.style.overflow = "hidden";
@@ -10406,7 +10674,7 @@ async function openImmersive(startUserId, startContentId = null) {
                     background: rgba(0,0,0,0.9);
                 }
             </style>
-        `;
+`;
 
         // Assemble final HTML
         overlay.innerHTML = `
@@ -10427,7 +10695,7 @@ async function openImmersive(startUserId, startContentId = null) {
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9l-6 6-6-6"/></svg>
                 </button>
             </div>
-        `;
+`;
 
         try {
             initXeraCarousels(overlay);
@@ -10540,7 +10808,7 @@ async function openImmersive(startUserId, startContentId = null) {
                     <button onclick="closeImmersive()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #333; border: none; border-radius: 4px; color: white; cursor: pointer;">Fermer</button>
                 </div>
             </div>
-        `;
+`;
     }
 }
 
@@ -11073,10 +11341,18 @@ function setupImmersiveSnapNav() {
         navigateStep(direction);
     };
 
-    overlay.addEventListener("touchstart", onTouchStart, { passive: true });
-    overlay.addEventListener("touchmove", onTouchMove, { passive: false });
-    overlay.addEventListener("touchend", onTouchEnd, { passive: false });
-    overlay.addEventListener("touchcancel", onTouchCancel, { passive: true });
+    overlay.addEventListener("touchstart", onTouchStart, {
+        passive: true,
+    });
+    overlay.addEventListener("touchmove", onTouchMove, {
+        passive: false,
+    });
+    overlay.addEventListener("touchend", onTouchEnd, {
+        passive: false,
+    });
+    overlay.addEventListener("touchcancel", onTouchCancel, {
+        passive: true,
+    });
     overlay.addEventListener("wheel", onWheel, { passive: false });
 
     overlay.__snapCleanup = () => {
@@ -11119,7 +11395,10 @@ function setupImmersiveKeyboardNav() {
         const nextIndex =
             e.key === "ArrowDown" ? currentIndex + 1 : currentIndex - 1;
         const clamped = Math.max(0, Math.min(posts.length - 1, nextIndex));
-        posts[clamped].scrollIntoView({ behavior: "smooth", block: "start" });
+        posts[clamped].scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
         e.preventDefault();
     };
 
@@ -11161,7 +11440,10 @@ function setupImmersiveArrowNav() {
 
     const scrollToIndex = (posts, index) => {
         if (!posts[index]) return;
-        posts[index].scrollIntoView({ behavior: "smooth", block: "start" });
+        posts[index].scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
     };
 
     const updateDisabled = () => {
@@ -11497,13 +11779,13 @@ async function renderProfileTimeline(userId) {
                     ${arcItems}
                 </div>
             </div>
-        `;
+`;
     }
 
     const collabRequestsHtml =
         pendingRequests.length > 0
             ? `
-        <div class="collab-requests" style="margin: 1.5rem 0; padding: 1rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 12px;">
+<div class="collab-requests" style="margin: 1.5rem 0; padding: 1rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 12px;">
             <h3 style="margin-bottom: 1rem;">Demandes de collaboration</h3>
             <div style="display: flex; flex-direction: column; gap: 0.75rem;">
                 ${pendingRequests
@@ -11536,7 +11818,7 @@ async function renderProfileTimeline(userId) {
                     })
                     .join("")}
             </div>
-        </div>
+</div>
     `
             : "";
 
@@ -11548,34 +11830,34 @@ async function renderProfileTimeline(userId) {
     // ... Boutons existants ...
     const settingsButtonHtml = isOwnProfile
         ? `
-        <button class="badge settings-badge" onclick="window.launchLive('${userId}')" title="Lancer un live">
+<button class="badge settings-badge" onclick="window.launchLive('${userId}')" title="Lancer un live">
             <div class="badge-icon"><img src="icons/live.svg" alt="Live" style="width:100%;height:100%;"></div>
             <span>Live</span>
-        </button>
-        <button class="badge settings-badge" onclick="window.location.href='analytics.html'" title="Analytics">
+</button>
+<button class="badge settings-badge" onclick="window.location.href='analytics.html'" title="Analytics">
             <div class="badge-icon"><img src="icons/analytics.svg" alt="Analytics" style="width:100%;height:100%;"></div>
             <span>Analytics</span>
-        </button>
-        ${
-            isSuperAdmin()
-                ? `
-        <button class="badge settings-badge" onclick="window.location.href='admin.html'" title="Administration">
+</button>
+${
+    isSuperAdmin()
+        ? `
+<button class="badge settings-badge" onclick="window.location.href='admin.html'" title="Administration">
             <div class="badge-icon"><img src="icons/team.svg" alt="Administration" style="width:100%;height:100%;"></div>
             <span>Admin</span>
-        </button>
-        `
-                : ""
-        }
-        <button class="badge settings-badge" onclick="openSettings('${userId}')" title="Réglages">
+</button>
+`
+        : ""
+}
+<button class="badge settings-badge" onclick="openSettings('${userId}')" title="Réglages">
             <div class="badge-icon"><img src="icons/reglages.svg" alt="Réglages" style="width:100%;height:100%;"></div>
             <span>Réglages</span>
-        </button>
+</button>
     `
         : "";
 
     const shareButtonHtml = `  <button class="btn-share-profile" onclick="shareProfileLink('${userId}')" title="Partager le profil" aria-label="Partager le profil">
             <img src="icons/share.svg" alt="Partager">
-        </button>
+</button>
     `;
 
     let followButtonHtml = "";
@@ -11648,7 +11930,7 @@ async function renderProfileTimeline(userId) {
         ? `Jour ${latestTrace.dayNumber || latestTrace.day_number || "-"}`
         : "Aucune";
     const progressSnapshotHtml = `
-        <div class="profile-progress-snapshot">
+<div class="profile-progress-snapshot">
             <div class="snapshot-item">
                 <div class="snapshot-label">Dernière mise à jour</div>
                 <div class="snapshot-value">${latestTraceLabel}</div>
@@ -11661,18 +11943,18 @@ async function renderProfileTimeline(userId) {
                 <div class="snapshot-label">Blocages</div>
                 <div class="snapshot-value">${failureCount}</div>
             </div>
-        </div>
+</div>
     `;
     const showVerificationCta = isOwnProfile && !isCurrentUserVerified();
     const verificationCtaHtml = showVerificationCta
         ? `
-        <div class="profile-verify-block">
+<div class="profile-verify-block">
             <button class="profile-verify-cta" onclick="window.location.href='subscription-plans.html'" aria-label="Demander une vérification XERA">
                 <span>Obtenir une vérification</span>
                 <img src="icons/verify-personal.svg?v=${BADGE_ASSET_VERSION}" alt="" aria-hidden="true" />
             </button>
-        </div>
-        `
+</div>
+`
         : "";
     const accountTypeValue = String(user.account_type || "").toLowerCase();
     const accountSubtypeValue = String(
@@ -11686,7 +11968,7 @@ async function renderProfileTimeline(userId) {
         accountTypeValue === "enterprise" ||
         accountTypeValue === "company";
     const profileSignalStatsHtml = `
-        <div class="profile-signal-metrics">
+<div class="profile-signal-metrics">
             <div class="follower-stat">
                 <div class="follower-stat-count" title="${Number(followerCount || 0).toLocaleString("fr-FR")}">${formatCompactCount(followerCount)}</div>
                 <div class="follower-stat-label">Abonnés</div>
@@ -11703,7 +11985,7 @@ async function renderProfileTimeline(userId) {
                 <div class="follower-stat-count" title="${Number(userTraces.length || 0).toLocaleString("fr-FR")}">${formatCompactCount(userTraces.length)}</div>
                 <div class="follower-stat-label">Updates</div>
             </div>
-        </div>
+</div>
     `;
     const publicSignalHtml = showPublicStats
         ? `${profileSignalStatsHtml}${progressSnapshotHtml}`
@@ -11748,7 +12030,7 @@ async function renderProfileTimeline(userId) {
     const projects = await projectsPromise;
     const projectsHtml = projects.length
         ? `
-        <div class="projects-grid">
+<div class="projects-grid">
             ${projects
                 .map(
                     (p) => `
@@ -11762,7 +12044,7 @@ async function renderProfileTimeline(userId) {
             `,
                 )
                 .join("")}
-        </div>
+</div>
     `
         : "";
 
@@ -11773,7 +12055,7 @@ async function renderProfileTimeline(userId) {
     const adminInlineHtml =
         isAdminViewer && !isOwnProfile
             ? `
-        <div class="admin-inline-box" style="margin: 1rem auto 0; max-width: 760px; border: 1px solid var(--border-color); border-radius: 12px; padding: 0.9rem 1rem; background: rgba(255,255,255,0.03);">
+<div class="admin-inline-box" style="margin: 1rem auto 0; max-width: 760px; border: 1px solid var(--border-color); border-radius: 12px; padding: 0.9rem 1rem; background: rgba(255,255,255,0.03);">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap;">
                 <div style="display:flex; flex-direction:column; gap:0.25rem;">
                     <strong style="font-size:0.95rem;">Modération rapide (admin)</strong>
@@ -11791,8 +12073,8 @@ async function renderProfileTimeline(userId) {
                 </div>
             </div>
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top:0.35rem;">Les actions s'appliquent immédiatement sur ce profil. La raison est enregistrée avec le ban ou la suppression douce.</p>
-        </div>
-        `
+</div>
+`
             : "";
 
     const hasArcs = Array.isArray(userArcs) && userArcs.length > 0;
@@ -11812,15 +12094,15 @@ async function renderProfileTimeline(userId) {
 
     const noArcNoticeHtml = !hasArcs
         ? `
-        <div class="no-arc-notice" style="margin: 1.5rem 0; padding: 1rem 1.25rem; border: 1px dashed var(--border-color); border-radius: 12px; color: var(--text-secondary); text-align: center;">
+<div class="no-arc-notice" style="margin: 1.5rem 0; padding: 1rem 1.25rem; border: 1px dashed var(--border-color); border-radius: 12px; color: var(--text-secondary); text-align: center;">
             L'utilisateur n'a pas encore créé de projet.
-        </div>
+</div>
     `
         : "";
 
     const weeklyChartHtml = hasArcs
         ? `
-        <div class="weekly-progress-card" style="margin: 1.5rem 0; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.25rem;">
+<div class="weekly-progress-card" style="margin: 1.5rem 0; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.25rem;">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
                 <div>
                     <h4 style="margin:0;">Progression hebdomadaire</h4>
@@ -11831,15 +12113,15 @@ async function renderProfileTimeline(userId) {
             <div style="margin-top:1rem; min-height:220px;">
                 <canvas id="weekly-progress-chart-${userId}" aria-label="Progression hebdomadaire" role="img"></canvas>
             </div>
-        </div>
+</div>
     `
         : "";
 
     const analyticsSectionHtml = hasArcs
         ? `
-        <div class="profile-analytics-section ${!isOwnProfile ? "compact" : ""}" style="margin: 2.5rem 0;">
+<div class="profile-analytics-section ${!isOwnProfile ? "compact" : ""}" style="margin: 2.5rem 0;">
             <div id="profile-analytics" class="analytics-dashboard ${!isOwnProfile ? "analytics-dashboard-compact" : ""}" style="padding: 0; margin: 0; max-width: 100%;"></div>
-        </div>
+</div>
     `
         : "";
 
@@ -11855,7 +12137,7 @@ async function renderProfileTimeline(userId) {
         user.bio || "Progression, preuves et projets publics.",
     ).replace(/\n/g, "<br>");
     const influenceSectionHtml = `
-        <section class="influence-section">
+<section class="influence-section">
             <h3 class="section-title">Influence & Reach</h3>
             <div class="influence-grid">
                 <div class="influence-card" id="yt-card">
@@ -11884,25 +12166,25 @@ async function renderProfileTimeline(userId) {
                     <button class="connect-btn" data-connect="spotify">Connect Spotify</button>
                 </div>
             </div>
-        </section>
+</section>
     `;
     const publicActivityHtml = showPublicActivity
         ? `
-        ${projectProgressBoardHtml}
-        ${arcsHtml}
-        ${collabRequestsHtml}
-        ${projectsHtml}
-        ${hasArcs ? weeklyChartHtml : noArcNoticeHtml}
-        ${showPublicStats ? influenceSectionHtml : ""}
-        ${showPublicStats ? analyticsSectionHtml : ""}
-        <div class="timeline profile-content-shell">
+${projectProgressBoardHtml}
+${arcsHtml}
+${collabRequestsHtml}
+${projectsHtml}
+${hasArcs ? weeklyChartHtml : noArcNoticeHtml}
+${showPublicStats ? influenceSectionHtml : ""}
+${showPublicStats ? analyticsSectionHtml : ""}
+<div class="timeline profile-content-shell">
             ${timelinesHtml}
-        </div>
+</div>
     `
         : renderProfileHiddenSection("activity");
 
     const profileHtml = `
-        <div class="profile-hero profile-hero--glam ${getProfileAppearanceClass(profilePreferences)}" style="${getProfileAppearanceStyle(profilePreferences)}">
+<div class="profile-hero profile-hero--glam ${getProfileAppearanceClass(profilePreferences)}" style="${getProfileAppearanceStyle(profilePreferences)}">
             <div class="profile-hero-glow" aria-hidden="true"></div>
             ${
                 bannerHtml
@@ -11957,11 +12239,11 @@ async function renderProfileTimeline(userId) {
                     }
                 </div>
             </div>
-        </div>
-        ${publicActivityHtml}
-        
-        <!-- Footer uniquement sur la page profil -->
-        <footer style="background: var(--bg-secondary); border-top: 1px solid var(--border-color); padding: 2rem; margin-top: 4rem; text-align: center;">
+</div>
+${publicActivityHtml}
+
+<!-- Footer uniquement sur la page profil -->
+<footer style="background: var(--bg-secondary); border-top: 1px solid var(--border-color); padding: 2rem; margin-top: 4rem; text-align: center;">
             <div style="max-width: 1200px; margin: 0 auto;">
                 <div style="display: flex; justify-content: center; align-items: center; gap: 2rem; margin-bottom: 1rem; flex-wrap: wrap;">
                     <a href="index.html" style="color: var(--text-secondary); text-decoration: none; transition: color 0.3s;">Accueil</a>
@@ -11969,7 +12251,7 @@ async function renderProfileTimeline(userId) {
                 </div>
                 <p style="color: var(--text-muted); font-size: 0.9rem;">© 2026 XERA - Documentez l'effort</p>
             </div>
-        </footer>
+</footer>
     `;
 
     const settingsButtonContainer = document.getElementById(
@@ -12064,7 +12346,7 @@ async function renderProfileIntoContainer(userId) {
                 <h3>Impossible de charger le profil</h3>
                 <p>${error?.message || "Une erreur est survenue pendant le rendu."}</p>
             </div>
-        `;
+`;
     }
 }
 
@@ -12074,18 +12356,18 @@ function getProfileLoadingMarkup() {
 
 function getProfileSkeletonMarkup() {
     const timelineItem = (key) => `
-        <div class="profile-skeleton-item" data-index="${key}">
+<div class="profile-skeleton-item" data-index="${key}">
             <div class="skeleton skeleton-dot"></div>
             <div class="profile-skeleton-card">
                 <div class="skeleton skeleton-text" style="width: 32%; height: 0.8rem;"></div>
                 <div class="skeleton skeleton-text" style="width: 68%; height: 0.9rem;"></div>
                 <div class="skeleton skeleton-card-sm"></div>
             </div>
-        </div>
+</div>
     `;
 
     return `
-        <div class="loading-state-container profile-skeleton" role="status" aria-busy="true" aria-live="polite">
+<div class="loading-state-container profile-skeleton" role="status" aria-busy="true" aria-live="polite">
             <div class="skeleton skeleton-banner" aria-hidden="true"></div>
 
             <div class="profile-skeleton-header">
@@ -12112,13 +12394,13 @@ function getProfileSkeletonMarkup() {
                 ${timelineItem(2)}
                 ${timelineItem(3)}
             </div>
-        </div>
+</div>
     `;
 }
 
 function getSettingsSkeletonMarkup() {
     return `
-        <div class="loading-state-container settings-skeleton" role="status" aria-busy="true" aria-live="polite">
+<div class="loading-state-container settings-skeleton" role="status" aria-busy="true" aria-live="polite">
             <div class="settings-skeleton-header">
                 <div class="skeleton skeleton-text" style="width: 40%; height: 1.5rem; margin-bottom: 0.5rem;"></div>
                 <div class="skeleton skeleton-text" style="width: 60%; height: 0.9rem;"></div>
@@ -12153,7 +12435,7 @@ function getSettingsSkeletonMarkup() {
                 <div class="skeleton skeleton-button" style="width: 100px;"></div>
                 <div class="skeleton skeleton-button" style="width: 100px;"></div>
             </div>
-        </div>
+</div>
     `;
 }
 
@@ -12211,7 +12493,9 @@ window.renderWeeklyProgressChart = async function (userId) {
             const dt = new Date(d);
             if (!Number.isFinite(dt.getTime())) return "";
             try {
-                return dt.toLocaleDateString(undefined, { weekday: "short" });
+                return dt.toLocaleDateString(undefined, {
+                    weekday: "short",
+                });
             } catch (e) {
                 return "";
             }
@@ -12840,6 +13124,13 @@ async function openSettings(userId) {
     const modal = document.getElementById("settings-modal");
     const container = modal.querySelector(".settings-container");
 
+    // Show skeleton immediately for better UX
+    container.innerHTML = getSettingsSkeletonMarkup();
+    modal.style.display = "block";
+    // Force reflow
+    modal.offsetHeight;
+    modal.classList.add("active");
+
     const followerCount = await getFollowerCount(userId);
     const accountType = user.account_type || "personal";
     const accountRole = normalizeDiscoveryAccountRole(
@@ -12871,13 +13162,13 @@ async function openSettings(userId) {
           : "";
 
     const verificationCtaHtml = `
-        <div class="verification-status info">
+<div class="verification-status info">
             Les demandes se font désormais sur la page Vérification.
-        </div>
-        <button type="button" class="btn-verify" onclick="window.location.href='subscription-plans.html'">
+</div>
+<button type="button" class="btn-verify" onclick="window.location.href='subscription-plans.html'">
             Obtenir une vérification
             <img src="icons/verify-personal.svg?v=${BADGE_ASSET_VERSION}" alt="Badge" style="width:18px;height:18px;margin-left:8px;">
-        </button>
+</button>
     `;
 
     const adminRequestsHtml = pendingRequests.length
@@ -12912,7 +13203,7 @@ async function openSettings(userId) {
 
     const verificationAdminHtml = isVerificationAdmin()
         ? `
-        <div class="settings-section">
+<div class="settings-section">
             <h3>Administration vérification</h3>
             <div class="verification-admin-block">
                 <div class="verification-requests">
@@ -12972,7 +13263,7 @@ async function openSettings(userId) {
                     <button type="button" class="btn-verify" onclick="addVerifiedUserId('staff', document.getElementById('verify-staff-id').value, document.getElementById('verify-staff-plan') ? document.getElementById('verify-staff-plan').value : null)">Ajouter</button>
                 </div>
             </div>
-        </div>
+</div>
     `
         : "";
 
@@ -13018,7 +13309,7 @@ async function openSettings(userId) {
             <div class="blocked-users-empty">
                 Aucun utilisateur bloqué pour le moment.
             </div>
-        `;
+`;
 
     // Social links preparation
     const socialLinks = user.social_links || user.socialLinks || {};
@@ -13104,7 +13395,7 @@ async function openSettings(userId) {
     const safeAccountEmailHtml = escapeHtml(accountEmail);
     const emailReminderEnabled = user.email_reminder_enabled !== false;
     container.innerHTML = `
-        <div class="settings-shell">
+<div class="settings-shell">
             <div class="settings-header" style="border:none; margin-bottom:1rem; padding-bottom:0;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap: 1rem; flex-wrap: wrap;">
                     <div style="display:flex; align-items:center; gap: 0.75rem;">
@@ -13597,7 +13888,7 @@ async function openSettings(userId) {
                 </div>
             </form>
             ${verificationAdminHtml}
-        </div>
+</div>
     `;
 
     modal.style.display = "block";
@@ -13952,6 +14243,7 @@ async function openSettings(userId) {
                                 reminderSaveResult.error,
                         );
                     }
+                    closeSettings();
                 } else {
                     if (window.ToastManager) {
                         ToastManager.success(
@@ -14139,7 +14431,7 @@ function createLiveModal() {
     modal.id = "live-modal";
     modal.className = "modal";
     modal.innerHTML = `
-        <div class="modal-content live-modal-content">
+<div class="modal-content live-modal-content">
             <div class="modal-header">
                 <h2><img src="icons/live.svg" alt="Live" style="width:20px;height:20px;vertical-align:middle;margin-right:8px;filter:invert(0.2);"> Configuration Live Stream</h2>
                 <button class="close-btn" onclick="closeLiveModal()">&times;</button>
@@ -14212,7 +14504,7 @@ function createLiveModal() {
                     </div>
                 </div>
             </div>
-        </div>
+</div>
     `;
     document.body.appendChild(modal);
     return modal;
@@ -14812,30 +15104,26 @@ function showPublishFeedbackCard(feedback) {
         .join("");
 
     card.innerHTML = `
-        <div class="publish-feedback-glow" aria-hidden="true"></div>
-        <div class="publish-feedback-sparks" aria-hidden="true">
+<div class="publish-feedback-glow" aria-hidden="true"></div>
+<div class="publish-feedback-sparks" aria-hidden="true">
             <span></span>
             <span></span>
             <span></span>
             <span></span>
-        </div>
-        <button type="button" class="publish-feedback-close" aria-label="Fermer">✕</button>
-        <p class="publish-feedback-eyebrow">${escapeHtml(feedback.eyebrow || "Publication")}</p>
-        <h3 class="publish-feedback-title">${escapeHtml(feedback.title || "C'est en ligne")}</h3>
-        <p class="publish-feedback-message">${escapeHtml(feedback.message || "")}</p>
-        ${
-            chipsHtml
-                ? `<div class="publish-feedback-chips">${chipsHtml}</div>`
-                : ""
-        }
-        <div class="publish-feedback-actions">
+</div>
+<button type="button" class="publish-feedback-close" aria-label="Fermer">✕</button>
+<p class="publish-feedback-eyebrow">${escapeHtml(feedback.eyebrow || "Publication")}</p>
+<h3 class="publish-feedback-title">${escapeHtml(feedback.title || "C'est en ligne")}</h3>
+<p class="publish-feedback-message">${escapeHtml(feedback.message || "")}</p>
+${chipsHtml ? `<div class="publish-feedback-chips">${chipsHtml}</div>` : ""}
+<div class="publish-feedback-actions">
             <button type="button" class="publish-feedback-btn publish-feedback-btn-primary">
                 ${escapeHtml(feedback.primaryLabel || "Voir")}
             </button>
             <button type="button" class="publish-feedback-btn publish-feedback-btn-secondary">
                 ${escapeHtml(feedback.secondaryLabel || "Continuer")}
             </button>
-        </div>
+</div>
     `;
 
     const removeCard = () => {
@@ -14904,7 +15192,7 @@ function showBackgroundPublishBanner({
                 </div>
                 <button type="button" class="background-publish-banner__close" aria-label="Fermer">✕</button>
             </div>
-        `;
+`;
         banner
             .querySelector(".background-publish-banner__close")
             ?.addEventListener("click", () => hideBackgroundPublishBanner());
@@ -15076,7 +15364,10 @@ async function openCreateMenu(
         );
         (collabArcs || []).forEach((arc) => {
             if (!arcMap.has(arc.id))
-                arcMap.set(arc.id, { ...arc, _collabRole: "collaborator" });
+                arcMap.set(arc.id, {
+                    ...arc,
+                    _collabRole: "collaborator",
+                });
         });
         arcs = Array.from(arcMap.values());
     } catch (e) {
@@ -15090,7 +15381,9 @@ async function openCreateMenu(
                 "Vous devez créer un projet avant de pouvoir poster une mise à jour. Voulez-vous créer votre premier projet maintenant ?",
             )
         ) {
-            setPendingCreatePostAfterArc(userId, { reason: "arc-required" });
+            setPendingCreatePostAfterArc(userId, {
+                reason: "arc-required",
+            });
             closeCreateMenu();
             if (window.openCreateModal) {
                 window.openCreateModal();
@@ -15192,7 +15485,7 @@ async function openCreateMenu(
         : `Update = mise à jour rapide (texte + photo optionnelle). Annonce = étape majeure partagée publiquement.`;
 
     container.innerHTML = `
-        <div class="settings-section">
+<div class="settings-section">
             <button type="button" class="create-close" onclick="closeCreateMenu()">✕</button>
             <div class="settings-header" style="border:none; margin-bottom:1rem; padding-bottom:0;">
                 <h2>${title}</h2>
@@ -15325,7 +15618,7 @@ async function openCreateMenu(
                     <button type="submit" class="btn-save">${isEdit ? "Mettre à jour" : "Publier la mise à jour"}</button>
                 </div>
             </form>
-        </div>
+</div>
     `;
 
     modal.style.display = "block";
@@ -15415,10 +15708,10 @@ async function openCreateMenu(
     };
 
     const buildMediaPreviewShell = (innerHtml) => `
-        <div class="media-preview-shell">
+<div class="media-preview-shell">
             <button type="button" class="media-remove-btn" title="Retirer le media">X</button>
             ${innerHtml}
-        </div>
+</div>
     `;
 
     const updateMultiPreview = (urls = []) => {
@@ -15447,7 +15740,7 @@ async function openCreateMenu(
                 <div class="xera-carousel-track">${slides}</div>
                 ${dots}
             </div>
-        `);
+`);
     };
 
     const setGroupVisible = (group, visible) => {
@@ -15751,7 +16044,9 @@ async function openCreateMenu(
 
     arcSelect?.addEventListener("change", () => {
         if (!isEdit) {
-            updateCreatePrefs(userId, { lastArcId: arcSelect.value || null });
+            updateCreatePrefs(userId, {
+                lastArcId: arcSelect.value || null,
+            });
         }
         refreshSmartSuggestions();
     });
@@ -15967,7 +16262,9 @@ async function openCreateMenu(
                 previewContainer.innerHTML = buildMediaPreviewShell(
                     `<img src="${successUrls[0]}" style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">`,
                 );
-                refreshSmartSuggestions({ fileName: latestSelectedFileName });
+                refreshSmartSuggestions({
+                    fileName: latestSelectedFileName,
+                });
             },
         });
     }
@@ -16613,7 +16910,11 @@ function subscribeToRealtime() {
         .channel("public:streaming_sessions")
         .on(
             "postgres_changes",
-            { event: "*", schema: "public", table: "streaming_sessions" },
+            {
+                event: "*",
+                schema: "public",
+                table: "streaming_sessions",
+            },
             (payload) => {
                 console.log(
                     "Changement détecté dans streaming_sessions:",
@@ -16847,7 +17148,12 @@ async function sendAdminBroadcastEmail() {
     try {
         const result = await fetchSuperAdminJson("/api/admin/broadcast-email", {
             method: "POST",
-            body: JSON.stringify({ subject, body, ctaLabel, ctaUrl }),
+            body: JSON.stringify({
+                subject,
+                body,
+                ctaLabel,
+                ctaUrl,
+            }),
         });
 
         await ensureMinimumBusyTime();
