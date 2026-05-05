@@ -813,9 +813,20 @@ function updateCharCount(textarea) {
 
 // Gérer la sauvegarde des réglages
 function handleSettingsSave(userId) {
-    if (saveUserChanges(userId)) {
-        // Refresh du profil
-        navigateToUserProfile(userId);
+    try {
+        const saveSuccess = saveUserChanges(userId);
+        // Toujours fermer la modale immédiatement après la tentative de sauvegarde
+        closeSettings();
+        // Ensuite faire la navigation si la sauvegarde a réussi
+        if (saveSuccess) {
+            // Utiliser setTimeout pour permettre à la modale de se fermer en premier
+            setTimeout(() => {
+                navigateToUserProfile(userId);
+            }, 300);
+        }
+    } catch (error) {
+        console.error("Erreur lors de la sauvegarde des paramètres:", error);
+        // Fermer la modale même en cas d'erreur
         closeSettings();
     }
     return false;
@@ -846,8 +857,20 @@ function openSettings(userId) {
 // Fermer la modale de réglages
 function closeSettings() {
     const modal = document.getElementById("settings-modal");
+    if (!modal) return;
+
+    // Retirer immédiatement la classe active pour lancer l'animation de fermeture
     modal.classList.remove("active");
+
+    // Restaurer le défilement du body
     document.body.style.overflow = "auto";
+
+    // Cacher complètement la modale après la transition
+    setTimeout(() => {
+        if (modal && !modal.classList.contains("active")) {
+            modal.style.display = "none";
+        }
+    }, 300);
 }
 
 /* ========================================
