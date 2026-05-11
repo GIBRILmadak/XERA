@@ -1681,7 +1681,7 @@ nav {
 .discover-editorial-header {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(420px, 560px);
+    grid-template-columns: minmax(0, 0.85fr) minmax(620px, 0.95fr);
     gap: clamp(0.85rem, 2vw, 1.4rem);
     align-items: center;
     width: 100%;
@@ -1797,7 +1797,7 @@ nav {
 
 .discover-editorial-tools {
     display: grid;
-    grid-template-columns: minmax(174px, 218px) minmax(220px, 1fr);
+    grid-template-columns: minmax(390px, max-content) minmax(220px, 1fr);
     align-items: center;
     gap: 0.68rem;
     min-width: 0;
@@ -1818,6 +1818,13 @@ nav {
     border-radius: 999px;
     background: rgba(0, 0, 0, 0.22);
     backdrop-filter: blur(18px);
+    overflow-x: auto;
+    scrollbar-width: none;
+    width: 100%;
+}
+
+.discover-filter::-webkit-scrollbar {
+    display: none;
 }
 
 .discover-filter .filter-btn {
@@ -1827,6 +1834,7 @@ nav {
     color: var(--text-secondary);
     cursor: pointer;
     flex: 1;
+    flex-shrink: 0;
     min-height: 32px;
     font-size: 0.7rem;
     font-weight: 850;
@@ -1837,6 +1845,12 @@ nav {
         background 0.22s ease,
         color 0.22s ease,
         transform 0.22s ease;
+}
+
+@media (min-width: 1024px) {
+    .discover-filter .filter-btn {
+        flex: 0 0 auto;
+    }
 }
 
 .discover-filter .filter-btn:hover {
@@ -1908,6 +1922,11 @@ nav {
     max-width: 100%;
 }
 
+#discover .discover-grid > .discover-skeleton-grid,
+#discover .discover-grid > .discover-section-divider {
+    grid-column: 1 / -1;
+}
+
 #discover .discover-grid > .user-card.discover-row-size-4 {
     grid-column: span 3;
 }
@@ -1940,6 +1959,118 @@ nav {
         var(--feed-card-bg);
     box-shadow: 0 16px 46px rgba(0, 0, 0, 0.18);
     transform-origin: center;
+}
+
+.discover-skeleton-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--feed-gap, 22px);
+    width: 100%;
+}
+
+.discover-skeleton-card {
+    min-height: 410px;
+    overflow: hidden;
+    border: 1px solid var(--feed-card-border);
+    border-radius: 24px;
+    background: var(--feed-card-bg);
+    box-shadow: 0 16px 46px rgba(0, 0, 0, 0.12);
+}
+
+.discover-skeleton-media,
+.discover-skeleton-line,
+.discover-skeleton-avatar {
+    position: relative;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.075);
+}
+
+.discover-skeleton-media::after,
+.discover-skeleton-line::after,
+.discover-skeleton-avatar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.14),
+        transparent
+    );
+    animation: discoverSkeletonSweep 1.35s ease-in-out infinite;
+}
+
+.discover-skeleton-media {
+    height: clamp(180px, 15vw, 230px);
+    border-radius: 24px 24px 18px 18px;
+}
+
+.discover-skeleton-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    padding: 1rem;
+}
+
+.discover-skeleton-line {
+    width: 82%;
+    height: 12px;
+    border-radius: 999px;
+}
+
+.discover-skeleton-line--title {
+    width: 94%;
+    height: 18px;
+}
+
+.discover-skeleton-line--small {
+    width: 54%;
+}
+
+.discover-skeleton-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-top: 0.4rem;
+}
+
+.discover-skeleton-avatar {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 12px;
+}
+
+@keyframes discoverSkeletonSweep {
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.discover-section-divider {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.35rem 0.15rem 0;
+    color: var(--text-primary);
+}
+
+.discover-section-divider span {
+    font-family: var(--font-heading);
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+
+.discover-section-divider small {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .user-card.editorial-card::before {
@@ -1977,7 +2108,84 @@ nav {
     opacity: 1;
 }
 
+.discover-card-actions {
+    position: absolute;
+    top: 0.72rem;
+    left: 0.72rem;
+    z-index: 8;
+}
+
+.discover-card-action-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.42);
+    color: rgba(255, 255, 255, 0.86);
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: -0.12em;
+    opacity: 0;
+    transform: translateY(-3px);
+    transition:
+        opacity 0.18s ease,
+        transform 0.18s ease,
+        background 0.18s ease;
+    backdrop-filter: blur(12px);
+}
+
+.user-card.editorial-card:hover .discover-card-action-trigger,
+.user-card.editorial-card:focus-within .discover-card-action-trigger {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.discover-card-action-trigger:hover {
+    background: rgba(0, 0, 0, 0.62);
+}
+
+.discover-card-action-menu {
+    position: absolute;
+    top: calc(100% + 0.42rem);
+    left: 0;
+    display: none;
+    min-width: 150px;
+    padding: 0.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    background: rgba(12, 12, 12, 0.94);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(18px);
+}
+
+.discover-card-actions:hover .discover-card-action-menu,
+.discover-card-actions:focus-within .discover-card-action-menu {
+    display: grid;
+}
+
+.discover-card-action-menu button {
+    width: 100%;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.88);
+    cursor: pointer;
+    padding: 0.55rem 0.65rem;
+    text-align: left;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.discover-card-action-menu button:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
 .user-card.editorial-card .card-media-wrap {
+    position: relative;
     border-radius: 24px 24px 18px 18px;
     background:
         radial-gradient(
@@ -1986,6 +2194,27 @@ nav {
             transparent 36%
         ),
         #050505;
+}
+
+.discover-video-progress {
+    position: absolute;
+    right: 0.72rem;
+    bottom: 0.72rem;
+    left: 0.72rem;
+    z-index: 6;
+    height: 3px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.discover-video-progress span {
+    display: block;
+    width: var(--video-progress, 0%);
+    height: 100%;
+    border-radius: inherit;
+    background: #ef4444;
+    transition: width 0.18s linear;
 }
 
 .user-card.editorial-card .card-media-wrap::before {
@@ -2268,6 +2497,18 @@ html.light-mode .card-status--editorial {
     #discover .discover-grid {
         --feed-grid-max: 1012px;
     }
+
+    .discover-editorial-header {
+        grid-template-columns: 1fr;
+    }
+
+    .discover-editorial-tools {
+        grid-template-columns: minmax(390px, max-content) minmax(260px, 1fr);
+    }
+
+    .discover-skeleton-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 1023px) {
@@ -2284,15 +2525,19 @@ html.light-mode .card-status--editorial {
     }
 
     .discover-editorial-tools {
-        grid-template-columns: minmax(180px, 240px) minmax(240px, 1fr);
+        grid-template-columns: 1fr;
     }
 
     .discover-filter {
-        width: max-content;
+        width: 100%;
     }
 
     #discover .discover-grid {
         --feed-grid-max: 744px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .discover-skeleton-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
@@ -2369,6 +2614,22 @@ html.light-mode .card-status--editorial {
         --feed-gap: 20px;
         --feed-grid-max: 520px;
         grid-template-columns: 1fr;
+    }
+
+    .discover-skeleton-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .discover-section-divider {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.2rem;
+        padding-inline: 0.2rem;
+    }
+
+    .discover-card-action-trigger {
+        opacity: 1;
+        transform: none;
     }
 
     #discover .discover-grid > .user-card,

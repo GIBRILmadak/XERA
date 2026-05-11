@@ -7595,7 +7595,7 @@ window.submitAnnouncementReply = submitAnnouncementReply;
 
 window.discoverFilter = "all";
 
-window.toggleDiscoverFilter = function (filter) {
+function setDiscoverFilter(filter = "all", { render = true } = {}) {
     window.discoverFilter = filter;
 
     // Update UI buttons
@@ -7605,8 +7605,140 @@ window.toggleDiscoverFilter = function (filter) {
         btn.setAttribute("aria-pressed", isActive ? "true" : "false");
     });
 
-    renderDiscoverGrid();
+    if (render) renderDiscoverGrid();
+}
+
+window.toggleDiscoverFilter = function (filter) {
+    setDiscoverFilter(filter, { render: true });
 };
+
+function showDiscoverSkeleton(grid, count = 8) {
+    if (!grid) return;
+    const skeletons = Array.from({ length: count })
+        .map(
+            (_, index) => `
+            <article class="discover-skeleton-card ${index % 5 === 0 ? "discover-skeleton-card--wide" : ""}" aria-hidden="true">
+                <div class="discover-skeleton-media"></div>
+                <div class="discover-skeleton-body">
+                    <div class="discover-skeleton-line discover-skeleton-line--title"></div>
+                    <div class="discover-skeleton-line"></div>
+                    <div class="discover-skeleton-meta">
+                        <span class="discover-skeleton-avatar"></span>
+                        <span class="discover-skeleton-line discover-skeleton-line--small"></span>
+                    </div>
+                </div>
+            </article>
+        `,
+        )
+        .join("");
+    grid.innerHTML = `<div class="discover-skeleton-grid">${skeletons}</div>`;
+}
+
+function getDiscoverSectionTitle(filter, section) {
+    if (filter === "live") return "En direct";
+    if (filter === "video") return "Vidéos récentes";
+    if (filter === "image") return "Images et preuves";
+    if (filter === "projects") return "Projets";
+    if (filter === "recent") return "Récent";
+    if (filter === "following") return "Tes trajectoires suivies";
+    if (section === "live") return "En direct maintenant";
+    return "À explorer";
+}
+
+function buildDiscoverSectionItem(filter, section, count) {
+    const title = getDiscoverSectionTitle(filter, section);
+    const sub =
+        section === "live"
+            ? "Sessions actives à rejoindre"
+            : filter === "following"
+              ? "Les créateurs que tu suis"
+              : filter === "projects"
+                ? "Trajectoires structurées par projet"
+                : filter === "recent"
+                  ? "Dernières preuves publiées"
+              : "Recommandé selon l'activité récente";
+    return {
+        key: `section-${filter}-${section}`,
+        type: "section",
+        html: `
+            <div class="discover-section-divider" role="presentation">
+                <span>${title}</span>
+                <small>${sub}${count ? ` · ${count}` : ""}</small>
+            </div>
+        `,
+    };
+}
+
+function getDiscoverEmptyState(filter) {
+    const states = {
+        live: {
+            title: "Aucun live en ce moment",
+            message: "Revenez un peu plus tard ou repassez sur Tout pour explorer les trajectoires.",
+        },
+        video: {
+            title: "Aucune vidéo à afficher",
+            message: "Le feed Tout contient peut-être déjà des images, textes ou projets récents.",
+        },
+        projects: {
+            title: "Aucun projet filtré",
+            message: "Repassez sur Tout pour voir toutes les trajectoires disponibles.",
+        },
+        following: {
+            title: "Aucune trajectoire suivie",
+            message: "Suivez quelques créateurs ou repassez sur Tout pour découvrir du contenu.",
+        },
+        recent: {
+            title: "Rien de récent dans ce filtre",
+            message: "Repassez sur Tout pour explorer les trajectoires disponibles.",
+        },
+    };
+    return (
+        states[filter] || {
+            title: "Aucune trajectoire à explorer",
+            message: "Revenez plus tard pour découvrir de nouvelles trajectoires.",
+        }
+    );
+}
+
+function matchesDiscoverFilter(item, currentFilter, followedSet = new Set()) {
+    if (!item) return false;
+    const userId = item.user?.id || item.content?.userId || item.stream?.user_id;
+    if (currentFilter === "following") return userId && followedSet.has(userId);
+    if (currentFilter === "live") return item.type === "live";
+    if (currentFilter === "video") {
+        return item.type !== "live" && item.content?.type === "video";
+    }
+    if (currentFilter === "image") {
+        return item.type !== "live" && item.content?.type === "image";
+    }
+    if (currentFilter === "projects") {
+        return item.type !== "live" && Boolean(item.arcId || item.content?.arc);
+    }
+    if (currentFilter === "recent") return item.type !== "live";
+    return true;
+}
+
+function partitionDiscoverItems(items, currentFilter) {
+    const filtered = Array.isArray(items) ? items : [];
+    if (currentFilter === "all") {
+        return [
+            {
+                section: "live",
+                items: filtered.filter((item) => item.type === "live"),
+            },
+            {
+                section: "explore",
+                items: filtered.filter((item) => item.type !== "live"),
+            },
+        ].filter((group) => group.items.length > 0);
+    }
+    return [
+        {
+            section: currentFilter,
+            items: filtered,
+        },
+    ].filter((group) => group.items.length > 0);
+}
 
 const DISCOVER_VERIFIED_MIX_PATTERNS = [
     [
@@ -7917,6 +8049,39 @@ function handleDiscoverInterest(contentId, action) {
 }
 window.handleDiscoverInterest = handleDiscoverInterest;
 
+async function handleDiscoverQuickAction(contentId, action, userId = null) {
+    if (!contentId || !action) return;
+    const content = findContentById(contentId);
+    if (action === "more" || action === "less") {
+        handleDiscoverInterest(contentId, action === "less" ? "dislike" : "like");
+        return;
+    }
+
+    if (action === "share") {
+        const title = content?.title || "Trajectoire XERA";
+        const url = userId
+            ? buildProfileShareUrl(userId)
+            : new URL(window.location.href).toString();
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title,
+                    text: `Découvre cette trajectoire sur XERA: ${title}`,
+                    url,
+                });
+                return;
+            }
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(url);
+                ToastManager?.success?.("Lien copié", "La trajectoire est prête à partager.");
+            }
+        } catch (error) {
+            console.warn("Discover share failed:", error);
+        }
+    }
+}
+window.handleDiscoverQuickAction = handleDiscoverQuickAction;
+
 function buildMoodDiscoverMix(
     discoverArcCards,
     liveStreams = [],
@@ -8084,6 +8249,7 @@ function renderUserCard(
                         <img src="icons/play.svg" alt="Play" width="40" height="40">
                         <span>Vidéo</span>
                     </div>
+                    <div class="discover-video-progress" aria-hidden="true"><span></span></div>
                     ${collabCornerHtml}
                     ${supportOverlayHtml}
                     <div class="card-stats-overlay">
@@ -8245,7 +8411,7 @@ function renderUserCard(
     // User Info (Name, Avatar, Subscribe) - Moved to bottom
     const userInfoHtml = `
 <div class="card-user-bottom">
-            <button class="profile-link card-profile-link" onclick="event.stopPropagation(); handleProfileClick('${userId}', this)">
+            <button class="profile-link card-profile-link" data-profile-user-id="${userId}" onclick="event.preventDefault(); event.stopPropagation(); handleProfileClick('${userId}', this)" type="button" aria-label="Voir le profil de ${escapeHtml(user.name || "cet utilisateur")}">
                 <img src="${user.avatar || "https://placehold.co/40"}" class="card-avatar" loading="lazy" decoding="async">
                 <div class="profile-link-text">
                     <h3 class="discover-user-name">${renderUsernameWithBadge(user.name, user.id)}${monetizationBadgeHtml}</h3>
@@ -8331,8 +8497,20 @@ function renderUserCard(
                </button>`
             : "";
 
+    const quickActionsHtml = `
+        <div class="discover-card-actions" onclick="event.stopPropagation();">
+            <button type="button" class="discover-card-action-trigger" aria-label="Actions rapides" title="Actions rapides">•••</button>
+            <div class="discover-card-action-menu">
+                <button type="button" onclick="handleDiscoverQuickAction('${latestContent.contentId}', 'more', '${userId}')">Plus comme ça</button>
+                <button type="button" onclick="handleDiscoverQuickAction('${latestContent.contentId}', 'less', '${userId}')">Moins comme ça</button>
+                <button type="button" onclick="handleDiscoverQuickAction('${latestContent.contentId}', 'share', '${userId}')">Partager</button>
+            </div>
+        </div>
+    `;
+
     return `
 <div class="${cardClass}" style="--state-color: ${stateColor};" data-user="${userId}" data-content-id="${latestContent.contentId}" data-tags="${tagDataset}" onclick="openImmersive('${userId}', '${latestContent.contentId}')">
+            ${quickActionsHtml}
             ${mediaHtml}
             <div class="card-content">
                 ${arcInfo}
@@ -8922,29 +9100,44 @@ function chooseDiscoverRowSize(remaining, seed) {
 function assignDiscoverRowLayout(renderedItems) {
     if (!Array.isArray(renderedItems) || renderedItems.length === 0) return;
 
-    let seed = hashDiscoverLayoutSeed(
-        renderedItems.map((item) => item.key).join("|"),
-    );
-    let index = 0;
     let rowIndex = 0;
+    const assignSegment = (items) => {
+        if (!items.length) return;
+        let seed = hashDiscoverLayoutSeed(items.map((item) => item.key).join("|"));
+        let index = 0;
+        while (index < items.length) {
+            const remaining = items.length - index;
+            const choice = chooseDiscoverRowSize(remaining, seed);
+            const rowSize = Math.max(1, Math.min(choice.rowSize, remaining));
+            seed = choice.seed;
 
-    while (index < renderedItems.length) {
-        const remaining = renderedItems.length - index;
-        const choice = chooseDiscoverRowSize(remaining, seed);
-        const rowSize = Math.max(1, Math.min(choice.rowSize, remaining));
-        seed = choice.seed;
+            for (let position = 0; position < rowSize; position += 1) {
+                const item = items[index + position];
+                if (!item) continue;
+                item.rowSize = rowSize;
+                item.rowPosition = position;
+                item.rowIndex = rowIndex;
+            }
 
-        for (let position = 0; position < rowSize; position += 1) {
-            const item = renderedItems[index + position];
-            if (!item) continue;
-            item.rowSize = rowSize;
-            item.rowPosition = position;
-            item.rowIndex = rowIndex;
+            index += rowSize;
+            rowIndex += 1;
         }
+    };
 
-        index += rowSize;
-        rowIndex += 1;
-    }
+    let segment = [];
+    renderedItems.forEach((item) => {
+        if (item?.type === "section") {
+            assignSegment(segment);
+            segment = [];
+            item.rowSize = 4;
+            item.rowPosition = 0;
+            item.rowIndex = rowIndex;
+            rowIndex += 1;
+            return;
+        }
+        segment.push(item);
+    });
+    assignSegment(segment);
 }
 
 function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
@@ -9064,12 +9257,7 @@ async function renderDiscoverGrid() {
 
     // Afficher un état de chargement si les données ne sont pas encore là
     if (!window.hasLoadedUsers) {
-        if (
-            window.LoadingStateManager &&
-            typeof LoadingStateManager.showSpinner === "function"
-        ) {
-            LoadingStateManager.showSpinner(grid);
-        }
+        showDiscoverSkeleton(grid);
         return;
     }
     if (window.userLoadError) {
@@ -9192,25 +9380,43 @@ async function renderDiscoverGrid() {
         const isEncouraged = content
             ? encouragedContentIds.has(content.contentId)
             : false;
-        const respectFilter = currentFilter === "following" ? isFollowed : true;
-        if (!respectFilter) return "";
         return renderUserCard(userId, isFollowed, isEncouraged, content, {
             isPreferred: Boolean(item.__discoverPreferred),
         });
     };
 
     const renderedItems = [];
-    mixedItems.forEach((item) => {
-        const html = renderItem(item);
-        if (!html) return;
-        const key = getDiscoverItemKey(item);
-        const contentId = getDiscoverItemContentId(item);
-        if (!key) return;
-        renderedItems.push({
-            key,
-            html,
-            contentId,
-            type: item.type,
+    let filteredMixedItems = mixedItems.filter((item) =>
+        matchesDiscoverFilter(item, currentFilter, followedSet),
+    );
+    if (currentFilter === "recent") {
+        filteredMixedItems = filteredMixedItems.sort(
+            (a, b) =>
+                getDiscoverContentTime(b.content) -
+                getDiscoverContentTime(a.content),
+        );
+    }
+    const itemGroups = partitionDiscoverItems(filteredMixedItems, currentFilter);
+    itemGroups.forEach((group) => {
+        renderedItems.push(
+            buildDiscoverSectionItem(
+                currentFilter,
+                group.section,
+                group.items.length,
+            ),
+        );
+        group.items.forEach((item) => {
+            const html = renderItem(item);
+            if (!html) return;
+            const key = getDiscoverItemKey(item);
+            const contentId = getDiscoverItemContentId(item);
+            if (!key) return;
+            renderedItems.push({
+                key,
+                html,
+                contentId,
+                type: item.type,
+            });
         });
     });
 
@@ -9222,6 +9428,8 @@ async function renderDiscoverGrid() {
         return;
     }
 
+    const emptyState = getDiscoverEmptyState(currentFilter);
+
     if (
         window.LoadingStateManager &&
         typeof LoadingStateManager.showEmptyState === "function"
@@ -9229,16 +9437,16 @@ async function renderDiscoverGrid() {
         LoadingStateManager.showEmptyState(
             grid,
             "👥",
-            "Aucune trajectoire à explorer",
-            "Revenez plus tard pour découvrir de nouvelles trajectoires.",
+            emptyState.title,
+            emptyState.message,
             { text: "Actualiser", action: "location.reload()" },
         );
     } else {
         grid.innerHTML = `
             <div class="empty-state">
                 <div class="empty-state-icon">👥</div>
-                <h3>Aucune trajectoire à explorer</h3>
-                <p>Revenez plus tard pour découvrir de nouvelles trajectoires.</p>
+                <h3>${emptyState.title}</h3>
+                <p>${emptyState.message}</p>
             </div>
 `;
     }
@@ -12628,6 +12836,9 @@ function navigateTo(pageId) {
             }
             return;
         }
+        if (typeof setDiscoverFilter === "function") {
+            setDiscoverFilter("all", { render: false });
+        }
     }
 
     if (pageId === "messages") {
@@ -12667,6 +12878,25 @@ function navigateTo(pageId) {
 }
 
 window.syncFloatingCreateVisibility = syncFloatingCreateVisibility;
+
+document.addEventListener(
+    "click",
+    (event) => {
+        const profileTrigger = event.target.closest(
+            ".user-card .card-profile-link[data-profile-user-id]",
+        );
+        if (!profileTrigger) return;
+        const userId = profileTrigger.dataset.profileUserId;
+        if (!userId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        handleProfileClick(userId, profileTrigger).catch((error) => {
+            console.error("Discover profile click failed:", error);
+        });
+    },
+    true,
+);
 
 // Make sure handleProfileNavigation is defined as an async function
 async function handleProfileNavigation() {
@@ -12827,6 +13057,19 @@ function setupDiscoverVideoInteractions() {
 
         // Start observing
         discoverVideoObserver.observe(video);
+
+        const updateProgress = () => {
+            const duration = Number(video.duration) || 0;
+            const current = Number(video.currentTime) || 0;
+            const progress =
+                duration > 0 ? Math.max(0, Math.min(1, current / duration)) : 0;
+            wrap?.style.setProperty("--video-progress", `${progress * 100}%`);
+        };
+        video.addEventListener("timeupdate", updateProgress);
+        video.addEventListener("loadedmetadata", updateProgress);
+        video.addEventListener("ended", () => {
+            wrap?.style.setProperty("--video-progress", "0%");
+        });
 
         // Autoplay on hover for discover cards
         video.addEventListener("mouseenter", function () {

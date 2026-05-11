@@ -44,10 +44,12 @@
             #pwa-ios-hint ol { margin: 0 0 12px 18px; padding: 0; color: rgba(248,250,252,0.85); font-size: 0.9rem; line-height: 1.35; }
             #pwa-ios-hint button { border: none; background: #10b981; color: #0b1612; padding: 9px 12px; border-radius: 12px; font-weight: 700; cursor: pointer; width: 100%; }
             @media (max-width: 480px) {
-                #pwa-install-banner { gap: 10px; }
-                #pwa-install-banner .pwa-icon { width: 34px; height: 34px; border-radius: 10px; font-size: 18px; }
+                #pwa-install-banner { gap: 9px; padding: 9px 10px; box-sizing: border-box; max-width: calc(100vw - 24px); }
+                #pwa-install-banner .pwa-icon { width: 32px; height: 32px; border-radius: 10px; font-size: 17px; }
                 #pwa-install-banner .pwa-title { font-size: 0.92rem; margin-bottom: 2px; }
+                #pwa-install-banner .pwa-desc { display: none; }
                 #pwa-install-banner .pwa-actions { gap: 6px; }
+                #pwa-install-banner button { padding: 7px 9px; font-size: 0.8rem; white-space: nowrap; }
             }
         `;
         document.head.appendChild(style);
