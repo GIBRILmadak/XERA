@@ -27,22 +27,28 @@
         const style = document.createElement("style");
         style.id = "pwa-install-style";
         style.textContent = `
-            #pwa-install-banner { position: fixed; inset: auto 12px 14px 12px; z-index: 1400; display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: rgba(16,16,16,0.94); color: #f7f7f7; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; box-shadow: 0 18px 46px rgba(0,0,0,0.35); backdrop-filter: blur(10px); max-width: 520px; margin: 0 auto; } 
+            #pwa-install-banner { position: fixed; inset: calc(env(safe-area-inset-top, 0px) + 76px) 12px auto 12px; z-index: 1400; display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: rgba(16,16,16,0.94); color: #f7f7f7; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; box-shadow: 0 18px 46px rgba(0,0,0,0.35); backdrop-filter: blur(10px); max-width: 520px; margin: 0 auto; } 
             #pwa-install-banner .pwa-icon { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: inline-flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
             #pwa-install-banner .pwa-copy { flex: 1; min-width: 0; }
             #pwa-install-banner .pwa-title { font-weight: 700; font-size: 0.98rem; margin-bottom: 4px; }
-            #pwa-install-banner .pwa-desc { color: rgba(247,247,247,0.75); font-size: 0.9rem; line-height: 1.25; }
+            #pwa-install-banner .pwa-desc { color: rgba(247,247,247,0.75); font-size: 0.84rem; line-height: 1.25; }
             #pwa-install-banner .pwa-actions { display: flex; gap: 8px; flex-shrink: 0; }
-            #pwa-install-banner button { cursor: pointer; border: none; border-radius: 12px; padding: 9px 12px; font-weight: 700; font-size: 0.9rem; }
+            #pwa-install-banner button { cursor: pointer; border: none; border-radius: 12px; padding: 8px 10px; font-weight: 700; font-size: 0.86rem; }
             #pwa-install-banner .pwa-primary { background: #10b981; color: #0b1612; }
             #pwa-install-banner .pwa-ghost { background: rgba(255,255,255,0.08); color: #f7f7f7; border: 1px solid rgba(255,255,255,0.12); }
-            @media (min-width: 769px) { #pwa-install-banner { right: 18px; left: auto; width: 360px; } }
-            #pwa-ios-hint { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1401; display: none; align-items: flex-end; justify-content: center; padding: 18px; }
+            @media (min-width: 769px) { #pwa-install-banner { top: calc(env(safe-area-inset-top, 0px) + 88px); right: 18px; left: auto; width: 360px; } }
+            #pwa-ios-hint { position: fixed; inset: 0; background: rgba(0,0,0,0.38); z-index: 1401; display: none; align-items: flex-start; justify-content: center; padding: calc(env(safe-area-inset-top, 0px) + 82px) 14px 18px; }
             #pwa-ios-hint.show { display: flex; }
-            #pwa-ios-hint .pwa-card { background: #0f1115; color: #f8fafc; width: min(520px, 100%); border-radius: 16px; padding: 16px 18px; box-shadow: 0 24px 60px rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.08); }
+            #pwa-ios-hint .pwa-card { background: #0f1115; color: #f8fafc; width: min(520px, 100%); border-radius: 14px; padding: 14px 16px; box-shadow: 0 24px 60px rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.08); }
             #pwa-ios-hint h4 { margin: 0 0 8px 0; font-size: 1.05rem; }
-            #pwa-ios-hint ol { margin: 0 0 12px 18px; padding: 0; color: rgba(248,250,252,0.85); }
-            #pwa-ios-hint button { border: none; background: #10b981; color: #0b1612; padding: 10px 12px; border-radius: 12px; font-weight: 700; cursor: pointer; width: 100%; }
+            #pwa-ios-hint ol { margin: 0 0 12px 18px; padding: 0; color: rgba(248,250,252,0.85); font-size: 0.9rem; line-height: 1.35; }
+            #pwa-ios-hint button { border: none; background: #10b981; color: #0b1612; padding: 9px 12px; border-radius: 12px; font-weight: 700; cursor: pointer; width: 100%; }
+            @media (max-width: 480px) {
+                #pwa-install-banner { gap: 10px; }
+                #pwa-install-banner .pwa-icon { width: 34px; height: 34px; border-radius: 10px; font-size: 18px; }
+                #pwa-install-banner .pwa-title { font-size: 0.92rem; margin-bottom: 2px; }
+                #pwa-install-banner .pwa-actions { gap: 6px; }
+            }
         `;
         document.head.appendChild(style);
     }

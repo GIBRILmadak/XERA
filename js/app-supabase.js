@@ -27,6 +27,7 @@ let followedUserIdsCache = new Set();
 let followedUserIdsCacheOwner = null;
 let followedUserIdsCacheUpdatedAt = 0;
 let discoverVideoObserver = null;
+let discoverRenderSequence = 0;
 
 function isMobileDevice() {
     return window.matchMedia && window.matchMedia("(max-width: 768px)").matches;
@@ -1798,6 +1799,16 @@ function resetLoadedCollections() {
     Object.keys(userProjects || {}).forEach((key) => delete userProjects[key]);
 }
 
+function snapshotUserContents() {
+    const snapshot = new Map();
+    Object.entries(userContents || {}).forEach(([userId, contents]) => {
+        if (Array.isArray(contents)) {
+            snapshot.set(userId, [...contents]);
+        }
+    });
+    return snapshot;
+}
+
 const XERA_CACHE_USERS_KEY = "xera:cache:users";
 const XERA_CACHE_DISCOVER_LATEST_KEY = "xera:cache:discover:latest";
 const XERA_CACHE_DISCOVER_TS_KEY = "xera:cache:discover:ts";
@@ -1991,7 +2002,10 @@ function persistProfileContentsCache(userId) {
     }
 }
 
-async function preloadUserContents(users, { publicOnly = false } = {}) {
+async function preloadUserContents(
+    users,
+    { publicOnly = false, fallbackContentsByUser = null } = {},
+) {
     const safeUsers = Array.isArray(users) ? users : [];
     if (safeUsers.length === 0) return;
 
@@ -2046,7 +2060,10 @@ async function preloadUserContents(users, { publicOnly = false } = {}) {
         } catch (error) {
             console.error("Erreur préchargement contenu batch:", error);
             chunk.forEach((user) => {
-                userContents[user.id] = [];
+                const fallback = fallbackContentsByUser?.get?.(user.id);
+                userContents[user.id] = Array.isArray(fallback)
+                    ? [...fallback]
+                    : [];
             });
         }
     }
@@ -2073,6 +2090,7 @@ async function loadAllData() {
     try {
         window.hasLoadedUsers = false;
         window.userLoadError = null;
+        const fallbackContentsByUser = snapshotUserContents();
         resetLoadedCollections();
 
         // S'assurer que l'utilisateur connecté a un profil
@@ -2119,7 +2137,10 @@ async function loadAllData() {
         // Charger les badges vérifiés avant de rendre les annonces pour que le badge apparaisse
         await fetchVerifiedBadges();
         await Promise.all([
-            preloadUserContents(allUsers, { publicOnly: false }),
+            preloadUserContents(allUsers, {
+                publicOnly: false,
+                fallbackContentsByUser,
+            }),
             fetchAdminAnnouncements(),
         ]);
 
@@ -2137,6 +2158,7 @@ async function loadPublicData() {
     try {
         window.hasLoadedUsers = false;
         window.userLoadError = null;
+        const fallbackContentsByUser = snapshotUserContents();
         resetLoadedCollections();
 
         const usersResult = await getAllUsers();
@@ -2152,7 +2174,10 @@ async function loadPublicData() {
         // Même ordre côté public pour assurer l'affichage correct des badges dans les annonces
         await fetchVerifiedBadges();
         await Promise.all([
-            preloadUserContents(allUsers, { publicOnly: true }),
+            preloadUserContents(allUsers, {
+                publicOnly: true,
+                fallbackContentsByUser,
+            }),
             fetchAdminAnnouncements(),
         ]);
 
@@ -8999,6 +9024,7 @@ function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
 }
 
 async function renderDiscoverGrid() {
+    const renderSequence = ++discoverRenderSequence;
     const grid = document.querySelector(".discover-grid");
     if (!grid) return;
     const waitMessage = document.querySelector(".wait");
@@ -9034,6 +9060,7 @@ async function renderDiscoverGrid() {
     } catch (error) {
         console.error("Erreur chargement lives discover:", error);
     }
+    if (renderSequence !== discoverRenderSequence) return;
 
     // Afficher un état de chargement si les données ne sont pas encore là
     if (!window.hasLoadedUsers) {
@@ -9098,6 +9125,7 @@ async function renderDiscoverGrid() {
     if (currentUser) {
         followedSet = await getFollowedUserIdSet();
     }
+    if (renderSequence !== discoverRenderSequence) return;
 
     // Tri de base par récence puis mélange pondéré vérifiés/non-vérifiés
     usersToDisplay = sortUsersByLatestRecency(usersToDisplay).filter((user) =>
@@ -9123,6 +9151,7 @@ async function renderDiscoverGrid() {
     if (arcIdsForDiscover.length > 0) {
         await preloadArcCollaborators(arcIdsForDiscover);
     }
+    if (renderSequence !== discoverRenderSequence) return;
 
     // Personalized encouragement/follow status
     const contentIds = discoverArcCards
@@ -9142,6 +9171,7 @@ async function renderDiscoverGrid() {
             }
         }
     }
+    if (renderSequence !== discoverRenderSequence) return;
 
     // Mood-based mix (includes lives)
     const mixedItems = buildMoodDiscoverMix(
@@ -13102,9 +13132,19 @@ async function handleUnblockUserFromSettings(blockedUserId) {
 
 function closeSettings() {
     const modal = document.getElementById("settings-modal");
+    if (!modal) return;
+
+    // Retirer immédiatement la classe active pour lancer l'animation de fermeture
     modal.classList.remove("active");
+
+    // Restaurer le défilement du body
+    document.body.style.overflow = "auto";
+
+    // Cacher complètement la modale après la transition
     setTimeout(() => {
-        modal.style.display = "none";
+        if (modal && !modal.classList.contains("active")) {
+            modal.style.display = "none";
+        }
     }, 300);
 }
 
@@ -13130,6 +13170,7 @@ async function openSettings(userId) {
     // Force reflow
     modal.offsetHeight;
     modal.classList.add("active");
+    document.body.style.overflow = "hidden";
 
     const followerCount = await getFollowerCount(userId);
     const accountType = user.account_type || "personal";
@@ -14211,14 +14252,58 @@ async function openSettings(userId) {
                     /* ignore */
                 }
 
-                // Reload profile view
-                if (document.querySelector("#profile.active")) {
-                    await renderProfileIntoContainer(userId);
+                // Preserve current form values in case modal is still open during refresh
+                const currentFormValues = {
+                    name: document.getElementById("setting-name")?.value,
+                    title: document.getElementById("setting-title")?.value,
+                    bio: document.getElementById("setting-bio")?.value,
+                };
+
+                // Reload profile view - with error protection
+                try {
+                    if (document.querySelector("#profile.active")) {
+                        await renderProfileIntoContainer(userId);
+                    }
+                } catch (e) {
+                    console.warn("Profile refresh failed:", e);
                 }
 
-                // Refresh Discover cards (multiple cards can exist per user/arc)
-                if (document.querySelector(".discover-grid")) {
-                    await renderDiscoverGrid();
+                // Restore form values if modal is still open
+                const settingsModal = document.getElementById("settings-modal");
+                if (
+                    settingsModal &&
+                    settingsModal.classList.contains("active")
+                ) {
+                    if (
+                        currentFormValues.name &&
+                        document.getElementById("setting-name")
+                    ) {
+                        document.getElementById("setting-name").value =
+                            currentFormValues.name;
+                    }
+                    if (
+                        currentFormValues.title &&
+                        document.getElementById("setting-title")
+                    ) {
+                        document.getElementById("setting-title").value =
+                            currentFormValues.title;
+                    }
+                    if (
+                        currentFormValues.bio &&
+                        document.getElementById("setting-bio")
+                    ) {
+                        document.getElementById("setting-bio").value =
+                            currentFormValues.bio;
+                    }
+                }
+
+                // Refresh Discover cards (multiple cards can exist per user/arc) - with error protection
+                try {
+                    if (document.querySelector(".discover-grid")) {
+                        await renderDiscoverGrid();
+                    }
+                } catch (e) {
+                    console.warn("Discover grid refresh failed:", e);
                 }
 
                 // Refresh discover React island if present
@@ -14243,7 +14328,6 @@ async function openSettings(userId) {
                                 reminderSaveResult.error,
                         );
                     }
-                    closeSettings();
                 } else {
                     if (window.ToastManager) {
                         ToastManager.success(
@@ -14251,8 +14335,9 @@ async function openSettings(userId) {
                             "Vos réglages ont été enregistrés avec succès.",
                         );
                     }
-                    closeSettings();
                 }
+                // TOUJOURS fermer la modale, même si les rafraîchissements ont échoué
+                closeSettings();
             } else {
                 if (window.ToastManager) {
                     ToastManager.error(

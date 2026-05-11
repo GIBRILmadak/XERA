@@ -501,10 +501,12 @@
     }
 
     .notification-toast {
+        top: calc(env(safe-area-inset-top, 0px) + 76px);
         right: 1rem;
         left: 1rem;
         min-width: auto;
         max-width: none;
+        padding: 0.85rem;
     }
 
     .search-container {
