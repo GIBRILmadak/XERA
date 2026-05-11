@@ -10738,12 +10738,6 @@ async function openImmersive(startUserId, startContentId = null) {
         return;
     }
 
-    if (!userContents || Object.keys(userContents).length === 0) {
-        console.error("Content data not loaded");
-        alert("Aucun contenu disponible pour le moment");
-        return;
-    }
-
     const overlay = document.getElementById("immersive-overlay");
 
     if (!overlay) {
@@ -10773,21 +10767,9 @@ async function openImmersive(startUserId, startContentId = null) {
 
     try {
         // Get ALL content sorted by date, then personalize
-        let allContents = await getPersonalizedFeed(getAllFeedContent());
+        let allContents = await waitForImmersiveFeedContent();
+        if (!window.__immersiveOpen || allContents.length === 0) return;
         console.log("All contents found:", allContents.length);
-
-        if (allContents.length === 0) {
-            overlay.innerHTML = `
-                <div class="close-immersive" onclick="closeImmersive()">✕</div>
-                <div style="display:flex;justify-content:center;align-items:center;height:100vh;color:white;">
-                    <div style="text-align:center;">
-                        <h3>Aucun contenu disponible</h3>
-                        <p>Les utilisateurs n'ont pas encore publié de contenu</p>
-                    </div>
-                </div>
-            `;
-            return;
-        }
 
         // Ensure the clicked content is first in the personalized feed
         let startIndex = -1;
@@ -10808,6 +10790,10 @@ async function openImmersive(startUserId, startContentId = null) {
             if (pinned && pinned.userId) {
                 startUserId = pinned.userId;
             }
+        }
+        if (startIndex < 0 && allContents[0]) {
+            startIndex = 0;
+            startUserId = allContents[0].userId || startUserId;
         }
         console.log(
             "Start index:",
@@ -10834,7 +10820,7 @@ async function openImmersive(startUserId, startContentId = null) {
         const initialContentHtml = await renderImmersivePage(0);
 
         // Initial header for the starting user
-        const user = getUser(startUserId);
+        const user = getUser(startUserId) || getUser(allContents[0]?.userId);
         if (!user) {
             console.error("User not found:", startUserId);
             alert("Utilisateur non trouvé");
@@ -10922,6 +10908,7 @@ async function openImmersive(startUserId, startContentId = null) {
             <div id="immersive-header-container">
                 ${headerHtml}
             </div>
+            ${renderImmersiveMetadataHint()}
             <div id="immersive-content-container">
                 ${initialContentHtml}
                 <div id="immersive-load-sentinel" style="width:100%;height:4px"></div>
@@ -10935,6 +10922,8 @@ async function openImmersive(startUserId, startContentId = null) {
                 </button>
             </div>
 `;
+        applyImmersiveMetadataPreference(overlay);
+        setupImmersiveMetadataHint(overlay);
 
         try {
             initXeraCarousels(overlay);
@@ -10992,6 +10981,7 @@ async function openImmersive(startUserId, startContentId = null) {
                         const pageHtml =
                             await renderImmersivePage(immersiveCurrentPage);
                         container.insertAdjacentHTML("beforeend", pageHtml);
+                        applyImmersiveMetadataPreference(container);
                         // réinitialiser les observers / UI pour les nouveaux éléments
                         setupImmersiveLazyLoad();
                         setupImmersiveObserver();
@@ -11181,7 +11171,11 @@ function setupImmersiveObserver() {
                             window.__activeImmersiveContentId !== contentId
                         ) {
                             window.__activeImmersiveContentId = contentId;
-                            setImmersivePostUi(entry.target, false);
+                            setImmersivePostUi(
+                                entry.target,
+                                getImmersiveMetadataPreference(),
+                                { syncAll: false },
+                            );
                         }
 
                         // Update Header si nécessaire
@@ -11300,15 +11294,137 @@ function setupImmersiveVideoUI() {
     setupImmersiveLazyLoad();
 }
 
-function setImmersivePostUi(post, visible) {
+function getImmersiveMetadataPreference() {
+    return window.__immersiveMetadataVisible === true;
+}
+
+const IMMERSIVE_CONTENT_RETRY_DELAY = 3000;
+
+function waitForImmersiveRetry(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForImmersiveFeedContent() {
+    const readFeed = async () => {
+        const rawContents = getAllFeedContent();
+        if (!rawContents.length) return [];
+        return await getPersonalizedFeed(rawContents);
+    };
+
+    while (window.__immersiveOpen) {
+        const currentContents = await readFeed();
+        if (currentContents.length > 0) return currentContents;
+
+        if (typeof loadAllData === "function") {
+            try {
+                if (!window.__immersiveContentRefreshPromise) {
+                    window.__immersiveContentRefreshPromise = loadAllData()
+                        .catch((error) => {
+                            console.warn(
+                                "Chargement feed immersif en attente:",
+                                error,
+                            );
+                        })
+                        .finally(() => {
+                            window.__immersiveContentRefreshPromise = null;
+                        });
+                }
+                await window.__immersiveContentRefreshPromise;
+            } catch (error) {
+                // Le skeleton reste visible; on retentera au prochain cycle.
+            }
+        }
+
+        if (!window.__immersiveOpen) break;
+
+        const refreshedContents = await readFeed();
+        if (refreshedContents.length > 0) return refreshedContents;
+
+        await waitForImmersiveRetry(IMMERSIVE_CONTENT_RETRY_DELAY);
+    }
+
+    return [];
+}
+
+const IMMERSIVE_METADATA_HINT_KEY = "xera_immersive_metadata_hint_clicked";
+
+function hasSeenImmersiveMetadataHint() {
+    try {
+        return localStorage.getItem(IMMERSIVE_METADATA_HINT_KEY) === "1";
+    } catch (error) {
+        return window.__immersiveMetadataHintSeen === true;
+    }
+}
+
+function markImmersiveMetadataHintSeen() {
+    window.__immersiveMetadataHintSeen = true;
+    try {
+        localStorage.setItem(IMMERSIVE_METADATA_HINT_KEY, "1");
+    } catch (error) {
+        // ignore storage restrictions
+    }
+}
+
+function renderImmersiveMetadataHint() {
+    if (hasSeenImmersiveMetadataHint()) return "";
+    return `
+        <button type="button" class="immersive-metadata-hint" id="immersive-metadata-hint" aria-label="Afficher les métadonnées">
+            <span>Clique sur le média pour afficher les métadonnées</span>
+        </button>
+    `;
+}
+
+function setupImmersiveMetadataHint(root = document) {
+    const hint = root.querySelector?.("#immersive-metadata-hint");
+    if (!hint) return;
+
+    hint.addEventListener("click", (event) => {
+        event.stopPropagation();
+        dismissImmersiveMetadataHint({ showMetadata: true });
+    });
+}
+
+function dismissImmersiveMetadataHint({ showMetadata = false } = {}) {
+    const hint = document.getElementById("immersive-metadata-hint");
+    if (!hint) return;
+
+    if (showMetadata) {
+        const activeContentId = window.__activeImmersiveContentId || "";
+        const activeSelector =
+            activeContentId && window.CSS?.escape
+                ? `.immersive-post[data-content-id="${CSS.escape(activeContentId)}"]`
+                : "";
+        const activePost =
+            (activeSelector && document.querySelector(activeSelector)) ||
+            document.querySelector(".immersive-post");
+        if (activePost) setImmersivePostUi(activePost, true);
+    }
+
+    markImmersiveMetadataHintSeen();
+    hint.classList.add("is-dismissed");
+    setTimeout(() => hint.remove(), 240);
+}
+
+function applyImmersiveMetadataPreference(root = document) {
+    const visible = getImmersiveMetadataPreference();
+    root.querySelectorAll?.(".immersive-post").forEach((post) => {
+        post.classList.toggle("is-ui-visible", visible);
+    });
+}
+
+function setImmersivePostUi(post, visible, options = {}) {
     const overlay = document.getElementById("immersive-overlay");
     if (!overlay || !post) return;
+    const shouldSyncAll = options.syncAll !== false;
 
-    overlay.querySelectorAll(".immersive-post.is-ui-visible").forEach((item) => {
-        if (item !== post) item.classList.remove("is-ui-visible");
-    });
+    window.__immersiveMetadataVisible = !!visible;
 
-    post.classList.toggle("is-ui-visible", !!visible);
+    if (shouldSyncAll) {
+        applyImmersiveMetadataPreference(overlay);
+        return;
+    }
+
+    post.classList.toggle("is-ui-visible", getImmersiveMetadataPreference());
 }
 
 function setupImmersiveFullscreenToggle(root = document) {
@@ -11334,8 +11450,11 @@ function setupImmersiveFullscreenToggle(root = document) {
 
                 const post = wrap.closest(".immersive-post");
                 if (!post) return;
-                const shouldShow = !post.classList.contains("is-ui-visible");
+                const shouldShow = !getImmersiveMetadataPreference();
                 setImmersivePostUi(post, shouldShow);
+                if (shouldShow) {
+                    dismissImmersiveMetadataHint();
+                }
             });
         },
     );
