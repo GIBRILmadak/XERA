@@ -10759,6 +10759,7 @@ async function openImmersive(startUserId, startContentId = null) {
 </div>
     `;
     overlay.style.display = "block";
+    overlay.classList.add("immersive-clean-mode");
     document.body.style.overflow = "hidden";
     // Marquer l'immersif comme ouvert pour éviter les rafraîchissements indésirables
     window.__immersiveOpen = true;
@@ -10964,6 +10965,7 @@ async function openImmersive(startUserId, startContentId = null) {
             setupImmersiveSnapNav();
             setupImmersiveKeyboardNav();
             setupImmersiveArrowNav();
+            setupImmersiveFullscreenToggle();
 
             // Sentinel pour charger les pages suivantes lorsque l'utilisateur scroll
             const overlayEl = document.getElementById("immersive-overlay");
@@ -10996,6 +10998,7 @@ async function openImmersive(startUserId, startContentId = null) {
                         setupImmersiveVideoUI();
                         setupImmersiveSnapNav();
                         setupImmersiveArrowNav();
+                        setupImmersiveFullscreenToggle();
                     } catch (e) {
                         console.error("Erreur chargement page immersive:", e);
                     }
@@ -11051,13 +11054,16 @@ async function openImmersive(startUserId, startContentId = null) {
 }
 
 function closeImmersive() {
-    document.getElementById("immersive-overlay").style.display = "none";
+    const overlay = document.getElementById("immersive-overlay");
+    overlay.style.display = "none";
+    overlay.classList.remove("immersive-clean-mode");
     document.body.style.overflow = "auto";
     loginPromptImmersiveViews = 0;
     handleLoginPromptContext();
     // Nettoyage des états liés à l'immersif
     try {
         window.__immersiveOpen = false;
+        window.__activeImmersiveContentId = null;
         if (window.__immersiveSentinelObserver) {
             window.__immersiveSentinelObserver.disconnect();
             window.__immersiveSentinelObserver = null;
@@ -11170,6 +11176,14 @@ function setupImmersiveObserver() {
                             scheduleImmersiveViewCount(entry.target, video);
                         }
 
+                        if (
+                            contentId &&
+                            window.__activeImmersiveContentId !== contentId
+                        ) {
+                            window.__activeImmersiveContentId = contentId;
+                            setImmersivePostUi(entry.target, false);
+                        }
+
                         // Update Header si nécessaire
                         if (userId && userId !== currentImmersiveUser) {
                             currentImmersiveUser = userId;
@@ -11272,8 +11286,6 @@ function setupImmersiveVideoUI() {
                 muteOtherImmersiveVideos(video);
                 video.muted = false;
                 video.play().catch(() => {});
-            } else {
-                video.pause();
             }
         });
 
@@ -11286,6 +11298,47 @@ function setupImmersiveVideoUI() {
 
     // Activer le lazy-load avec préchargement progressif
     setupImmersiveLazyLoad();
+}
+
+function setImmersivePostUi(post, visible) {
+    const overlay = document.getElementById("immersive-overlay");
+    if (!overlay || !post) return;
+
+    overlay.querySelectorAll(".immersive-post.is-ui-visible").forEach((item) => {
+        if (item !== post) item.classList.remove("is-ui-visible");
+    });
+
+    post.classList.toggle("is-ui-visible", !!visible);
+}
+
+function setupImmersiveFullscreenToggle(root = document) {
+    const overlay = document.getElementById("immersive-overlay");
+    const container =
+        root?.querySelector?.("#immersive-content-container") ||
+        document.getElementById("immersive-content-container");
+    if (!overlay || !container) return;
+
+    container.querySelectorAll(".immersive-post .post-content-wrap").forEach(
+        (wrap) => {
+            if (wrap.dataset.immersiveFullscreenToggleBound === "1") return;
+            wrap.dataset.immersiveFullscreenToggleBound = "1";
+
+            wrap.addEventListener("click", (event) => {
+                if (
+                    event.target.closest(
+                        "button, a, input, textarea, select, [contenteditable='true'], .post-info, .xera-carousel-arrow, .xera-carousel-dots, .support-overlay, .arc-collab-avatars",
+                    )
+                ) {
+                    return;
+                }
+
+                const post = wrap.closest(".immersive-post");
+                if (!post) return;
+                const shouldShow = !post.classList.contains("is-ui-visible");
+                setImmersivePostUi(post, shouldShow);
+            });
+        },
+    );
 }
 
 // Précharge localement une vidéo immersive quand son conteneur approche de l'écran.

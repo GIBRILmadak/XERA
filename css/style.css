@@ -2852,6 +2852,33 @@ html.light-mode .card-status--editorial {
     height: 0;
 }
 
+#immersive-overlay.immersive-clean-mode .post-info {
+    pointer-events: auto;
+}
+
+#immersive-overlay.immersive-clean-mode
+    .immersive-post:not(.is-ui-visible)
+    .immersive-meta-row,
+#immersive-overlay.immersive-clean-mode
+    .immersive-post:not(.is-ui-visible)
+    .post-info
+    h2,
+#immersive-overlay.immersive-clean-mode
+    .immersive-post:not(.is-ui-visible)
+    .post-info
+    > p,
+#immersive-overlay.immersive-clean-mode
+    .immersive-post:not(.is-ui-visible)
+    .post-stats
+    .stat-pill {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition:
+        opacity 0.18s ease,
+        transform 0.18s ease;
+}
+
 .immersive-post {
     height: 100vh;
     width: 100%;

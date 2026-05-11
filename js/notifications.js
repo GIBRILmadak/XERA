@@ -20,6 +20,7 @@ let returnReminderTimer = null;
 let pushMessageListenerBound = false;
 let notificationsPollingTimer = null;
 let notificationsRealtimeWarned = false;
+let notificationOutsideClickBound = false;
 
 // Initialiser les notifications
 async function initializeNotifications() {
@@ -39,6 +40,7 @@ async function initializeNotifications() {
 
     // Mettre à jour le badge
     updateNotificationBadge();
+    bindNotificationPanelOutsideClick();
 
     // Afficher un CTA type YouTube pour déclencher la demande via geste utilisateur
     renderNotificationPermissionCTA();
@@ -723,10 +725,63 @@ function toggleNotificationPanel() {
     const isVisible = panel.classList.contains("show");
 
     if (isVisible) {
-        panel.classList.remove("show");
+        closeNotificationPanel();
     } else {
         panel.classList.add("show");
         renderNotifications();
+        bindNotificationPanelOutsideClick();
+        void clearUnreadNotificationsOnPanelOpen();
+    }
+}
+
+function closeNotificationPanel() {
+    const panel = document.getElementById("notification-panel");
+    if (panel) {
+        panel.classList.remove("show");
+    }
+}
+
+function bindNotificationPanelOutsideClick() {
+    if (notificationOutsideClickBound || typeof document === "undefined") {
+        return;
+    }
+
+    document.addEventListener("click", (event) => {
+        const panel = document.getElementById("notification-panel");
+        if (!panel || !panel.classList.contains("show")) return;
+
+        const notificationButton = document.getElementById("notification-btn");
+        const clickedInsidePanel = panel.contains(event.target);
+        const clickedNotificationButton =
+            notificationButton && notificationButton.contains(event.target);
+
+        if (!clickedInsidePanel && !clickedNotificationButton) {
+            closeNotificationPanel();
+        }
+    });
+
+    notificationOutsideClickBound = true;
+}
+
+async function clearUnreadNotificationsOnPanelOpen() {
+    const unreadNotifications = notifications.filter((notif) => !notif.read);
+    if (unreadNotifications.length === 0) return;
+
+    unreadNotifications.forEach((notif) => {
+        notif.read = true;
+    });
+    updateNotificationBadge();
+    renderNotifications();
+
+    try {
+        await supabase
+            .from("notifications")
+            .update({ read: true })
+            .eq("user_id", currentUser.id)
+            .eq("read", false);
+        await resetServerBadge();
+    } catch (error) {
+        console.error("Erreur remise à zéro badge notifications:", error);
     }
 }
 
@@ -791,7 +846,7 @@ async function handleNotificationClick(notificationId) {
         }
 
         // Fermer le panneau
-        toggleNotificationPanel();
+        closeNotificationPanel();
 
         // Naviguer vers la ressource liée (optionnel)
         const targetLink = notif ? normalizeNotificationLink(notif) : null;
