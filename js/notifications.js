@@ -20,6 +20,7 @@ let returnReminderTimer = null;
 let pushMessageListenerBound = false;
 let notificationsPollingTimer = null;
 let notificationsRealtimeWarned = false;
+let notificationOutsideClickBound = false;
 
 // Initialiser les notifications
 async function initializeNotifications() {
@@ -39,6 +40,7 @@ async function initializeNotifications() {
 
     // Mettre à jour le badge
     updateNotificationBadge();
+    bindNotificationPanelOutsideClick();
 
     // Afficher un CTA type YouTube pour déclencher la demande via geste utilisateur
     renderNotificationPermissionCTA();
@@ -420,15 +422,15 @@ function renderNotificationPermissionCTA() {
     const cta = document.createElement("div");
     cta.id = "notif-permission-cta";
     cta.style.cssText =
-        "position:fixed; bottom:18px; right:18px; max-width:320px; z-index:1200; background:var(--surface-color, #111); color:var(--text-primary, #fff); border:1px solid var(--border-color, rgba(255,255,255,0.12)); box-shadow:0 12px 30px rgba(0,0,0,0.25); border-radius:14px; padding:14px 16px; display:flex; gap:12px; align-items:flex-start;";
+        "position:fixed; top:calc(env(safe-area-inset-top, 0px) + 76px); right:14px; left:14px; max-width:360px; margin:0 auto; z-index:1200; background:var(--surface-color, #111); color:var(--text-primary, #fff); border:1px solid var(--border-color, rgba(255,255,255,0.12)); box-shadow:0 12px 30px rgba(0,0,0,0.25); border-radius:14px; padding:12px 14px; display:flex; gap:10px; align-items:flex-start;";
     cta.innerHTML = `
-        <div style="flex-shrink:0; width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg, #6366f1, #8b5cf6); display:flex; align-items:center; justify-content:center; font-size:18px;">🔔</div>
+        <div style="flex-shrink:0; width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg, #6366f1, #8b5cf6); display:flex; align-items:center; justify-content:center; font-size:17px;">🔔</div>
         <div style="flex:1; min-width:0;">
-            <div style="font-weight:700; margin-bottom:6px;">Activer les notifications</div>
-            <div style="color:var(--text-secondary, #b5b5c3); font-size:0.9rem; line-height:1.3;">Soyez averti des nouveaux lives, réponses et encouragements.</div>
+            <div style="font-weight:700; margin-bottom:4px;">Activer les notifications</div>
+            <div style="color:var(--text-secondary, #b5b5c3); font-size:0.84rem; line-height:1.3;">Nouveaux lives, réponses et encouragements.</div>
             <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-                <button id="notif-cta-allow" class="btn-verify" style="padding:8px 12px; border:none; border-radius:10px; background:#10b981; color:#fff; cursor:pointer;">Autoriser</button>
-                <button id="notif-cta-later" class="btn-ghost" style="padding:8px 12px; border:1px solid var(--border-color, rgba(255,255,255,0.15)); border-radius:10px; background:transparent; color:var(--text-secondary, #b5b5c3); cursor:pointer;">Plus tard</button>
+                <button id="notif-cta-allow" class="btn-verify" style="padding:7px 11px; border:none; border-radius:10px; background:#10b981; color:#fff; cursor:pointer;">Autoriser</button>
+                <button id="notif-cta-later" class="btn-ghost" style="padding:7px 11px; border:1px solid var(--border-color, rgba(255,255,255,0.15)); border-radius:10px; background:transparent; color:var(--text-secondary, #b5b5c3); cursor:pointer;">Plus tard</button>
             </div>
         </div>
     `;
@@ -723,10 +725,63 @@ function toggleNotificationPanel() {
     const isVisible = panel.classList.contains("show");
 
     if (isVisible) {
-        panel.classList.remove("show");
+        closeNotificationPanel();
     } else {
         panel.classList.add("show");
         renderNotifications();
+        bindNotificationPanelOutsideClick();
+        void clearUnreadNotificationsOnPanelOpen();
+    }
+}
+
+function closeNotificationPanel() {
+    const panel = document.getElementById("notification-panel");
+    if (panel) {
+        panel.classList.remove("show");
+    }
+}
+
+function bindNotificationPanelOutsideClick() {
+    if (notificationOutsideClickBound || typeof document === "undefined") {
+        return;
+    }
+
+    document.addEventListener("click", (event) => {
+        const panel = document.getElementById("notification-panel");
+        if (!panel || !panel.classList.contains("show")) return;
+
+        const notificationButton = document.getElementById("notification-btn");
+        const clickedInsidePanel = panel.contains(event.target);
+        const clickedNotificationButton =
+            notificationButton && notificationButton.contains(event.target);
+
+        if (!clickedInsidePanel && !clickedNotificationButton) {
+            closeNotificationPanel();
+        }
+    });
+
+    notificationOutsideClickBound = true;
+}
+
+async function clearUnreadNotificationsOnPanelOpen() {
+    const unreadNotifications = notifications.filter((notif) => !notif.read);
+    if (unreadNotifications.length === 0) return;
+
+    unreadNotifications.forEach((notif) => {
+        notif.read = true;
+    });
+    updateNotificationBadge();
+    renderNotifications();
+
+    try {
+        await supabase
+            .from("notifications")
+            .update({ read: true })
+            .eq("user_id", currentUser.id)
+            .eq("read", false);
+        await resetServerBadge();
+    } catch (error) {
+        console.error("Erreur remise à zéro badge notifications:", error);
     }
 }
 
@@ -791,7 +846,7 @@ async function handleNotificationClick(notificationId) {
         }
 
         // Fermer le panneau
-        toggleNotificationPanel();
+        closeNotificationPanel();
 
         // Naviguer vers la ressource liée (optionnel)
         const targetLink = notif ? normalizeNotificationLink(notif) : null;

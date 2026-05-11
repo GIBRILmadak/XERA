@@ -28,6 +28,7 @@ function initializeSearch() {
             return;
         }
         
+        searchResults.style.display = 'none';
         showSearchSkeleton();
         searchTimeout = setTimeout(() => {
             performSearch(query);
@@ -38,6 +39,7 @@ function initializeSearch() {
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.search-container')) {
             searchResults.style.display = 'none';
+            hideSearchSkeleton();
         }
     });
 }
@@ -143,16 +145,19 @@ function displaySearchResults(users, content, query) {
 
 function ensureSearchSkeleton() {
     if (searchSkeleton) return;
-    const modal = document.createElement('div');
-    modal.id = 'search-skeleton-modal';
-    modal.className = 'search-skeleton-modal';
-    modal.innerHTML = `
+    const searchContainer = document.querySelector('.search-container');
+    if (!searchContainer) return;
+    const panel = document.createElement('div');
+    panel.id = 'search-skeleton-modal';
+    panel.className = 'search-skeleton-modal';
+    panel.setAttribute('aria-hidden', 'true');
+    panel.innerHTML = `
         <div class="search-skeleton-panel">
             ${buildSkeletonRows(5)}
         </div>
     `;
-    document.body.appendChild(modal);
-    searchSkeleton = modal;
+    searchContainer.appendChild(panel);
+    searchSkeleton = panel;
 }
 
 function buildSkeletonRows(count) {
@@ -161,7 +166,7 @@ function buildSkeletonRows(count) {
         rows.push(`
             <div class="search-skeleton-row">
                 <div class="skeleton-avatar skeleton-shimmer"></div>
-                <div style="display:flex; flex-direction:column; gap:8px;">
+                <div class="search-skeleton-copy">
                     <div class="skeleton-line wide skeleton-shimmer"></div>
                     <div class="skeleton-line mid skeleton-shimmer"></div>
                 </div>
@@ -172,7 +177,7 @@ function buildSkeletonRows(count) {
 }
 
 function showSearchSkeleton() {
-    if (searchSkeleton) searchSkeleton.style.display = 'flex';
+    if (searchSkeleton) searchSkeleton.style.display = 'block';
 }
 
 function hideSearchSkeleton() {

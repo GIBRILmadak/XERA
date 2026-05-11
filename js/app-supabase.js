@@ -27,6 +27,7 @@ let followedUserIdsCache = new Set();
 let followedUserIdsCacheOwner = null;
 let followedUserIdsCacheUpdatedAt = 0;
 let discoverVideoObserver = null;
+let discoverRenderSequence = 0;
 
 function isMobileDevice() {
     return window.matchMedia && window.matchMedia("(max-width: 768px)").matches;
@@ -1798,6 +1799,16 @@ function resetLoadedCollections() {
     Object.keys(userProjects || {}).forEach((key) => delete userProjects[key]);
 }
 
+function snapshotUserContents() {
+    const snapshot = new Map();
+    Object.entries(userContents || {}).forEach(([userId, contents]) => {
+        if (Array.isArray(contents)) {
+            snapshot.set(userId, [...contents]);
+        }
+    });
+    return snapshot;
+}
+
 const XERA_CACHE_USERS_KEY = "xera:cache:users";
 const XERA_CACHE_DISCOVER_LATEST_KEY = "xera:cache:discover:latest";
 const XERA_CACHE_DISCOVER_TS_KEY = "xera:cache:discover:ts";
@@ -1991,7 +2002,10 @@ function persistProfileContentsCache(userId) {
     }
 }
 
-async function preloadUserContents(users, { publicOnly = false } = {}) {
+async function preloadUserContents(
+    users,
+    { publicOnly = false, fallbackContentsByUser = null } = {},
+) {
     const safeUsers = Array.isArray(users) ? users : [];
     if (safeUsers.length === 0) return;
 
@@ -2046,7 +2060,10 @@ async function preloadUserContents(users, { publicOnly = false } = {}) {
         } catch (error) {
             console.error("Erreur préchargement contenu batch:", error);
             chunk.forEach((user) => {
-                userContents[user.id] = [];
+                const fallback = fallbackContentsByUser?.get?.(user.id);
+                userContents[user.id] = Array.isArray(fallback)
+                    ? [...fallback]
+                    : [];
             });
         }
     }
@@ -2073,6 +2090,7 @@ async function loadAllData() {
     try {
         window.hasLoadedUsers = false;
         window.userLoadError = null;
+        const fallbackContentsByUser = snapshotUserContents();
         resetLoadedCollections();
 
         // S'assurer que l'utilisateur connecté a un profil
@@ -2119,7 +2137,10 @@ async function loadAllData() {
         // Charger les badges vérifiés avant de rendre les annonces pour que le badge apparaisse
         await fetchVerifiedBadges();
         await Promise.all([
-            preloadUserContents(allUsers, { publicOnly: false }),
+            preloadUserContents(allUsers, {
+                publicOnly: false,
+                fallbackContentsByUser,
+            }),
             fetchAdminAnnouncements(),
         ]);
 
@@ -2137,6 +2158,7 @@ async function loadPublicData() {
     try {
         window.hasLoadedUsers = false;
         window.userLoadError = null;
+        const fallbackContentsByUser = snapshotUserContents();
         resetLoadedCollections();
 
         const usersResult = await getAllUsers();
@@ -2152,7 +2174,10 @@ async function loadPublicData() {
         // Même ordre côté public pour assurer l'affichage correct des badges dans les annonces
         await fetchVerifiedBadges();
         await Promise.all([
-            preloadUserContents(allUsers, { publicOnly: true }),
+            preloadUserContents(allUsers, {
+                publicOnly: true,
+                fallbackContentsByUser,
+            }),
             fetchAdminAnnouncements(),
         ]);
 
@@ -7570,7 +7595,7 @@ window.submitAnnouncementReply = submitAnnouncementReply;
 
 window.discoverFilter = "all";
 
-window.toggleDiscoverFilter = function (filter) {
+function setDiscoverFilter(filter = "all", { render = true } = {}) {
     window.discoverFilter = filter;
 
     // Update UI buttons
@@ -7580,8 +7605,140 @@ window.toggleDiscoverFilter = function (filter) {
         btn.setAttribute("aria-pressed", isActive ? "true" : "false");
     });
 
-    renderDiscoverGrid();
+    if (render) renderDiscoverGrid();
+}
+
+window.toggleDiscoverFilter = function (filter) {
+    setDiscoverFilter(filter, { render: true });
 };
+
+function showDiscoverSkeleton(grid, count = 8) {
+    if (!grid) return;
+    const skeletons = Array.from({ length: count })
+        .map(
+            (_, index) => `
+            <article class="discover-skeleton-card ${index % 5 === 0 ? "discover-skeleton-card--wide" : ""}" aria-hidden="true">
+                <div class="discover-skeleton-media"></div>
+                <div class="discover-skeleton-body">
+                    <div class="discover-skeleton-line discover-skeleton-line--title"></div>
+                    <div class="discover-skeleton-line"></div>
+                    <div class="discover-skeleton-meta">
+                        <span class="discover-skeleton-avatar"></span>
+                        <span class="discover-skeleton-line discover-skeleton-line--small"></span>
+                    </div>
+                </div>
+            </article>
+        `,
+        )
+        .join("");
+    grid.innerHTML = `<div class="discover-skeleton-grid">${skeletons}</div>`;
+}
+
+function getDiscoverSectionTitle(filter, section) {
+    if (filter === "live") return "En direct";
+    if (filter === "video") return "Vidéos récentes";
+    if (filter === "image") return "Images et preuves";
+    if (filter === "projects") return "Projets";
+    if (filter === "recent") return "Récent";
+    if (filter === "following") return "Tes trajectoires suivies";
+    if (section === "live") return "En direct maintenant";
+    return "À explorer";
+}
+
+function buildDiscoverSectionItem(filter, section, count) {
+    const title = getDiscoverSectionTitle(filter, section);
+    const sub =
+        section === "live"
+            ? "Sessions actives à rejoindre"
+            : filter === "following"
+              ? "Les créateurs que tu suis"
+              : filter === "projects"
+                ? "Trajectoires structurées par projet"
+                : filter === "recent"
+                  ? "Dernières preuves publiées"
+              : "Recommandé selon l'activité récente";
+    return {
+        key: `section-${filter}-${section}`,
+        type: "section",
+        html: `
+            <div class="discover-section-divider" role="presentation">
+                <span>${title}</span>
+                <small>${sub}${count ? ` · ${count}` : ""}</small>
+            </div>
+        `,
+    };
+}
+
+function getDiscoverEmptyState(filter) {
+    const states = {
+        live: {
+            title: "Aucun live en ce moment",
+            message: "Revenez un peu plus tard ou repassez sur Tout pour explorer les trajectoires.",
+        },
+        video: {
+            title: "Aucune vidéo à afficher",
+            message: "Le feed Tout contient peut-être déjà des images, textes ou projets récents.",
+        },
+        projects: {
+            title: "Aucun projet filtré",
+            message: "Repassez sur Tout pour voir toutes les trajectoires disponibles.",
+        },
+        following: {
+            title: "Aucune trajectoire suivie",
+            message: "Suivez quelques créateurs ou repassez sur Tout pour découvrir du contenu.",
+        },
+        recent: {
+            title: "Rien de récent dans ce filtre",
+            message: "Repassez sur Tout pour explorer les trajectoires disponibles.",
+        },
+    };
+    return (
+        states[filter] || {
+            title: "Aucune trajectoire à explorer",
+            message: "Revenez plus tard pour découvrir de nouvelles trajectoires.",
+        }
+    );
+}
+
+function matchesDiscoverFilter(item, currentFilter, followedSet = new Set()) {
+    if (!item) return false;
+    const userId = item.user?.id || item.content?.userId || item.stream?.user_id;
+    if (currentFilter === "following") return userId && followedSet.has(userId);
+    if (currentFilter === "live") return item.type === "live";
+    if (currentFilter === "video") {
+        return item.type !== "live" && item.content?.type === "video";
+    }
+    if (currentFilter === "image") {
+        return item.type !== "live" && item.content?.type === "image";
+    }
+    if (currentFilter === "projects") {
+        return item.type !== "live" && Boolean(item.arcId || item.content?.arc);
+    }
+    if (currentFilter === "recent") return item.type !== "live";
+    return true;
+}
+
+function partitionDiscoverItems(items, currentFilter) {
+    const filtered = Array.isArray(items) ? items : [];
+    if (currentFilter === "all") {
+        return [
+            {
+                section: "live",
+                items: filtered.filter((item) => item.type === "live"),
+            },
+            {
+                section: "explore",
+                items: filtered.filter((item) => item.type !== "live"),
+            },
+        ].filter((group) => group.items.length > 0);
+    }
+    return [
+        {
+            section: currentFilter,
+            items: filtered,
+        },
+    ].filter((group) => group.items.length > 0);
+}
 
 const DISCOVER_VERIFIED_MIX_PATTERNS = [
     [
@@ -7892,6 +8049,39 @@ function handleDiscoverInterest(contentId, action) {
 }
 window.handleDiscoverInterest = handleDiscoverInterest;
 
+async function handleDiscoverQuickAction(contentId, action, userId = null) {
+    if (!contentId || !action) return;
+    const content = findContentById(contentId);
+    if (action === "more" || action === "less") {
+        handleDiscoverInterest(contentId, action === "less" ? "dislike" : "like");
+        return;
+    }
+
+    if (action === "share") {
+        const title = content?.title || "Trajectoire XERA";
+        const url = userId
+            ? buildProfileShareUrl(userId)
+            : new URL(window.location.href).toString();
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title,
+                    text: `Découvre cette trajectoire sur XERA: ${title}`,
+                    url,
+                });
+                return;
+            }
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(url);
+                ToastManager?.success?.("Lien copié", "La trajectoire est prête à partager.");
+            }
+        } catch (error) {
+            console.warn("Discover share failed:", error);
+        }
+    }
+}
+window.handleDiscoverQuickAction = handleDiscoverQuickAction;
+
 function buildMoodDiscoverMix(
     discoverArcCards,
     liveStreams = [],
@@ -8059,6 +8249,7 @@ function renderUserCard(
                         <img src="icons/play.svg" alt="Play" width="40" height="40">
                         <span>Vidéo</span>
                     </div>
+                    <div class="discover-video-progress" aria-hidden="true"><span></span></div>
                     ${collabCornerHtml}
                     ${supportOverlayHtml}
                     <div class="card-stats-overlay">
@@ -8220,7 +8411,7 @@ function renderUserCard(
     // User Info (Name, Avatar, Subscribe) - Moved to bottom
     const userInfoHtml = `
 <div class="card-user-bottom">
-            <button class="profile-link card-profile-link" onclick="event.stopPropagation(); handleProfileClick('${userId}', this)">
+            <button class="profile-link card-profile-link" data-profile-user-id="${userId}" onclick="event.preventDefault(); event.stopPropagation(); handleProfileClick('${userId}', this)" type="button" aria-label="Voir le profil de ${escapeHtml(user.name || "cet utilisateur")}">
                 <img src="${user.avatar || "https://placehold.co/40"}" class="card-avatar" loading="lazy" decoding="async">
                 <div class="profile-link-text">
                     <h3 class="discover-user-name">${renderUsernameWithBadge(user.name, user.id)}${monetizationBadgeHtml}</h3>
@@ -8306,8 +8497,20 @@ function renderUserCard(
                </button>`
             : "";
 
+    const quickActionsHtml = `
+        <div class="discover-card-actions" onclick="event.stopPropagation();">
+            <button type="button" class="discover-card-action-trigger" aria-label="Actions rapides" title="Actions rapides">•••</button>
+            <div class="discover-card-action-menu">
+                <button type="button" onclick="handleDiscoverQuickAction('${latestContent.contentId}', 'more', '${userId}')">Plus comme ça</button>
+                <button type="button" onclick="handleDiscoverQuickAction('${latestContent.contentId}', 'less', '${userId}')">Moins comme ça</button>
+                <button type="button" onclick="handleDiscoverQuickAction('${latestContent.contentId}', 'share', '${userId}')">Partager</button>
+            </div>
+        </div>
+    `;
+
     return `
 <div class="${cardClass}" style="--state-color: ${stateColor};" data-user="${userId}" data-content-id="${latestContent.contentId}" data-tags="${tagDataset}" onclick="openImmersive('${userId}', '${latestContent.contentId}')">
+            ${quickActionsHtml}
             ${mediaHtml}
             <div class="card-content">
                 ${arcInfo}
@@ -8897,29 +9100,44 @@ function chooseDiscoverRowSize(remaining, seed) {
 function assignDiscoverRowLayout(renderedItems) {
     if (!Array.isArray(renderedItems) || renderedItems.length === 0) return;
 
-    let seed = hashDiscoverLayoutSeed(
-        renderedItems.map((item) => item.key).join("|"),
-    );
-    let index = 0;
     let rowIndex = 0;
+    const assignSegment = (items) => {
+        if (!items.length) return;
+        let seed = hashDiscoverLayoutSeed(items.map((item) => item.key).join("|"));
+        let index = 0;
+        while (index < items.length) {
+            const remaining = items.length - index;
+            const choice = chooseDiscoverRowSize(remaining, seed);
+            const rowSize = Math.max(1, Math.min(choice.rowSize, remaining));
+            seed = choice.seed;
 
-    while (index < renderedItems.length) {
-        const remaining = renderedItems.length - index;
-        const choice = chooseDiscoverRowSize(remaining, seed);
-        const rowSize = Math.max(1, Math.min(choice.rowSize, remaining));
-        seed = choice.seed;
+            for (let position = 0; position < rowSize; position += 1) {
+                const item = items[index + position];
+                if (!item) continue;
+                item.rowSize = rowSize;
+                item.rowPosition = position;
+                item.rowIndex = rowIndex;
+            }
 
-        for (let position = 0; position < rowSize; position += 1) {
-            const item = renderedItems[index + position];
-            if (!item) continue;
-            item.rowSize = rowSize;
-            item.rowPosition = position;
-            item.rowIndex = rowIndex;
+            index += rowSize;
+            rowIndex += 1;
         }
+    };
 
-        index += rowSize;
-        rowIndex += 1;
-    }
+    let segment = [];
+    renderedItems.forEach((item) => {
+        if (item?.type === "section") {
+            assignSegment(segment);
+            segment = [];
+            item.rowSize = 4;
+            item.rowPosition = 0;
+            item.rowIndex = rowIndex;
+            rowIndex += 1;
+            return;
+        }
+        segment.push(item);
+    });
+    assignSegment(segment);
 }
 
 function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
@@ -8999,6 +9217,7 @@ function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
 }
 
 async function renderDiscoverGrid() {
+    const renderSequence = ++discoverRenderSequence;
     const grid = document.querySelector(".discover-grid");
     if (!grid) return;
     const waitMessage = document.querySelector(".wait");
@@ -9034,15 +9253,11 @@ async function renderDiscoverGrid() {
     } catch (error) {
         console.error("Erreur chargement lives discover:", error);
     }
+    if (renderSequence !== discoverRenderSequence) return;
 
     // Afficher un état de chargement si les données ne sont pas encore là
     if (!window.hasLoadedUsers) {
-        if (
-            window.LoadingStateManager &&
-            typeof LoadingStateManager.showSpinner === "function"
-        ) {
-            LoadingStateManager.showSpinner(grid);
-        }
+        showDiscoverSkeleton(grid);
         return;
     }
     if (window.userLoadError) {
@@ -9098,6 +9313,7 @@ async function renderDiscoverGrid() {
     if (currentUser) {
         followedSet = await getFollowedUserIdSet();
     }
+    if (renderSequence !== discoverRenderSequence) return;
 
     // Tri de base par récence puis mélange pondéré vérifiés/non-vérifiés
     usersToDisplay = sortUsersByLatestRecency(usersToDisplay).filter((user) =>
@@ -9123,6 +9339,7 @@ async function renderDiscoverGrid() {
     if (arcIdsForDiscover.length > 0) {
         await preloadArcCollaborators(arcIdsForDiscover);
     }
+    if (renderSequence !== discoverRenderSequence) return;
 
     // Personalized encouragement/follow status
     const contentIds = discoverArcCards
@@ -9142,6 +9359,7 @@ async function renderDiscoverGrid() {
             }
         }
     }
+    if (renderSequence !== discoverRenderSequence) return;
 
     // Mood-based mix (includes lives)
     const mixedItems = buildMoodDiscoverMix(
@@ -9162,25 +9380,43 @@ async function renderDiscoverGrid() {
         const isEncouraged = content
             ? encouragedContentIds.has(content.contentId)
             : false;
-        const respectFilter = currentFilter === "following" ? isFollowed : true;
-        if (!respectFilter) return "";
         return renderUserCard(userId, isFollowed, isEncouraged, content, {
             isPreferred: Boolean(item.__discoverPreferred),
         });
     };
 
     const renderedItems = [];
-    mixedItems.forEach((item) => {
-        const html = renderItem(item);
-        if (!html) return;
-        const key = getDiscoverItemKey(item);
-        const contentId = getDiscoverItemContentId(item);
-        if (!key) return;
-        renderedItems.push({
-            key,
-            html,
-            contentId,
-            type: item.type,
+    let filteredMixedItems = mixedItems.filter((item) =>
+        matchesDiscoverFilter(item, currentFilter, followedSet),
+    );
+    if (currentFilter === "recent") {
+        filteredMixedItems = filteredMixedItems.sort(
+            (a, b) =>
+                getDiscoverContentTime(b.content) -
+                getDiscoverContentTime(a.content),
+        );
+    }
+    const itemGroups = partitionDiscoverItems(filteredMixedItems, currentFilter);
+    itemGroups.forEach((group) => {
+        renderedItems.push(
+            buildDiscoverSectionItem(
+                currentFilter,
+                group.section,
+                group.items.length,
+            ),
+        );
+        group.items.forEach((item) => {
+            const html = renderItem(item);
+            if (!html) return;
+            const key = getDiscoverItemKey(item);
+            const contentId = getDiscoverItemContentId(item);
+            if (!key) return;
+            renderedItems.push({
+                key,
+                html,
+                contentId,
+                type: item.type,
+            });
         });
     });
 
@@ -9192,6 +9428,8 @@ async function renderDiscoverGrid() {
         return;
     }
 
+    const emptyState = getDiscoverEmptyState(currentFilter);
+
     if (
         window.LoadingStateManager &&
         typeof LoadingStateManager.showEmptyState === "function"
@@ -9199,16 +9437,16 @@ async function renderDiscoverGrid() {
         LoadingStateManager.showEmptyState(
             grid,
             "👥",
-            "Aucune trajectoire à explorer",
-            "Revenez plus tard pour découvrir de nouvelles trajectoires.",
+            emptyState.title,
+            emptyState.message,
             { text: "Actualiser", action: "location.reload()" },
         );
     } else {
         grid.innerHTML = `
             <div class="empty-state">
                 <div class="empty-state-icon">👥</div>
-                <h3>Aucune trajectoire à explorer</h3>
-                <p>Revenez plus tard pour découvrir de nouvelles trajectoires.</p>
+                <h3>${emptyState.title}</h3>
+                <p>${emptyState.message}</p>
             </div>
 `;
     }
@@ -10500,12 +10738,6 @@ async function openImmersive(startUserId, startContentId = null) {
         return;
     }
 
-    if (!userContents || Object.keys(userContents).length === 0) {
-        console.error("Content data not loaded");
-        alert("Aucun contenu disponible pour le moment");
-        return;
-    }
-
     const overlay = document.getElementById("immersive-overlay");
 
     if (!overlay) {
@@ -10521,6 +10753,7 @@ async function openImmersive(startUserId, startContentId = null) {
 </div>
     `;
     overlay.style.display = "block";
+    overlay.classList.add("immersive-clean-mode");
     document.body.style.overflow = "hidden";
     // Marquer l'immersif comme ouvert pour éviter les rafraîchissements indésirables
     window.__immersiveOpen = true;
@@ -10534,21 +10767,9 @@ async function openImmersive(startUserId, startContentId = null) {
 
     try {
         // Get ALL content sorted by date, then personalize
-        let allContents = await getPersonalizedFeed(getAllFeedContent());
+        let allContents = await waitForImmersiveFeedContent();
+        if (!window.__immersiveOpen || allContents.length === 0) return;
         console.log("All contents found:", allContents.length);
-
-        if (allContents.length === 0) {
-            overlay.innerHTML = `
-                <div class="close-immersive" onclick="closeImmersive()">✕</div>
-                <div style="display:flex;justify-content:center;align-items:center;height:100vh;color:white;">
-                    <div style="text-align:center;">
-                        <h3>Aucun contenu disponible</h3>
-                        <p>Les utilisateurs n'ont pas encore publié de contenu</p>
-                    </div>
-                </div>
-            `;
-            return;
-        }
 
         // Ensure the clicked content is first in the personalized feed
         let startIndex = -1;
@@ -10569,6 +10790,10 @@ async function openImmersive(startUserId, startContentId = null) {
             if (pinned && pinned.userId) {
                 startUserId = pinned.userId;
             }
+        }
+        if (startIndex < 0 && allContents[0]) {
+            startIndex = 0;
+            startUserId = allContents[0].userId || startUserId;
         }
         console.log(
             "Start index:",
@@ -10595,7 +10820,7 @@ async function openImmersive(startUserId, startContentId = null) {
         const initialContentHtml = await renderImmersivePage(0);
 
         // Initial header for the starting user
-        const user = getUser(startUserId);
+        const user = getUser(startUserId) || getUser(allContents[0]?.userId);
         if (!user) {
             console.error("User not found:", startUserId);
             alert("Utilisateur non trouvé");
@@ -10683,6 +10908,7 @@ async function openImmersive(startUserId, startContentId = null) {
             <div id="immersive-header-container">
                 ${headerHtml}
             </div>
+            ${renderImmersiveMetadataHint()}
             <div id="immersive-content-container">
                 ${initialContentHtml}
                 <div id="immersive-load-sentinel" style="width:100%;height:4px"></div>
@@ -10696,6 +10922,8 @@ async function openImmersive(startUserId, startContentId = null) {
                 </button>
             </div>
 `;
+        applyImmersiveMetadataPreference(overlay);
+        setupImmersiveMetadataHint(overlay);
 
         try {
             initXeraCarousels(overlay);
@@ -10726,6 +10954,7 @@ async function openImmersive(startUserId, startContentId = null) {
             setupImmersiveSnapNav();
             setupImmersiveKeyboardNav();
             setupImmersiveArrowNav();
+            setupImmersiveFullscreenToggle();
 
             // Sentinel pour charger les pages suivantes lorsque l'utilisateur scroll
             const overlayEl = document.getElementById("immersive-overlay");
@@ -10752,12 +10981,14 @@ async function openImmersive(startUserId, startContentId = null) {
                         const pageHtml =
                             await renderImmersivePage(immersiveCurrentPage);
                         container.insertAdjacentHTML("beforeend", pageHtml);
+                        applyImmersiveMetadataPreference(container);
                         // réinitialiser les observers / UI pour les nouveaux éléments
                         setupImmersiveLazyLoad();
                         setupImmersiveObserver();
                         setupImmersiveVideoUI();
                         setupImmersiveSnapNav();
                         setupImmersiveArrowNav();
+                        setupImmersiveFullscreenToggle();
                     } catch (e) {
                         console.error("Erreur chargement page immersive:", e);
                     }
@@ -10813,13 +11044,16 @@ async function openImmersive(startUserId, startContentId = null) {
 }
 
 function closeImmersive() {
-    document.getElementById("immersive-overlay").style.display = "none";
+    const overlay = document.getElementById("immersive-overlay");
+    overlay.style.display = "none";
+    overlay.classList.remove("immersive-clean-mode");
     document.body.style.overflow = "auto";
     loginPromptImmersiveViews = 0;
     handleLoginPromptContext();
     // Nettoyage des états liés à l'immersif
     try {
         window.__immersiveOpen = false;
+        window.__activeImmersiveContentId = null;
         if (window.__immersiveSentinelObserver) {
             window.__immersiveSentinelObserver.disconnect();
             window.__immersiveSentinelObserver = null;
@@ -10932,6 +11166,18 @@ function setupImmersiveObserver() {
                             scheduleImmersiveViewCount(entry.target, video);
                         }
 
+                        if (
+                            contentId &&
+                            window.__activeImmersiveContentId !== contentId
+                        ) {
+                            window.__activeImmersiveContentId = contentId;
+                            setImmersivePostUi(
+                                entry.target,
+                                getImmersiveMetadataPreference(),
+                                { syncAll: false },
+                            );
+                        }
+
                         // Update Header si nécessaire
                         if (userId && userId !== currentImmersiveUser) {
                             currentImmersiveUser = userId;
@@ -11034,8 +11280,6 @@ function setupImmersiveVideoUI() {
                 muteOtherImmersiveVideos(video);
                 video.muted = false;
                 video.play().catch(() => {});
-            } else {
-                video.pause();
             }
         });
 
@@ -11048,6 +11292,172 @@ function setupImmersiveVideoUI() {
 
     // Activer le lazy-load avec préchargement progressif
     setupImmersiveLazyLoad();
+}
+
+function getImmersiveMetadataPreference() {
+    return window.__immersiveMetadataVisible === true;
+}
+
+const IMMERSIVE_CONTENT_RETRY_DELAY = 3000;
+
+function waitForImmersiveRetry(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForImmersiveFeedContent() {
+    const readFeed = async () => {
+        const rawContents = getAllFeedContent();
+        if (!rawContents.length) return [];
+        return await getPersonalizedFeed(rawContents);
+    };
+
+    while (window.__immersiveOpen) {
+        const currentContents = await readFeed();
+        if (currentContents.length > 0) return currentContents;
+
+        if (typeof loadAllData === "function") {
+            try {
+                if (!window.__immersiveContentRefreshPromise) {
+                    window.__immersiveContentRefreshPromise = loadAllData()
+                        .catch((error) => {
+                            console.warn(
+                                "Chargement feed immersif en attente:",
+                                error,
+                            );
+                        })
+                        .finally(() => {
+                            window.__immersiveContentRefreshPromise = null;
+                        });
+                }
+                await window.__immersiveContentRefreshPromise;
+            } catch (error) {
+                // Le skeleton reste visible; on retentera au prochain cycle.
+            }
+        }
+
+        if (!window.__immersiveOpen) break;
+
+        const refreshedContents = await readFeed();
+        if (refreshedContents.length > 0) return refreshedContents;
+
+        await waitForImmersiveRetry(IMMERSIVE_CONTENT_RETRY_DELAY);
+    }
+
+    return [];
+}
+
+const IMMERSIVE_METADATA_HINT_KEY = "xera_immersive_metadata_hint_clicked";
+
+function hasSeenImmersiveMetadataHint() {
+    try {
+        return localStorage.getItem(IMMERSIVE_METADATA_HINT_KEY) === "1";
+    } catch (error) {
+        return window.__immersiveMetadataHintSeen === true;
+    }
+}
+
+function markImmersiveMetadataHintSeen() {
+    window.__immersiveMetadataHintSeen = true;
+    try {
+        localStorage.setItem(IMMERSIVE_METADATA_HINT_KEY, "1");
+    } catch (error) {
+        // ignore storage restrictions
+    }
+}
+
+function renderImmersiveMetadataHint() {
+    if (hasSeenImmersiveMetadataHint()) return "";
+    return `
+        <button type="button" class="immersive-metadata-hint" id="immersive-metadata-hint" aria-label="Afficher les métadonnées">
+            <span>Clique sur le média pour afficher les métadonnées</span>
+        </button>
+    `;
+}
+
+function setupImmersiveMetadataHint(root = document) {
+    const hint = root.querySelector?.("#immersive-metadata-hint");
+    if (!hint) return;
+
+    hint.addEventListener("click", (event) => {
+        event.stopPropagation();
+        dismissImmersiveMetadataHint({ showMetadata: true });
+    });
+}
+
+function dismissImmersiveMetadataHint({ showMetadata = false } = {}) {
+    const hint = document.getElementById("immersive-metadata-hint");
+    if (!hint) return;
+
+    if (showMetadata) {
+        const activeContentId = window.__activeImmersiveContentId || "";
+        const activeSelector =
+            activeContentId && window.CSS?.escape
+                ? `.immersive-post[data-content-id="${CSS.escape(activeContentId)}"]`
+                : "";
+        const activePost =
+            (activeSelector && document.querySelector(activeSelector)) ||
+            document.querySelector(".immersive-post");
+        if (activePost) setImmersivePostUi(activePost, true);
+    }
+
+    markImmersiveMetadataHintSeen();
+    hint.classList.add("is-dismissed");
+    setTimeout(() => hint.remove(), 240);
+}
+
+function applyImmersiveMetadataPreference(root = document) {
+    const visible = getImmersiveMetadataPreference();
+    root.querySelectorAll?.(".immersive-post").forEach((post) => {
+        post.classList.toggle("is-ui-visible", visible);
+    });
+}
+
+function setImmersivePostUi(post, visible, options = {}) {
+    const overlay = document.getElementById("immersive-overlay");
+    if (!overlay || !post) return;
+    const shouldSyncAll = options.syncAll !== false;
+
+    window.__immersiveMetadataVisible = !!visible;
+
+    if (shouldSyncAll) {
+        applyImmersiveMetadataPreference(overlay);
+        return;
+    }
+
+    post.classList.toggle("is-ui-visible", getImmersiveMetadataPreference());
+}
+
+function setupImmersiveFullscreenToggle(root = document) {
+    const overlay = document.getElementById("immersive-overlay");
+    const container =
+        root?.querySelector?.("#immersive-content-container") ||
+        document.getElementById("immersive-content-container");
+    if (!overlay || !container) return;
+
+    container.querySelectorAll(".immersive-post .post-content-wrap").forEach(
+        (wrap) => {
+            if (wrap.dataset.immersiveFullscreenToggleBound === "1") return;
+            wrap.dataset.immersiveFullscreenToggleBound = "1";
+
+            wrap.addEventListener("click", (event) => {
+                if (
+                    event.target.closest(
+                        "button, a, input, textarea, select, [contenteditable='true'], .post-info, .xera-carousel-arrow, .xera-carousel-dots, .support-overlay, .arc-collab-avatars",
+                    )
+                ) {
+                    return;
+                }
+
+                const post = wrap.closest(".immersive-post");
+                if (!post) return;
+                const shouldShow = !getImmersiveMetadataPreference();
+                setImmersivePostUi(post, shouldShow);
+                if (shouldShow) {
+                    dismissImmersiveMetadataHint();
+                }
+            });
+        },
+    );
 }
 
 // Précharge localement une vidéo immersive quand son conteneur approche de l'écran.
@@ -12598,6 +13008,9 @@ function navigateTo(pageId) {
             }
             return;
         }
+        if (typeof setDiscoverFilter === "function") {
+            setDiscoverFilter("all", { render: false });
+        }
     }
 
     if (pageId === "messages") {
@@ -12637,6 +13050,25 @@ function navigateTo(pageId) {
 }
 
 window.syncFloatingCreateVisibility = syncFloatingCreateVisibility;
+
+document.addEventListener(
+    "click",
+    (event) => {
+        const profileTrigger = event.target.closest(
+            ".user-card .card-profile-link[data-profile-user-id]",
+        );
+        if (!profileTrigger) return;
+        const userId = profileTrigger.dataset.profileUserId;
+        if (!userId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        handleProfileClick(userId, profileTrigger).catch((error) => {
+            console.error("Discover profile click failed:", error);
+        });
+    },
+    true,
+);
 
 // Make sure handleProfileNavigation is defined as an async function
 async function handleProfileNavigation() {
@@ -12797,6 +13229,19 @@ function setupDiscoverVideoInteractions() {
 
         // Start observing
         discoverVideoObserver.observe(video);
+
+        const updateProgress = () => {
+            const duration = Number(video.duration) || 0;
+            const current = Number(video.currentTime) || 0;
+            const progress =
+                duration > 0 ? Math.max(0, Math.min(1, current / duration)) : 0;
+            wrap?.style.setProperty("--video-progress", `${progress * 100}%`);
+        };
+        video.addEventListener("timeupdate", updateProgress);
+        video.addEventListener("loadedmetadata", updateProgress);
+        video.addEventListener("ended", () => {
+            wrap?.style.setProperty("--video-progress", "0%");
+        });
 
         // Autoplay on hover for discover cards
         video.addEventListener("mouseenter", function () {
@@ -13102,9 +13547,19 @@ async function handleUnblockUserFromSettings(blockedUserId) {
 
 function closeSettings() {
     const modal = document.getElementById("settings-modal");
+    if (!modal) return;
+
+    // Retirer immédiatement la classe active pour lancer l'animation de fermeture
     modal.classList.remove("active");
+
+    // Restaurer le défilement du body
+    document.body.style.overflow = "auto";
+
+    // Cacher complètement la modale après la transition
     setTimeout(() => {
-        modal.style.display = "none";
+        if (modal && !modal.classList.contains("active")) {
+            modal.style.display = "none";
+        }
     }, 300);
 }
 
@@ -13130,6 +13585,7 @@ async function openSettings(userId) {
     // Force reflow
     modal.offsetHeight;
     modal.classList.add("active");
+    document.body.style.overflow = "hidden";
 
     const followerCount = await getFollowerCount(userId);
     const accountType = user.account_type || "personal";
@@ -14211,14 +14667,58 @@ async function openSettings(userId) {
                     /* ignore */
                 }
 
-                // Reload profile view
-                if (document.querySelector("#profile.active")) {
-                    await renderProfileIntoContainer(userId);
+                // Preserve current form values in case modal is still open during refresh
+                const currentFormValues = {
+                    name: document.getElementById("setting-name")?.value,
+                    title: document.getElementById("setting-title")?.value,
+                    bio: document.getElementById("setting-bio")?.value,
+                };
+
+                // Reload profile view - with error protection
+                try {
+                    if (document.querySelector("#profile.active")) {
+                        await renderProfileIntoContainer(userId);
+                    }
+                } catch (e) {
+                    console.warn("Profile refresh failed:", e);
                 }
 
-                // Refresh Discover cards (multiple cards can exist per user/arc)
-                if (document.querySelector(".discover-grid")) {
-                    await renderDiscoverGrid();
+                // Restore form values if modal is still open
+                const settingsModal = document.getElementById("settings-modal");
+                if (
+                    settingsModal &&
+                    settingsModal.classList.contains("active")
+                ) {
+                    if (
+                        currentFormValues.name &&
+                        document.getElementById("setting-name")
+                    ) {
+                        document.getElementById("setting-name").value =
+                            currentFormValues.name;
+                    }
+                    if (
+                        currentFormValues.title &&
+                        document.getElementById("setting-title")
+                    ) {
+                        document.getElementById("setting-title").value =
+                            currentFormValues.title;
+                    }
+                    if (
+                        currentFormValues.bio &&
+                        document.getElementById("setting-bio")
+                    ) {
+                        document.getElementById("setting-bio").value =
+                            currentFormValues.bio;
+                    }
+                }
+
+                // Refresh Discover cards (multiple cards can exist per user/arc) - with error protection
+                try {
+                    if (document.querySelector(".discover-grid")) {
+                        await renderDiscoverGrid();
+                    }
+                } catch (e) {
+                    console.warn("Discover grid refresh failed:", e);
                 }
 
                 // Refresh discover React island if present
@@ -14243,7 +14743,6 @@ async function openSettings(userId) {
                                 reminderSaveResult.error,
                         );
                     }
-                    closeSettings();
                 } else {
                     if (window.ToastManager) {
                         ToastManager.success(
@@ -14251,8 +14750,9 @@ async function openSettings(userId) {
                             "Vos réglages ont été enregistrés avec succès.",
                         );
                     }
-                    closeSettings();
                 }
+                // TOUJOURS fermer la modale, même si les rafraîchissements ont échoué
+                closeSettings();
             } else {
                 if (window.ToastManager) {
                     ToastManager.error(

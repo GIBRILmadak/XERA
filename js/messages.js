@@ -34,6 +34,9 @@
         pendingAttachment: null,
         sendingMessage: false,
         activeRelationship: null,
+        lastRenderedConversationId: null,
+        lastRenderedMessagesSignature: "",
+        conversationMembershipChecks: new Map(),
     };
 
     function getCurrentUserId() {
@@ -937,6 +940,60 @@
         return `${bodyHtml}${mediaHtml}${attachmentLabel}`;
     }
 
+    function getMessageRenderSignature(message) {
+        if (!message) return "";
+        return [
+            message.id || "",
+            message.body || "",
+            message.media_url || "",
+            message.media_type || "",
+            message.media_name || "",
+            message.media_size_bytes || "",
+            message.created_at || "",
+            message.pending ? "pending" : "",
+        ].join("|");
+    }
+
+    function getMessagesListSignature(messages) {
+        return (messages || [])
+            .map((message) => getMessageRenderSignature(message))
+            .join("::");
+    }
+
+    function buildMessageHtml(message, currentUserId, senderProfile) {
+        const mine = message.sender_id === currentUserId;
+        const bubbleClass = mine ? "chat-bubble mine" : "chat-bubble";
+        const messageTime = formatMessageTime(message.created_at);
+        const senderHtml =
+            !mine && senderProfile?.id
+                ? `
+                    <div class="chat-sender-row">
+                        <a href="${escapeHtml(buildProfileHref(senderProfile.id))}" class="chat-user-link" data-message-user-link="1" data-user-id="${escapeHtml(senderProfile.id)}">
+                            ${renderNameWithBadges(senderProfile)}
+                        </a>
+                    </div>
+                `
+                : "";
+
+        return `
+            <div class="${bubbleClass}" data-message-id="${escapeHtml(message.id)}">
+                ${senderHtml}
+                ${renderMessageBody(message)}
+                <div class="chat-time">${escapeHtml(messageTime)}</div>
+            </div>
+        `;
+    }
+
+    function createMessageNode(message, currentUserId, senderProfile) {
+        const template = document.createElement("template");
+        template.innerHTML = buildMessageHtml(
+            message,
+            currentUserId,
+            senderProfile,
+        ).trim();
+        return template.content.firstElementChild;
+    }
+
     function showSchemaMissingState() {
         if (!ensureMessagesShell()) return;
         const list = document.getElementById("threads-list");
@@ -1306,13 +1363,18 @@
         const conversationId = state.selectedConversationId;
         if (!conversationId) {
             panel.classList.add("empty");
-            chat.innerHTML = `<div class="loading-state">Choisissez une conversation pour commencer.</div>`;
+            if (state.lastRenderedConversationId !== null) {
+                chat.innerHTML = `<div class="loading-state">Choisissez une conversation pour commencer.</div>`;
+            }
+            state.lastRenderedConversationId = null;
+            state.lastRenderedMessagesSignature = "";
             syncComposerState();
             return;
         }
 
         panel.classList.remove("empty");
         const messages = state.messagesByConversation.get(conversationId) || [];
+        const listSignature = getMessagesListSignature(messages);
         const currentUserId = getCurrentUserId();
         const conversation =
             state.conversationsById.get(conversationId) || null;
@@ -1321,37 +1383,59 @@
             : null;
 
         if (!messages.length) {
-            chat.innerHTML = `<div class="loading-state">Aucun message pour l'instant. Lancez la conversation.</div>`;
+            if (
+                state.lastRenderedConversationId !== conversationId ||
+                state.lastRenderedMessagesSignature !== listSignature
+            ) {
+                chat.innerHTML = `<div class="loading-state">Aucun message pour l'instant. Lancez la conversation.</div>`;
+            }
+            state.lastRenderedConversationId = conversationId;
+            state.lastRenderedMessagesSignature = listSignature;
             syncComposerState();
             return;
         }
 
-        chat.innerHTML = messages
-            .map((msg) => {
-                const mine = msg.sender_id === currentUserId;
-                const bubbleClass = mine ? "chat-bubble mine" : "chat-bubble";
-                const messageTime = formatMessageTime(msg.created_at);
-                const senderHtml =
-                    !mine && senderProfile?.id
-                        ? `
-                            <div class="chat-sender-row">
-                                <a href="${escapeHtml(buildProfileHref(senderProfile.id))}" class="chat-user-link" data-message-user-link="1" data-user-id="${escapeHtml(senderProfile.id)}">
-                                    ${renderNameWithBadges(senderProfile)}
-                                </a>
-                            </div>
-                        `
-                        : "";
-                return `
-                    <div class="${bubbleClass}" data-message-id="${msg.id}">
-                        ${senderHtml}
-                        ${renderMessageBody(msg)}
-                        <div class="chat-time">${escapeHtml(messageTime)}</div>
-                    </div>
-                `;
-            })
-            .join("");
+        if (
+            state.lastRenderedConversationId === conversationId &&
+            state.lastRenderedMessagesSignature === listSignature &&
+            chat.querySelector(".chat-bubble")
+        ) {
+            syncComposerState();
+            return;
+        }
 
-        chat.scrollTop = chat.scrollHeight;
+        const previousRenderedConversationId = state.lastRenderedConversationId;
+        const wasNearBottom =
+            chat.scrollHeight - chat.scrollTop - chat.clientHeight < 96;
+        const existingNodes = new Map();
+        chat.querySelectorAll(".chat-bubble[data-message-id]").forEach((node) => {
+            existingNodes.set(node.getAttribute("data-message-id"), node);
+        });
+
+        const fragment = document.createDocumentFragment();
+        messages.forEach((message) => {
+            const messageId = String(message.id || "");
+            const renderSignature = getMessageRenderSignature(message);
+            const existing = existingNodes.get(messageId);
+            let node = existing;
+
+            if (!node || node.dataset.renderSignature !== renderSignature) {
+                node = createMessageNode(message, currentUserId, senderProfile);
+            }
+
+            if (node) {
+                node.dataset.renderSignature = renderSignature;
+                fragment.appendChild(node);
+            }
+        });
+
+        chat.replaceChildren(fragment);
+        state.lastRenderedConversationId = conversationId;
+        state.lastRenderedMessagesSignature = listSignature;
+
+        if (wasNearBottom || previousRenderedConversationId !== conversationId) {
+            chat.scrollTop = chat.scrollHeight;
+        }
         syncComposerState();
     }
 
@@ -2264,14 +2348,53 @@
         }
     }
 
+    async function isConversationRelevantToCurrentUser(conversationId) {
+        const currentUserId = getCurrentUserId();
+        if (!currentUserId || !conversationId) return false;
+        if (state.conversationsById.has(conversationId)) return true;
+
+        const cacheKey = `${currentUserId}:${conversationId}`;
+        if (state.conversationMembershipChecks.has(cacheKey)) {
+            return state.conversationMembershipChecks.get(cacheKey);
+        }
+
+        const checkPromise = supabase
+            .from("dm_participants")
+            .select("conversation_id")
+            .eq("conversation_id", conversationId)
+            .eq("user_id", currentUserId)
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (error) {
+                    console.warn("DM membership check failed:", error);
+                    return true;
+                }
+                return Boolean(data?.conversation_id);
+            })
+            .catch((error) => {
+                console.warn("DM membership check failed:", error);
+                return true;
+            });
+
+        state.conversationMembershipChecks.set(cacheKey, checkPromise);
+        const isRelevant = await checkPromise;
+        state.conversationMembershipChecks.set(cacheKey, isRelevant);
+        return isRelevant;
+    }
+
     async function handleIncomingMessage(messageRow) {
         const normalizedMessage = normalizeMessageRow(messageRow);
         if (!normalizedMessage || !normalizedMessage.id) return;
-        if (state.seenMessageIds.has(normalizedMessage.id)) return;
-        rememberMessageId(normalizedMessage.id);
 
         const conversationId = normalizedMessage.conversation_id;
         if (!conversationId) return;
+        if (state.seenMessageIds.has(normalizedMessage.id)) return;
+
+        const isRelevantConversation =
+            await isConversationRelevantToCurrentUser(conversationId);
+        if (!isRelevantConversation) return;
+
+        rememberMessageId(normalizedMessage.id);
 
         if (!state.conversationsById.has(conversationId)) {
             scheduleConversationsRefresh();
@@ -2618,6 +2741,9 @@
             state.realtimeWarned = false;
             state.sendingMessage = false;
             state.activeRelationship = null;
+            state.lastRenderedConversationId = null;
+            state.lastRenderedMessagesSignature = "";
+            state.conversationMembershipChecks = new Map();
 
             if (hasDmPage()) {
                 ensureMessagesShell();
@@ -2646,6 +2772,9 @@
         state.usersById = new Map();
         state.seenMessageIds = new Set();
         state.routeHandled = false;
+        state.lastRenderedConversationId = null;
+        state.lastRenderedMessagesSignature = "";
+        state.conversationMembershipChecks = new Map();
         state.sendingMessage = false;
         state.activeRelationship = null;
         // clear any queued outbound messages when user logs out or messaging is cleaned up
