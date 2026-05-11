@@ -125,7 +125,7 @@ function displaySearchResults(users, content, query) {
     if (content.length > 0) {
         html += '<div class="search-section">';
         html += '<h4 class="search-section-title">Publications</h4>';
-        content.forEach(item => {
+        content.forEach(item 
             html += `
                 <div class="search-result-item" onclick="navigateToUserProfile('${item.user_id}'); document.getElementById('search-results').style.display='none';">
                     <img src="${item.users.avatar}" class="search-result-avatar" alt="${item.users.name}">
