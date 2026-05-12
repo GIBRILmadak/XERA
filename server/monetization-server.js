@@ -6574,6 +6574,22 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
     }
 });
 
+// ==================== YOUTUBE API INTEGRATION ====================
+// Middleware to attach Supabase client to request
+app.use((req, res, next) => {
+    req.supabase = supabase;
+    next();
+});
+
+// Register YouTube routes
+try {
+    const youtubeRoutes = require("./api/youtube/routes");
+    app.use("/api/youtube", youtubeRoutes);
+    console.info("YouTube API routes registered at /api/youtube/*");
+} catch (err) {
+    console.warn("YouTube API routes not available:", err?.message || err);
+}
+
 if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {
     sweepExpiredSubscriptions();
     setInterval(sweepExpiredSubscriptions, SUBSCRIPTION_SWEEP_MS);
