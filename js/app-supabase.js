@@ -7656,7 +7656,7 @@ function buildDiscoverSectionItem(filter, section, count) {
                 ? "Trajectoires structurées par projet"
                 : filter === "recent"
                   ? "Dernières preuves publiées"
-              : "Recommandé selon l'activité récente";
+                  : "Recommandé selon l'activité récente";
     return {
         key: `section-${filter}-${section}`,
         type: "section",
@@ -7673,36 +7673,43 @@ function getDiscoverEmptyState(filter) {
     const states = {
         live: {
             title: "Aucun live en ce moment",
-            message: "Revenez un peu plus tard ou repassez sur Tout pour explorer les trajectoires.",
+            message:
+                "Revenez un peu plus tard ou repassez sur Tout pour explorer les trajectoires.",
         },
         video: {
             title: "Aucune vidéo à afficher",
-            message: "Le feed Tout contient peut-être déjà des images, textes ou projets récents.",
+            message:
+                "Le feed Tout contient peut-être déjà des images, textes ou projets récents.",
         },
         projects: {
             title: "Aucun projet filtré",
-            message: "Repassez sur Tout pour voir toutes les trajectoires disponibles.",
+            message:
+                "Repassez sur Tout pour voir toutes les trajectoires disponibles.",
         },
         following: {
             title: "Aucune trajectoire suivie",
-            message: "Suivez quelques créateurs ou repassez sur Tout pour découvrir du contenu.",
+            message:
+                "Suivez quelques créateurs ou repassez sur Tout pour découvrir du contenu.",
         },
         recent: {
             title: "Rien de récent dans ce filtre",
-            message: "Repassez sur Tout pour explorer les trajectoires disponibles.",
+            message:
+                "Repassez sur Tout pour explorer les trajectoires disponibles.",
         },
     };
     return (
         states[filter] || {
             title: "Aucune trajectoire à explorer",
-            message: "Revenez plus tard pour découvrir de nouvelles trajectoires.",
+            message:
+                "Revenez plus tard pour découvrir de nouvelles trajectoires.",
         }
     );
 }
 
 function matchesDiscoverFilter(item, currentFilter, followedSet = new Set()) {
     if (!item) return false;
-    const userId = item.user?.id || item.content?.userId || item.stream?.user_id;
+    const userId =
+        item.user?.id || item.content?.userId || item.stream?.user_id;
     if (currentFilter === "following") return userId && followedSet.has(userId);
     if (currentFilter === "live") return item.type === "live";
     if (currentFilter === "video") {
@@ -8053,7 +8060,10 @@ async function handleDiscoverQuickAction(contentId, action, userId = null) {
     if (!contentId || !action) return;
     const content = findContentById(contentId);
     if (action === "more" || action === "less") {
-        handleDiscoverInterest(contentId, action === "less" ? "dislike" : "like");
+        handleDiscoverInterest(
+            contentId,
+            action === "less" ? "dislike" : "like",
+        );
         return;
     }
 
@@ -8073,7 +8083,10 @@ async function handleDiscoverQuickAction(contentId, action, userId = null) {
             }
             if (navigator.clipboard?.writeText) {
                 await navigator.clipboard.writeText(url);
-                ToastManager?.success?.("Lien copié", "La trajectoire est prête à partager.");
+                ToastManager?.success?.(
+                    "Lien copié",
+                    "La trajectoire est prête à partager.",
+                );
             }
         } catch (error) {
             console.warn("Discover share failed:", error);
@@ -9103,7 +9116,9 @@ function assignDiscoverRowLayout(renderedItems) {
     let rowIndex = 0;
     const assignSegment = (items) => {
         if (!items.length) return;
-        let seed = hashDiscoverLayoutSeed(items.map((item) => item.key).join("|"));
+        let seed = hashDiscoverLayoutSeed(
+            items.map((item) => item.key).join("|"),
+        );
         let index = 0;
         while (index < items.length) {
             const remaining = items.length - index;
@@ -9396,7 +9411,10 @@ async function renderDiscoverGrid() {
                 getDiscoverContentTime(a.content),
         );
     }
-    const itemGroups = partitionDiscoverItems(filteredMixedItems, currentFilter);
+    const itemGroups = partitionDiscoverItems(
+        filteredMixedItems,
+        currentFilter,
+    );
     itemGroups.forEach((group) => {
         renderedItems.push(
             buildDiscoverSectionItem(
@@ -11434,8 +11452,9 @@ function setupImmersiveFullscreenToggle(root = document) {
         document.getElementById("immersive-content-container");
     if (!overlay || !container) return;
 
-    container.querySelectorAll(".immersive-post .post-content-wrap").forEach(
-        (wrap) => {
+    container
+        .querySelectorAll(".immersive-post .post-content-wrap")
+        .forEach((wrap) => {
             if (wrap.dataset.immersiveFullscreenToggleBound === "1") return;
             wrap.dataset.immersiveFullscreenToggleBound = "1";
 
@@ -11456,8 +11475,7 @@ function setupImmersiveFullscreenToggle(root = document) {
                     dismissImmersiveMetadataHint();
                 }
             });
-        },
-    );
+        });
 }
 
 // Précharge localement une vidéo immersive quand son conteneur approche de l'écran.
@@ -14433,6 +14451,22 @@ async function openSettings(userId) {
         .addEventListener("submit", async (e) => {
             e.preventDefault();
 
+            // Validate required fields before submission
+            const nameInput = document.getElementById("setting-name");
+            const nameTrimmed = String(nameInput?.value || "").trim();
+
+            if (!nameTrimmed) {
+                if (window.ToastManager) {
+                    ToastManager.error(
+                        "Erreur",
+                        "Le nom d'affichage ne peut pas être vide.",
+                    );
+                } else {
+                    alert("Le nom d'affichage ne peut pas être vide.");
+                }
+                return;
+            }
+
             if (pendingProfileMediaUploads > 0) {
                 alert(
                     "Un upload d'image est encore en cours. Attendez la fin puis réessayez.",
@@ -14553,17 +14587,60 @@ async function openSettings(userId) {
                 : existingSubtypeRaw;
             const profilePreferences = collectProfilePreferencesFromSettings();
 
+            // Collect and validate form values
+            const collectedName = String(
+                document.getElementById("setting-name")?.value || "",
+            ).trim();
+            const collectedTitle = String(
+                document.getElementById("setting-title")?.value || "",
+            ).trim();
+            const collectedBio = String(
+                document.getElementById("setting-bio")?.value || "",
+            ).trim();
+            const collectedAvatar = String(
+                document.getElementById("setting-avatar")?.value || "",
+            ).trim();
+            const collectedBanner = String(
+                document.getElementById("setting-banner")?.value || "",
+            ).trim();
+
+            // Validate name is not empty - fallback to current name if needed
+            let finalName = collectedName;
+            if (!finalName) {
+                // Fallback to existing user name
+                finalName = String(user.name || "").trim();
+                if (!finalName && currentUser?.email) {
+                    // Last resort: use email prefix
+                    finalName = currentUser.email.split("@")[0];
+                }
+                if (!finalName) {
+                    finalName = "Utilisateur";
+                }
+                console.warn(
+                    "Empty username detected, using fallback:",
+                    finalName,
+                );
+            }
+
             const profileData = {
-                name: document.getElementById("setting-name").value,
-                title: document.getElementById("setting-title").value,
-                bio: document.getElementById("setting-bio").value,
-                avatar: document.getElementById("setting-avatar").value,
-                banner: document.getElementById("setting-banner").value,
+                name: finalName,
+                title: collectedTitle,
+                bio: collectedBio,
+                avatar: collectedAvatar,
+                banner: collectedBanner,
                 socialLinks: newSocialLinks,
                 account_type: accountType || "personal",
                 account_subtype: subtypeToSave,
                 profilePreferences,
             };
+
+            // Debug logging
+            console.log(
+                "Saving profile with name:",
+                profileData.name,
+                "Previous name was:",
+                user.name,
+            );
 
             const okOnline = await ensureOnlineOrNotify();
             if (!okOnline) {
@@ -14579,6 +14656,30 @@ async function openSettings(userId) {
             const result = await upsertUserProfile(userId, profileData);
 
             if (result.success) {
+                // Validate response data
+                const returnedName = String(result.data?.name || "").trim();
+
+                // If server returned empty name or only email prefix, log warning
+                if (
+                    !returnedName ||
+                    returnedName === currentUser?.email?.split("@")[0]
+                ) {
+                    console.warn(
+                        "Server returned unexpected name value:",
+                        returnedName,
+                        "Expected:",
+                        profileData.name,
+                    );
+                    // If name was lost, restore it from what we sent
+                    if (!returnedName) {
+                        result.data.name = profileData.name;
+                    }
+                }
+
+                console.log(
+                    "Profile save successful. Name in response:",
+                    result.data?.name,
+                );
                 let reminderSaveResult = { success: true };
                 if (emailReminderCheckbox && !emailReminderCheckbox.disabled) {
                     reminderSaveResult = await saveEmailReminderPreferences({
@@ -14754,14 +14855,19 @@ async function openSettings(userId) {
                 // TOUJOURS fermer la modale, même si les rafraîchissements ont échoué
                 closeSettings();
             } else {
+                // Check if it's a name validation error
+                const isNameError = String(result.error || "")
+                    .toLowerCase()
+                    .includes("nom");
+                const errorMsg = isNameError
+                    ? "Le nom d'affichage ne peut pas être vide. Veuillez remplir ce champ."
+                    : result.error ||
+                      "Une erreur est survenue lors de l'enregistrement.";
+
                 if (window.ToastManager) {
-                    ToastManager.error(
-                        "Erreur",
-                        result.error ||
-                            "Une erreur est survenue lors de l'enregistrement.",
-                    );
+                    ToastManager.error("Erreur", errorMsg);
                 } else {
-                    alert("Erreur: " + result.error);
+                    alert("Erreur: " + errorMsg);
                 }
             }
 

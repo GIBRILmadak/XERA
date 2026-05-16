@@ -190,9 +190,22 @@ async function upsertUserProfile(userId, profileData) {
         const socialLinksPayload = profileData.socialLinks || {};
         const profilePreferencesPayload =
             profileData.profile_preferences || profileData.profilePreferences;
+
+        // Validate and sanitize name - never allow empty name
+        const profileName = String(profileData.name || "").trim();
+        if (!profileName) {
+            console.warn(
+                "Warning: Empty name provided to upsertUserProfile, using fallback",
+            );
+            return {
+                success: false,
+                error: "Le nom d'utilisateur ne peut pas être vide.",
+            };
+        }
+
         const profilePayload = {
             id: userId,
-            name: profileData.name,
+            name: profileName,
             title: profileData.title,
             bio: profileData.bio,
             avatar: profileData.avatar,
