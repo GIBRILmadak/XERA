@@ -881,14 +881,16 @@ function closeSettings() {
 function renderUserCard(userId) {
     const user = getUser(userId);
     const latestContent = getLatestContent(userId);
-    const dominantState = getDominantState(userId);
 
     if (!latestContent) return "";
 
+    // Use the specific content's state, not the dominant state
+    const contentState = latestContent.state || "pause";
+
     const stateColor =
-        dominantState === "success"
+        contentState === "success"
             ? "#10b981"
-            : dominantState === "failure"
+            : contentState === "failure"
               ? "#ef4444"
               : "#6366f1";
 
