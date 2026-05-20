@@ -7656,7 +7656,7 @@ function buildDiscoverSectionItem(filter, section, count) {
                 ? "Trajectoires structurées par projet"
                 : filter === "recent"
                   ? "Dernières preuves publiées"
-              : "Recommandé selon l'activité récente";
+                  : "Recommandé selon l'activité récente";
     return {
         key: `section-${filter}-${section}`,
         type: "section",
@@ -7673,36 +7673,43 @@ function getDiscoverEmptyState(filter) {
     const states = {
         live: {
             title: "Aucun live en ce moment",
-            message: "Revenez un peu plus tard ou repassez sur Tout pour explorer les trajectoires.",
+            message:
+                "Revenez un peu plus tard ou repassez sur Tout pour explorer les trajectoires.",
         },
         video: {
             title: "Aucune vidéo à afficher",
-            message: "Le feed Tout contient peut-être déjà des images, textes ou projets récents.",
+            message:
+                "Le feed Tout contient peut-être déjà des images, textes ou projets récents.",
         },
         projects: {
             title: "Aucun projet filtré",
-            message: "Repassez sur Tout pour voir toutes les trajectoires disponibles.",
+            message:
+                "Repassez sur Tout pour voir toutes les trajectoires disponibles.",
         },
         following: {
             title: "Aucune trajectoire suivie",
-            message: "Suivez quelques créateurs ou repassez sur Tout pour découvrir du contenu.",
+            message:
+                "Suivez quelques créateurs ou repassez sur Tout pour découvrir du contenu.",
         },
         recent: {
             title: "Rien de récent dans ce filtre",
-            message: "Repassez sur Tout pour explorer les trajectoires disponibles.",
+            message:
+                "Repassez sur Tout pour explorer les trajectoires disponibles.",
         },
     };
     return (
         states[filter] || {
             title: "Aucune trajectoire à explorer",
-            message: "Revenez plus tard pour découvrir de nouvelles trajectoires.",
+            message:
+                "Revenez plus tard pour découvrir de nouvelles trajectoires.",
         }
     );
 }
 
 function matchesDiscoverFilter(item, currentFilter, followedSet = new Set()) {
     if (!item) return false;
-    const userId = item.user?.id || item.content?.userId || item.stream?.user_id;
+    const userId =
+        item.user?.id || item.content?.userId || item.stream?.user_id;
     if (currentFilter === "following") return userId && followedSet.has(userId);
     if (currentFilter === "live") return item.type === "live";
     if (currentFilter === "video") {
@@ -8053,7 +8060,10 @@ async function handleDiscoverQuickAction(contentId, action, userId = null) {
     if (!contentId || !action) return;
     const content = findContentById(contentId);
     if (action === "more" || action === "less") {
-        handleDiscoverInterest(contentId, action === "less" ? "dislike" : "like");
+        handleDiscoverInterest(
+            contentId,
+            action === "less" ? "dislike" : "like",
+        );
         return;
     }
 
@@ -8073,7 +8083,10 @@ async function handleDiscoverQuickAction(contentId, action, userId = null) {
             }
             if (navigator.clipboard?.writeText) {
                 await navigator.clipboard.writeText(url);
-                ToastManager?.success?.("Lien copié", "La trajectoire est prête à partager.");
+                ToastManager?.success?.(
+                    "Lien copié",
+                    "La trajectoire est prête à partager.",
+                );
             }
         } catch (error) {
             console.warn("Discover share failed:", error);
@@ -8178,26 +8191,28 @@ function renderUserCard(
     if (!user) return "";
 
     const latestContent = latestContentOverride || getLatestContent(userId);
-    const dominantState = getDominantState(userId);
 
     if (!latestContent) return "";
 
+    // Use the specific content's state, not the dominant state
+    const contentState = latestContent.state || "pause";
+
     const stateColor =
-        dominantState === "success"
+        contentState === "success"
             ? "#10b981"
-            : dominantState === "failure"
+            : contentState === "failure"
               ? "#ef4444"
               : "#6366f1";
     const stateClass =
-        dominantState === "success"
+        contentState === "success"
             ? "is-success"
-            : dominantState === "failure"
+            : contentState === "failure"
               ? "is-failure"
               : "is-paused";
     const stateLabel =
-        dominantState === "success"
+        contentState === "success"
             ? "Victoire"
-            : dominantState === "failure"
+            : contentState === "failure"
               ? "Bloqué"
               : "Pause";
 
@@ -8347,8 +8362,8 @@ function renderUserCard(
         ? " editorial-card--preferred"
         : "";
     const cardClass = hasMedia
-        ? `user-card editorial-card has-media ${mediaTypeClass}${verifiedClass}${preferredClass} editorial-card--${mediaTypeClass} editorial-card--${dominantState}`
-        : `user-card editorial-card ${isTextContent ? "text-card" : ""}${verifiedClass}${preferredClass} editorial-card--text editorial-card--${dominantState}`;
+        ? `user-card editorial-card has-media ${mediaTypeClass}${verifiedClass}${preferredClass} editorial-card--${mediaTypeClass} editorial-card--${contentState}`
+        : `user-card editorial-card ${isTextContent ? "text-card" : ""}${verifiedClass}${preferredClass} editorial-card--text editorial-card--${contentState}`;
 
     // Ajout information ARC
     let arcInfo = "";
@@ -9103,7 +9118,9 @@ function assignDiscoverRowLayout(renderedItems) {
     let rowIndex = 0;
     const assignSegment = (items) => {
         if (!items.length) return;
-        let seed = hashDiscoverLayoutSeed(items.map((item) => item.key).join("|"));
+        let seed = hashDiscoverLayoutSeed(
+            items.map((item) => item.key).join("|"),
+        );
         let index = 0;
         while (index < items.length) {
             const remaining = items.length - index;
@@ -9396,7 +9413,10 @@ async function renderDiscoverGrid() {
                 getDiscoverContentTime(a.content),
         );
     }
-    const itemGroups = partitionDiscoverItems(filteredMixedItems, currentFilter);
+    const itemGroups = partitionDiscoverItems(
+        filteredMixedItems,
+        currentFilter,
+    );
     itemGroups.forEach((group) => {
         renderedItems.push(
             buildDiscoverSectionItem(
@@ -11434,8 +11454,9 @@ function setupImmersiveFullscreenToggle(root = document) {
         document.getElementById("immersive-content-container");
     if (!overlay || !container) return;
 
-    container.querySelectorAll(".immersive-post .post-content-wrap").forEach(
-        (wrap) => {
+    container
+        .querySelectorAll(".immersive-post .post-content-wrap")
+        .forEach((wrap) => {
             if (wrap.dataset.immersiveFullscreenToggleBound === "1") return;
             wrap.dataset.immersiveFullscreenToggleBound = "1";
 
@@ -11456,8 +11477,7 @@ function setupImmersiveFullscreenToggle(root = document) {
                     dismissImmersiveMetadataHint();
                 }
             });
-        },
-    );
+        });
 }
 
 // Précharge localement une vidéo immersive quand son conteneur approche de l'écran.
@@ -13396,11 +13416,11 @@ function updateThemeButtons(isLight) {
         const isLegacySettingsButton = control.id === "theme-toggle-btn";
         control.textContent = isLegacySettingsButton
             ? isLight
-                ? "🌙 Passer en mode sombre"
-                : "☀️ Passer en mode clair"
+                ? "Passer en mode sombre"
+                : "Passer en mode clair"
             : isLight
-              ? "🌙 Mode Sombre"
-              : "☀️ Mode Clair";
+              ? "Mode sombre"
+              : "Mode clair";
         control.setAttribute("aria-pressed", isLight ? "true" : "false");
     });
 }
@@ -13784,9 +13804,9 @@ async function openSettings(userId) {
         })
         .join("");
     const layoutOptionsHtml = [
-        ["balanced", "Equilibre", "Profil et signaux cote a cote."],
-        ["showcase", "Showcase", "Identite large, signaux en second plan."],
-        ["compact", "Compact", "Vue dense pour profils tres actifs."],
+        ["balanced", "Équilibre", "Profil et signaux côte à côte."],
+        ["showcase", "Showcase", "Identité large, signaux en second plan."],
+        ["compact", "Compact", "Vue dense pour profils très actifs."],
     ]
         .map(
             ([value, label, description]) => `
@@ -13830,8 +13850,8 @@ async function openSettings(userId) {
         .join("");
     const visibilityOptionsHtml = [
         ["public", "Public", "Visible par tous."],
-        ["followers", "Abonnes", "Visible par les abonnes."],
-        ["private", "Prive", "Visible par vous seul."],
+        ["followers", "Abonnés", "Visible par les abonnés."],
+        ["private", "Privé", "Visible par vous seul."],
     ]
         .map(
             ([value, label, description]) => `
@@ -13850,21 +13870,108 @@ async function openSettings(userId) {
     ).trim();
     const safeAccountEmailHtml = escapeHtml(accountEmail);
     const emailReminderEnabled = user.email_reminder_enabled !== false;
+    const followerCountLabel = new Intl.NumberFormat("fr-FR").format(
+        Number(followerCount) || 0,
+    );
+    const accountRoleLabel =
+        {
+            fan: "Fan",
+            recruiter: "Recruteur",
+            investor: "Investisseur",
+        }[accountRole] || "Fan";
+    const currentThemeLabel = isLightMode() ? "Mode sombre" : "Mode clair";
     container.innerHTML = `
-<div class="settings-shell">
-            <div class="settings-header" style="border:none; margin-bottom:1rem; padding-bottom:0;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap: 1rem; flex-wrap: wrap;">
-                    <div style="display:flex; align-items:center; gap: 0.75rem;">
+<div class="settings-shell settings-shell-redesign">
+            <div class="settings-header">
+                <div class="settings-header-main">
+                    <div class="settings-kicker">Centre de contrôle</div>
+                    <div class="settings-title-row">
                         <h2>Réglages</h2>
                         ${isSuperAdmin() ? `<span class="admin-badge">Super admin</span>` : isVerificationAdmin() ? `<span class="admin-badge">Admin mode</span>` : ""}
                     </div>
+                    <p>Organisez votre compte, votre profil public et vos préférences depuis un seul espace.</p>
                 </div>
-                <p>Gérez votre compte, votre profil et vos préférences.</p>
+                <button type="button" class="settings-close-btn" onclick="closeSettings()" aria-label="Fermer les réglages">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <div class="settings-status-strip" aria-label="Résumé du compte">
+                    <div class="settings-status-card">
+                        <span>Email</span>
+                        <strong>${safeAccountEmailHtml || "Non renseigné"}</strong>
+                    </div>
+                    <div class="settings-status-card">
+                        <span>Audience</span>
+                        <strong>${followerCountLabel} abonnés</strong>
+                    </div>
+                    <div class="settings-status-card">
+                        <span>Rôle</span>
+                        <strong>${accountRoleLabel}</strong>
+                    </div>
+                </div>
             </div>
 
             <form id="settings-form" novalidate class="settings-form-layout">
+                <div class="settings-workbench">
+                    <div class="settings-mobile-list-header">
+                        <span>Sections</span>
+                        <strong>Choisir un réglage</strong>
+                    </div>
+                    <aside class="settings-navigation" aria-label="Sections des réglages">
+                        <button type="button" class="settings-nav-item active" data-settings-target="preferences">
+                            <span class="settings-nav-glyph">01</span>
+                            <span><strong>Préférences</strong><small>Langue, thème, emails</small></span>
+                        </button>
+                        <button type="button" class="settings-nav-item" data-settings-target="appearance">
+                            <span class="settings-nav-glyph">02</span>
+                            <span><strong>Profil</strong><small>Look et mise en page</small></span>
+                        </button>
+                        <button type="button" class="settings-nav-item" data-settings-target="identity">
+                            <span class="settings-nav-glyph">03</span>
+                            <span><strong>Identité</strong><small>Avatar, bannière, bio</small></span>
+                        </button>
+                        <button type="button" class="settings-nav-item" data-settings-target="account-type">
+                            <span class="settings-nav-glyph">04</span>
+                            <span><strong>Compte</strong><small>Rôle Discover</small></span>
+                        </button>
+                        <button type="button" class="settings-nav-item" data-settings-target="verification">
+                            <span class="settings-nav-glyph">05</span>
+                            <span><strong>Vérification</strong><small>Badge et statut</small></span>
+                        </button>
+                        <button type="button" class="settings-nav-item" data-settings-target="socials">
+                            <span class="settings-nav-glyph">06</span>
+                            <span><strong>Réseaux</strong><small>Liens publics</small></span>
+                        </button>
+                        <button type="button" class="settings-nav-item" data-settings-target="privacy">
+                            <span class="settings-nav-glyph">07</span>
+                            <span><strong>Confidentialité</strong><small>Visibilité et messages</small></span>
+                        </button>
+                        <button type="button" class="settings-nav-item" data-settings-target="blocked">
+                            <span class="settings-nav-glyph">08</span>
+                            <span><strong>Blocages</strong><small>${blockedUsers.length} utilisateur${blockedUsers.length > 1 ? "s" : ""}</small></span>
+                        </button>
+                        <button type="button" class="settings-nav-item" data-settings-target="session">
+                            <span class="settings-nav-glyph">09</span>
+                            <span><strong>Session</strong><small>Déconnexion</small></span>
+                        </button>
+                        <button type="button" class="settings-nav-item settings-nav-danger" data-settings-target="danger">
+                            <span class="settings-nav-glyph">10</span>
+                            <span><strong>Danger</strong><small>Suppression du compte</small></span>
+                        </button>
+                    </aside>
+
+                    <div class="settings-panel-stack">
+                        <div class="settings-mobile-panel-topbar">
+                            <button type="button" class="settings-mobile-back-btn" aria-label="Retour aux sections">
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M15 6 9 12l6 6" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                            <strong class="settings-mobile-panel-title">Préférences</strong>
+                        </div>
                 <!-- Préférences -->
-                <div class="accordion-section">
+                <div class="accordion-section settings-panel" data-settings-section="preferences">
                     <button type="button" class="accordion-header">
                         <div class="accordion-title">
                             <span>Préférences de l'application</span>
@@ -13887,32 +13994,31 @@ async function openSettings(userId) {
                                 <div class="form-group">
                                     <label>Thème</label>
                                     <button type="button" class="btn-theme-toggle settings-theme-control" onclick="toggleTheme()">
-                                        ${isLightMode() ? "🌙 Mode Sombre" : "☀️ Mode Clair"}
+                                        ${currentThemeLabel}
                                     </button>
                                     <div class="form-hint">Choisissez l'affichage qui vous convient.</div>
                                 </div>
                                 <div class="form-group">
                                     <label for="setting-email-reminder-enabled">Emails</label>
-                                    <label style="display:flex; align-items:flex-start; gap:0.75rem; cursor:pointer; padding:0.9rem 1rem; border:1px solid rgba(255,255,255,0.08); border-radius:14px; background:rgba(255,255,255,0.03);">
+                                    <label class="settings-toggle-card">
                                         <input
                                             type="checkbox"
                                             id="setting-email-reminder-enabled"
                                             ${emailReminderEnabled ? "checked" : ""}
                                             ${accountEmail ? "" : "disabled"}
-                                            style="margin-top:0.2rem;"
                                         >
                                         <span style="display:block;">
                                             <span style="display:block; font-weight:700;">RECEVOIR DES EMAILS</span>
                                             <span class="form-hint" style="display:block; margin-top:0.35rem;">
                                                 ${
                                                     accountEmail
-                                                        ? `evnoie à ${safeAccountEmailHtml}`
-                                                        : "evnoie à l'adresse email du compte"
+                                                        ? `Envoi à ${safeAccountEmailHtml}`
+                                                        : "Envoi à l'adresse email du compte"
                                                 }
                                             </span>
                                         </span>
                                     </label>
-                                    <div class="form-hint">Vous pouvez couper ces emails a tout moment.</div>
+                                    <div class="form-hint">Vous pouvez couper ces emails à tout moment.</div>
                                 </div>
                             </div>
                         </div>
@@ -13920,7 +14026,7 @@ async function openSettings(userId) {
                 </div>
 
                 <!-- Apparence du profil -->
-                <div class="accordion-section">
+                <div class="accordion-section settings-panel" data-settings-section="appearance">
                     <button type="button" class="accordion-header">
                         <div class="accordion-title">
                             <span>Apparence du profil</span>
@@ -13948,7 +14054,7 @@ async function openSettings(userId) {
                             </div>
 
                             <div class="form-group">
-                                <label>Theme du profil</label>
+                                <label>Thème du profil</label>
                                 <div class="profile-choice-grid theme-choice-grid">
                                     ${themeOptionsHtml}
                                 </div>
@@ -13974,7 +14080,7 @@ async function openSettings(userId) {
 
                             <div class="settings-duo-grid">
                                 <div class="form-group">
-                                    <label>Banniere</label>
+                                    <label>Bannière</label>
                                     <div class="settings-segmented-control">
                                         ${bannerStyleOptionsHtml}
                                     </div>
@@ -13991,7 +14097,7 @@ async function openSettings(userId) {
                 </div>
 
                 <!-- Identité -->
-                <div class="accordion-section">
+                <div class="accordion-section settings-panel" data-settings-section="identity">
                     <button type="button" class="accordion-header">
                         <div class="accordion-title">
                             <span>Identité</span>
@@ -14002,31 +14108,36 @@ async function openSettings(userId) {
                     </button>
                     <div class="accordion-content">
                         <div class="accordion-body">
-                            <div class="upload-section" style="display: flex; flex-direction: column; gap: 2rem; margin-bottom: 2rem;">
-                                <!-- Avatar Section -->
-                                <div style="display: flex; flex-direction: column; align-items: center;">
-                                    <label class="form-hint" style="margin-bottom:0.5rem; display:block;">Avatar</label>
-                                    <div style="position: relative; cursor: pointer;" onclick="document.getElementById('setting-avatar-file').click()">
-                                        <img src="${user.avatar && user.avatar.startsWith("http") ? escapeHtml(user.avatar) : "https://placehold.co/150"}" class="preview-avatar-circle" id="preview-avatar" alt="Avatar" style="object-fit: cover;">
-                                        <div style="position: absolute; bottom: 0; right: 0; background: #fff; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 10px rgba(0,0,0,0.5);">
-                                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#000" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                        </div>
+                            <div class="settings-media-grid">
+                                <div class="settings-upload-card settings-upload-card-avatar" onclick="document.getElementById('setting-avatar-file').click()">
+                                    <div class="settings-upload-copy">
+                                        <span>Avatar</span>
+                                        <strong>Photo principale</strong>
+                                        <small>Format carré recommandé.</small>
                                     </div>
-                                    <input type="file" id="setting-avatar-file" accept="image/*" style="display: none;">
+                                    <div class="settings-avatar-preview-wrap">
+                                        <img src="${user.avatar && user.avatar.startsWith("http") ? escapeHtml(user.avatar) : "https://placehold.co/150"}" class="preview-avatar-circle" id="preview-avatar" alt="Avatar">
+                                        <span class="settings-upload-action" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M12 3v12m0-12 5 5m-5-5-5 5M5 16v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </span>
+                                    </div>
+                                    <input type="file" id="setting-avatar-file" accept="image/*">
                                     <input type="hidden" id="setting-avatar" value="${escapeHtml(user.avatar || "")}">
-                                    <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">Cliquez pour changer</p>
                                 </div>
 
-                                <!-- Banner Section -->
-                                <div>
-                                    <label class="form-hint" style="margin-bottom:0.5rem; display:block;">Bannière</label>
-                                    <div style="position: relative; cursor: pointer;" onclick="document.getElementById('setting-banner-file').click()">
-                                        <img src="${user.banner && user.banner.startsWith("http") ? escapeHtml(user.banner) : "https://placehold.co/1200x300/1a1a2e/00ff88?text=Ma+Trajectoire"}" class="preview-banner-rect" id="preview-banner" alt="Bannière" style="object-fit: cover;">
-                                        <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; border-radius: 14px;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
-                                            <span style="background: rgba(0,0,0,0.6); color: white; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.9rem;">Changer la bannière</span>
-                                        </div>
+                                <div class="settings-upload-card settings-upload-card-banner" onclick="document.getElementById('setting-banner-file').click()">
+                                    <div class="settings-upload-copy">
+                                        <span>Bannière</span>
+                                        <strong>Couverture du profil</strong>
+                                        <small>Image large, lisible sur mobile.</small>
                                     </div>
-                                    <input type="file" id="setting-banner-file" accept="image/*" style="display: none;">
+                                    <div class="settings-banner-preview-wrap">
+                                        <img src="${user.banner && user.banner.startsWith("http") ? escapeHtml(user.banner) : "https://placehold.co/1200x300/1a1a2e/00ff88?text=Ma+Trajectoire"}" class="preview-banner-rect" id="preview-banner" alt="Bannière">
+                                        <span class="settings-upload-action" aria-hidden="true">Changer</span>
+                                    </div>
+                                    <input type="file" id="setting-banner-file" accept="image/*">
                                     <input type="hidden" id="setting-banner" value="${escapeHtml(user.banner || "")}">
                                 </div>
                             </div>
@@ -14052,7 +14163,7 @@ async function openSettings(userId) {
 
 
                 <!-- Type de compte -->
-                <div class="accordion-section">
+                <div class="accordion-section settings-panel" data-settings-section="account-type">
                     <button type="button" class="accordion-header">
                         <div class="accordion-title">
                             <span>Type de compte</span>
@@ -14075,7 +14186,7 @@ async function openSettings(userId) {
                 </div>
 
                 <!-- Vérification -->
-                <div class="accordion-section">
+                <div class="accordion-section settings-panel" data-settings-section="verification">
                     <button type="button" class="accordion-header">
                         <div class="accordion-title">
                             <span>Vérification</span>
@@ -14095,7 +14206,7 @@ async function openSettings(userId) {
                 </div>
 
                 <!-- Réseaux Sociaux -->
-                <div class="accordion-section">
+                <div class="accordion-section settings-panel" data-settings-section="socials">
                     <button type="button" class="accordion-header">
                         <div class="accordion-title">
                             <span>Réseaux Sociaux</span>
@@ -14172,11 +14283,11 @@ async function openSettings(userId) {
                     </div>
                 </div>
 
-                <!-- Confidentialite du profil -->
-                <div class="accordion-section">
+                <!-- Confidentialité du profil -->
+                <div class="accordion-section settings-panel" data-settings-section="privacy">
                     <button type="button" class="accordion-header">
                         <div class="accordion-title">
-                            <span>Confidentialite du profil</span>
+                            <span>Confidentialité du profil</span>
                         </div>
                         <div class="accordion-arrow">
                             <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -14185,7 +14296,7 @@ async function openSettings(userId) {
                     <div class="accordion-content">
                         <div class="accordion-body">
                             <div class="form-group">
-                                <label>Visibilite</label>
+                                <label>Visibilité</label>
                                 <div class="profile-choice-grid">
                                     ${visibilityOptionsHtml}
                                 </div>
@@ -14194,8 +14305,8 @@ async function openSettings(userId) {
                             <div class="privacy-toggle-list">
                                 <label class="privacy-toggle-row">
                                     <span>
-                                        <strong>Apparaitre dans Discover</strong>
-                                        <small>Votre profil peut etre recommande dans le flux public.</small>
+                                        <strong>Apparaître dans Discover</strong>
+                                        <small>Votre profil peut être recommandé dans le flux public.</small>
                                     </span>
                                     <span class="toggle-switch">
                                         <input type="checkbox" id="setting-profile-discoverable" ${privacy.discoverable ? "checked" : ""}>
@@ -14205,7 +14316,7 @@ async function openSettings(userId) {
                                 <label class="privacy-toggle-row">
                                     <span>
                                         <strong>Afficher les signaux</strong>
-                                        <small>Abonnes, vues, updates et progression.</small>
+                                        <small>Abonnés, vues, updates et progression.</small>
                                     </span>
                                     <span class="toggle-switch">
                                         <input type="checkbox" id="setting-profile-show-stats" ${privacy.showStats ? "checked" : ""}>
@@ -14215,7 +14326,7 @@ async function openSettings(userId) {
                                 <label class="privacy-toggle-row">
                                     <span>
                                         <strong>Afficher les liens sociaux</strong>
-                                        <small>Email, portfolio et reseaux publics.</small>
+                                        <small>Email, portfolio et réseaux publics.</small>
                                     </span>
                                     <span class="toggle-switch">
                                         <input type="checkbox" id="setting-profile-show-socials" ${privacy.showSocials ? "checked" : ""}>
@@ -14224,7 +14335,7 @@ async function openSettings(userId) {
                                 </label>
                                 <label class="privacy-toggle-row">
                                     <span>
-                                        <strong>Afficher l'activite</strong>
+                                        <strong>Afficher l'activité</strong>
                                         <small>Projets, updates, analytics et timeline.</small>
                                     </span>
                                     <span class="toggle-switch">
@@ -14238,7 +14349,7 @@ async function openSettings(userId) {
                                 <label for="setting-profile-allow-messages">Messages</label>
                                 <select id="setting-profile-allow-messages" class="form-input">
                                     <option value="everyone" ${privacy.allowMessages === "everyone" ? "selected" : ""}>Tout le monde</option>
-                                    <option value="followers" ${privacy.allowMessages === "followers" ? "selected" : ""}>Abonnes uniquement</option>
+                                    <option value="followers" ${privacy.allowMessages === "followers" ? "selected" : ""}>Abonnés uniquement</option>
                                     <option value="none" ${privacy.allowMessages === "none" ? "selected" : ""}>Personne</option>
                                 </select>
                             </div>
@@ -14247,7 +14358,7 @@ async function openSettings(userId) {
                 </div>
 
                 <!-- Utilisateurs bloqués -->
-                <div class="accordion-section">
+                <div class="accordion-section settings-panel" data-settings-section="blocked">
                     <button type="button" class="accordion-header">
                         <div class="accordion-title">
                             <span>Utilisateurs bloqués</span>
@@ -14267,7 +14378,7 @@ async function openSettings(userId) {
                 </div>
 
                 <!-- Session -->
-                <div class="accordion-section">
+                <div class="accordion-section settings-panel" data-settings-section="session">
                     <button type="button" class="accordion-header">
                         <div class="accordion-title">
                             <span>Session</span>
@@ -14287,10 +14398,10 @@ async function openSettings(userId) {
                 </div>
 
                 <!-- Suppression de compte -->
-                <div class="accordion-section settings-danger-zone">
+                <div class="accordion-section settings-panel settings-danger-zone" data-settings-section="danger">
                     <button type="button" class="accordion-header">
                         <div class="accordion-title">
-                            <span style="color: #fca5a5;">Suppression du compte</span>
+                            <span class="settings-danger-title">Suppression du compte</span>
                         </div>
                         <div class="accordion-arrow">
                             <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -14298,9 +14409,9 @@ async function openSettings(userId) {
                     </button>
                     <div class="accordion-content">
                         <div class="accordion-body">
-                            <div class="delete-account-box" style="border-top: none; margin-top: 0; padding-top: 0;">
-                                <p style="color: #fca5a5; font-weight: 600; margin-bottom: 1rem;">
-                                    ⚠️ AVERTISSEMENT : Cette action est définitive et irréversible.
+                            <div class="delete-account-box">
+                                <p class="settings-danger-alert">
+                                    Avertissement : cette action est définitive et irréversible.
                                 </p>
                                 <p>Toutes vos données, publications, ARCs et informations de profil seront supprimées de façon permanente.</p>
                                 
@@ -14330,11 +14441,14 @@ async function openSettings(userId) {
                                     <label for="delete-account-other">Précisez la raison</label>
                                     <textarea id="delete-account-other" class="form-input" rows="3" placeholder="Expliquez brièvement..." disabled></textarea>
                                 </div>
-                                <button type="button" class="btn-delete-account" onclick="requestAccountDeletion('${userId}')" style="width: 100%; margin-top: 1.5rem; background: #dc2626; border: 1px solid #b91c1c; padding: 1rem; border-radius: 12px; color: white; font-weight: 700; cursor: pointer;">
+                                <button type="button" class="btn-delete-account" onclick="requestAccountDeletion('${userId}')">
                                     Supprimer définitivement mon compte
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+
                     </div>
                 </div>
 
@@ -14352,24 +14466,90 @@ async function openSettings(userId) {
     modal.offsetHeight;
     modal.classList.add("active");
 
-    // Logic for accordion behavior
+    // Logic for the settings workspace navigation
     const accordionSections = container.querySelectorAll(".accordion-section");
-    accordionSections.forEach((section, index) => {
-        const header = section.querySelector(".accordion-header");
-        header.addEventListener("click", () => {
-            const isActive = section.classList.contains("active");
-            // Close all sections
-            accordionSections.forEach((s) => s.classList.remove("active"));
-            // If the clicked section wasn't active, open it
-            if (!isActive) {
-                section.classList.add("active");
+    const navButtons = container.querySelectorAll(".settings-nav-item");
+    const workbench = container.querySelector(".settings-workbench");
+    const panelStack = container.querySelector(".settings-panel-stack");
+    const mobilePanelTitle = container.querySelector(
+        ".settings-mobile-panel-title",
+    );
+    const mobileBackButton = container.querySelector(
+        ".settings-mobile-back-btn",
+    );
+    const mobileSettingsQuery = window.matchMedia("(max-width: 768px)");
+    const getSectionTitle = (target) => {
+        const button = container.querySelector(
+            `.settings-nav-item[data-settings-target="${target}"] strong`,
+        );
+        return button?.textContent?.trim() || "Réglages";
+    };
+    const setActiveSettingsSection = (target) => {
+        accordionSections.forEach((section) => {
+            section.classList.toggle(
+                "active",
+                section.dataset.settingsSection === target,
+            );
+        });
+        navButtons.forEach((button) => {
+            const isActive = button.dataset.settingsTarget === target;
+            button.classList.toggle("active", isActive);
+            if (isActive) {
+                button.setAttribute("aria-current", "page");
+            } else {
+                button.removeAttribute("aria-current");
+            }
+            if (
+                isActive &&
+                !mobileSettingsQuery.matches &&
+                typeof button.scrollIntoView === "function"
+            ) {
+                button.scrollIntoView({
+                    block: "nearest",
+                    inline: "center",
+                });
             }
         });
-        // Open the first section by default
-        if (index === 0) {
-            section.classList.add("active");
+        if (mobilePanelTitle) {
+            mobilePanelTitle.textContent = getSectionTitle(target);
         }
+    };
+    const openMobileSettingsSection = (target) => {
+        setActiveSettingsSection(target);
+        if (mobileSettingsQuery.matches) {
+            workbench?.classList.add("settings-mobile-section-open");
+            panelStack?.scrollTo({ top: 0, behavior: "auto" });
+        }
+    };
+    const closeMobileSettingsSection = () => {
+        workbench?.classList.remove("settings-mobile-section-open");
+    };
+
+    navButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            const target = button.dataset.settingsTarget;
+            if (!target) return;
+            if (mobileSettingsQuery.matches) {
+                openMobileSettingsSection(target);
+            } else {
+                setActiveSettingsSection(target);
+            }
+        });
     });
+
+    mobileBackButton?.addEventListener("click", () => {
+        closeMobileSettingsSection();
+    });
+
+    accordionSections.forEach((section) => {
+        const header = section.querySelector(".accordion-header");
+        header?.addEventListener("click", () => {
+            setActiveSettingsSection(section.dataset.settingsSection);
+        });
+    });
+
+    setActiveSettingsSection("preferences");
+    closeMobileSettingsSection();
 
     if (window.refreshLanguageControl) {
         window.refreshLanguageControl();
@@ -14432,6 +14612,22 @@ async function openSettings(userId) {
         .getElementById("settings-form")
         .addEventListener("submit", async (e) => {
             e.preventDefault();
+
+            // Validate required fields before submission
+            const nameInput = document.getElementById("setting-name");
+            const nameTrimmed = String(nameInput?.value || "").trim();
+
+            if (!nameTrimmed) {
+                if (window.ToastManager) {
+                    ToastManager.error(
+                        "Erreur",
+                        "Le nom d'affichage ne peut pas être vide.",
+                    );
+                } else {
+                    alert("Le nom d'affichage ne peut pas être vide.");
+                }
+                return;
+            }
 
             if (pendingProfileMediaUploads > 0) {
                 alert(
@@ -14553,17 +14749,60 @@ async function openSettings(userId) {
                 : existingSubtypeRaw;
             const profilePreferences = collectProfilePreferencesFromSettings();
 
+            // Collect and validate form values
+            const collectedName = String(
+                document.getElementById("setting-name")?.value || "",
+            ).trim();
+            const collectedTitle = String(
+                document.getElementById("setting-title")?.value || "",
+            ).trim();
+            const collectedBio = String(
+                document.getElementById("setting-bio")?.value || "",
+            ).trim();
+            const collectedAvatar = String(
+                document.getElementById("setting-avatar")?.value || "",
+            ).trim();
+            const collectedBanner = String(
+                document.getElementById("setting-banner")?.value || "",
+            ).trim();
+
+            // Validate name is not empty - fallback to current name if needed
+            let finalName = collectedName;
+            if (!finalName) {
+                // Fallback to existing user name
+                finalName = String(user.name || "").trim();
+                if (!finalName && currentUser?.email) {
+                    // Last resort: use email prefix
+                    finalName = currentUser.email.split("@")[0];
+                }
+                if (!finalName) {
+                    finalName = "Utilisateur";
+                }
+                console.warn(
+                    "Empty username detected, using fallback:",
+                    finalName,
+                );
+            }
+
             const profileData = {
-                name: document.getElementById("setting-name").value,
-                title: document.getElementById("setting-title").value,
-                bio: document.getElementById("setting-bio").value,
-                avatar: document.getElementById("setting-avatar").value,
-                banner: document.getElementById("setting-banner").value,
+                name: finalName,
+                title: collectedTitle,
+                bio: collectedBio,
+                avatar: collectedAvatar,
+                banner: collectedBanner,
                 socialLinks: newSocialLinks,
                 account_type: accountType || "personal",
                 account_subtype: subtypeToSave,
                 profilePreferences,
             };
+
+            // Debug logging
+            console.log(
+                "Saving profile with name:",
+                profileData.name,
+                "Previous name was:",
+                user.name,
+            );
 
             const okOnline = await ensureOnlineOrNotify();
             if (!okOnline) {
@@ -14579,6 +14818,30 @@ async function openSettings(userId) {
             const result = await upsertUserProfile(userId, profileData);
 
             if (result.success) {
+                // Validate response data
+                const returnedName = String(result.data?.name || "").trim();
+
+                // If server returned empty name or only email prefix, log warning
+                if (
+                    !returnedName ||
+                    returnedName === currentUser?.email?.split("@")[0]
+                ) {
+                    console.warn(
+                        "Server returned unexpected name value:",
+                        returnedName,
+                        "Expected:",
+                        profileData.name,
+                    );
+                    // If name was lost, restore it from what we sent
+                    if (!returnedName) {
+                        result.data.name = profileData.name;
+                    }
+                }
+
+                console.log(
+                    "Profile save successful. Name in response:",
+                    result.data?.name,
+                );
                 let reminderSaveResult = { success: true };
                 if (emailReminderCheckbox && !emailReminderCheckbox.disabled) {
                     reminderSaveResult = await saveEmailReminderPreferences({
@@ -14754,14 +15017,19 @@ async function openSettings(userId) {
                 // TOUJOURS fermer la modale, même si les rafraîchissements ont échoué
                 closeSettings();
             } else {
+                // Check if it's a name validation error
+                const isNameError = String(result.error || "")
+                    .toLowerCase()
+                    .includes("nom");
+                const errorMsg = isNameError
+                    ? "Le nom d'affichage ne peut pas être vide. Veuillez remplir ce champ."
+                    : result.error ||
+                      "Une erreur est survenue lors de l'enregistrement.";
+
                 if (window.ToastManager) {
-                    ToastManager.error(
-                        "Erreur",
-                        result.error ||
-                            "Une erreur est survenue lors de l'enregistrement.",
-                    );
+                    ToastManager.error("Erreur", errorMsg);
                 } else {
-                    alert("Erreur: " + result.error);
+                    alert("Erreur: " + errorMsg);
                 }
             }
 
