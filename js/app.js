@@ -169,6 +169,48 @@ const badgeSVGs = {
         '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>',
 };
 
+// Calculer le score de Momentum (Neuro-Psychologie : Intensité vs Constance)
+function calculateMomentum(userId) {
+    const contents = getUserContent(userId);
+    if (!contents || contents.length === 0) return 0;
+
+    const now = Date.now();
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+    // On calcule l'activité sur les 7 derniers jours
+    let score = 0;
+    contents.forEach(content => {
+        const ageInDays = (now - new Date(content.createdAt).getTime()) / MS_PER_DAY;
+        if (ageInDays <= 7) {
+            // Un succès récent vaut plus (Dopamine Decay)
+            const recencyMultiplier = Math.max(0, 1 - (ageInDays / 7));
+            const stateValue = content.state === 'success' ? 20 : (content.state === 'failure' ? 10 : 5);
+            score += stateValue * recencyMultiplier;
+        }
+    });
+
+    return Math.min(100, Math.round(score));
+}
+
+// Générer le badge de Momentum visuel
+function renderMomentumBadge(userId) {
+    const momentum = calculateMomentum(userId);
+    let color = "#6366f1"; // Default
+    let label = "Stable";
+
+    if (momentum > 70) { color = "#f59e0b"; label = "EN FEU"; }
+    else if (momentum > 40) { color = "#10b981"; label = "En Progression"; }
+    else if (momentum > 10) { color = "#6366f1"; label = "Actif"; }
+    else { color = "#9ca3af"; label = "Au repos"; }
+
+    return `
+        <div class="momentum-pulse" style="--momentum-color: ${color};" title="Momentum: ${momentum}%">
+            <div class="pulse-dot"></div>
+            <span>${label} (${momentum}%)</span>
+        </div>
+    `;
+}
+
 // Calculer la constance (jours consécutifs)
 function calculateConsistency(userId) {
     const contents = getUserContent(userId);
@@ -453,8 +495,8 @@ function renderProfileSocialLinks(userId) {
                 `;
             }
             return `
-                <a href="${url}" target="_blank" rel="noopener noreferrer" 
-                   class="social-badge" 
+                <a href="${url}" target="_blank" rel="noopener noreferrer"
+                   class="social-badge"
                    title="Visiter ${label}">
                     <img src="./icons/${platform}.svg" alt="${platform}" class="social-badge-icon" />
                     <span>${label}</span>
@@ -579,8 +621,8 @@ function renderSettingsModal(userId) {
             return `
             <div class="social-link-item">
                 <img src="${social.icon}" alt="${social.label}" style="opacity: 0.7;">
-                <input 
-                    type="${isEmail ? "email" : "url"}" 
+                <input
+                    type="${isEmail ? "email" : "url"}"
                     class="form-input"
                     placeholder="${isEmail ? "email@exemple.com" : social.platform === "site" ? "https://example.com" : `${social.label.toLowerCase()}.com/username`}"
                     value="${value}"
@@ -613,8 +655,8 @@ function renderSettingsModal(userId) {
                 <div class="accordion-content">
                     <div class="form-group">
                         <label>Nom public</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             class="form-input"
                             value="${data.name}"
                             placeholder="Ex: Jean Dupont"
@@ -625,7 +667,7 @@ function renderSettingsModal(userId) {
                     </div>
                     <div class="form-group">
                         <label>Bio courte</label>
-                        <textarea 
+                        <textarea
                             class="form-input"
                             rows="2"
                             maxlength="120"
@@ -656,11 +698,11 @@ function renderSettingsModal(userId) {
                                 <label for="avatarUpload-${userId}" class="custom-file-upload">
                                     Parcourir
                                 </label>
-                                <input 
-                                    id="avatarUpload-${userId}" 
-                                    type="file" 
-                                    accept="image/*" 
-                                    onchange="(function(input) { 
+                                <input
+                                    id="avatarUpload-${userId}"
+                                    type="file"
+                                    accept="image/*"
+                                    onchange="(function(input) {
                                         const reader = new FileReader();
                                         reader.onload = function(e) {
                                             userEditData['${userId}'].avatar = e.target.result;
@@ -678,11 +720,11 @@ function renderSettingsModal(userId) {
                         <label for="bannerUpload-${userId}" class="custom-file-upload">
                             Importer
                         </label>
-                        <input 
-                            id="bannerUpload-${userId}" 
-                            type="file" 
-                            accept="image/*" 
-                            onchange="(function(input) { 
+                        <input
+                            id="bannerUpload-${userId}"
+                            type="file"
+                            accept="image/*"
+                            onchange="(function(input) {
                                 const reader = new FileReader();
                                 reader.onload = function(e) {
                                     userEditData['${userId}'].banner = e.target.result;
@@ -726,8 +768,8 @@ function renderSettingsModal(userId) {
                 <div class="accordion-content">
                     <div class="form-group">
                         <label>Thème</label>
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             class="btn-theme-toggle"
                             id="theme-toggle-btn"
                             onclick="toggleTheme()"
@@ -895,6 +937,7 @@ function renderUserCard(userId) {
               : "#6366f1";
 
     const userBadges = getUserBadges(userId);
+    const momentumHtml = renderMomentumBadge(userId);
     const badgesHtml = renderBadges(userBadges);
 
     // media preview: video or image when available
@@ -929,6 +972,7 @@ function renderUserCard(userId) {
                 <span class="status-day">J-${latestContent ? latestContent.dayNumber : 0}</span>
                 ${latestContent ? latestContent.title : ""}
             </div>
+            ${momentumHtml}
             ${badgesHtml}
         </div>
     `;
@@ -937,6 +981,7 @@ function renderUserCard(userId) {
 // Construire les posts immersifs
 function renderImmersiveContent(userId) {
     const contents = getUserContent(userId);
+    const user = getUser(userId);
 
     return contents
         .map((content) => {
@@ -949,6 +994,10 @@ function renderImmersiveContent(userId) {
 
             const contentBadges = getContentBadges(content);
             const badgesHtml = renderBadges(contentBadges);
+
+            const timeAgo = typeof formatNotificationTime === 'function'
+                ? formatNotificationTime(content.createdAt)
+                : "Récemment";
 
             let mediaHtml = "";
             if (content.mediaUrl) {
@@ -973,11 +1022,32 @@ function renderImmersiveContent(userId) {
             <div class="immersive-post">
                 <div class="post-content-wrap">
                     ${mediaHtml}
-                    <div class="post-info">
-                        <span class="step-indicator">Jour ${content.dayNumber}</span>
-                        <span class="state-tag">${stateLabel}</span>
-                        <h2>${content.title}</h2>
-                        <p>${content.description}</p>
+                    <div class="post-info" onclick="toggleImmersiveDescription(this)">
+                        <div class="post-info-header">
+                            <span class="step-indicator">Jour ${content.dayNumber}</span>
+                            <span class="state-tag">${stateLabel}</span>
+                            <h2>${content.title}</h2>
+                            <div class="post-author-row">
+                                <img src="${user.avatar}" class="author-avatar-sm">
+                                <span>${user.name} • ${timeAgo}</span>
+                            </div>
+                        </div>
+
+                        <div class="post-description-container">
+                            <p class="post-description-text">${content.description}</p>
+                            <span class="read-more-btn">voir plus</span>
+                        </div>
+
+                        <div class="post-stats-row">
+                            <div class="post-stat-item">👁 <span>${content.views || '1.2K'}</span> Views</div>
+                            <div class="post-stat-item">💪 <span>${content.encouragements || '45'}</span> Encouragements</div>
+                        </div>
+
+                        <div class="post-expanded-actions">
+                            <button class="btn-profile-link" onclick="event.stopPropagation(); navigateToUserProfile('${userId}'); closeImmersive();">Voir le profil</button>
+                            <button class="btn-close-info">Réduire</button>
+                        </div>
+
                         <div class="badges-immersive">
                             ${badgesHtml}
                         </div>
@@ -987,6 +1057,11 @@ function renderImmersiveContent(userId) {
         `;
         })
         .join("");
+}
+
+// Gérer l'expansion de la description dans le feed immersif
+function toggleImmersiveDescription(element) {
+    element.classList.toggle("expanded");
 }
 
 // Construire la documentation d'un projet (optionnelle)
@@ -1050,6 +1125,7 @@ function renderProfileTimeline(userId, viewerId = "user-1") {
     const viewer = getUser(viewerId);
     const timeline = getProfileTimeline(userId);
     const userBadges = getUserBadges(userId);
+    const momentumHtml = renderMomentumBadge(userId);
     const userBadgesHtml = renderBadges(userBadges);
 
     // Déterminer si c'est le profil de l'utilisateur courant
@@ -1069,7 +1145,7 @@ function renderProfileTimeline(userId, viewerId = "user-1") {
     // Bouton Follow (visible seulement pour les autres profils)
     const followButtonHtml = !isOwnProfile
         ? `
-        <button 
+        <button
             class="btn-follow ${isFollowingThisUser ? "unfollow" : ""}"
             onclick="toggleFollow('${viewerId}', '${userId}')"
             id="follow-btn-${userId}"
@@ -1234,9 +1310,10 @@ function renderProfileTimeline(userId, viewerId = "user-1") {
             </div>
             <h2>${isOwnProfile ? "Ma Trajectoire" : user.name}</h2>
             <p style="color: var(--text-secondary);">En train de bâtir <strong>${user.title}</strong></p>
+            ${momentumHtml}
             ${userBadgesHtml}
             ${renderProfileSocialLinks(userId)}
-            
+
             ${
                 !isOwnProfile
                     ? `
@@ -1263,7 +1340,7 @@ function renderProfileTimeline(userId, viewerId = "user-1") {
                                 <div class="follower-stat-label">Abonnements</div>
                             </div>
                         </div>
-                        <div style="margin-top:6px; display:flex; gap:8px; align-items:center;"> 
+                        <div style="margin-top:6px; display:flex; gap:8px; align-items:center;">
                             <button class="btn-add" onclick="openCreateMenu('${userId}')" title="Ajouter">
                                 <img src="./icons/plus.svg" alt="Ajouter" style="width:18px;height:18px">
                             </button>

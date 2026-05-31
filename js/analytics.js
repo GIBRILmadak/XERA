@@ -1,4 +1,80 @@
 /* ========================================
+   MOMENTUM ENGINE & INSIGHTS (Algorithmic Power)
+   ======================================== */
+
+function calculateMomentum(series, daysInMonth) {
+    const successData = series.success || [];
+    const activeDays = successData.filter(v => v > 0).length;
+    const totalVolume = successData.reduce((a, b) => a + b, 0);
+
+    if (daysInMonth <= 0) return { score: 0, activeDays: 0, totalVolume: 0, consistency: 0 };
+    if (activeDays === 0) return { score: 0, activeDays: 0, totalVolume: 0, consistency: 0 };
+
+    const frequency = activeDays / daysInMonth;
+    const mean = totalVolume / daysInMonth;
+    const variance = successData.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / daysInMonth;
+
+    // Consistency: Reward low variance (stable effort)
+    const consistency = 1 / (1 + Math.pow(variance, 0.5));
+
+    // Intensity: Bonus for those who do more than just one log
+    const avgDaily = totalVolume / activeDays;
+    const intensity = Math.min(1.4, 0.5 + (avgDaily / 4));
+
+    // Final Momentum Score: Heavy weight on frequency and consistency
+    const rawScore = (intensity * Math.pow(frequency, 1.5) * consistency) * 130;
+
+    return {
+        score: Math.min(100, Math.round(rawScore)),
+        activeDays,
+        totalVolume,
+        consistency: Math.round(consistency * 100)
+    };
+}
+
+function generateInsights(momentum, series) {
+    const totalSuccess = series.success.reduce((a, b) => a + b, 0);
+    const totalFailure = series.failure.reduce((a, b) => a + b, 0);
+    const score = momentum.score;
+
+    const insights = [];
+
+    if (score > 70) {
+        insights.push({
+            type: 'high',
+            text: "Impulsion Exceptionnelle. Ta vélocité actuelle dépasse 90% des builders.",
+            icon: '🔥',
+            command: "Augmente la complexité de tes Traces pour scaler."
+        });
+    } else if (score > 40) {
+        insights.push({
+            type: 'mid',
+            text: "Progression Stable. Maintiens ce rythme pour consolider ta trajectoire.",
+            icon: '📈',
+            command: "Enregistre une Trace 'Deep Dive' pour inspirer les autres."
+        });
+    } else {
+        insights.push({
+            type: 'low',
+            text: "Inertie détectée. Une petite action aujourd'hui relancera ton moteur.",
+            icon: '🌑',
+            command: "Poste une Trace rapide (même une simple pensée) maintenant."
+        });
+    }
+
+    if (totalFailure > totalSuccess * 0.3) {
+        insights.push({
+            type: 'warning',
+            text: "Taux de friction élevé. Analyse tes points de blocage.",
+            icon: '⚠️',
+            command: "Revois tes milestones, elles sont peut-être trop larges."
+        });
+    }
+
+    return insights;
+}
+
+/* ========================================
    ANALYTICS MENSUELLES
    ======================================== */
 
@@ -436,34 +512,44 @@ function renderDashboardShell(months, selectedKey, containerId = 'analytics-dash
         return `<option value="${m.key}" ${selected}>${m.label}</option>`;
     }).join('');
 
+    const momentumId = `momentum-insight-${safeId}`;
+
     dashboard.innerHTML = `
-        <div class="analytics-header" style="text-align: center; margin-bottom: 2rem;">
-            <h1 style="font-size: 2.2rem; font-weight: 800; margin-bottom: 0.4rem;">Analytics Mensuelles</h1>
-            <p style="color: var(--text-secondary);">Succès, échecs, pauses et lives (heures) par jour</p>
-        </div>
-        <div class="analytics-controls" style="display: flex; justify-content: center; gap: 1rem; align-items: center; margin-bottom: 2rem; flex-wrap: wrap;">
-            <label for="${selectId}" style="color: var(--text-secondary); font-weight: 600;">Mois</label>
-            <select id="${selectId}" style="background: rgba(255,255,255,0.06); color: var(--text-primary); border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; border-radius: 8px;">
-                ${options}
-            </select>
-            ${showShareActions ? `
-                <div class="analytics-share-actions">
-                    <button class="btn btn-ghost analytics-share-btn" id="${downloadBtnId}">
-                        <img src="icons/camera.svg" alt="Télécharger">
-                        Télécharger
-                    </button>
-                    <button class="btn btn-ghost analytics-share-btn" id="${shareBtnId}">
-                        <img src="icons/link.svg" alt="Partager">
-                        Partager
-                    </button>
+        <div class="analytics-prestige-container">
+            <div class="analytics-header-redesign">
+                <div class="header-left">
+                    <span class="analytics-eyebrow">Intelligence de Trajectoire</span>
+                    <h1>Performance Mensuelle</h1>
                 </div>
-            ` : ''}
+                <div class="analytics-controls-prestige">
+                    <select id="${selectId}" class="prestige-select">
+                        ${options}
+                    </select>
+                    ${showShareActions ? `
+                        <div class="analytics-share-actions">
+                            <button class="btn-prestige-icon" id="${downloadBtnId}" title="Télécharger">
+                                <img src="icons/camera.svg" alt="Camera">
+                            </button>
+                            <button class="btn-prestige-icon" id="${shareBtnId}" title="Partager">
+                                <img src="icons/link.svg" alt="Link">
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <div id="${momentumId}" class="momentum-grid">
+                <!-- Dynamiquement injecté par renderMonth -->
+            </div>
+
+            ${showShareActions ? `<div id="${sharePanelId}" class="analytics-share-panel" style="display:none;"></div>` : ''}
+
+            <div class="chart-prestige-wrap">
+                <canvas id="${canvasId}" height="320"></canvas>
+            </div>
+
+            <div id="${messageId}" class="analytics-system-message"></div>
         </div>
-        ${showShareActions ? `<div id="${sharePanelId}" class="analytics-share-panel" style="display:none;"></div>` : ''}
-        <div class="chart-container" style="background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color);">
-            <canvas id="${canvasId}" height="320"></canvas>
-        </div>
-        <div id="${messageId}" style="text-align: center; margin-top: 1rem; color: var(--text-secondary);"></div>
     `;
 }
 
@@ -578,7 +664,7 @@ async function renderMonth(userId, year, monthIndex, containerId = 'analytics-da
     const { messageId } = getAnalyticsDomIds(containerId);
     const message = document.getElementById(messageId);
     if (message) {
-        message.textContent = 'Chargement des données...';
+        message.textContent = 'Calcul de la vélocité...';
     }
 
     const { daysInMonth } = getMonthRange(year, monthIndex);
@@ -596,6 +682,42 @@ async function renderMonth(userId, year, monthIndex, containerId = 'analytics-da
     const series = buildSeries(metricsResult.metrics, daysInMonth, liveHours);
 
     renderMonthlyChart({ year, monthIndex, daysInMonth, series, containerId });
+
+    // --- Momentum & Insights Integration ---
+    const momentum = calculateMomentum(series, daysInMonth);
+    const insights = generateInsights(momentum, series);
+    const { safeId } = getAnalyticsDomIds(containerId);
+    const momentumId = `momentum-insight-${safeId}`;
+
+    const momentumSection = document.getElementById(momentumId);
+    if (momentumSection) {
+        momentumSection.innerHTML = `
+            <div class="momentum-card-prestige">
+                <div class="momentum-visual">
+                    <svg viewBox="0 0 36 36" class="circular-chart">
+                        <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        <path class="circle" stroke-dasharray="${momentum.score}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        <text x="18" y="20.35" class="percentage">${momentum.score}</text>
+                    </svg>
+                </div>
+                <div class="momentum-info">
+                    <span class="momentum-label">Score de Momentum</span>
+                    <p class="momentum-desc">Basé sur ${momentum.activeDays} jours d'activité.</p>
+                </div>
+            </div>
+            <div class="insights-container-prestige">
+                ${insights.map(insight => `
+                    <div class="insight-pill insight-${insight.type}">
+                        <div class="insight-main">
+                            <span class="insight-icon">${insight.icon}</span>
+                            <span class="insight-text">${insight.text}</span>
+                        </div>
+                        ${insight.command ? `<div class="insight-command">COMMAND: ${insight.command}</div>` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
 
     const total = series.success.reduce((a, b) => a + b, 0)
         + series.failure.reduce((a, b) => a + b, 0)

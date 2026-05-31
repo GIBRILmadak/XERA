@@ -41,6 +41,31 @@
             name="description"
             content="XERA - Plateforme de suivi de progression transparente sans dopamine sociale"
         />
+
+        <!-- Open Graph meta tags for link previews -->
+        <meta property="og:title" content="XERA | Découvrez les trajectoires" />
+        <meta
+            property="og:description"
+            content="XERA - Plateforme de suivi de progression transparente sans dopamine sociale"
+        />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="" />
+        <meta property="og:image" content="" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+
+        <!-- Twitter Card -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta
+            name="twitter:title"
+            content="XERA | Découvrez les trajectoires"
+        />
+        <meta
+            name="twitter:description"
+            content="XERA - Plateforme de suivi de progression transparente"
+        />
+        <meta name="twitter:image" content="" />
+
         <meta name="ga-measurement-id" content="" />
         <script>
             // Lightweight analytics config (fill ga-measurement-id or window.GA_MEASUREMENT_ID)
@@ -72,6 +97,8 @@
         <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     </head>
     <body class="has-mobile-nav">
+        <!-- Global Fluidity Progress Bar -->
+        <div id="global-progress-bar-placeholder"></div>
         <!-- Container pour les notifications Toast -->
         <div id="toast-container"></div>
 
@@ -219,17 +246,22 @@
                         TRACK YOUR GOALS WITH projets
                     </p>
                     <h1 class="hero-title" data-i18n="heroTitle">
-                        Turn your progress into opportunities.
+                        The Infrastructure of High-Signal Progression.
                     </h1>
                     <p class="hero-lede" data-i18n="heroLede">
-                        XERA is a progression infrastructure where builders document their work, attract the right audiences (investors, collaborators, community) and transform their progress into real reputation.
+                        XERA is a progression infrastructure where builders
+                        document their work, attract the right audiences
+                        (investors, collaborators, community) and transform
+                        their progress into real reputation.
                     </p>
                     <ul class="hero-bullets" id="hero-bullets">
                         <li data-i18n="heroBullet1">
                             Create a project or goal
                         </li>
                         <li data-i18n="heroBullet2">
-                            Publish your track record with evidence, target those who see your progress, attract collaborators, investors, or financial support
+                            Publish your track record with evidence, target
+                            those who see your progress, attract collaborators,
+                            investors, or financial support
                         </li>
                         <li data-i18n="heroBullet3">
                             Build a reputation based on execution
@@ -342,7 +374,9 @@
                         <p class="discover-kicker">XERA Feed</p>
                         <div class="discover-heading-row">
                             <h2 data-i18n="discoverTitle">In motion</h2>
-                            <span class="discover-live-pulse">Live & proof</span>
+                            <span class="discover-live-pulse"
+                                >Live & proof</span
+                            >
                         </div>
                         <p class="discover-subtitle" data-i18n="discoverSub">
                             Live trajectories, proof first.

@@ -30,6 +30,186 @@ const ARC_OPPORTUNITY_LABELS = {
 
 let hookInterval;
 
+const XERA_INSPIRED_ARC_KEY = "xera-inspired-arc-seed";
+
+function xeraEscapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function xeraToast(type, title, message) {
+    const manager = window.ToastManager;
+    if (manager && typeof manager[type] === "function") {
+        manager[type](title, message);
+        return;
+    }
+    if (message) {
+        alert(`${title}\n${message}`);
+    } else {
+        alert(title);
+    }
+}
+
+function xeraIsOptionalGrowthSchemaError(error) {
+    const code = String(error?.code || "");
+    const msg = String(error?.message || "").toLowerCase();
+    return (
+        code === "42P01" ||
+        code === "42703" ||
+        msg.includes("schema cache") ||
+        msg.includes("could not find") ||
+        msg.includes("does not exist") ||
+        (msg.includes("relation") && msg.includes("exist"))
+    );
+}
+
+function xeraMakeToken(prefix = "xera") {
+    return `${prefix}_${Date.now().toString(36)}_${Math.random()
+        .toString(36)
+        .slice(2, 10)}`;
+}
+
+async function xeraSafeInsert(table, payload, options = {}) {
+    if (!window.supabase || !table) return { data: null, skipped: true };
+    try {
+        let query = supabase.from(table).insert(payload);
+        if (options.select) {
+            query = query.select(options.select === true ? "*" : options.select);
+            if (options.single) query = query.single();
+            else if (options.maybeSingle) query = query.maybeSingle();
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        return { data, skipped: false };
+    } catch (error) {
+        if (xeraIsOptionalGrowthSchemaError(error)) {
+            console.warn(`[XERA growth] Optional table not ready: ${table}`, error);
+            return { data: null, skipped: true, error };
+        }
+        throw error;
+    }
+}
+
+async function xeraTrackGrowthEvent(eventType, payload = {}) {
+    const actorUserId = window.currentUser?.id || null;
+    try {
+        await xeraSafeInsert("social_growth_events", {
+            event_type: eventType,
+            actor_user_id: actorUserId,
+            target_user_id: payload.targetUserId || null,
+            arc_id: payload.arcId || null,
+            content_id: payload.contentId || null,
+            metadata: payload.metadata || {},
+        });
+    } catch (error) {
+        console.warn("[XERA growth] Event tracking failed:", error);
+    }
+}
+
+function xeraGetContentId(content) {
+    return content?.id || content?.contentId || null;
+}
+
+function xeraGetContentTitle(content) {
+    return content?.title || "Trace XERA";
+}
+
+function xeraGetContentDescription(content) {
+    return content?.description || content?.rawDescription || "";
+}
+
+function xeraBuildProfileDeepLink(userId, params = {}) {
+    const query = { user: userId, ...params };
+    Object.keys(query).forEach((key) => {
+        if (query[key] === null || query[key] === undefined || query[key] === "") {
+            delete query[key];
+        }
+    });
+
+    let path = `profile.html?${new URLSearchParams(query).toString()}`;
+    try {
+        if (window.XeraRouter?.buildHtmlUrl) {
+            path = window.XeraRouter.buildHtmlUrl("profile", { query });
+        }
+    } catch (error) {
+        // fallback path above
+    }
+
+    try {
+        return new URL(path, window.location.href).toString();
+    } catch (error) {
+        return path;
+    }
+}
+
+function xeraBuildArcShareUrl(arc, content = null, extra = {}) {
+    const contentId = xeraGetContentId(content);
+    return xeraBuildProfileDeepLink(arc?.user_id || arc?.userId, {
+        arc: arc?.id,
+        content: contentId,
+        ...extra,
+    });
+}
+
+async function xeraSharePayload(payload) {
+    const { title, text, url } = payload;
+    if (navigator.share) {
+        try {
+            await navigator.share({ title, text, url });
+            return true;
+        } catch (error) {
+            console.warn("Share cancelled or failed:", error);
+        }
+    }
+
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(url);
+            xeraToast("success", "Lien copié", "La preuve est prête à partager.");
+            return true;
+        }
+    } catch (error) {
+        console.warn("Clipboard share failed:", error);
+    }
+
+    prompt("Copiez ce lien :", url);
+    return true;
+}
+
+function xeraGetInspiredArcSeed() {
+    if (window.pendingInspiredArcSeed) return window.pendingInspiredArcSeed;
+    try {
+        const raw = localStorage.getItem(XERA_INSPIRED_ARC_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed?.sourceArcId) return null;
+        return parsed;
+    } catch (error) {
+        return null;
+    }
+}
+
+function xeraSetInspiredArcSeed(seed) {
+    window.pendingInspiredArcSeed = seed || null;
+    try {
+        if (seed) {
+            localStorage.setItem(XERA_INSPIRED_ARC_KEY, JSON.stringify(seed));
+        } else {
+            localStorage.removeItem(XERA_INSPIRED_ARC_KEY);
+        }
+    } catch (error) {
+        // ignore storage failures
+    }
+}
+
+function xeraClearInspiredArcSeed() {
+    xeraSetInspiredArcSeed(null);
+}
+
 function normalizeArcStageLevel(value) {
     const raw = String(value || "")
         .trim()
@@ -109,12 +289,28 @@ function renderArcCreationForm(arcToEdit = null) {
     const isEdit = !!arcToEdit;
     const title = isEdit ? "Modifier votre projet" : "Démarrez votre projet";
     const btnText = isEdit ? "Mettre à jour" : "Lancer le projet";
+    const inspiredSeed = !isEdit ? xeraGetInspiredArcSeed() : null;
     const defaultStageLevel = normalizeArcStageLevel(
-        isEdit ? arcToEdit.stage_level : "idee",
+        isEdit ? arcToEdit.stage_level : inspiredSeed?.stageLevel || "idee",
     );
     const selectedOpportunityIntents = normalizeArcOpportunityIntents(
-        isEdit ? arcToEdit.opportunity_intents : [],
+        isEdit
+            ? arcToEdit.opportunity_intents
+            : inspiredSeed?.opportunityIntents || [],
     );
+    const defaultTitleValue = isEdit
+        ? arcToEdit.title
+        : inspiredSeed?.title
+          ? `Ma version: ${inspiredSeed.title}`
+          : "";
+    const defaultGoalValue = isEdit
+        ? arcToEdit.goal || ""
+        : inspiredSeed?.goal || "";
+    const defaultDescriptionValue = isEdit
+        ? arcToEdit.description || ""
+        : inspiredSeed?.description
+          ? `Inspiré par "${inspiredSeed.title}".\n\n${inspiredSeed.description}`
+          : "";
 
     // Default dates
     const today = new Date().toISOString().split("T")[0];
@@ -134,7 +330,7 @@ function renderArcCreationForm(arcToEdit = null) {
     } else {
         // Default end date +30 days
         const end = new Date();
-        end.setDate(end.getDate() + 30);
+        end.setDate(end.getDate() + (inspiredSeed?.durationDays || 30));
         defaultEndDate = end.toISOString().split("T")[0];
     }
 
@@ -149,13 +345,22 @@ function renderArcCreationForm(arcToEdit = null) {
             
             <div class="form-group">
                 <label for="arc-title">Titre de votre projet *</label>
-                <input type="text" id="arc-title" name="title" placeholder="Ex: 30 jours pour..." required class="form-input large-input" value="${isEdit ? escapeHtml(arcToEdit.title) : ""}">
+                <input type="text" id="arc-title" name="title" placeholder="Ex: 30 jours pour..." required class="form-input large-input" value="${xeraEscapeHtml(defaultTitleValue)}">
             </div>
 
             <div class="form-group">
                 <label for="arc-goal">Objectif final *</label>
-                <textarea id="arc-goal" name="goal" placeholder="Ex: Site en ligne le 1er mars" rows="2" class="form-input" required>${isEdit ? escapeHtml(arcToEdit.goal || "") : ""}</textarea>
+                <textarea id="arc-goal" name="goal" placeholder="Ex: Site en ligne le 1er mars" rows="2" class="form-input" required>${xeraEscapeHtml(defaultGoalValue)}</textarea>
             </div>
+
+            ${
+                inspiredSeed
+                    ? `<div class="xera-growth-seed">
+                        <strong>ARC inspiré</strong>
+                        <span>Cette base vient d'une trajectoire existante. Ajustez-la pour construire votre version.</span>
+                    </div>`
+                    : ""
+            }
 
             <div class="form-group">
                 <label for="arc-stage-level">Niveau du projet</label>
@@ -197,7 +402,7 @@ function renderArcCreationForm(arcToEdit = null) {
 
             <div class="form-group">
                 <label for="arc-description">Description (Optionnel)</label>
-                <textarea id="arc-description" name="description" placeholder="Détails supplémentaires..." rows="3" class="form-input">${isEdit ? escapeHtml(arcToEdit.description || "") : ""}</textarea>
+                <textarea id="arc-description" name="description" placeholder="Détails supplémentaires..." rows="3" class="form-input">${xeraEscapeHtml(defaultDescriptionValue)}</textarea>
             </div>
 
             <div class="form-group">
@@ -629,6 +834,7 @@ async function handleCreateArc(e) {
 
     const formData = new FormData(e.target);
     const arcId = formData.get("arc_id"); // If editing
+    const inspiredSeed = !arcId ? xeraGetInspiredArcSeed() : null;
 
     // Calculate duration from dates
     const startDateVal = formData.get("start_date");
@@ -709,6 +915,15 @@ async function handleCreateArc(e) {
 
         if (!arcId && createdArc && createdArc.id) {
             await createArcLaunchTrace(createdArc, arcData, authUser);
+            if (inspiredSeed?.sourceArcId) {
+                await recordArcInspiration(
+                    inspiredSeed.sourceArcId,
+                    createdArc.id,
+                    authUser.id,
+                    inspiredSeed.sourceOwnerId,
+                );
+                xeraClearInspiredArcSeed();
+            }
         }
 
         const pendingPayload = window.pendingCreatePostAfterArc;
@@ -1078,6 +1293,551 @@ function escapeHtml(text) {
         .replace(/'/g, "&#039;");
 }
 
+async function fetchArcAndContentForGrowth(arcId, contentId = null) {
+    let arc = window.currentArc && window.currentArc.id === arcId
+        ? window.currentArc
+        : null;
+    let content = null;
+
+    if (!arc && window.supabase) {
+        const { data, error } = await supabase
+            .from("arcs")
+            .select("*, users(name, avatar)")
+            .eq("id", arcId)
+            .maybeSingle();
+        if (error) throw error;
+        arc = data || null;
+    }
+
+    if (contentId && window.supabase) {
+        const { data, error } = await supabase
+            .from("content")
+            .select("*")
+            .eq("id", contentId)
+            .maybeSingle();
+        if (error) throw error;
+        content = data || null;
+    } else if (arcId && window.supabase) {
+        const { data, error } = await supabase
+            .from("content")
+            .select("*")
+            .eq("arc_id", arcId)
+            .order("created_at", { ascending: false })
+            .limit(1);
+        if (error) throw error;
+        content = data?.[0] || null;
+    }
+
+    return { arc, content };
+}
+
+async function ensureProofCard(arc, content = null) {
+    if (!arc?.id) return null;
+    const contentId = xeraGetContentId(content);
+    const slug = contentId
+        ? `proof-${contentId.slice(0, 8)}`
+        : `arc-${arc.id.slice(0, 8)}`;
+    const payload = {
+        arc_id: arc.id,
+        content_id: contentId,
+        created_by: arc.user_id,
+        slug,
+        title_snapshot: content ? xeraGetContentTitle(content) : arc.title,
+        excerpt_snapshot: (content
+            ? xeraGetContentDescription(content)
+            : arc.goal || arc.description || ""
+        ).slice(0, 280),
+    };
+
+    if (!window.supabase || window.currentUser?.id !== arc.user_id) {
+        return { slug, ...payload };
+    }
+
+    try {
+        let query = supabase
+            .from("proof_cards")
+            .upsert(payload, { onConflict: "arc_id,content_id" })
+            .select()
+            .maybeSingle();
+        const { data, error } = await query;
+        if (error) throw error;
+        return data || { slug, ...payload };
+    } catch (error) {
+        if (xeraIsOptionalGrowthSchemaError(error)) {
+            console.warn("[XERA growth] proof_cards not ready:", error);
+            return { slug, ...payload };
+        }
+        throw error;
+    }
+}
+
+async function incrementProofCardShare(arcId, contentId) {
+    if (!window.supabase || !arcId) return;
+    try {
+        let query = supabase
+            .from("proof_cards")
+            .select("id, share_count")
+            .eq("arc_id", arcId);
+        query = contentId ? query.eq("content_id", contentId) : query.is("content_id", null);
+        const { data, error } = await query.limit(1).maybeSingle();
+        if (error) throw error;
+        if (!data?.id) return;
+        await supabase
+            .from("proof_cards")
+            .update({ share_count: Number(data.share_count || 0) + 1 })
+            .eq("id", data.id);
+    } catch (error) {
+        if (!xeraIsOptionalGrowthSchemaError(error)) {
+            console.warn("[XERA growth] share counter failed:", error);
+        }
+    }
+}
+
+function renderProofCardMarkup(arc, content) {
+    const progress = calculateArcProgress(arc);
+    const dayLabel =
+        content?.day_number !== undefined && content?.day_number !== null
+            ? `Jour ${content.day_number}`
+            : `J${calculateDaysSince(arc.start_date)}`;
+    const description = xeraGetContentDescription(content) || arc.goal || "";
+    const author = arc.users?.name || "Builder XERA";
+    const mediaUrl = content?.media_url || arc.media_url;
+    const mediaHtml = mediaUrl
+        ? `<div class="xera-proof-media" style="background-image:url('${xeraEscapeHtml(mediaUrl)}')"></div>`
+        : "";
+
+    return `
+        <div class="xera-proof-card">
+            ${mediaHtml}
+            <div class="xera-proof-topline">
+                <span>${xeraEscapeHtml(dayLabel)}</span>
+                <span>${progress}%</span>
+            </div>
+            <h3>${xeraEscapeHtml(xeraGetContentTitle(content) || arc.title)}</h3>
+            <p>${xeraEscapeHtml(description).slice(0, 260)}</p>
+            <div class="xera-proof-footer">
+                <strong>${xeraEscapeHtml(arc.title || "ARC")}</strong>
+                <span>par ${xeraEscapeHtml(author)}</span>
+            </div>
+        </div>
+    `;
+}
+
+async function openProofCardModal(arcId, contentId = null) {
+    try {
+        const { arc, content } = await fetchArcAndContentForGrowth(
+            arcId,
+            contentId,
+        );
+        if (!arc) throw new Error("ARC introuvable");
+        await ensureProofCard(arc, content);
+        const safeContentArg = content ? `'${xeraGetContentId(content)}'` : "null";
+        const modal = document.createElement("div");
+        modal.id = "xera-growth-modal";
+        modal.className = "xera-growth-modal";
+        modal.innerHTML = `
+            <div class="xera-growth-dialog">
+                <button type="button" class="xera-growth-close" onclick="closeProofCardModal()">×</button>
+                <div class="xera-growth-kicker">Carte de preuve</div>
+                ${renderProofCardMarkup(arc, content)}
+                <div class="xera-growth-actions">
+                    <button type="button" class="btn btn-primary" onclick="shareProofCard('${arc.id}', ${safeContentArg})">Partager</button>
+                    <button type="button" class="btn btn-ghost" onclick="requestArcWitness('${arc.id}', ${safeContentArg})">Demander un regard</button>
+                    <button type="button" class="btn btn-ghost" onclick="shareWeeklyTrajectoryRecap('${arc.id}')">Récap semaine</button>
+                </div>
+            </div>
+        `;
+        document.getElementById("xera-growth-modal")?.remove();
+        document.body.appendChild(modal);
+        await xeraTrackGrowthEvent("proof_card_opened", {
+            targetUserId: arc.user_id,
+            arcId: arc.id,
+            contentId: xeraGetContentId(content),
+        });
+    } catch (error) {
+        console.error("openProofCardModal error:", error);
+        xeraToast("error", "Carte indisponible", error?.message || "Impossible d'ouvrir la carte.");
+    }
+}
+
+function closeProofCardModal() {
+    document.getElementById("xera-growth-modal")?.remove();
+}
+
+async function shareProofCard(arcId, contentId = null) {
+    try {
+        const { arc, content } = await fetchArcAndContentForGrowth(
+            arcId,
+            contentId,
+        );
+        if (!arc) throw new Error("ARC introuvable");
+        await ensureProofCard(arc, content);
+        const url = xeraBuildArcShareUrl(arc, content, { proof: "1" });
+        const title = content
+            ? `${xeraGetContentTitle(content)} | XERA`
+            : `${arc.title} | XERA`;
+        const text = content
+            ? `Preuve de progression: ${xeraGetContentTitle(content)}`
+            : `Trajectoire en cours: ${arc.title}`;
+        const didShare = await xeraSharePayload({ title, text, url });
+        if (didShare) {
+            await incrementProofCardShare(arc.id, xeraGetContentId(content));
+            await xeraTrackGrowthEvent("proof_card_shared", {
+                targetUserId: arc.user_id,
+                arcId: arc.id,
+                contentId: xeraGetContentId(content),
+                metadata: { url },
+            });
+            window.engagementTracker?.trackInteraction?.({
+                type: "share",
+                targetUserId: arc.user_id,
+                contentId: xeraGetContentId(content),
+                contentType: "trace",
+                metadata: { source: "proof_card" },
+            });
+        }
+    } catch (error) {
+        console.error("shareProofCard error:", error);
+        xeraToast("error", "Partage impossible", error?.message || "La carte n'a pas pu être partagée.");
+    }
+}
+
+async function requestArcWitness(arcId, contentId = null) {
+    if (!window.currentUser?.id) {
+        xeraToast("info", "Connexion requise", "Connectez-vous pour demander un regard sur ce jalon.");
+        return;
+    }
+
+    try {
+        const { arc, content } = await fetchArcAndContentForGrowth(
+            arcId,
+            contentId,
+        );
+        if (!arc) throw new Error("ARC introuvable");
+        if (arc.user_id !== window.currentUser.id) {
+            xeraToast("info", "Action réservée", "Seul le builder peut demander un regard sur ce jalon.");
+            return;
+        }
+
+        const witness = prompt(
+            "Qui peut reconnaître cette progression ? Ajoutez un email ou un nom.",
+            "",
+        );
+        if (!witness || !witness.trim()) return;
+
+        const claimToken = xeraMakeToken("witness");
+        await xeraSafeInsert("arc_witnesses", {
+            arc_id: arc.id,
+            milestone_content_id: xeraGetContentId(content),
+            witness_email: witness.trim(),
+            invited_by: window.currentUser.id,
+            claim_token: claimToken,
+            status: "pending",
+        });
+
+        const url = xeraBuildArcShareUrl(arc, content, {
+            witness: claimToken,
+        });
+        await xeraTrackGrowthEvent("witness_requested", {
+            targetUserId: arc.user_id,
+            arcId: arc.id,
+            contentId: xeraGetContentId(content),
+            metadata: { witness: witness.trim() },
+        });
+        await xeraSharePayload({
+            title: `${arc.title} | XERA`,
+            text: `Regarde ce jalon et dis-moi si la progression est réelle: ${content ? xeraGetContentTitle(content) : arc.title}`,
+            url,
+        });
+    } catch (error) {
+        console.error("requestArcWitness error:", error);
+        xeraToast("error", "Demande impossible", error?.message || "Le témoin n'a pas pu être ajouté.");
+    }
+}
+
+async function validateArcMilestone(arcId, contentId = null) {
+    if (!window.currentUser?.id) {
+        xeraToast("info", "Connexion requise", "Connectez-vous pour valider un jalon.");
+        return;
+    }
+
+    try {
+        const { arc, content } = await fetchArcAndContentForGrowth(
+            arcId,
+            contentId,
+        );
+        if (!arc || !content) throw new Error("Jalon introuvable");
+        if (arc.user_id === window.currentUser.id) {
+            xeraToast("info", "Déjà builder", "La validation doit venir d'une autre personne.");
+            return;
+        }
+
+        const comment =
+            prompt("Ajouter un court retour de validation (optionnel).", "") ||
+            "";
+        const contentKey = xeraGetContentId(content);
+        const payload = {
+            arc_id: arc.id,
+            content_id: contentKey,
+            validator_user_id: window.currentUser.id,
+            validation_type: "witnessed",
+            comment: comment.trim() || null,
+        };
+
+        try {
+            await xeraSafeInsert("arc_milestone_validations", payload);
+        } catch (error) {
+            if (String(error?.code || "") === "23505") {
+                xeraToast("info", "Déjà validé", "Votre validation existe déjà.");
+                return;
+            }
+            throw error;
+        }
+
+        if (typeof createNotification === "function") {
+            const actorName =
+                window.currentUser.name || window.currentUser.email || "Un membre";
+            await createNotification(
+                arc.user_id,
+                "arc_validation",
+                `${actorName} a validé un jalon de "${arc.title}".`,
+                xeraBuildProfileDeepLink(arc.user_id, {
+                    arc: arc.id,
+                    content: contentKey,
+                }),
+            );
+        }
+
+        await xeraTrackGrowthEvent("milestone_validated", {
+            targetUserId: arc.user_id,
+            arcId: arc.id,
+            contentId: contentKey,
+            metadata: { hasComment: !!comment.trim() },
+        });
+        xeraToast("success", "Jalon validé", "Votre validation renforce la preuve de progression.");
+    } catch (error) {
+        console.error("validateArcMilestone error:", error);
+        xeraToast("error", "Validation impossible", error?.message || "Le jalon n'a pas pu être validé.");
+    }
+}
+
+async function openArcCoBuilderRole(arcId) {
+    if (!window.currentUser?.id) {
+        xeraToast("info", "Connexion requise", "Connectez-vous pour ouvrir un rôle.");
+        return;
+    }
+
+    try {
+        const { arc } = await fetchArcAndContentForGrowth(arcId);
+        if (!arc) throw new Error("ARC introuvable");
+        if (arc.user_id !== window.currentUser.id) {
+            xeraToast("info", "Action réservée", "Seul le builder peut ouvrir un rôle.");
+            return;
+        }
+
+        const role = prompt(
+            "Quel rôle rendrait cet ARC plus fort ?",
+            "Co-builder",
+        );
+        if (!role || !role.trim()) return;
+
+        await xeraSafeInsert("arc_collaboration_slots", {
+            arc_id: arc.id,
+            owner_id: window.currentUser.id,
+            role_label: role.trim(),
+            status: "open",
+        });
+
+        await xeraTrackGrowthEvent("co_builder_slot_opened", {
+            targetUserId: arc.user_id,
+            arcId: arc.id,
+            metadata: { role: role.trim() },
+        });
+        await xeraSharePayload({
+            title: `${arc.title} | XERA`,
+            text: `Rôle ouvert sur cet ARC: ${role.trim()}`,
+            url: xeraBuildArcShareUrl(arc, null, { role: role.trim() }),
+        });
+    } catch (error) {
+        console.error("openArcCoBuilderRole error:", error);
+        xeraToast("error", "Rôle impossible", error?.message || "Le rôle n'a pas pu être ouvert.");
+    }
+}
+
+async function requestArcCollaborationWithRole(arcId, ownerId, role = "") {
+    if (typeof window.requestArcCollaboration === "function") {
+        await window.requestArcCollaboration(arcId, ownerId);
+    }
+    await xeraTrackGrowthEvent("co_builder_requested", {
+        targetUserId: ownerId,
+        arcId,
+        metadata: { role },
+    });
+}
+
+async function shareWeeklyTrajectoryRecap(arcId) {
+    try {
+        const { arc } = await fetchArcAndContentForGrowth(arcId);
+        if (!arc) throw new Error("ARC introuvable");
+        const { data, error } = await supabase
+            .from("content")
+            .select("id, title, day_number, created_at")
+            .eq("arc_id", arc.id)
+            .order("created_at", { ascending: false })
+            .limit(7);
+        if (error) throw error;
+        const traces = data || [];
+        const recap = traces.length
+            ? traces
+                  .map((item) => `J${item.day_number}: ${item.title}`)
+                  .join("\n")
+            : "Aucune trace publiée cette semaine.";
+        await xeraTrackGrowthEvent("weekly_recap_shared", {
+            targetUserId: arc.user_id,
+            arcId: arc.id,
+            metadata: { traceCount: traces.length },
+        });
+        await xeraSharePayload({
+            title: `Récap XERA: ${arc.title}`,
+            text: `Progression de la semaine:\n${recap}`,
+            url: xeraBuildArcShareUrl(arc, traces[0] || null, { recap: "week" }),
+        });
+    } catch (error) {
+        console.error("shareWeeklyTrajectoryRecap error:", error);
+        xeraToast("error", "Récap impossible", error?.message || "Le récap n'a pas pu être généré.");
+    }
+}
+
+async function startInspiredArc(arcId) {
+    try {
+        const { arc } = await fetchArcAndContentForGrowth(arcId);
+        if (!arc) throw new Error("ARC introuvable");
+        xeraSetInspiredArcSeed({
+            sourceArcId: arc.id,
+            sourceOwnerId: arc.user_id,
+            title: arc.title || "",
+            goal: arc.goal || "",
+            description: arc.description || "",
+            durationDays: arc.duration_days || 30,
+            stageLevel: arc.stage_level || "idee",
+            opportunityIntents: normalizeArcOpportunityIntents(
+                arc.opportunity_intents,
+            ),
+        });
+        await xeraTrackGrowthEvent("arc_inspiration_started", {
+            targetUserId: arc.user_id,
+            arcId: arc.id,
+        });
+
+        if (!window.currentUser?.id) {
+            xeraToast("info", "Base prête", "Connectez-vous pour construire votre version.");
+            setTimeout(() => {
+                window.location.href = "login.html";
+            }, 900);
+            return;
+        }
+
+        if (typeof window.closeImmersive === "function") {
+            window.closeImmersive();
+        }
+        setTimeout(() => {
+            if (typeof window.openCreateModal === "function") {
+                window.openCreateModal();
+            }
+        }, 80);
+    } catch (error) {
+        console.error("startInspiredArc error:", error);
+        xeraToast("error", "ARC indisponible", error?.message || "Impossible de préparer votre version.");
+    }
+}
+
+async function recordArcInspiration(sourceArcId, newArcId, userId, sourceOwnerId = null) {
+    if (!sourceArcId || !newArcId || !userId) return;
+    try {
+        await xeraSafeInsert("arc_inspirations", {
+            source_arc_id: sourceArcId,
+            new_arc_id: newArcId,
+            created_by: userId,
+        });
+        await xeraTrackGrowthEvent("arc_inspired_created", {
+            targetUserId: sourceOwnerId,
+            arcId: sourceArcId,
+            metadata: { newArcId },
+        });
+    } catch (error) {
+        console.warn("[XERA growth] recordArcInspiration failed:", error);
+    }
+}
+
+function renderArcGrowthPanel(arc, isOwner, content = []) {
+    const latestContent = Array.isArray(content) ? content[0] : null;
+    const latestContentId = xeraGetContentId(latestContent);
+    const contentArg = latestContentId ? `'${latestContentId}'` : "null";
+
+    if (isOwner) {
+        return `
+            <div class="xera-growth-panel">
+                <div>
+                    <h3>Preuve sociale</h3>
+                    <p>Transformez une progression réelle en validation, retour ou collaboration.</p>
+                </div>
+                <div class="xera-growth-action-grid">
+                    <button type="button" class="btn btn-primary" onclick="openProofCardModal('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Carte preuve</button>
+                    <button type="button" class="btn btn-ghost" onclick="requestArcWitness('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Ajouter un témoin</button>
+                    <button type="button" class="btn btn-ghost" onclick="openArcCoBuilderRole('${arc.id}')">Ouvrir un rôle</button>
+                    <button type="button" class="btn btn-ghost" onclick="shareWeeklyTrajectoryRecap('${arc.id}')">Récap semaine</button>
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="xera-growth-panel">
+            <div>
+                <h3>Construire autour de cette preuve</h3>
+                <p>Validez un jalon, proposez une contribution ou démarrez votre propre version.</p>
+            </div>
+            <div class="xera-growth-action-grid">
+                <button type="button" class="btn btn-primary" onclick="validateArcMilestone('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Valider le jalon</button>
+                <button type="button" class="btn btn-ghost" onclick="requestArcCollaborationWithRole('${arc.id}', '${arc.user_id}', 'co-builder')">Contribuer</button>
+                <button type="button" class="btn btn-ghost" onclick="startInspiredArc('${arc.id}')">Construire ma version</button>
+                <button type="button" class="btn btn-ghost" onclick="shareProofCard('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Partager la preuve</button>
+            </div>
+        </div>
+    `;
+}
+
+async function afterTracePublishedGrowthLoop({ content, contentData }) {
+    if (!contentData?.arcId || !content?.id) return;
+    try {
+        const { arc } = await fetchArcAndContentForGrowth(contentData.arcId);
+        if (!arc) return;
+        await ensureProofCard(arc, content);
+        await xeraTrackGrowthEvent("proof_card_created", {
+            targetUserId: arc.user_id,
+            arcId: arc.id,
+            contentId: content.id,
+            metadata: { state: contentData.state, type: contentData.type },
+        });
+
+        const nudge = document.createElement("div");
+        nudge.className = "xera-proof-nudge";
+        nudge.innerHTML = `
+            <div>
+                <strong>Carte de preuve prête</strong>
+                <span>Cette trace peut recevoir un regard ou devenir une preuve partageable.</span>
+            </div>
+            <button type="button" onclick="openProofCardModal('${arc.id}', '${content.id}'); this.closest('.xera-proof-nudge')?.remove();">Ouvrir</button>
+            <button type="button" class="ghost" onclick="this.closest('.xera-proof-nudge')?.remove();">Plus tard</button>
+        `;
+        document.querySelector(".xera-proof-nudge")?.remove();
+        document.body.appendChild(nudge);
+        setTimeout(() => nudge.remove(), 9000);
+    } catch (error) {
+        console.warn("[XERA growth] afterTracePublishedGrowthLoop failed:", error);
+    }
+}
+
 // --- ARC DETAILS & INTERACTION ---
 
 async function openArcDetails(arcId) {
@@ -1189,6 +1949,7 @@ function renderArcDetails(arc, followersCount, isFollowing, content) {
         content && content.length > 0
             ? `<div class="arc-content-grid">${content.map((c) => createContentCardSimple(c, isOwner)).join("")}</div>`
             : `<p style="text-align:center; opacity:0.6; margin-top:2rem;">Aucune mise à jour pour le moment.</p>`;
+    const growthPanelHtml = renderArcGrowthPanel(arc, isOwner, content || []);
 
     overlay.innerHTML = `
         <div class="arc-details-container" style="max-width: 800px; margin: 0 auto; padding: 2rem; padding-bottom: 100px;">
@@ -1222,6 +1983,8 @@ function renderArcDetails(arc, followersCount, isFollowing, content) {
                 </div>
             </div>
 
+            ${growthPanelHtml}
+
             <div class="arc-description" style="margin-bottom: 3rem; background: var(--surface-color); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color);">
                 <h3 style="margin-bottom:0.5rem; font-size:1rem; text-transform:uppercase; letter-spacing:1px; color:var(--text-secondary);">À propos</h3>
                 <p style="line-height:1.6;">${escapeHtml(arc.description || "Pas de description.")}</p>
@@ -1243,6 +2006,8 @@ function renderArcDetails(arc, followersCount, isFollowing, content) {
 function createContentCardSimple(content, isOwner) {
     // Simplified version of content card for the list
     const date = new Date(content.created_at).toLocaleDateString();
+    const contentId = xeraGetContentId(content);
+    const arcId = content.arc_id || content.arcId || window.currentArc?.id;
 
     let stateClass = "";
     if (content.state === "success") stateClass = "item-success";
@@ -1250,17 +2015,26 @@ function createContentCardSimple(content, isOwner) {
     else if (content.state === "pause") stateClass = "item-pause";
 
     let actions = "";
-    if (isOwner) {
+    if (contentId && arcId && isOwner) {
         actions = `
             <div class="timeline-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.5rem;">
-                <button class="btn btn-ghost" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;" onclick="event.stopPropagation(); window.editContent('${content.id}')">Modifier</button>
-                <button class="btn btn-ghost" style="padding: 0.2rem 0.6rem; font-size: 0.8rem; color: var(--failure);" onclick="event.stopPropagation(); window.deleteContent('${content.id}')">Supprimer</button>
+                <button class="btn btn-ghost" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;" onclick="event.stopPropagation(); window.openProofCardModal('${arcId}', '${contentId}')">Carte preuve</button>
+                <button class="btn btn-ghost" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;" onclick="event.stopPropagation(); window.requestArcWitness('${arcId}', '${contentId}')">Témoin</button>
+                <button class="btn btn-ghost" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;" onclick="event.stopPropagation(); window.editContent('${contentId}')">Modifier</button>
+                <button class="btn btn-ghost" style="padding: 0.2rem 0.6rem; font-size: 0.8rem; color: var(--failure);" onclick="event.stopPropagation(); window.deleteContent('${contentId}')">Supprimer</button>
+            </div>
+        `;
+    } else if (contentId && arcId) {
+        actions = `
+            <div class="timeline-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.5rem;">
+                <button class="btn btn-ghost" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;" onclick="event.stopPropagation(); window.validateArcMilestone('${arcId}', '${contentId}')">Valider</button>
+                <button class="btn btn-ghost" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;" onclick="event.stopPropagation(); window.shareProofCard('${arcId}', '${contentId}')">Partager</button>
             </div>
         `;
     }
 
     return `
-        <div class="timeline-item ${stateClass}" style="margin-bottom: 1.5rem;">
+        <div class="timeline-item ${stateClass}" data-content-id="${xeraEscapeHtml(contentId || "")}" style="margin-bottom: 1.5rem;">
             <div class="timeline-date">${date} - Jour ${content.day_number}</div>
             <div class="timeline-card">
                 <h4>${escapeHtml(content.title)}</h4>
@@ -1338,6 +2112,25 @@ async function toggleFollowArc(arcId) {
                             );
                         }
                     }
+                    let cameFromProofCard = false;
+                    try {
+                        const params = new URLSearchParams(
+                            window.location.search,
+                        );
+                        cameFromProofCard = params.get("proof") === "1";
+                    } catch (e) {
+                        cameFromProofCard = false;
+                    }
+                    await xeraTrackGrowthEvent(
+                        cameFromProofCard
+                            ? "proof_card_followed"
+                            : "arc_followed",
+                        {
+                            targetUserId: arcRow.user_id,
+                            arcId,
+                            metadata: { cameFromProofCard },
+                        },
+                    );
                 }
             } catch (e) {
                 console.warn("notifyArcFollow error", e);
@@ -1426,6 +2219,19 @@ window.openArcDetails = openArcDetails;
 window.toggleFollowArc = toggleFollowArc;
 window.updateArcStatus = updateArcStatus;
 window.deleteArc = deleteArc;
+window.openProofCardModal = openProofCardModal;
+window.closeProofCardModal = closeProofCardModal;
+window.shareProofCard = shareProofCard;
+window.requestArcWitness = requestArcWitness;
+window.validateArcMilestone = validateArcMilestone;
+window.openArcCoBuilderRole = openArcCoBuilderRole;
+window.requestArcCollaborationWithRole = requestArcCollaborationWithRole;
+window.shareWeeklyTrajectoryRecap = shareWeeklyTrajectoryRecap;
+window.startInspiredArc = startInspiredArc;
+window.xeraGrowthLoops = {
+    afterTracePublished: afterTracePublishedGrowthLoop,
+    recordArcInspiration,
+};
 
 // Auto-init when DOM loaded
 document.addEventListener("DOMContentLoaded", initArcs);
