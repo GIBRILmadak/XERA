@@ -12,6 +12,10 @@ const {
     getBotDailyEncourageTarget,
     getDeterministicRandom,
 } = require("./bot-schedule-utils");
+const {
+    rankUsersIntelligently,
+    fetchUserEngagementStats,
+} = require("./recommendation-engine");
 
 dotenv.config();
 
@@ -1104,6 +1108,117 @@ async function fetchProfileRecordById(userId, options = {}) {
     );
 
     return { success: true, data: normalizedProfile };
+}
+
+/**
+ * NOUVELLE FONCTION: Utilisateurs recommandés avec algorithme sophistiqué
+ * Remplace la simple découverte chronologique
+ */
+async function fetchRecommendedUsers(options = {}) {
+    const cacheKey = `app:recommend:users:v2`;
+    if (options.useCache !== false) {
+        const cached = getCachedAppQueryValue(cacheKey);
+        if (cached) {
+            return {
+                success: true,
+                data: cached,
+                cached: true,
+            };
+        }
+    }
+
+    try {
+        // Récupère les données utilisateur enrichies
+        const { data: users, error } = await supabase
+            .from("users")
+            .select(
+                `
+                id,
+                name,
+                avatar,
+                followers_count,
+                title,
+                bio,
+                plan,
+                badge,
+                is_monetized,
+                account_type,
+                account_subtype,
+                updated_at,
+                created_at,
+                priority_recommendations,
+                momentum_score,
+                active_days,
+                consistency_ratio
+            `,
+            )
+            .eq("deleted_at", null)
+            .limit(200); // Récupère plus pour filtrer
+
+        if (error) {
+            console.error("fetchRecommendedUsers error:", error);
+            return {
+                success: false,
+                status: 500,
+                code: String(error.code || "UNKNOWN"),
+                error:
+                    error.message ||
+                    "Impossible de charger les recommandations.",
+            };
+        }
+
+        if (!Array.isArray(users) || users.length === 0) {
+            return {
+                success: true,
+                data: [],
+            };
+        }
+
+        // Récupère les stats d'engagement pour scoring
+        const userIds = users.map((u) => u.id);
+        const engagementStats = await fetchUserEngagementStats(
+            supabase,
+            userIds,
+        );
+
+        // Normalise les utilisateurs
+        const normalizedUsers = users.map((user) =>
+            normalizeUserProfileRecord(user),
+        );
+
+        // Applique l'algorithme de ranking
+        const recommendedUsers = rankUsersIntelligently(
+            normalizedUsers,
+            engagementStats,
+            {
+                limit: 100,
+                randomizationFactor: 0.05,
+                boostPriority: true,
+                boostMonetized: true,
+                personalizationFactors: {},
+            },
+        );
+
+        // Cache le résultat
+        setCachedAppQueryValue(
+            cacheKey,
+            recommendedUsers,
+            APP_DISCOVER_CACHE_TTL_MS,
+        );
+
+        return {
+            success: true,
+            data: recommendedUsers,
+        };
+    } catch (err) {
+        console.error("fetchRecommendedUsers exception:", err);
+        return {
+            success: false,
+            status: 500,
+            code: "INTERNAL_ERROR",
+            error: "Erreur interne lors du calcul des recommandations.",
+        };
+    }
 }
 
 async function fetchDiscoverUsers(options = {}) {
@@ -5072,21 +5187,23 @@ app.put("/api/app/profiles/:userId", async (req, res) => {
 
 app.get("/api/app/discover/users", async (_req, res) => {
     try {
-        const usersResult = await fetchDiscoverUsers();
-        if (!usersResult.success) {
-            return res.status(usersResult.status || 500).json({
+        // Utilise le nouvel algorithme de recommandation
+        const recommendedResult = await fetchRecommendedUsers();
+        if (!recommendedResult.success) {
+            return res.status(recommendedResult.status || 500).json({
                 success: false,
                 error:
-                    usersResult.error ||
-                    "Impossible de charger les utilisateurs.",
-                code: usersResult.code || "UNKNOWN",
+                    recommendedResult.error ||
+                    "Impossible de charger les recommandations.",
+                code: recommendedResult.code || "UNKNOWN",
             });
         }
 
         return res.json({
             success: true,
-            data: usersResult.data,
-            cached: usersResult.cached === true,
+            data: recommendedResult.data,
+            cached: recommendedResult.cached === true,
+            algorithm: "xera-v2-composite", // Identifie l'algo utilisé
         });
     } catch (error) {
         console.error("App discover users error:", error);
@@ -5094,7 +5211,7 @@ app.get("/api/app/discover/users", async (_req, res) => {
             success: false,
             error:
                 error?.message ||
-                "Impossible de charger les utilisateurs Discover.",
+                "Impossible de charger les recommandations Discover.",
             code: String(error?.code || "UNKNOWN"),
         });
     }

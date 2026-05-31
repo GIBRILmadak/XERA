@@ -439,14 +439,195 @@ if (!document.getElementById('ux-enhancements-css')) {
     document.head.appendChild(style);
 }
 
+/* ========================================
+   FLUIDITY ENGINE (Seamless Extensions)
+   ======================================== */
+
+class FluidityEngine {
+    static init() {
+        this.injectProgressBar();
+        this.setupNavigationIntercept();
+        this.injectStatusIndicator();
+        this.startLoading();
+        setTimeout(() => this.stopLoading(), 800);
+        console.log("🚀 Fluidity Engine: Initialized.");
+    }
+
+    static injectStatusIndicator() {
+        const dot = document.createElement('div');
+        dot.style.cssText = `
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            z-index: 10000;
+            opacity: 0.6;
+            box-shadow: 0 0 5px #10b981;
+        `;
+        dot.title = "XERA Engine Active";
+        document.body.appendChild(dot);
+    }
+
+    static injectProgressBar() {
+        if (document.getElementById('global-progress-bar')) return;
+        const bar = document.createElement('div');
+        bar.id = 'global-progress-bar';
+        bar.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 4px;
+            width: 0;
+            background: linear-gradient(90deg, #10b981, #6366f1);
+            z-index: 10000;
+            transition: width 0.4s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.4s;
+            pointer-events: none;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+            opacity: 0;
+        `;
+        document.body.appendChild(bar);
+    }
+
+    static startLoading() {
+        const bar = document.getElementById('global-progress-bar');
+        if (!bar) return;
+        bar.style.opacity = '1';
+        bar.style.width = '30%';
+        this.loadingInterval = setInterval(() => {
+            const currentWidth = parseFloat(bar.style.width);
+            if (currentWidth < 90) {
+                bar.style.width = (currentWidth + (90 - currentWidth) * 0.1) + '%';
+            }
+        }, 500);
+    }
+
+    static stopLoading() {
+        if (this.loadingInterval) clearInterval(this.loadingInterval);
+        const bar = document.getElementById('global-progress-bar');
+        if (!bar) return;
+        bar.style.width = '100%';
+        setTimeout(() => {
+            bar.style.opacity = '0';
+            setTimeout(() => { bar.style.width = '0'; }, 400);
+        }, 300);
+    }
+
+    static setupNavigationIntercept() {
+        document.addEventListener('mouseover', (e) => {
+            const link = e.target.closest('a');
+            if (!link || !link.href || link.dataset.prefetched) return;
+            const url = new URL(link.href);
+            if (url.origin !== window.location.origin) return;
+            link.dataset.prefetched = "true";
+            const linkTag = document.createElement('link');
+            linkTag.rel = 'prefetch';
+            linkTag.href = link.href;
+            document.head.appendChild(linkTag);
+        });
+
+        document.addEventListener('click', (e) => {
+            const link = e.target.closest('a');
+            if (!link || !link.href || link.target === '_blank' || e.metaKey || e.ctrlKey) return;
+            const url = new URL(link.href);
+            if (url.origin !== window.location.origin) return;
+            if (url.pathname.endsWith('.pdf') || url.pathname.includes('/api/')) return;
+            this.startLoading();
+        });
+
+        window.addEventListener('popstate', () => {
+            this.startLoading();
+        });
+    }
+}
+
+/* ========================================
+   COMMAND CENTER (Invisible Infrastructure)
+   ======================================== */
+
+class CommandCenter {
+    static init() {
+        document.addEventListener('keydown', (e) => {
+            // CTRL+K logic
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                this.toggle();
+            }
+            // ESC to quit Zen
+            if (e.key === 'Escape') {
+                if (document.body.classList.contains('zen-mode-active')) {
+                    ZenMode.toggle();
+                }
+            }
+        });
+        console.log("⌨️ Command Center: CTRL+K & ESC Active.");
+    }
+
+    static toggle() {
+        const userId = window.currentUserId || (window.currentUser ? window.currentUser.id : null);
+
+        // Priorité à la création de Trace (le geste le plus fréquent)
+        if (typeof window.openCreateMenu === 'function' && userId) {
+            window.openCreateMenu(userId);
+            this.focusTextarea();
+        } else if (typeof window.openCreateModal === 'function') {
+            window.openCreateModal();
+            this.focusTextarea();
+        } else {
+            console.warn("CommandCenter: No creation method found.");
+            if (window.ToastManager) ToastManager.error("Erreur", "Menu de création indisponible.");
+        }
+    }
+
+    static focusTextarea() {
+        setTimeout(() => {
+            const area = document.querySelector('#create-modal textarea, #create-form textarea');
+            if (area) {
+                area.focus();
+                console.log("🎯 Area focused.");
+            }
+        }, 150);
+    }
+}
+
 // Initialisation automatique
 document.addEventListener('DOMContentLoaded', () => {
     ToastManager.init();
     NetworkStatusBanner.init();
     InteractionFeedback.initAll();
+    FluidityEngine.init();
+    CommandCenter.init();
 });
 
-// Export global
+/* ========================================
+   ZEN MODE & GLOBAL UTILS (Performance & Focus)
+   ======================================== */
+
+class ZenMode {
+    static toggle() {
+        document.body.classList.toggle('zen-mode-active');
+        const isActive = document.body.classList.contains('zen-mode-active');
+        if (isActive) {
+            ToastManager.info("Mode Zen Activé", "Focus sur l'essentiel.");
+        }
+    }
+}
+
+async function copyToClipboard(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+        ToastManager.success("Copié !", "Lien ou clé copié dans le presse-papiers.");
+        return true;
+    } catch (err) {
+        console.error('Failed to copy: ', err);
+        return false;
+    }
+}
+
+window.ZenMode = ZenMode;
+window.copyToClipboard = copyToClipboard;
 window.LoadingManager = LoadingManager;
 window.ToastManager = ToastManager;
 window.NetworkStatusBanner = NetworkStatusBanner;

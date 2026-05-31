@@ -294,14 +294,16 @@ function showNotificationToast(notification) {
 // Obtenir l'icône selon le type de notification
 function getNotificationIcon(type) {
     const icons = {
-        support: "💖",
-        follow: "👤",
+        support: "💎",
+        follow: "🚀",
         arc_follow: "📌",
         new_update: "📝",
-        new_arc: "📈",
+        new_arc: "🏗️",
         stream: "🔴",
         live_start: "🔴",
         encouragement: "✨",
+        peer_validation: "🤝",
+        peer_validation_high: "🔥",
         announcement_reply: "💬",
         collaboration: "🤝",
         like: "❤️",
@@ -313,26 +315,28 @@ function getNotificationIcon(type) {
     return icons[type] || "🔔";
 }
 
-// Obtenir le titre de la notification
+// Obtenir le titre de la notification (Optimisé Neuro-Psychologie: Identité & Statut)
 function getNotificationTitle(notification) {
     const titles = {
-        support: "Nouveau soutien",
-        follow: "Nouvel abonné",
-        arc_follow: "Nouveau follower de projet",
-        new_update: "Nouvelle mise à jour",
-        new_arc: "Nouveau projet",
+        support: "Soutien reçu",
+        follow: "Nouvelle connexion",
+        arc_follow: "Projet suivi",
+        new_update: "Mise à jour d'ARC",
+        new_arc: "Nouveau chantier lancé",
         stream: "Live en cours",
         live_start: "Live en cours",
-        encouragement: "Nouvel encouragement",
-        announcement_reply: "Nouvelle réponse à votre annonce",
-        collaboration: "Demande de collaboration",
-        like: "Nouveau like",
-        comment: "Nouveau commentaire",
-        live_chat: "Nouveau message du live",
-        mention: "Mention",
-        achievement: "Succès débloqué",
+        encouragement: "Boost d'énergie",
+        peer_validation: "Validation par un pair",
+        peer_validation_high: "⚡️ SIGNAL HAUT DÉTECTÉ",
+        announcement_reply: "Réponse reçue",
+        collaboration: "Opportunité de duo",
+        like: "Approbation",
+        comment: "Feedback reçu",
+        live_chat: "Message en direct",
+        mention: "Tu as été cité",
+        achievement: "Palier franchi",
     };
-    return titles[notification.type] || "Notification";
+    return titles[notification.type] || "XERA";
 }
 
 function getCurrentPageStreamId() {
@@ -641,10 +645,14 @@ function scheduleReturnReminder() {
 async function showReturnReminderNotification(reminderDate = new Date()) {
     const hour = reminderDate.getHours();
     const isMorning = hour < 14;
-    const title = isMorning ? "Rappel XERA • 10h" : "Rappel XERA • 18h";
+
+    // Neuro-Psychologie : Framing d'identité et de momentum
+    const title = isMorning ? "XERA • L'Intention" : "XERA • La Trace";
+
     const body = isMorning
-        ? "Prends 2 minutes pour documenter ta progression ce matin."
-        : "Pense à documenter ta progression de la journée sur XERA.";
+        ? "Quelle est ta micro-victoire d'aujourd'hui ? Fixe l'intention."
+        : "Ne laisse pas ton momentum s'éteindre. Documente ta progression.";
+
     const link = currentUser?.id
         ? `profile.html?user=${currentUser.id}`
         : "index.html";
@@ -806,7 +814,7 @@ function renderNotifications() {
             const displayName =
                 notif.actor?.name || getNotificationTitle(notif);
             return `
-        <div class="notification-item ${notif.read ? "" : "unread"}" onclick="handleNotificationClick('${notif.id}')" style="display:flex;gap:12px;align-items:flex-start;">
+        <div class="notification-item ${notif.read ? "" : "unread"}" data-type="${notif.type}" onclick="handleNotificationClick('${notif.id}')" style="display:flex;gap:12px;align-items:flex-start;">
             <div class="notification-leading" style="width:42px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
                 ${
                     avatar
@@ -893,18 +901,26 @@ function formatNotificationTime(timestamp) {
     return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
-// Jouer un son de notification
+// Jouer un son de notification (Optimisé Neuro : Fréquences de récompense)
 function playNotificationSound(type = "default") {
     try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
         const audioContext = new AudioCtx();
-        const pattern = type === "encouragement" ? [920, 1240] : [760];
+
+        // Fréquences harmoniques pour stimuler la dopamine (C5, E5, G5)
+        let pattern = [760];
+        if (type === "encouragement" || type === "support") {
+            pattern = [523.25, 659.25, 783.99]; // Accord de Do majeur (C-E-G)
+        } else if (type === "peer_validation_high" || type === "achievement") {
+            pattern = [659.25, 830.61, 987.77, 1318.51]; // Accord de Mi majeur montant
+        }
+
         const now = audioContext.currentTime;
 
         pattern.forEach((frequency, index) => {
-            const startAt = now + index * 0.13;
-            const stopAt = startAt + 0.09;
+            const startAt = now + index * 0.08;
+            const stopAt = startAt + 0.12;
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
             oscillator.connect(gainNode);
@@ -912,8 +928,10 @@ function playNotificationSound(type = "default") {
 
             oscillator.type = "sine";
             oscillator.frequency.value = frequency;
+
+            // Enveloppe ADSR simplifiée pour un son "premium"
             gainNode.gain.setValueAtTime(0.0001, startAt);
-            gainNode.gain.exponentialRampToValueAtTime(0.22, startAt + 0.015);
+            gainNode.gain.exponentialRampToValueAtTime(0.25, startAt + 0.02);
             gainNode.gain.exponentialRampToValueAtTime(0.0001, stopAt);
 
             oscillator.start(startAt);
@@ -924,7 +942,7 @@ function playNotificationSound(type = "default") {
             if (audioContext && typeof audioContext.close === "function") {
                 audioContext.close().catch(() => {});
             }
-        }, 700);
+        }, 1000);
     } catch (error) {
         // Ignorer les erreurs de son
     }

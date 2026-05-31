@@ -29,6 +29,428 @@ let followedUserIdsCacheUpdatedAt = 0;
 let discoverVideoObserver = null;
 let discoverRenderSequence = 0;
 
+// Pagination système pour le feed discover
+const DISCOVER_ITEMS_PER_PAGE = 20;
+let discoverPaginationState = {
+    allItems: [],
+    currentPage: 0,
+    hasMore: false,
+    isLoading: false,
+    intersectionObserver: null,
+};
+
+/**
+ * Mettre à jour les meta tags Open Graph pour le partage social
+ * Détecte le contexte (profil, contenu) et met à jour les images appropriées
+ */
+function updateOpenGraphTags(context = {}) {
+    try {
+        // Contexte par défaut
+        const pageUrl = window.location.href;
+        let ogTitle = "XERA | Tracez votre progression";
+        let ogDescription = "Découvrez les trajectoires créatives sur XERA";
+        let ogImage = "icons/logo-192x192.png";
+        let ogType = "website";
+
+        // Si contexte profil
+        if (context.userId || context.userProfile) {
+            const profile = context.userProfile || {};
+            ogTitle = `${profile.username || "Profil"} | XERA`;
+            ogDescription = profile.bio || "Découvrez ce profil sur XERA";
+            ogImage =
+                profile.profileImage ||
+                profile.avatar_url ||
+                "icons/logo-192x192.png";
+            ogType = "profile";
+        }
+
+        // Si contexte contenu
+        if (context.contentId || context.content) {
+            const content = context.content || {};
+            ogTitle = content.title || "Contenu XERA";
+            ogDescription =
+                content.description ||
+                content.title ||
+                "Découvrez ce contenu sur XERA";
+
+            // Utiliser l'image du contenu si disponible
+            if (
+                content.media &&
+                Array.isArray(content.media) &&
+                content.media.length > 0
+            ) {
+                ogImage = content.media[0].url || content.media[0];
+            } else if (content.mediaUrl) {
+                ogImage = content.mediaUrl;
+            } else if (content.thumbnail_url) {
+                ogImage = content.thumbnail_url;
+            }
+
+            ogType = "article";
+        }
+
+        // Mettre à jour les meta tags
+        updateMetaTag("og:title", ogTitle);
+        updateMetaTag("og:description", ogDescription);
+        updateMetaTag("og:image", ogImage);
+        updateMetaTag("og:url", pageUrl);
+        updateMetaTag("og:type", ogType);
+
+        // Twitter Card
+        updateMetaTag("twitter:title", ogTitle);
+        updateMetaTag("twitter:description", ogDescription);
+        updateMetaTag("twitter:image", ogImage);
+
+        // Mettre à jour aussi le title principal
+        if (context.userId || context.userProfile) {
+            document.title = `${context.userProfile?.username || "Profil"} | XERA`;
+        }
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour des meta tags OG:", error);
+    }
+}
+
+/**
+ * Utility pour créer ou mettre à jour une meta tag
+ */
+function updateMetaTag(property, content) {
+    if (!content) return;
+
+    let tag = document.querySelector(
+        `meta[property="${property}"], meta[name="${property}"]`,
+    );
+
+    if (!tag) {
+        tag = document.createElement("meta");
+        tag.setAttribute("property", property);
+        document.head.appendChild(tag);
+    }
+
+    tag.setAttribute("content", content);
+}
+
+/* ========================================
+   STRATÉGIE DE CROISSANCE VIRALE
+   Engager les utilisateurs à inviter leurs potes sans message explicite
+   ======================================== */
+
+/**
+ * Calcule les stats de portée d'un utilisateur
+ * Montre implicitement son influence sans être agressif
+ */
+function calculateUserReachStats(userId) {
+    try {
+        const followers = getFollowerCount(userId);
+        const contents = getUserContentLocal(userId) || [];
+        const totalViews = contents.reduce((sum, c) => sum + (c.views || 0), 0);
+        const totalEncouragements = contents.reduce(
+            (sum, c) => sum + (c.encouragementsCount || 0),
+            0,
+        );
+
+        // Score d'influence: followers + engagement
+        const influenceScore = followers + Math.log1p(totalEncouragements) * 10;
+
+        return {
+            followers,
+            totalViews,
+            totalEncouragements,
+            influenceScore,
+            contentCount: contents.length,
+            monthlyViews: totalViews, // Simplifié pour MVP
+        };
+    } catch (e) {
+        return {
+            followers: 0,
+            totalViews: 0,
+            totalEncouragements: 0,
+            influenceScore: 0,
+            contentCount: 0,
+        };
+    }
+}
+
+/**
+ * Compte les followers d'un utilisateur
+ */
+function getFollowerCount(userId) {
+    if (!window.supabase || !userId) return 0;
+    // Cette donnée devrait venir de la DB, pour MVP on utilise une approximation
+    const followers = new Set();
+    if (window.userContents && window.userContents[userId]) {
+        // Chaque utilisateur qui a interagi est un "contact potentiel"
+        Object.keys(window.userContents).forEach((uid) => {
+            if (uid !== userId && window.userContents[uid]?.length > 0) {
+                followers.add(uid);
+            }
+        });
+    }
+    return followers.size;
+}
+
+/**
+ * Génère un badge de "contributeur majeur" subtle
+ * Récompense implicitement ceux qui créent du contenu
+ */
+function getContributorBadgeHtml(userId) {
+    try {
+        const stats = calculateUserReachStats(userId);
+
+        // Badge conditions (subtle, pas agressif)
+        let badgeClass = "";
+        let badgeText = "";
+
+        if (stats.contentCount >= 50 && stats.followers >= 20) {
+            badgeClass = "badge-creator-elite";
+            badgeText = "Créateur Elite";
+        } else if (stats.contentCount >= 20 && stats.followers >= 10) {
+            badgeClass = "badge-creator-established";
+            badgeText = "Créateur Établi";
+        } else if (stats.contentCount >= 5) {
+            badgeClass = "badge-creator-emerging";
+            badgeText = "Créateur";
+        } else {
+            return ""; // Pas de badge pour les non-contributeurs
+        }
+
+        return `
+            <span class="contributor-badge ${badgeClass}" title="${badgeText}: Créateur actif de contenu">
+                ⭐ ${badgeText}
+            </span>
+        `;
+    } catch (e) {
+        return "";
+    }
+}
+
+/**
+ * Affiche les statistiques de portée de manière subtle
+ * Crée un sentiment d'accomplissement et de croissance
+ */
+function renderReachStatsWidget(userId) {
+    try {
+        const stats = calculateUserReachStats(userId);
+
+        // Ne montrer que si l'utilisateur a du contenu
+        if (stats.contentCount === 0) return "";
+
+        // Format compact pour intégration subtile
+        return `
+            <div class="reach-stats-widget">
+                <div class="reach-stat-item">
+                    <span class="reach-icon">👥</span>
+                    <span class="reach-value">${stats.followers}</span>
+                    <span class="reach-label">followers</span>
+                </div>
+                <div class="reach-stat-item">
+                    <span class="reach-icon">👁️</span>
+                    <span class="reach-value">${formatCompactCount(stats.totalViews)}</span>
+                    <span class="reach-label">vues</span>
+                </div>
+                <div class="reach-stat-item">
+                    <span class="reach-icon">💪</span>
+                    <span class="reach-value">${formatCompactCount(stats.totalEncouragements)}</span>
+                    <span class="reach-label">encouragements</span>
+                </div>
+            </div>
+        `;
+    } catch (e) {
+        return "";
+    }
+}
+
+/**
+ * Génère un widget de "friends on XERA"
+ * Social proof: montrer les amis qui sont déjà là
+ */
+function renderFriendsOnXeraWidget(userId) {
+    try {
+        const friends = [];
+        const allFollowing = getFollowingList(userId) || [];
+
+        // Limiter à 5 amis pour ne pas surcharger
+        allFollowing.slice(0, 5).forEach((friendId) => {
+            const friend = getUser(friendId);
+            if (friend && friend.avatar) {
+                friends.push({ id: friendId, avatar: friend.avatar });
+            }
+        });
+
+        if (friends.length === 0) return "";
+
+        const friendAvatars = friends
+            .map(
+                (f) =>
+                    `<img src="${f.avatar}" alt="" class="friend-avatar" onclick="handleProfileClick('${f.id}', null, true)">`,
+            )
+            .join("");
+
+        const moreCount = Math.max(0, allFollowing.length - 5);
+        const moreText =
+            moreCount > 0
+                ? `<span class="friends-more">+${moreCount}</span>`
+                : "";
+
+        return `
+            <div class="friends-on-xera-widget">
+                <span class="friends-label">Tes potes sur XERA 👋</span>
+                <div class="friends-avatars">
+                    ${friendAvatars}
+                    ${moreText}
+                </div>
+            </div>
+        `;
+    } catch (e) {
+        return "";
+    }
+}
+
+/**
+ * Smart notification quand un ami rejoint XERA
+ */
+function showFriendJoinedNotification(friendId, friendName) {
+    try {
+        const notification = document.createElement("div");
+        notification.className = "friend-joined-toast";
+        notification.innerHTML = `
+            <div class="friend-joined-content">
+                <span class="toast-icon">🎉</span>
+                <div class="toast-text">
+                    <strong>${friendName}</strong> a rejoint XERA
+                </div>
+                <button class="toast-action" onclick="handleProfileClick('${friendId}', null, true)">
+                    Voir
+                </button>
+            </div>
+        `;
+
+        const container = document.getElementById("toast-container");
+        if (container) {
+            container.appendChild(notification);
+            setTimeout(() => notification.remove(), 4000);
+        }
+    } catch (e) {
+        console.error("Toast notification error:", e);
+    }
+}
+
+/**
+ * Générer un bouton de partage élégant et naturel
+ * Intégré dans le profil/post, pas comme CTA agressif
+ */
+function renderShareButton(context = {}) {
+    const { userId = null, contentId = null, className = "" } = context;
+
+    let shareUrl = window.location.href;
+    let shareTitle = "XERA | Tracez votre progression";
+
+    if (userId) {
+        shareUrl = buildProfileUrl(userId);
+        const user = getUser(userId);
+        shareTitle = `Découvre ${user?.name || "ce profil"} sur XERA`;
+    } else if (contentId) {
+        const content = findContentById(contentId);
+        if (content) {
+            shareUrl = `${buildProfileUrl(content.userId)}?content=${contentId}`;
+            shareTitle = content.title || "Découvre ce contenu sur XERA";
+        }
+    }
+
+    return `
+        <button class="btn-share-elegant ${className}" onclick="shareContentElegant('${shareUrl}', '${shareTitle}')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="18" cy="5" r="3"></circle>
+                <circle cx="6" cy="12" r="3"></circle>
+                <circle cx="18" cy="19" r="3"></circle>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+            </svg>
+            <span>Partager</span>
+        </button>
+    `;
+}
+
+/**
+ * Native share avec fallback
+ */
+window.shareContentElegant = async function (url, title) {
+    try {
+        if (navigator.share) {
+            await navigator.share({
+                title: title,
+                url: url,
+            });
+        } else {
+            // Fallback: copier dans le presse-papiers
+            await navigator.clipboard.writeText(url);
+            showToastNotification("Lien copié ! 📋", "success");
+        }
+    } catch (e) {
+        console.error("Share error:", e);
+    }
+};
+
+/**
+ * Obtenir la liste des utilisateurs suivis
+ */
+function getFollowingList(userId) {
+    // Simplifié pour MVP - à implémenter avec la DB complète
+    const following = [];
+    if (window.userContents) {
+        Object.keys(window.userContents).forEach((uid) => {
+            if (uid !== userId) following.push(uid);
+        });
+    }
+    return following;
+}
+
+window.showFriendJoinedNotification = showFriendJoinedNotification;
+window.calculateUserReachStats = calculateUserReachStats;
+window.getContributorBadgeHtml = getContributorBadgeHtml;
+
+/**
+ * Injecter les widgets de croissance virale dans le profil
+ */
+function injectViralGrowthWidgets(userId) {
+    try {
+        const profileContainer = document.querySelector(".profile-container");
+        if (!profileContainer) return;
+
+        // Injecter après le header du profil
+        const profileHeader = profileContainer.querySelector(".profile-header");
+        if (!profileHeader) return;
+
+        let injectionPoint = profileHeader.nextElementSibling;
+
+        // Vérifier qu'on n'a pas déjà injecté
+        if (injectionPoint?.className.includes("viral-growth-section")) return;
+
+        // Créer le conteneur des widgets
+        const viralSection = document.createElement("div");
+        viralSection.className = "viral-growth-section";
+        viralSection.innerHTML = `
+            ${renderReachStatsWidget(userId)}
+            ${renderFriendsOnXeraWidget(userId)}
+            ${renderShareButton({ userId, className: "btn-share-profile" })}
+        `;
+
+        // Injecter avant la timeline
+        if (injectionPoint) {
+            injectionPoint.parentNode.insertBefore(
+                viralSection,
+                injectionPoint,
+            );
+        } else {
+            profileHeader.parentNode.insertBefore(
+                viralSection,
+                profileHeader.nextSibling,
+            );
+        }
+    } catch (e) {
+        console.error("Error injecting viral widgets:", e);
+    }
+}
+
 function isMobileDevice() {
     return window.matchMedia && window.matchMedia("(max-width: 768px)").matches;
 }
@@ -50,6 +472,24 @@ function getInitialAppAction() {
             .toLowerCase();
     } catch (error) {
         return "";
+    }
+}
+
+function getInitialArcId() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        return params.get("arc") || null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function getInitialContentId() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        return params.get("content") || null;
+    } catch (error) {
+        return null;
     }
 }
 
@@ -372,8 +812,93 @@ async function updateMonetizationNavButton(isLoggedIn) {
 }
 
 /* ========================================
-   COLLABORATIONS D'ARC
+   TRAJECTORY GUARD (Indispensable Progression)
    ======================================== */
+
+async function renderTrajectoryGuard(userId) {
+    if (!window.currentUserId || window.currentUserId !== userId) return "";
+
+    // Utiliser les métriques du mois en cours
+    const now = new Date();
+    const { startStr, endStr, daysInMonth } = getMonthRange(
+        now.getFullYear(),
+        now.getMonth(),
+    );
+
+    try {
+        const { data: metrics } = await supabase
+            .from("daily_metrics")
+            .select("date, success_count")
+            .eq("user_id", userId)
+            .gte("date", startStr)
+            .lte("date", endStr);
+
+        const successData = Array(daysInMonth).fill(0);
+        (metrics || []).forEach((m) => {
+            const d = new Date(m.date).getDate();
+            successData[d - 1] = m.success_count || 0;
+        });
+
+        // Calcul du momentum aligné sur analytics.js
+        const activeDays = successData.filter((v) => v > 0).length;
+        const totalVolume = successData.reduce((a, b) => a + b, 0);
+        const frequency = activeDays / now.getDate();
+        const mean = totalVolume / now.getDate();
+        const variance =
+            successData
+                .slice(0, now.getDate())
+                .reduce((a, b) => a + Math.pow(b - mean, 2), 0) / now.getDate();
+        const consistency = 1 / (1 + Math.pow(variance, 0.5));
+        const avgDaily = activeDays > 0 ? totalVolume / activeDays : 0;
+        const intensity = Math.min(1.4, 0.5 + avgDaily / 4);
+
+        const momentum =
+            activeDays > 0
+                ? Math.min(
+                      100,
+                      Math.round(
+                          intensity *
+                              Math.pow(frequency, 1.5) *
+                              consistency *
+                              130,
+                      ),
+                  )
+                : 0;
+
+        const needsAction = successData[now.getDate() - 1] === 0;
+
+        return `
+            <div class="trajectory-guard ${momentum < 30 ? "guard-low" : "guard-solid"}">
+                <div class="guard-header">
+                    <div class="guard-title">
+                        <span class="guard-icon">${momentum < 30 ? "⚠️" : "⚡"}</span>
+                        <strong>État de trajectoire</strong>
+                    </div>
+                    <div class="guard-momentum">
+                        <span class="momentum-label">Momentum:</span>
+                        <span class="momentum-value">${momentum}%</span>
+                    </div>
+                </div>
+                <div class="guard-body">
+                    <div class="guard-message">
+                        <p>${
+                            needsAction
+                                ? "<strong>Alerte :</strong> Tu n'as pas validé de Trace aujourd'hui. Ta trajectoire risque de s'affaiblir."
+                                : "<strong>Trajectoire active :</strong> Continue ! Chaque Trace renforce ton autorité sur cet ARC."
+                        }</p>
+                    </div>
+                </div>
+                <div class="guard-footer">
+                    <button class="btn-guard-action" onclick="openCreateModal()">
+                        ${needsAction ? "Relancer maintenant" : "Loguer une Trace"}
+                    </button>
+                </div>
+            </div>
+        `;
+    } catch (e) {
+        return "";
+    }
+}
 
 function getArcCollaboratorsCached(arcId) {
     if (!arcId) return [];
@@ -894,9 +1419,12 @@ async function closeOwnOrphanLiveSessions(userId, options = {}) {
 
 // Vérifier l'authentification au chargement
 async function initializeApp() {
+    if (typeof FluidityEngine !== "undefined") FluidityEngine.startLoading();
     const grid = document.querySelector(".discover-grid");
     const waitMessage = document.querySelector(".wait");
     const initialProfileId = getInitialProfileUserId();
+    const initialArcId = getInitialArcId();
+    const initialContentId = getInitialContentId();
     const profileOnlyPage = isProfileOnlyPage();
     const discoverAvailable = hasDiscoverPage();
 
@@ -911,7 +1439,15 @@ async function initializeApp() {
         Promise.resolve().then(async () => {
             try {
                 await renderDiscoverGrid();
+                if (typeof window.ToastManager !== "undefined") {
+                    window.ToastManager.success(
+                        "XΞRA High-Signal",
+                        "Momentum Engine & Fluidity Active.",
+                        3000,
+                    );
+                }
                 if (initialProfileId) {
+                    if (initialArcId) window.selectedArcId = initialArcId;
                     window.currentProfileViewed = initialProfileId;
                     await renderProfileIntoContainer(initialProfileId);
                 } else if (window.currentUserId) {
@@ -953,6 +1489,13 @@ async function initializeApp() {
             window.userLoadError = "Supabase client introuvable";
             window.hasLoadedUsers = true;
             await renderDiscoverGrid();
+            if (typeof window.ToastManager !== "undefined") {
+                window.ToastManager.success(
+                    "XΞRA High-Signal",
+                    "Momentum Engine & Fluidity Active.",
+                    3000,
+                );
+            }
             if (waitMessage) waitMessage.classList.add("is-hidden");
             clearTimeout(safetyTimeout);
             return;
@@ -1027,10 +1570,30 @@ async function initializeApp() {
         subscribeToRealtime();
 
         await renderDiscoverGrid();
+        if (typeof window.ToastManager !== "undefined") {
+            window.ToastManager.success(
+                "XΞRA High-Signal",
+                "Momentum Engine & Fluidity Active.",
+                3000,
+            );
+        }
 
         if (initialProfileId) {
+            if (initialArcId) window.selectedArcId = initialArcId;
             window.currentProfileViewed = initialProfileId;
             await renderProfileIntoContainer(initialProfileId);
+            if (initialContentId) {
+                setTimeout(() => {
+                    document
+                        .querySelector(
+                            `[data-content-id="${initialContentId}"]`,
+                        )
+                        ?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                        });
+                }, 500);
+            }
         } else if (window.currentUserId) {
             await renderProfileIntoContainer(window.currentUserId);
         }
@@ -1049,6 +1612,13 @@ async function initializeApp() {
         window.userLoadError = error?.message || "Erreur de chargement";
         window.hasLoadedUsers = true;
         await renderDiscoverGrid();
+        if (typeof window.ToastManager !== "undefined") {
+            window.ToastManager.success(
+                "XΞRA High-Signal",
+                "Momentum Engine & Fluidity Active.",
+                3000,
+            );
+        }
         if (waitMessage) waitMessage.classList.add("is-hidden");
     }
 }
@@ -3002,12 +3572,47 @@ function timeAgo(date) {
     }
 }
 
+/**
+ * Charge les images pour un slide spécifique et ses slides adjacentes
+ * Optimise le chargement en fonction de la navigation
+ */
+function loadCarouselImagesForIndex(carousel, index, slideCount) {
+    if (!carousel) return;
+
+    const slides = carousel.querySelectorAll(".xera-carousel-slide img");
+    if (slides.length === 0) return;
+
+    // Charger l'image courante en priorité, puis les images adjacentes
+    const indicesToLoad = [index];
+    if (index > 0) indicesToLoad.unshift(index - 1); // Slide précédente
+    if (index < slideCount - 1) indicesToLoad.push(index + 1); // Slide suivante
+
+    indicesToLoad.forEach((idx, order) => {
+        if (idx >= 0 && idx < slides.length) {
+            const img = slides[idx];
+            const dataSrc = img.getAttribute("data-src");
+            if (dataSrc) {
+                // Charger avec un délai progressif basé sur la priorité
+                setTimeout(() => {
+                    if (img.getAttribute("data-src")) {
+                        img.src = dataSrc;
+                        img.removeAttribute("data-src");
+                    }
+                }, order * 100);
+            }
+        }
+    });
+}
+
 function initXeraCarousels(root = document) {
     const scope = root || document;
     const carousels = Array.from(scope.querySelectorAll("[data-carousel]"));
     carousels.forEach((carousel) => {
         if (carousel.dataset.carouselInit === "1") return;
         carousel.dataset.carouselInit = "1";
+
+        // Charger les images de manière séquentielle
+        sequentiallyLoadCarouselImages(carousel);
 
         const track = carousel.querySelector(".xera-carousel-track");
         if (!track) return;
@@ -3041,6 +3646,8 @@ function initXeraCarousels(root = document) {
                     ),
                 );
                 setActive(idx);
+                // Charger progressivement les images visibles et adjacentes
+                loadCarouselImagesForIndex(carousel, idx, slideCount);
                 ticking = false;
             });
         };
@@ -3053,6 +3660,8 @@ function initXeraCarousels(root = document) {
                 behavior: "smooth",
             });
             setActive(safeIndex);
+            // Charger les images pour l'index cible
+            loadCarouselImagesForIndex(carousel, safeIndex, slideCount);
         };
 
         track.addEventListener("scroll", updateFromScroll, {
@@ -3508,14 +4117,68 @@ async function notifyEncouragement(contentId) {
     const owner = await fetchContentOwner(contentId);
     if (!owner || !owner.user_id) return;
     const ownerId = owner.user_id;
-    if (ownerId === currentUser?.id) return; // Pas de notif pour soi-même
+    if (ownerId === currentUser?.id) return;
+
     const actorName = getCurrentUserDisplayName();
-    const message = `${actorName} t'a encouragé sur "${owner.title || "ta mise à jour"}"`;
     const link = safeProfileLink(ownerId);
+
+    // --- PREDATORY INSTINCT: High-Signal Validation (Style Meta) ---
     try {
-        await createNotification(ownerId, "encouragement", message, link);
+        // Vérifier si l'acteur a des ARCs actifs (c'est un "Peer")
+        const { data: actorArcs } = await supabase
+            .from("arcs")
+            .select("title, status")
+            .eq("user_id", currentUser.id);
+
+        const isPeer = actorArcs && actorArcs.length > 0;
+
+        // Vérifier la similarité (High Signal)
+        let isHighSignal = false;
+        if (isPeer && owner.arc_id) {
+            const { data: targetArc } = await supabase
+                .from("arcs")
+                .select("title")
+                .eq("id", owner.arc_id)
+                .single();
+
+            if (targetArc) {
+                const targetTitle = targetArc.title.toLowerCase();
+                isHighSignal = actorArcs.some((a) => {
+                    const myTitle = a.title.toLowerCase();
+                    // Similarité simple par mots-clés (ex: "AI", "Startup", "Dev", "Game")
+                    const keywords = [
+                        "ai",
+                        "startup",
+                        "dev",
+                        "game",
+                        "code",
+                        "design",
+                        "build",
+                    ];
+                    return keywords.some(
+                        (k) => targetTitle.includes(k) && myTitle.includes(k),
+                    );
+                });
+            }
+        }
+
+        let type = "encouragement";
+        let message = `${actorName} t'a encouragé sur "${owner.title || "ta mise à jour"}"`;
+
+        if (isHighSignal) {
+            type = "peer_validation_high";
+            message = `🔥 VALIDATION HAUT-SIGNAL : ${actorName} (expert du domaine) a validé ta progression !`;
+        } else if (isPeer) {
+            type = "peer_validation";
+            message = `🤝 VALIDATION PAIR : ${actorName} (builder actif) a validé ta Trace.`;
+        }
+
+        await createNotification(ownerId, type, message, link);
     } catch (e) {
-        console.warn("notifyEncouragement createNotification error", e);
+        console.warn("High-Signal Validation error:", e);
+        // Fallback
+        const message = `${actorName} t'a encouragé sur "${owner.title || "ta mise à jour"}"`;
+        await createNotification(ownerId, "encouragement", message, link);
     }
 }
 
@@ -3706,9 +4369,12 @@ async function toggleCourage(contentId, btnElement) {
         const content = findContentById(contentId);
         updateImmersivePrefs(content, "like");
         // Notifier l'auteur de la mise à jour (sauf auto-encouragement)
-        notifyEncouragement(contentId).catch((e) =>
-            console.warn("notifyEncouragement error", e),
-        );
+        notifyEncouragement(contentId)
+            .then(() => {
+                // Meta Style: Predatory Feedback
+                // Si on a les infos, on pourrait afficher un toast spécial ici aussi
+            })
+            .catch((e) => console.warn("notifyEncouragement error", e));
     } catch (error) {
         console.error("Erreur toggleCourage:", error);
         // Revert on error
@@ -4616,6 +5282,13 @@ async function refreshAdminSubscriptionRelatedViews(user) {
             document.querySelector(".discover-grid")
         ) {
             await renderDiscoverGrid();
+            if (typeof window.ToastManager !== "undefined") {
+                window.ToastManager.success(
+                    "XΞRA High-Signal",
+                    "Momentum Engine & Fluidity Active.",
+                    3000,
+                );
+            }
         }
     } catch (error) {
         console.warn("Refresh discover after payment confirm failed:", error);
@@ -7598,6 +8271,15 @@ window.discoverFilter = "all";
 function setDiscoverFilter(filter = "all", { render = true } = {}) {
     window.discoverFilter = filter;
 
+    // Réinitialiser la pagination quand on change de filtre
+    discoverPaginationState.allItems = [];
+    discoverPaginationState.currentPage = 0;
+    discoverPaginationState.hasMore = false;
+    if (discoverPaginationState.intersectionObserver) {
+        discoverPaginationState.intersectionObserver.disconnect();
+        discoverPaginationState.intersectionObserver = null;
+    }
+
     // Update UI buttons
     document.querySelectorAll(".discover-filter .filter-btn").forEach((btn) => {
         const isActive = btn.dataset.filter === filter;
@@ -7611,6 +8293,9 @@ function setDiscoverFilter(filter = "all", { render = true } = {}) {
 window.toggleDiscoverFilter = function (filter) {
     setDiscoverFilter(filter, { render: true });
 };
+
+window.loadNextDiscoverPage = loadNextDiscoverPage;
+window.setupDiscoverPaginationObserver = setupDiscoverPaginationObserver;
 
 function showDiscoverSkeleton(grid, count = 8) {
     if (!grid) return;
@@ -8282,8 +8967,8 @@ function renderUserCard(
             if (hasMultiImages) {
                 const slides = mediaList
                     .map(
-                        (url) =>
-                            `<div class="xera-carousel-slide"><img class="card-media" src="${url}" alt="${latestContent.title || "Preview"}" loading="lazy" decoding="async" data-content-id="${latestContent.contentId}"></div>`,
+                        (url, index) =>
+                            `<div class="xera-carousel-slide"><img class="card-media" ${index === 0 ? `src="${url}"` : `data-src="${url}"`} alt="${latestContent.title || "Preview"}" loading="lazy" decoding="async" data-content-id="${latestContent.contentId}"></div>`,
                     )
                     .join("");
                 const dots = `<div class="xera-carousel-dots">${mediaList
@@ -8354,6 +9039,9 @@ function renderUserCard(
             </div>
 `;
     }
+
+    // Momentum badge removed
+    const momentumBadgeHtml = ``;
 
     // Déterminer la classe CSS selon le type de média pour l'adaptation
     const verifiedClass = isVerifiedUser ? " verified-card" : "";
@@ -8430,6 +9118,7 @@ function renderUserCard(
                 <img src="${user.avatar || "https://placehold.co/40"}" class="card-avatar" loading="lazy" decoding="async">
                 <div class="profile-link-text">
                     <h3 class="discover-user-name">${renderUsernameWithBadge(user.name, user.id)}${monetizationBadgeHtml}</h3>
+                    ${momentumBadgeHtml}
                     <div class="card-user-title">${user.title || ""}</div>
                 </div>
             </button>
@@ -9233,6 +9922,102 @@ function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
     }
 }
 
+/**
+ * Charge et affiche les prochains éléments du feed de manière progressive
+ * Ajoute 20 éléments et les charge un par un
+ */
+function loadNextDiscoverPage() {
+    if (discoverPaginationState.isLoading || !discoverPaginationState.hasMore)
+        return;
+
+    discoverPaginationState.isLoading = true;
+    const grid = document.querySelector(".discover-grid");
+    if (!grid) return;
+
+    const startIdx =
+        (discoverPaginationState.currentPage + 1) * DISCOVER_ITEMS_PER_PAGE;
+    const endIdx = Math.min(
+        startIdx + DISCOVER_ITEMS_PER_PAGE,
+        discoverPaginationState.allItems.length,
+    );
+
+    const itemsToAdd = discoverPaginationState.allItems.slice(startIdx, endIdx);
+    const fragment = document.createDocumentFragment();
+
+    // Ajouter les nouveaux éléments au DOM
+    itemsToAdd.forEach((item, order) => {
+        const { html, key, contentId, type, rowSize, rowPosition } = item;
+        setTimeout(() => {
+            const node = createDiscoverElement(html, key, contentId, {
+                markAsNew: false,
+            });
+            if (node && type) node.dataset.type = type;
+            if (node && rowSize) node.dataset.rowSize = rowSize;
+            if (node && rowPosition) node.dataset.rowPosition = rowPosition;
+            if (node) grid.appendChild(node);
+
+            // Initialiser les interactions pour le nouvel élément
+            if (typeof setupDiscoverVideoInteractions === "function") {
+                setupDiscoverVideoInteractions();
+            }
+            if (typeof initDiscoverMoodTracking === "function") {
+                initDiscoverMoodTracking();
+            }
+        }, order * 80); // Charger les éléments un par un avec 80ms d'intervalle
+    });
+
+    discoverPaginationState.currentPage++;
+    discoverPaginationState.hasMore =
+        endIdx < discoverPaginationState.allItems.length;
+    discoverPaginationState.isLoading = false;
+
+    // Recréer l'intersection observer après avoir ajouté les éléments
+    if (discoverPaginationState.hasMore) {
+        setupDiscoverPaginationObserver();
+    }
+}
+
+/**
+ * Configure l'Intersection Observer pour détecter quand on atteint la fin du feed
+ */
+function setupDiscoverPaginationObserver() {
+    const grid = document.querySelector(".discover-grid");
+    if (!grid) return;
+
+    // Nettoyer l'ancien observateur
+    if (discoverPaginationState.intersectionObserver) {
+        discoverPaginationState.intersectionObserver.disconnect();
+    }
+
+    // Créer un nouvel observateur
+    const options = {
+        root: null,
+        rootMargin: "300px",
+        threshold: 0,
+    };
+
+    discoverPaginationState.intersectionObserver = new IntersectionObserver(
+        (entries) => {
+            entries.forEach((entry) => {
+                if (
+                    entry.isIntersecting &&
+                    !discoverPaginationState.isLoading &&
+                    discoverPaginationState.hasMore
+                ) {
+                    loadNextDiscoverPage();
+                }
+            });
+        },
+        options,
+    );
+
+    // Observer le dernier élément du grid
+    const lastChild = grid.lastElementChild;
+    if (lastChild) {
+        discoverPaginationState.intersectionObserver.observe(lastChild);
+    }
+}
+
 async function renderDiscoverGrid() {
     const renderSequence = ++discoverRenderSequence;
     const grid = document.querySelector(".discover-grid");
@@ -9442,9 +10227,24 @@ async function renderDiscoverGrid() {
 
     if (renderedItems.length > 0) {
         assignDiscoverRowLayout(renderedItems);
-        reconcileDiscoverGrid(grid, renderedItems, waitMessage);
+
+        // Implémenter la pagination: afficher seulement les 20 premiers éléments
+        discoverPaginationState.allItems = renderedItems;
+        discoverPaginationState.currentPage = 0;
+        discoverPaginationState.hasMore =
+            renderedItems.length > DISCOVER_ITEMS_PER_PAGE;
+
+        // Afficher seulement les 20 premiers éléments
+        const initialItems = renderedItems.slice(0, DISCOVER_ITEMS_PER_PAGE);
+        reconcileDiscoverGrid(grid, initialItems, waitMessage);
+
         setupDiscoverVideoInteractions();
         initDiscoverMoodTracking();
+
+        // Initialiser l'observateur pour la pagination
+        if (discoverPaginationState.hasMore) {
+            setupDiscoverPaginationObserver();
+        }
         return;
     }
 
@@ -10477,9 +11277,33 @@ async function renderImmersiveFeed(contents) {
                     : 0;
             // Defensive: some cached/local items may still carry the tag payload inside
             // `description` (e.g. "\n\n#hashtags: ..."). Keep immersive copy clean.
-            const immersiveDescription = extractTagsFromDescription(
+            const fullDescription = extractTagsFromDescription(
                 content.rawDescription || content.description || "",
             ).cleanDescription;
+
+            // Nettoyer le titre en retirant le prefix "Objectif:" ou "objectif:"
+            let cleanTitle = content.title || "";
+            // Retirer "Objectif: ", "Objectif:" ou "objectif:" au début du titre
+            cleanTitle = cleanTitle
+                .replace(/^(Objectif|objectif):\s*/i, "")
+                .trim();
+
+            // Extract first two lines of description for immersive display
+            const extractFirstTwoLines = (text) => {
+                if (!text) return { preview: "", full: text, hasMore: false };
+                const lines = text.split("\n").filter((line) => line.trim());
+                if (lines.length <= 2) {
+                    return { preview: text, full: text, hasMore: false };
+                }
+                const preview = lines.slice(0, 2).join("\n");
+                return { preview, full: text, hasMore: true };
+            };
+            const descriptionInfo = extractFirstTwoLines(fullDescription);
+            const immersiveDescription = descriptionInfo.preview;
+            const hasMoreDescription =
+                descriptionInfo.hasMore &&
+                fullDescription &&
+                fullDescription.length > immersiveDescription.length;
 
             const contentBadges = getContentBadges(content);
             // Include user badges as well (consistent with Discover cards)
@@ -10569,8 +11393,8 @@ async function renderImmersiveFeed(contents) {
                     if (mediaList.length > 1) {
                         const slides = mediaList
                             .map(
-                                (u) =>
-                                    `<div class="xera-carousel-slide"><img src="${u}" class="immersive-image" alt="${content.title || "Media"}" loading="lazy" decoding="async"></div>`,
+                                (u, index) =>
+                                    `<div class="xera-carousel-slide"><img ${index === 0 ? `src="${u}"` : `data-src="${u}"`} class="immersive-image" alt="${content.title || "Media"}" loading="lazy" decoding="async"></div>`,
                             )
                             .join("");
                         const dots = `<div class="xera-carousel-dots">${mediaList
@@ -10680,8 +11504,8 @@ async function renderImmersiveFeed(contents) {
                             }
                         </div>
                         
-                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                            <h2>${content.title}</h2>
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top: -0.8rem;">
+                            <h2>${cleanTitle}</h2>
                             <div class="post-stats" style="display:flex; gap:1rem;">
                                 <div class="stat-pill" title="Vues">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -10694,7 +11518,9 @@ async function renderImmersiveFeed(contents) {
                             </div>
                         </div>
                         
-                        <p>${immersiveDescription}</p>
+                        <div class="immersive-description-wrapper" data-content-id="${content.contentId}">
+                            <p class="immersive-description" onclick="event.stopPropagation(); expandImmersiveDescription('${content.contentId}', ${inlineJsString(fullDescription)}, ${content.views || 0}, ${content.encouragementsCount || 0})">${immersiveDescription}</p>
+                        </div>
                         ${moodActionsHtml}
                         ${immersiveReplyHtml}
                         <div class="immersive-post-user">
@@ -10715,6 +11541,8 @@ async function renderImmersiveFeed(contents) {
                         </div>
                         <div class="badges-immersive">
                             ${badgesHtml}
+                            ${getContributorBadgeHtml(content.userId)}
+                            ${renderShareButton({ contentId: content.contentId, className: "btn-share-post-immersive" })}
                         </div>
                     </div>
                 </div>
@@ -12146,6 +12974,8 @@ async function renderProfileTimeline(userId) {
         }
     }
 
+    const trajectoryGuardHtml = await renderTrajectoryGuard(userId);
+
     // Générer HTML des ARCs
     let arcsHtml = "";
     if (allArcs.length > 0) {
@@ -12600,6 +13430,7 @@ ${
     `;
     const publicActivityHtml = showPublicActivity
         ? `
+${trajectoryGuardHtml}
 ${projectProgressBoardHtml}
 ${arcsHtml}
 ${collabRequestsHtml}
@@ -12731,6 +13562,17 @@ async function renderProfileIntoContainer(userId) {
             } else {
                 profileContainer.classList.remove("is-community");
             }
+
+            // Mettre à jour les meta tags Open Graph pour le partage du profil
+            updateOpenGraphTags({
+                userId: userId,
+                userProfile: {
+                    username: user.username || "Profil",
+                    bio: user.bio || "",
+                    avatar_url: user.avatar_url || user.avatarUrl || "",
+                    profileImage: user.avatar_url || user.avatarUrl || "",
+                },
+            });
         }
 
         profileContainer.classList.toggle("arc-view", !!window.selectedArcId);
@@ -12742,6 +13584,9 @@ async function renderProfileIntoContainer(userId) {
         if (window.renderInfluenceReach) window.renderInfluenceReach(userId);
         maybeShowAmbassadorWelcome(userId);
         maybeApplyLatestPublishedPostHighlight(userId);
+
+        // Injecter les widgets de croissance virale
+        injectViralGrowthWidgets(userId);
     };
 
     if (
@@ -13943,20 +14788,24 @@ async function openSettings(userId) {
                             <span class="settings-nav-glyph">06</span>
                             <span><strong>Réseaux</strong><small>Liens publics</small></span>
                         </button>
-                        <button type="button" class="settings-nav-item" data-settings-target="privacy">
+                        <button type="button" class="settings-nav-item" data-settings-target="direct-hook">
                             <span class="settings-nav-glyph">07</span>
+                            <span><strong>Direct Hook</strong><small>API & Webhooks</small></span>
+                        </button>
+                        <button type="button" class="settings-nav-item" data-settings-target="privacy">
+                            <span class="settings-nav-glyph">08</span>
                             <span><strong>Confidentialité</strong><small>Visibilité et messages</small></span>
                         </button>
                         <button type="button" class="settings-nav-item" data-settings-target="blocked">
-                            <span class="settings-nav-glyph">08</span>
+                            <span class="settings-nav-glyph">09</span>
                             <span><strong>Blocages</strong><small>${blockedUsers.length} utilisateur${blockedUsers.length > 1 ? "s" : ""}</small></span>
                         </button>
                         <button type="button" class="settings-nav-item" data-settings-target="session">
-                            <span class="settings-nav-glyph">09</span>
+                            <span class="settings-nav-glyph">10</span>
                             <span><strong>Session</strong><small>Déconnexion</small></span>
                         </button>
                         <button type="button" class="settings-nav-item settings-nav-danger" data-settings-target="danger">
-                            <span class="settings-nav-glyph">10</span>
+                            <span class="settings-nav-glyph">11</span>
                             <span><strong>Danger</strong><small>Suppression du compte</small></span>
                         </button>
                     </aside>
@@ -14278,6 +15127,43 @@ async function openSettings(userId) {
                                     <img src="icons/link.svg" alt="Site">
                                     <input type="text" class="form-input" data-social="site" placeholder="https://example.com" value="${socialLinks.site || ""}">
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Direct Hook (Developers) -->
+                <div class="accordion-section settings-panel" data-settings-section="direct-hook">
+                    <button type="button" class="accordion-header">
+                        <div class="accordion-title">
+                            <span>Direct Hook (API pour Builders)</span>
+                        </div>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="accordion-body">
+                            <p class="section-desc">Rendez votre log automatique. Envoyez des Traces directement depuis votre terminal ou vos scripts Git.</p>
+
+                            <div class="form-group">
+                                <label>Clé API Direct Hook</label>
+                                <div style="display:flex; gap:0.5rem;">
+                                    <input type="text" class="form-input" id="direct-hook-key" value="xera_live_${Math.random().toString(36).substring(7)}" readonly>
+                                    <button type="button" class="btn btn-secondary" onclick="copyToClipboard(document.getElementById('direct-hook-key').value)">Copier</button>
+                                </div>
+                                <p class="form-hint">Gardez cette clé secrète. Elle permet de publier en votre nom.</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Webhook Endpoint (Simulé)</label>
+                                <input type="text" class="form-input" value="https://xera.tech/api/hook/v1/publish" readonly>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Exemple cURL</label>
+                                <pre style="background:rgba(0,0,0,0.5); padding:1rem; border-radius:10px; font-size:0.8rem; overflow-x:auto; color:var(--accent-color);">
+curl -X POST https://xera.tech/api/hook/v1/publish \\
+  -H "X-XERA-KEY: [VOTRE_CLE]" \\
+  -d '{"title": "Git Commit: Merge UI", "day": 12, "arc_id": "..."}'
+                                </pre>
                             </div>
                         </div>
                     </div>
@@ -14979,6 +15865,13 @@ async function openSettings(userId) {
                 try {
                     if (document.querySelector(".discover-grid")) {
                         await renderDiscoverGrid();
+                        if (typeof window.ToastManager !== "undefined") {
+                            window.ToastManager.success(
+                                "XΞRA High-Signal",
+                                "Momentum Engine & Fluidity Active.",
+                                3000,
+                            );
+                        }
                     }
                 } catch (e) {
                     console.warn("Discover grid refresh failed:", e);
@@ -17234,6 +18127,10 @@ async function openCreateMenu(
                         notifyFollowersOfTrace(result.data).catch((e) =>
                             console.warn("notifyFollowersOfTrace error", e),
                         );
+                        window.xeraGrowthLoops?.afterTracePublished?.({
+                            content: result.data,
+                            contentData,
+                        });
                     }
                     clearPendingCreatePostAfterArc();
                     // Recharger les données locales et rafraîchir l'interface
@@ -17262,6 +18159,13 @@ async function openCreateMenu(
                     // Refresh Discover cards (multiple cards can exist per user/arc)
                     if (document.querySelector(".discover-grid")) {
                         await renderDiscoverGrid();
+                        if (typeof window.ToastManager !== "undefined") {
+                            window.ToastManager.success(
+                                "XΞRA High-Signal",
+                                "Momentum Engine & Fluidity Active.",
+                                3000,
+                            );
+                        }
                     }
 
                     // Refresh Arc details if open
@@ -17417,6 +18321,13 @@ async function deleteContent(contentId) {
         // Refresh Discover cards (multiple cards can exist per user/arc)
         if (document.querySelector(".discover-grid")) {
             await renderDiscoverGrid();
+            if (typeof window.ToastManager !== "undefined") {
+                window.ToastManager.success(
+                    "XΞRA High-Signal",
+                    "Momentum Engine & Fluidity Active.",
+                    3000,
+                );
+            }
         }
 
         // Refresh Arc details if open
@@ -17982,5 +18893,219 @@ async function sendAdminBroadcastEmail() {
             submitBtn.disabled = false;
             submitBtn.textContent = defaultLabel;
         }
+    }
+}
+
+/**
+ * Charge les images d'un carousel de manière séquentielle (une par une)
+ * pour optimiser la performance et le temps de chargement initial
+ */
+function sequentiallyLoadCarouselImages(carouselElement) {
+    if (!carouselElement) return;
+
+    const images = carouselElement.querySelectorAll("img[data-src]");
+    if (images.length === 0) return;
+
+    let loadedCount = 0;
+    const totalImages = images.length;
+
+    // Charger les images une par une avec un délai minimal
+    images.forEach((img, index) => {
+        const dataSrc = img.getAttribute("data-src");
+        if (!dataSrc) return;
+
+        // Délai progressif pour étaler le chargement
+        setTimeout(() => {
+            if (img.getAttribute("data-src")) {
+                img.src = dataSrc;
+                img.removeAttribute("data-src");
+                loadedCount++;
+                // Déclencher un événement custom quand toutes les images sont chargées
+                if (loadedCount === totalImages) {
+                    carouselElement.dispatchEvent(
+                        new CustomEvent("carousel-images-loaded"),
+                    );
+                }
+            }
+        }, index * 150); // 150ms entre chaque image
+    });
+}
+
+/**
+ * Charge les images des carousels visibles dans le DOM
+ */
+function loadAllCarouselImagesSequentially() {
+    const carousels = document.querySelectorAll(".xera-carousel");
+    carousels.forEach((carousel) => sequentiallyLoadCarouselImages(carousel));
+}
+
+/**
+ * Expand immersive description to show full text and views
+ */
+function expandImmersiveDescription(
+    contentId,
+    fullDescription,
+    views,
+    encouragements,
+) {
+    const wrapper = document.querySelector(
+        `.immersive-description-wrapper[data-content-id="${contentId}"]`,
+    );
+
+    if (!wrapper) return;
+
+    const descriptionEl = wrapper.querySelector(".immersive-description");
+    if (!descriptionEl) return;
+
+    // Check if already expanded
+    if (descriptionEl.classList.contains("expanded")) {
+        descriptionEl.classList.remove("expanded");
+        const viewsRow = wrapper.querySelector(".expanded-views-row");
+        if (viewsRow) viewsRow.remove();
+        return;
+    }
+
+    // Expand the description
+    descriptionEl.classList.add("expanded");
+    descriptionEl.textContent = fullDescription || "Pas de description";
+
+    // Add views row
+    const viewsHtml = `
+        <div class="expanded-views-row">
+            <div class="view-stat" title="Vues">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span>${formatCompactCount(views || 0)}</span>
+            </div>
+        </div>
+    `;
+
+    descriptionEl.insertAdjacentHTML("afterend", viewsHtml);
+}
+
+/**
+ * Show content details modal with full description and metadata
+ */
+function showContentDetailsModal(contentId, contentTitle) {
+    // Find content by contentId across all userContents
+    let content = null;
+    for (const userId in window.userContents || {}) {
+        const contents = window.userContents[userId] || [];
+        const found = contents.find((c) => (c.contentId || c.id) === contentId);
+        if (found) {
+            content = found;
+            break;
+        }
+    }
+
+    if (!content) {
+        console.warn("Content not found:", contentId);
+        return;
+    }
+
+    // Mettre à jour les meta tags Open Graph pour le partage du contenu
+    updateOpenGraphTags({
+        contentId: contentId,
+        content: {
+            title: contentTitle || content.title || "Contenu XERA",
+            description: content.rawDescription || content.description || "",
+            media:
+                content.media || content.mediaUrl
+                    ? [{ url: content.mediaUrl }]
+                    : [],
+            mediaUrl: content.mediaUrl,
+            thumbnail_url: content.thumbnail_url,
+        },
+    });
+
+    const fullDescription =
+        extractTagsFromDescription(
+            content.rawDescription || content.description || "",
+        ).cleanDescription || "";
+
+    const contentUser = getUser(content.userId);
+    const contentUserName = contentUser ? contentUser.name : "Utilisateur";
+    const contentUserAvatar = contentUser ? contentUser.avatar : "";
+    const views = formatCompactCount(content.views || 0);
+    const encouragements = formatCompactCount(content.encouragementsCount || 0);
+    const createdAt = timeAgo(content.createdAt || new Date());
+
+    // Get state label
+    const stateLabel =
+        content.state === "success"
+            ? "✅ Victoire"
+            : content.state === "failure"
+              ? "🚫 Bloqué"
+              : "⏸️ Pause";
+
+    // Get day number if available
+    const dayInfo =
+        typeof content.dayNumber === "number"
+            ? `<div class="stat-item"><span class="stat-label">Jour</span><span class="stat-value">${content.dayNumber}</span></div>`
+            : "";
+
+    // Create modal HTML
+    const modalHtml = `
+        <div class="content-details-modal-overlay" onclick="if(event.target === this) closeContentDetailsModal()">
+            <div class="content-details-modal" onclick="event.stopPropagation()">
+                <button class="modal-close-btn" onclick="closeContentDetailsModal()">✕</button>
+                
+                <div class="modal-header">
+                    <h2>${escapeHtml(contentTitle || content.title)}</h2>
+                    <p class="modal-user">
+                        <img src="${escapeHtml(contentUserAvatar)}" alt="${escapeHtml(contentUserName)}" class="modal-user-avatar">
+                        <span>${escapeHtml(contentUserName)}</span>
+                        <span class="modal-date">${createdAt}</span>
+                    </p>
+                </div>
+
+                <div class="modal-body">
+                    <p class="full-description">${fullDescription ? escapeHtml(fullDescription).replace(/\n/g, "<br>") : "<em>Pas de description</em>"}</p>
+                </div>
+
+                <div class="modal-stats">
+                    ${dayInfo}
+                    <div class="stat-item">
+                        <span class="stat-label">État</span>
+                        <span class="stat-value">${stateLabel}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Vues</span>
+                        <span class="stat-value">${views}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Encouragements</span>
+                        <span class="stat-value">${encouragements}</span>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="modal-btn primary" onclick="handleProfileClick('${content.userId}', null, true); closeContentDetailsModal();">
+                        Voir le profil
+                    </button>
+                    <button class="modal-btn" onclick="closeContentDetailsModal();">Fermer</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if any
+    const existingModal = document.querySelector(
+        ".content-details-modal-overlay",
+    );
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Inject modal
+    document.body.insertAdjacentHTML("beforeend", modalHtml);
+}
+
+/**
+ * Close content details modal
+ */
+function closeContentDetailsModal() {
+    const modal = document.querySelector(".content-details-modal-overlay");
+    if (modal) {
+        modal.remove();
     }
 }
