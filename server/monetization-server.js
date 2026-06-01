@@ -279,6 +279,195 @@ const MAISHAPAY_CALLBACK_ALLOWED = parseBooleanEnv(
 );
 const MAISHAPAY_CALLBACK_ENABLED =
     MAISHAPAY_CALLBACK_ALLOWED && Boolean(CALLBACK_ORIGIN);
+const DEFAULT_SHARE_IMAGE_URL = `${PRIMARY_ORIGIN}/icons/logo-512x512.png`;
+
+function escapeHtmlText(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+function buildAbsoluteAppUrl(path = "/") {
+    const cleanPath = String(path || "/").replace(/^\/?/, "/");
+    return `${PRIMARY_ORIGIN}${cleanPath}`;
+}
+
+function toAbsoluteShareAssetUrl(value, fallback = DEFAULT_SHARE_IMAGE_URL) {
+    const raw = String(value || "").trim();
+    if (!raw) return fallback;
+    try {
+        return new URL(raw, PRIMARY_ORIGIN).toString();
+    } catch (error) {
+        return fallback;
+    }
+}
+
+function firstMediaUrl(row) {
+    const rawMediaUrls = row?.media_urls;
+    if (Array.isArray(rawMediaUrls)) {
+        return rawMediaUrls.find(Boolean) || row?.media_url || "";
+    }
+    if (typeof rawMediaUrls === "string") {
+        try {
+            const parsed = JSON.parse(rawMediaUrls);
+            if (Array.isArray(parsed)) return parsed.find(Boolean) || row?.media_url || "";
+        } catch (error) {
+            // Ignore malformed legacy values and fall back to media_url.
+        }
+    }
+    return row?.media_url || "";
+}
+
+function pickShareImage(row, fallback = DEFAULT_SHARE_IMAGE_URL) {
+    const explicitImage = row?.thumbnail_url || row?.avatar || row?.banner || "";
+    if (explicitImage) return toAbsoluteShareAssetUrl(explicitImage, fallback);
+    const type = String(row?.type || "").toLowerCase();
+    const mediaUrl = firstMediaUrl(row);
+    if (type === "image" && mediaUrl) {
+        return toAbsoluteShareAssetUrl(mediaUrl, fallback);
+    }
+    return fallback;
+}
+
+function summarizeShareDescription(value, fallback) {
+    const clean = String(value || "")
+        .replace(/#\[[^\]]+\]\([^)]*\)/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    return clean.slice(0, 220) || fallback;
+}
+
+function renderOpenGraphSharePage({
+    title,
+    description,
+    image,
+    url,
+    targetUrl,
+    type = "website",
+}) {
+    const safeTitle = escapeHtmlAttr(title || "XERA | Tracez votre progression");
+    const safeDescription = escapeHtmlAttr(
+        description || "Découvrez les trajectoires créatives sur XERA",
+    );
+    const safeImage = escapeHtmlAttr(image || DEFAULT_SHARE_IMAGE_URL);
+    const safeUrl = escapeHtmlAttr(url || PRIMARY_ORIGIN);
+    const safeTargetUrl = escapeHtmlAttr(targetUrl || PRIMARY_ORIGIN);
+    const safeType = escapeHtmlAttr(type || "website");
+
+    return `<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${safeTitle}</title>
+    <meta name="description" content="${safeDescription}">
+    <link rel="canonical" href="${safeUrl}">
+    <meta property="og:title" content="${safeTitle}">
+    <meta property="og:description" content="${safeDescription}">
+    <meta property="og:type" content="${safeType}">
+    <meta property="og:url" content="${safeUrl}">
+    <meta property="og:image" content="${safeImage}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="${safeTitle}">
+    <meta name="twitter:description" content="${safeDescription}">
+    <meta name="twitter:image" content="${safeImage}">
+    <meta http-equiv="refresh" content="1;url=${safeTargetUrl}">
+</head>
+<body>
+    <main>
+        <h1>${escapeHtmlText(title || "XERA")}</h1>
+        <p>${escapeHtmlText(description || "Ouverture de XERA...")}</p>
+        <p><a href="${safeTargetUrl}">Ouvrir dans XERA</a></p>
+    </main>
+</body>
+</html>`;
+}
+
+async function handleContentSharePage(req, res) {
+    const contentId = String(req.params.id || "").trim();
+    if (!contentId) return res.status(404).send("Content not found");
+
+    try {
+        const { data: content, error } = await supabase
+            .from("content")
+            .select("id, user_id, title, description, type, media_url, media_urls, thumbnail_url")
+            .eq("id", contentId)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!content) return res.status(404).send("Content not found");
+
+        const shareUrl = buildAbsoluteAppUrl(
+            `/share/content/${encodeURIComponent(content.id)}`,
+        );
+        const targetUrl = buildAbsoluteAppUrl(
+            `/index.html?content=${encodeURIComponent(content.id)}`,
+        );
+        const html = renderOpenGraphSharePage({
+            title: content.title || "Contenu XERA",
+            description: summarizeShareDescription(
+                content.description,
+                "Découvrez ce contenu sur XERA",
+            ),
+            image: pickShareImage(content),
+            url: shareUrl,
+            targetUrl,
+            type: "article",
+        });
+
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "public, max-age=300, s-maxage=600");
+        return res.status(200).send(html);
+    } catch (error) {
+        console.error("content share page error", error);
+        return res.status(500).send("Share preview unavailable");
+    }
+}
+
+async function handleProfileSharePage(req, res) {
+    const userId = String(req.params.id || "").trim();
+    if (!userId) return res.status(404).send("Profile not found");
+
+    try {
+        const { data: user, error } = await supabase
+            .from("users")
+            .select("id, name, title, bio, avatar, banner")
+            .eq("id", userId)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!user) return res.status(404).send("Profile not found");
+
+        const displayName = user.name || "Profil XERA";
+        const shareUrl = buildAbsoluteAppUrl(
+            `/share/profile/${encodeURIComponent(user.id)}`,
+        );
+        const targetUrl = buildAbsoluteAppUrl(
+            `/profile.html?user=${encodeURIComponent(user.id)}`,
+        );
+        const html = renderOpenGraphSharePage({
+            title: `${displayName} | XERA`,
+            description: summarizeShareDescription(
+                user.bio || user.title,
+                "Découvrez ce profil sur XERA",
+            ),
+            image: pickShareImage(user),
+            url: shareUrl,
+            targetUrl,
+            type: "profile",
+        });
+
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "public, max-age=300, s-maxage=600");
+        return res.status(200).send(html);
+    } catch (error) {
+        console.error("profile share page error", error);
+        return res.status(500).send("Share preview unavailable");
+    }
+}
 
 function getMaishaPayCallbackConfig(req) {
     if (!MAISHAPAY_CALLBACK_ALLOWED) {
@@ -5053,6 +5242,15 @@ app.get("/api/cron/evaluate-tech-badges", async (req, res) => {
 app.get("/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+app.get(
+    ["/api/share/content/:id", "/share/content/:id"],
+    handleContentSharePage,
+);
+app.get(
+    ["/api/share/profile/:id", "/share/profile/:id"],
+    handleProfileSharePage,
+);
 
 app.get("/api/health", (_req, res) => {
     res.json({

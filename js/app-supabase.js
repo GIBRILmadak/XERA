@@ -192,9 +192,9 @@ async function initializeOpenGraphFromUrl() {
             if (typeof supabase !== "undefined" && supabase) {
                 try {
                     const { data: content } = await supabase
-                        .from("contents")
+                        .from("content")
                         .select("*")
-                        .eq("contentId", contentId)
+                        .eq("id", contentId)
                         .single();
 
                     if (content) {
@@ -204,7 +204,7 @@ async function initializeOpenGraphFromUrl() {
                                 title: content.title || "Contenu XERA",
                                 description: content.description || "",
                                 media: content.media || [],
-                                mediaUrl: content.mediaUrl,
+                                mediaUrl: content.media_url,
                                 thumbnail_url: content.thumbnail_url,
                             },
                         });
@@ -250,7 +250,7 @@ async function initializeOpenGraphFromUrl() {
             if (typeof supabase !== "undefined" && supabase) {
                 try {
                     const { data: user } = await supabase
-                        .from("profiles")
+                        .from("users")
                         .select("*")
                         .eq("id", userId)
                         .single();
@@ -263,9 +263,15 @@ async function initializeOpenGraphFromUrl() {
                                     user.username || user.name || "Profil",
                                 bio: user.bio || "",
                                 avatar_url:
-                                    user.avatar_url || user.avatarUrl || "",
+                                    user.avatar_url ||
+                                    user.avatarUrl ||
+                                    user.avatar ||
+                                    "",
                                 profileImage:
-                                    user.avatar_url || user.avatarUrl || "",
+                                    user.avatar_url ||
+                                    user.avatarUrl ||
+                                    user.avatar ||
+                                    "",
                             },
                         });
                         return;
@@ -628,16 +634,14 @@ function renderShareButton(context = {}) {
     let shareUserId = null;
 
     if (userId) {
-        shareUrl = buildProfileUrl(userId);
+        shareUrl = buildOpenGraphShareUrl("profile", userId);
         const user = getUser(userId);
         shareTitle = `Découvre ${user?.name || "ce profil"} sur XERA`;
         shareUserId = userId;
     } else if (contentId) {
         const content = findContentById(contentId);
         if (content) {
-            // Partager le contenu directement (rediriger vers le feed immersif avec le contenu)
-            const baseUrl = window.location.origin;
-            shareUrl = `${baseUrl}/index.html?content=${encodeURIComponent(contentId)}`;
+            shareUrl = buildOpenGraphShareUrl("content", contentId);
             shareTitle = content.title || "Découvre ce contenu sur XERA";
         }
     }
@@ -765,6 +769,13 @@ function incrementShareCount(contentId) {
     } catch (e) {
         return 0;
     }
+}
+
+function buildOpenGraphShareUrl(kind, id) {
+    const safeKind = kind === "profile" ? "profile" : "content";
+    const safeId = encodeURIComponent(String(id || "").trim());
+    if (!safeId) return window.location.href;
+    return `${window.location.origin}/share/${safeKind}/${safeId}`;
 }
 
 /**
