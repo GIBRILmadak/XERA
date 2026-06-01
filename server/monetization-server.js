@@ -5885,7 +5885,6 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         0,
         Number.isFinite(offsetRaw) ? Math.floor(offsetRaw) : 0,
     );
-    const FOLLOW_DAILY_LIMIT = Number(process.env.BOT_FOLLOW_DAILY_LIMIT) || 3;
     const MAX_POSTS_PER_RUN = Number(process.env.BOT_MAX_POSTS_PER_RUN) || 50;
     const BOT_MIN_ACTIVE_ENCOURAGES_PER_DAY = Math.max(
         15,
@@ -6330,122 +6329,6 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         }
     }
 
-    async function getFollowingIds(botUserId) {
-        try {
-            const { data, error } = await supabase
-                .from("followers")
-                .select("following_id")
-                .eq("follower_id", botUserId);
-            if (error) throw error;
-            return (data || []).map((row) => row.following_id).filter(Boolean);
-        } catch (error) {
-            console.warn("getFollowingIds error", error?.message || error);
-            return [];
-        }
-    }
-
-    async function followAsBot(bot, maxToFollow = 1) {
-        try {
-            const now = new Date();
-            const todayStr = now.toISOString().slice(0, 10);
-            const meta = await fetchCurrentBotMeta(bot.user_id, bot.meta);
-            if (meta.last_followed_date === todayStr) return 0;
-
-            const followingIds = new Set(await getFollowingIds(bot.user_id));
-            const { data: candidates, error } = await supabase
-                .from("users")
-                .select("id, name, is_bot, followers_count")
-                .neq("id", bot.user_id)
-                .order("followers_count", { ascending: false })
-                .limit(400);
-            if (error) throw error;
-            if (!candidates || candidates.length === 0) return 0;
-
-            const realUsers = candidates.filter(
-                (candidate) => !candidate.is_bot,
-            );
-            const botUsers = candidates.filter((candidate) => candidate.is_bot);
-            realUsers.sort(
-                (a, b) => (b.followers_count || 0) - (a.followers_count || 0),
-            );
-            botUsers.sort(
-                (a, b) => (b.followers_count || 0) - (a.followers_count || 0),
-            );
-            const orderedCandidates = [...realUsers, ...botUsers];
-
-            let followed = 0;
-            for (const candidate of orderedCandidates) {
-                if (followed >= maxToFollow) break;
-                if (!candidate || !candidate.id) continue;
-                if (followingIds.has(candidate.id)) continue;
-                try {
-                    const { error: insertError } = await supabase
-                        .from("followers")
-                        .insert({
-                            follower_id: bot.user_id,
-                            following_id: candidate.id,
-                        });
-                    if (insertError) {
-                        console.warn(
-                            "follow insert err",
-                            insertError?.message || insertError,
-                        );
-                        continue;
-                    }
-                    followingIds.add(candidate.id);
-                    followed += 1;
-                    try {
-                        const { data: recent, error: recentErr } =
-                            await supabase
-                                .from("content")
-                                .select("id")
-                                .eq("user_id", candidate.id)
-                                .order("created_at", { ascending: false })
-                                .limit(3);
-                        if (!recentErr && Array.isArray(recent)) {
-                            for (const row of recent) {
-                                try {
-                                    await supabase.rpc("increment_views", {
-                                        row_id: row.id,
-                                    });
-                                } catch (_error) {
-                                    // ignore individual errors
-                                }
-                                await sleep(60 + Math.random() * 200);
-                            }
-                        }
-                    } catch (_error) {
-                        // ignore
-                    }
-                    await sleep(150 + Math.random() * 500);
-                } catch (error) {
-                    console.warn(
-                        "followAsBot insert error",
-                        error?.message || error,
-                    );
-                }
-            }
-
-            await persistMergedBotMeta(
-                bot.user_id,
-                (latestMeta) => {
-                    latestMeta.follow_total =
-                        (Number(latestMeta.follow_total) || 0) + followed;
-                    latestMeta.last_followed_date = todayStr;
-                    return latestMeta;
-                },
-                { last_action_at: new Date().toISOString() },
-            );
-            return followed;
-        } catch (error) {
-            console.warn(
-                `followAsBot error for ${bot.user_id}:`,
-                error?.message || error,
-            );
-            return 0;
-        }
-    }
-
     async function viewAsBot(bot, dailyTarget = BOT_DAILY_VIEWS_TARGET) {
         try {
             const todayStr = new Date().toISOString().slice(0, 10);
@@ -6569,7 +6452,6 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
 
         let posts = 0;
         let encourages = 0;
-        let follows = 0;
         let views = 0;
 
         const botUserIds = (bots || [])
@@ -6659,13 +6541,6 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             }
 
             try {
-                const followed = await followAsBot(bot, FOLLOW_DAILY_LIMIT);
-                if (followed) follows += followed;
-            } catch (_error) {
-                // ignore follow errors
-            }
-
-            try {
                 const viewed = await viewAsBot(bot, BOT_DAILY_VIEWS_TARGET);
                 if (viewed) views += viewed;
             } catch (_error) {
@@ -6680,7 +6555,7 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             nextOffset: offset + (bots || []).length,
             posts,
             encourages,
-            follows,
+            follows: 0,
             views,
             activeCount: activeCountValue,
         });

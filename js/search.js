@@ -9,9 +9,9 @@ let searchSkeleton = null;
 // Initialiser la recherche
 function initializeSearch() {
     const searchInput = document.getElementById('search-input');
-    const searchResults = document.getElementById('search-results');
+    const searchResultsContainer = document.getElementById('search-results');
     
-    if (!searchInput) return;
+    if (!searchInput || !searchResultsContainer) return;
 
     ensureSearchSkeleton();
     applyMobilePlaceholder(searchInput);
@@ -23,12 +23,12 @@ function initializeSearch() {
         clearTimeout(searchTimeout);
         
         if (query.length < 2) {
-            searchResults.style.display = 'none';
+            searchResultsContainer.style.display = 'none';
             hideSearchSkeleton();
             return;
         }
         
-        searchResults.style.display = 'none';
+        searchResultsContainer.style.display = 'none';
         showSearchSkeleton();
         searchTimeout = setTimeout(() => {
             performSearch(query);
@@ -38,7 +38,7 @@ function initializeSearch() {
     // Fermer les résultats en cliquant ailleurs
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.search-container')) {
-            searchResults.style.display = 'none';
+            searchResultsContainer.style.display = 'none';
             hideSearchSkeleton();
         }
     });
@@ -47,13 +47,19 @@ function initializeSearch() {
 // Effectuer la recherche
 async function performSearch(query) {
     const searchResultsContainer = document.getElementById('search-results');
+    const searchTerm = normalizeSearchQuery(query);
+
+    if (!searchResultsContainer || searchTerm.length < 2) {
+        hideSearchSkeleton();
+        return;
+    }
     
     try {
         // Rechercher dans les utilisateurs
         const { data: users, error: usersError } = await supabase
             .from('users')
             .select('*')
-            .or(`name.ilike.%${query}%,title.ilike.%${query}%,bio.ilike.%${query}%`)
+            .or(`name.ilike.%${searchTerm}%,title.ilike.%${searchTerm}%,bio.ilike.%${searchTerm}%`)
             .limit(10);
         
         if (usersError) throw usersError;
@@ -62,7 +68,7 @@ async function performSearch(query) {
         const { data: content, error: contentError } = await supabase
             .from('content')
             .select('*, users(name, avatar)')
-            .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
+            .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
             .limit(10);
         
         if (contentError) throw contentError;
@@ -72,7 +78,7 @@ async function performSearch(query) {
         }
         
         // Afficher les résultats
-        displaySearchResults(users, content, query);
+        displaySearchResults(users || [], content || [], query);
         hideSearchSkeleton();
         
     } catch (error) {
@@ -94,7 +100,7 @@ function displaySearchResults(users, content, query) {
     if (users.length === 0 && content.length === 0) {
         searchResultsContainer.innerHTML = `
             <div class="search-empty">
-                <p>Aucun résultat pour "${query}"</p>
+                <p>Aucun résultat pour "${escapeHtml(query)}"</p>
             </div>
         `;
         searchResultsContainer.style.display = 'block';
@@ -108,12 +114,15 @@ function displaySearchResults(users, content, query) {
         html += '<div class="search-section">';
         html += '<h4 class="search-section-title">Utilisateurs</h4>';
         users.forEach(user => {
+            const avatar = user.avatar || 'https://placehold.co/80';
+            const name = user.name || 'Utilisateur';
+            const title = user.title || '';
             html += `
                 <div class="search-result-item" onclick="navigateToUserProfile('${user.id}'); document.getElementById('search-results').style.display='none';">
-                    <img src="${user.avatar}" class="search-result-avatar" alt="${user.name}">
+                    <img src="${escapeHtml(avatar)}" class="search-result-avatar" alt="${escapeHtml(name)}">
                     <div class="search-result-info">
-                        <div class="search-result-name">${typeof window.renderUsernameWithBadge === 'function' ? window.renderUsernameWithBadge(highlightMatch(user.name, query), user.id) : highlightMatch(user.name, query)}</div>
-                        <div class="search-result-meta">${user.title || ''}</div>
+                        <div class="search-result-name">${typeof window.renderUsernameWithBadge === 'function' ? window.renderUsernameWithBadge(highlightMatch(name, query), user.id) : highlightMatch(name, query)}</div>
+                        <div class="search-result-meta">${escapeHtml(title)}</div>
                     </div>
                 </div>
             `;
@@ -125,13 +134,17 @@ function displaySearchResults(users, content, query) {
     if (content.length > 0) {
         html += '<div class="search-section">';
         html += '<h4 class="search-section-title">Publications</h4>';
-        content.forEach(item 
+        content.forEach(item => {
+            const author = item.users || {};
+            const authorName = author.name || 'Utilisateur';
+            const authorAvatar = author.avatar || 'https://placehold.co/80';
+            const title = item.title || 'Publication';
             html += `
                 <div class="search-result-item" onclick="navigateToUserProfile('${item.user_id}'); document.getElementById('search-results').style.display='none';">
-                    <img src="${item.users.avatar}" class="search-result-avatar" alt="${item.users.name}">
+                    <img src="${escapeHtml(authorAvatar)}" class="search-result-avatar" alt="${escapeHtml(authorName)}">
                     <div class="search-result-info">
-                        <div class="search-result-name">${highlightMatch(item.title, query)}</div>
-                        <div class="search-result-meta">Par ${typeof window.renderUsernameWithBadge === 'function' ? window.renderUsernameWithBadge(item.users.name, item.user_id) : item.users.name} • Jour ${item.day_number}</div>
+                        <div class="search-result-name">${highlightMatch(title, query)}</div>
+                        <div class="search-result-meta">Par ${typeof window.renderUsernameWithBadge === 'function' ? window.renderUsernameWithBadge(escapeHtml(authorName), item.user_id) : escapeHtml(authorName)} • Jour ${escapeHtml(item.day_number || '')}</div>
                     </div>
                 </div>
             `;
@@ -194,6 +207,30 @@ function applyMobilePlaceholder(inputEl) {
 // Mettre en évidence les correspondances
 function highlightMatch(text, query) {
     if (!text) return '';
-    const regex = new RegExp(`(${query})`, 'gi');
-    return text.replace(regex, '<mark>$1</mark>');
+    const escapedText = escapeHtml(text);
+    const escapedQuery = escapeRegExp(query.trim());
+    if (!escapedQuery) return escapedText;
+    const regex = new RegExp(`(${escapedQuery})`, 'gi');
+    return escapedText.replace(regex, '<mark>$1</mark>');
+}
+
+function normalizeSearchQuery(query) {
+    return String(query || '')
+        .trim()
+        .replace(/[%,()]/g, ' ')
+        .replace(/\s+/g, ' ');
+}
+
+function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+    })[char]);
 }

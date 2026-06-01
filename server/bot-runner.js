@@ -25,9 +25,6 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Configuration des quotas
-// Par défaut, chaque bot suivra au moins 3 utilisateurs par jour
-const FOLLOW_DAILY_LIMIT = Number(process.env.BOT_FOLLOW_DAILY_LIMIT) || 3;
-const MAX_FOLLOWS_PER_BOT = Number(process.env.BOT_MAX_FOLLOWS_PER_BOT) || 50;
 const MAX_ENCOURAGES_PER_RUN =
     Number(process.env.BOT_MAX_ENCOURAGES_PER_RUN) || 1000;
 const MAX_POSTS_PER_RUN = Number(process.env.BOT_MAX_POSTS_PER_RUN) || 1000;
@@ -814,121 +811,6 @@ async function encourageAsBot(bot) {
     }
 }
 
-async function getFollowingIds(botUserId) {
-    try {
-        const { data, error } = await supabase
-            .from("followers")
-            .select("following_id")
-            .eq("follower_id", botUserId);
-        if (error) throw error;
-        return (data || []).map((r) => r.following_id).filter(Boolean);
-    } catch (e) {
-        console.warn("getFollowingIds error", e?.message || e);
-        return [];
-    }
-}
-
-async function followAsBot(bot, maxToFollow = 1) {
-    try {
-        const now = new Date();
-        const todayStr = now.toISOString().slice(0, 10);
-        const meta = await fetchCurrentBotMeta(bot.user_id, bot.meta);
-        if (meta.last_followed_date === todayStr) return 0;
-
-        const followingIds = new Set(await getFollowingIds(bot.user_id));
-        const { data: candidates, error } = await supabase
-            .from("users")
-            .select("id, name, is_bot, followers_count")
-            .neq("id", bot.user_id)
-            .order("followers_count", { ascending: false })
-            .limit(400);
-        if (error) throw error;
-        if (!candidates || candidates.length === 0) return 0;
-
-        // Prioritize real users first, then bots (stronger preference)
-        const realUsers = candidates.filter((c) => !c.is_bot);
-        const botUsers = candidates.filter((c) => c.is_bot);
-        realUsers.sort(
-            (a, b) => (b.followers_count || 0) - (a.followers_count || 0),
-        );
-        botUsers.sort(
-            (a, b) => (b.followers_count || 0) - (a.followers_count || 0),
-        );
-        const orderedCandidates = [...realUsers, ...botUsers];
-
-        let followed = 0;
-        for (const cand of orderedCandidates) {
-            if (followed >= maxToFollow) break;
-            if (!cand || !cand.id) continue;
-            if (followingIds.has(cand.id)) continue;
-            try {
-                const { error: insErr } = await supabase
-                    .from("followers")
-                    .insert({
-                        follower_id: bot.user_id,
-                        following_id: cand.id,
-                    });
-                if (insErr) {
-                    // ignore duplicates or constraint errors
-                    console.warn(
-                        "follow insert err",
-                        insErr?.message || insErr,
-                    );
-                    continue;
-                }
-                followingIds.add(cand.id);
-                followed += 1;
-                // Simuler que le bot a vu les derniers posts de l'utilisateur suivi
-                try {
-                    const { data: recent, error: recentErr } = await supabase
-                        .from("content")
-                        .select("id")
-                        .eq("user_id", cand.id)
-                        .order("created_at", { ascending: false })
-                        .limit(3);
-                    if (!recentErr && Array.isArray(recent)) {
-                        for (const r of recent) {
-                            try {
-                                await supabase.rpc("increment_views", {
-                                    row_id: r.id,
-                                });
-                            } catch (rvErr) {
-                                // ignore individual errors
-                            }
-                            // tiny delay to avoid DB bursts
-                            await sleep(60 + Math.random() * 200);
-                        }
-                    }
-                } catch (rvCatch) {
-                    // ignore
-                }
-                // small delay between follow actions
-                await sleep(150 + Math.random() * 500);
-            } catch (e) {
-                console.warn("followAsBot insert error", e?.message || e);
-            }
-        }
-
-        // Update meta
-        await persistMergedBotMeta(
-            bot.user_id,
-            (latestMeta) => {
-                latestMeta.follow_total =
-                    (Number(latestMeta.follow_total) || 0) + followed;
-                latestMeta.last_followed_date = todayStr;
-                return latestMeta;
-            },
-            { last_action_at: new Date().toISOString() },
-        );
-        if (followed > 0)
-            console.log(`Bot ${bot.user_id} followed ${followed} user(s)`);
-        return followed;
-    } catch (e) {
-        console.warn(`followAsBot error for ${bot.user_id}:`, e?.message || e);
-        return 0;
-    }
-}
-
 async function viewAsBot(bot, dailyTarget = BOT_DAILY_VIEWS_TARGET) {
     try {
         const todayStr = new Date().toISOString().slice(0, 10);
@@ -1120,24 +1002,6 @@ async function loopOnce() {
                     if (!encourageResult) break;
                     encouragesProcessed += 1;
                     await sleep(150 + Math.random() * 350);
-                }
-
-                const lastFollow = meta.last_followed_date;
-                const followTotal = Number(meta.follow_total) || 0;
-                if (
-                    followTotal < MAX_FOLLOWS_PER_BOT &&
-                    lastFollow !== todayStr
-                ) {
-                    const followTargetMin =
-                        (Number(bot.schedule_hour) || 0) * 60 +
-                        getDeterministicRandom(
-                            `${bot.user_id}:${todayStr}:follow`,
-                            60,
-                        );
-                    if (currentMinutes >= followTargetMin) {
-                        await followAsBot(bot, FOLLOW_DAILY_LIMIT);
-                        await sleep(220 + Math.random() * 420);
-                    }
                 }
 
                 const viewed = await viewAsBot(bot, BOT_DAILY_VIEWS_TARGET);
