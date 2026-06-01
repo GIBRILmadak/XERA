@@ -66,6 +66,67 @@
         />
         <meta name="twitter:image" content="" />
 
+        <!-- Script pour initialiser rapidement les meta tags OG au chargement -->
+        <script>
+            (function () {
+                try {
+                    const params = new URLSearchParams(window.location.search);
+                    const contentId = params.get("content");
+                    const userId = params.get("user");
+
+                    // Récupérer les données du cache localStorage si disponible
+                    if (contentId) {
+                        const cachedContent = localStorage.getItem(
+                            `content_${contentId}`,
+                        );
+                        if (cachedContent) {
+                            const content = JSON.parse(cachedContent);
+                            // Mettre à jour les meta tags OG rapidement
+                            document.querySelector(
+                                'meta[property="og:title"]',
+                            ).content = content.title || "Contenu XERA";
+                            document.querySelector(
+                                'meta[property="og:description"]',
+                            ).content = content.description || "";
+                            if (content.image) {
+                                document.querySelector(
+                                    'meta[property="og:image"]',
+                                ).content = content.image;
+                                document.querySelector(
+                                    'meta[name="twitter:image"]',
+                                ).content = content.image;
+                            }
+                        }
+                    }
+
+                    if (userId) {
+                        const cachedUser = localStorage.getItem(
+                            `user_${userId}`,
+                        );
+                        if (cachedUser) {
+                            const user = JSON.parse(cachedUser);
+                            document.querySelector(
+                                'meta[property="og:title"]',
+                            ).content = user.username || "Profil";
+                            document.querySelector(
+                                'meta[property="og:description"]',
+                            ).content = user.bio || "";
+                            if (user.avatar) {
+                                document.querySelector(
+                                    'meta[property="og:image"]',
+                                ).content = user.avatar;
+                                document.querySelector(
+                                    'meta[name="twitter:image"]',
+                                ).content = user.avatar;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // Silently fail - use default OG tags
+                }
+            })();
+        </script>
+
         <meta name="ga-measurement-id" content="" />
         <script>
             // Lightweight analytics config (fill ga-measurement-id or window.GA_MEASUREMENT_ID)
@@ -551,10 +612,15 @@
                 }
 
                 // Initialiser la recherche
-                initializeSearch();
+                if (typeof initializeSearch === "function") {
+                    initializeSearch();
+                }
 
                 // Initialiser les notifications si l'utilisateur est connecté
-                if (currentUser) {
+                if (
+                    window.currentUser &&
+                    typeof initializeNotifications === "function"
+                ) {
                     initializeNotifications();
                     document.getElementById("notification-btn").style.display =
                         "flex";

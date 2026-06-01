@@ -43,13 +43,25 @@ let discoverPaginationState = {
  * Mettre à jour les meta tags Open Graph pour le partage social
  * Détecte le contexte (profil, contenu) et met à jour les images appropriées
  */
+/**
+ * Convertir une image URL relative en URL absolue
+ */
+function getAbsoluteImageUrl(imagePath) {
+    if (!imagePath) return `${window.location.origin}/icons/logo-192x192.png`;
+    if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+        return imagePath;
+    }
+    // Image relative - la convertir en URL absolue
+    return `${window.location.origin}/${imagePath.startsWith("/") ? imagePath.slice(1) : imagePath}`;
+}
+
 function updateOpenGraphTags(context = {}) {
     try {
         // Contexte par défaut
         const pageUrl = window.location.href;
         let ogTitle = "XERA | Tracez votre progression";
         let ogDescription = "Découvrez les trajectoires créatives sur XERA";
-        let ogImage = "icons/logo-192x192.png";
+        let ogImage = getAbsoluteImageUrl("icons/logo-192x192.png");
         let ogType = "website";
 
         // Si contexte profil
@@ -57,10 +69,11 @@ function updateOpenGraphTags(context = {}) {
             const profile = context.userProfile || {};
             ogTitle = `${profile.username || "Profil"} | XERA`;
             ogDescription = profile.bio || "Découvrez ce profil sur XERA";
-            ogImage =
+            ogImage = getAbsoluteImageUrl(
                 profile.profileImage ||
-                profile.avatar_url ||
-                "icons/logo-192x192.png";
+                    profile.avatar_url ||
+                    "icons/logo-192x192.png",
+            );
             ogType = "profile";
         }
 
@@ -79,24 +92,29 @@ function updateOpenGraphTags(context = {}) {
                 Array.isArray(content.media) &&
                 content.media.length > 0
             ) {
-                ogImage = content.media[0].url || content.media[0];
+                ogImage = getAbsoluteImageUrl(
+                    content.media[0].url || content.media[0],
+                );
             } else if (content.mediaUrl) {
-                ogImage = content.mediaUrl;
+                ogImage = getAbsoluteImageUrl(content.mediaUrl);
             } else if (content.thumbnail_url) {
-                ogImage = content.thumbnail_url;
+                ogImage = getAbsoluteImageUrl(content.thumbnail_url);
             }
 
             ogType = "article";
         }
 
-        // Mettre à jour les meta tags
+        // Mettre à jour les meta tags OG
         updateMetaTag("og:title", ogTitle);
         updateMetaTag("og:description", ogDescription);
         updateMetaTag("og:image", ogImage);
+        updateMetaTag("og:image:width", "1200");
+        updateMetaTag("og:image:height", "630");
         updateMetaTag("og:url", pageUrl);
         updateMetaTag("og:type", ogType);
 
         // Twitter Card
+        updateMetaTag("twitter:card", "summary_large_image");
         updateMetaTag("twitter:title", ogTitle);
         updateMetaTag("twitter:description", ogDescription);
         updateMetaTag("twitter:image", ogImage);
@@ -104,6 +122,9 @@ function updateOpenGraphTags(context = {}) {
         // Mettre à jour aussi le title principal
         if (context.userId || context.userProfile) {
             document.title = `${context.userProfile?.username || "Profil"} | XERA`;
+        } else if (context.contentId || context.content) {
+            const content = context.content || {};
+            document.title = `${content.title || "Contenu"} | XERA`;
         }
     } catch (error) {
         console.error("Erreur lors de la mise à jour des meta tags OG:", error);
@@ -127,6 +148,139 @@ function updateMetaTag(property, content) {
     }
 
     tag.setAttribute("content", content);
+}
+
+/**
+ * Initialiser les meta tags OG au chargement de la page en fonction de l'URL
+ * Appelé au démarrage pour que les réseaux sociaux récupèrent les bonnes images
+ */
+async function initializeOpenGraphFromUrl() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const contentId = params.get("content");
+        const userId = params.get("user");
+
+        // Si c'est un partage de contenu
+        if (contentId) {
+            // Essayer de charger le contenu depuis le cache local d'abord
+            if (window.userContents) {
+                for (const uid in window.userContents) {
+                    const contents = window.userContents[uid];
+                    if (Array.isArray(contents)) {
+                        const foundContent = contents.find(
+                            (c) =>
+                                c.contentId === contentId || c.id === contentId,
+                        );
+                        if (foundContent) {
+                            updateOpenGraphTags({
+                                contentId: contentId,
+                                content: {
+                                    title: foundContent.title || "Contenu XERA",
+                                    description: foundContent.description || "",
+                                    media: foundContent.media || [],
+                                    mediaUrl: foundContent.mediaUrl,
+                                    thumbnail_url: foundContent.thumbnail_url,
+                                },
+                            });
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Si non trouvé en cache, essayer de charger depuis Supabase
+            if (typeof supabase !== "undefined" && supabase) {
+                try {
+                    const { data: content } = await supabase
+                        .from("contents")
+                        .select("*")
+                        .eq("contentId", contentId)
+                        .single();
+
+                    if (content) {
+                        updateOpenGraphTags({
+                            contentId: contentId,
+                            content: {
+                                title: content.title || "Contenu XERA",
+                                description: content.description || "",
+                                media: content.media || [],
+                                mediaUrl: content.mediaUrl,
+                                thumbnail_url: content.thumbnail_url,
+                            },
+                        });
+                        return;
+                    }
+                } catch (e) {
+                    // Silently fail - use default OG tags
+                }
+            }
+        }
+
+        // Si c'est un partage de profil
+        if (userId) {
+            // Essayer de charger l'utilisateur depuis le cache
+            if (window.allUsers && Array.isArray(window.allUsers)) {
+                const foundUser = window.allUsers.find(
+                    (u) => u.id === userId || u.userId === userId,
+                );
+                if (foundUser) {
+                    updateOpenGraphTags({
+                        userId: userId,
+                        userProfile: {
+                            username:
+                                foundUser.username ||
+                                foundUser.name ||
+                                "Profil",
+                            bio: foundUser.bio || "",
+                            avatar_url:
+                                foundUser.avatar_url ||
+                                foundUser.avatarUrl ||
+                                "",
+                            profileImage:
+                                foundUser.avatar_url ||
+                                foundUser.avatarUrl ||
+                                "",
+                        },
+                    });
+                    return;
+                }
+            }
+
+            // Si non trouvé en cache, essayer de charger depuis Supabase
+            if (typeof supabase !== "undefined" && supabase) {
+                try {
+                    const { data: user } = await supabase
+                        .from("profiles")
+                        .select("*")
+                        .eq("id", userId)
+                        .single();
+
+                    if (user) {
+                        updateOpenGraphTags({
+                            userId: userId,
+                            userProfile: {
+                                username:
+                                    user.username || user.name || "Profil",
+                                bio: user.bio || "",
+                                avatar_url:
+                                    user.avatar_url || user.avatarUrl || "",
+                                profileImage:
+                                    user.avatar_url || user.avatarUrl || "",
+                            },
+                        });
+                        return;
+                    }
+                } catch (e) {
+                    // Silently fail - use default OG tags
+                }
+            }
+        }
+    } catch (error) {
+        console.error(
+            "Erreur lors de l'initialisation des meta tags OG:",
+            error,
+        );
+    }
 }
 
 /* ========================================
@@ -189,33 +343,161 @@ function getFollowerCount(userId) {
 }
 
 /**
- * Génère un badge de "contributeur majeur" subtle
+ * Génère un badge de "contributeur majeur" glamour style trophée
  * Récompense implicitement ceux qui créent du contenu
  */
+/**
+ * Vérifier et envoyer une notification DM si nouveau badge débloqué
+ */
+async function notifyBadgeUnlock(userId, badgeInfo) {
+    try {
+        const user = getUser(userId);
+        if (!user) return;
+
+        // Clé pour tracker le dernier badge de l'utilisateur
+        const badgeKey = `last_badge_${userId}`;
+        const lastBadge = localStorage.getItem(badgeKey);
+
+        // Si c'est le même badge, ne pas renvoyer de notification
+        if (lastBadge === badgeInfo.text) return;
+
+        // Marquer le nouveau badge comme traité
+        localStorage.setItem(badgeKey, badgeInfo.text);
+
+        // Préparer le message DM
+        const dmMessage = `Bonjour ${user.name} 🎉
+
+Félicitations pour ton nouveau trophée ! ${badgeInfo.icon}
+
+${badgeInfo.text}
+
+Tu as débloqué un accomplissement majeur ! Continue à créer du contenu incroyable et inspire la communauté XERA.
+
+Le compte XERA Admin`;
+
+        // Envoyer le DM via Supabase
+        if (window.supabase) {
+            try {
+                const adminUserId = "admin-super"; // ID du compte super admin
+
+                // Chercher ou créer une conversation entre admin et utilisateur
+                const { data: conversations } = await window.supabase
+                    .from("dm_conversations")
+                    .select("id")
+                    .or(
+                        `and(user_a.eq.${adminUserId},user_b.eq.${userId}),and(user_a.eq.${userId},user_b.eq.${adminUserId})`,
+                    )
+                    .limit(1)
+                    .single()
+                    .catch(() => ({ data: null }));
+
+                let conversationId = conversations?.id;
+
+                // Si pas de conversation, la créer
+                if (!conversationId) {
+                    const { data: newConv } = await window.supabase
+                        .from("dm_conversations")
+                        .insert({
+                            user_a: adminUserId,
+                            user_b: userId,
+                            created_at: new Date().toISOString(),
+                        })
+                        .select("id")
+                        .single()
+                        .catch(() => ({ data: null }));
+
+                    if (newConv?.id) {
+                        conversationId = newConv.id;
+                    }
+                }
+
+                // Insérer le message
+                if (conversationId) {
+                    await window.supabase
+                        .from("dm_messages")
+                        .insert({
+                            conversation_id: conversationId,
+                            sender_id: adminUserId,
+                            body: dmMessage,
+                            created_at: new Date().toISOString(),
+                        })
+                        .catch(() => {
+                            console.log("Badge notification queued locally");
+                        });
+                }
+
+                // Afficher une toast pour confirmer
+                showToastNotification(
+                    `🎉 ${badgeInfo.text} débloqué ! Un message a été envoyé à ton compte.`,
+                    "success",
+                );
+            } catch (e) {
+                console.log("Badge notification queued");
+            }
+        }
+    } catch (e) {
+        console.error("Badge unlock notification error:", e);
+    }
+}
+
 function getContributorBadgeHtml(userId) {
     try {
         const stats = calculateUserReachStats(userId);
 
-        // Badge conditions (subtle, pas agressif)
+        // Badge conditions - 7 paliers progressifs
         let badgeClass = "";
         let badgeText = "";
+        let trophyIcon = "";
+        let badgeInfo = null;
 
-        if (stats.contentCount >= 50 && stats.followers >= 20) {
+        if (stats.contentCount >= 300 && stats.followers >= 1000000) {
+            badgeClass = "badge-creator-immortal";
+            badgeText = "Architecte";
+            trophyIcon = "💎"; // Diamond
+            badgeInfo = { text: badgeText, icon: trophyIcon };
+        } else if (stats.contentCount >= 200 && stats.followers >= 100000) {
+            badgeClass = "badge-creator-supreme";
+            badgeText = "Empereur";
+            trophyIcon = "👑"; // Crown
+            badgeInfo = { text: badgeText, icon: trophyIcon };
+        } else if (stats.contentCount >= 100 && stats.followers >= 10000) {
+            badgeClass = "badge-creator-legend";
+            badgeText = "Bâtisseur";
+            trophyIcon = "🌟"; // Glowing star
+            badgeInfo = { text: badgeText, icon: trophyIcon };
+        } else if (stats.contentCount >= 70 && stats.followers >= 1000) {
             badgeClass = "badge-creator-elite";
-            badgeText = "Créateur Elite";
-        } else if (stats.contentCount >= 20 && stats.followers >= 10) {
+            badgeText = "Ingénieur";
+            trophyIcon = "🏆"; // Gold trophy
+            badgeInfo = { text: badgeText, icon: trophyIcon };
+        } else if (stats.contentCount >= 50 && stats.followers >= 500) {
             badgeClass = "badge-creator-established";
-            badgeText = "Créateur Établi";
-        } else if (stats.contentCount >= 5) {
+            badgeText = "Forgeron";
+            trophyIcon = "🥈"; // Silver trophy
+            badgeInfo = { text: badgeText, icon: trophyIcon };
+        } else if (stats.contentCount >= 50) {
+            badgeClass = "badge-creator-bronze";
+            badgeText = "Séquoia";
+            trophyIcon = "🥉"; // Bronze medal
+            badgeInfo = { text: badgeText, icon: trophyIcon };
+        } else if (stats.contentCount >= 20) {
             badgeClass = "badge-creator-emerging";
-            badgeText = "Créateur";
+            badgeText = "Silex";
+            trophyIcon = "⭐"; // Star
+            badgeInfo = { text: badgeText, icon: trophyIcon };
         } else {
             return ""; // Pas de badge pour les non-contributeurs
         }
 
+        // Vérifier et envoyer notification si nouveau badge
+        if (badgeInfo) {
+            notifyBadgeUnlock(userId, badgeInfo);
+        }
+
         return `
             <span class="contributor-badge ${badgeClass}" title="${badgeText}: Créateur actif de contenu">
-                ⭐ ${badgeText}
+                <span class="badge-trophy-icon">${trophyIcon}</span>
+                <span class="badge-text">${badgeText}</span>
             </span>
         `;
     } catch (e) {
@@ -343,21 +625,26 @@ function renderShareButton(context = {}) {
 
     let shareUrl = window.location.href;
     let shareTitle = "XERA | Tracez votre progression";
+    let shareUserId = null;
 
     if (userId) {
         shareUrl = buildProfileUrl(userId);
         const user = getUser(userId);
         shareTitle = `Découvre ${user?.name || "ce profil"} sur XERA`;
+        shareUserId = userId;
     } else if (contentId) {
         const content = findContentById(contentId);
         if (content) {
-            shareUrl = `${buildProfileUrl(content.userId)}?content=${contentId}`;
+            // Partager le contenu directement (rediriger vers le feed immersif avec le contenu)
+            const baseUrl = window.location.origin;
+            shareUrl = `${baseUrl}/index.html?content=${encodeURIComponent(contentId)}`;
             shareTitle = content.title || "Découvre ce contenu sur XERA";
         }
     }
 
+    const shareCount = getShareCount(context.contentId || "");
     return `
-        <button class="btn-share-elegant ${className}" onclick="shareContentElegant('${shareUrl}', '${shareTitle}')">
+        <button class="btn-share-elegant ${className}" onclick="shareContentElegant('${shareUrl}', '${shareTitle}', '${context.contentId}', '${shareUserId}')" data-share-id="${context.contentId}" title="${shareCount} partages">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="18" cy="5" r="3"></circle>
                 <circle cx="6" cy="12" r="3"></circle>
@@ -366,29 +653,252 @@ function renderShareButton(context = {}) {
                 <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
             </svg>
             <span>Partager</span>
+            ${shareCount > 0 ? `<span class="share-counter">${shareCount}</span>` : ""}
         </button>
     `;
 }
 
 /**
+ * Afficher une popup de confirmation que le lien a été copié sur PC
+ */
+function showCopyConfirmationPopup() {
+    // Vérifier si c'est desktop (pas mobile)
+    if (isMobileDevice()) return;
+
+    // Créer la popup
+    const popup = document.createElement("div");
+    popup.className = "copy-confirmation-popup";
+    popup.innerHTML = `
+        <div class="copy-popup-content">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <p>Lien copié! ✓</p>
+        </div>
+    `;
+
+    // Styles de la popup
+    const style = document.createElement("style");
+    style.textContent = `
+        .copy-confirmation-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(34, 197, 94, 0.95);
+            backdrop-filter: blur(8px);
+            border-radius: 16px;
+            padding: 24px 32px;
+            z-index: 10000;
+            animation: popupSlideIn 0.3s ease-out forwards;
+            pointer-events: none;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+        
+        .copy-popup-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        .copy-popup-content svg {
+            color: white;
+            flex-shrink: 0;
+        }
+        
+        @keyframes popupSlideIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+        
+        @keyframes popupSlideOut {
+            from {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+        }
+    `;
+
+    document.head.appendChild(style);
+    document.body.appendChild(popup);
+
+    // Retirer la popup après 2 secondes
+    setTimeout(() => {
+        popup.style.animation = "popupSlideOut 0.3s ease-out forwards";
+        setTimeout(() => {
+            document.body.removeChild(popup);
+        }, 300);
+    }, 2000);
+}
+
+/**
+ * Incrémenter et récupérer le compteur de partages
+ */
+function getShareCount(contentId) {
+    try {
+        const key = `share_count_${contentId}`;
+        return parseInt(localStorage.getItem(key) || "0", 10);
+    } catch (e) {
+        return 0;
+    }
+}
+
+function incrementShareCount(contentId) {
+    try {
+        const key = `share_count_${contentId}`;
+        const current = parseInt(localStorage.getItem(key) || "0", 10);
+        localStorage.setItem(key, String(current + 1));
+        return current + 1;
+    } catch (e) {
+        return 0;
+    }
+}
+
+/**
  * Native share avec fallback
  */
-window.shareContentElegant = async function (url, title) {
+window.shareContentElegant = async function (
+    url,
+    title,
+    contentId = null,
+    userId = null,
+) {
     try {
+        if (contentId) {
+            const newCount = incrementShareCount(contentId);
+
+            // Sauvegarder les données du contenu dans localStorage pour les web scrapers
+            try {
+                const content = findContentById(contentId);
+                if (content) {
+                    const contentData = {
+                        title: content.title || "Contenu XERA",
+                        description: content.description || "",
+                        image:
+                            content.media?.[0]?.url ||
+                            content.mediaUrl ||
+                            content.thumbnail_url ||
+                            "",
+                    };
+                    localStorage.setItem(
+                        `content_${contentId}`,
+                        JSON.stringify(contentData),
+                    );
+                }
+            } catch (e) {
+                // Silently fail - continue with sharing
+            }
+
+            // Mettre à jour l'affichage du compteur
+            const shareBtn = document.querySelector(
+                `[data-share-id="${contentId}"]`,
+            );
+            if (shareBtn) {
+                const counter = shareBtn.querySelector(".share-counter");
+                if (counter) {
+                    if (newCount > 0) {
+                        counter.textContent = newCount;
+                        counter.style.display = "flex";
+                    }
+                }
+            }
+        }
+
+        if (userId) {
+            // Sauvegarder les données du profil dans localStorage
+            try {
+                const user = getUser(userId);
+                if (user) {
+                    const userData = {
+                        username: user.username || user.name || "Profil",
+                        bio: user.bio || "",
+                        avatar: user.avatar_url || user.avatarUrl || "",
+                    };
+                    localStorage.setItem(
+                        `user_${userId}`,
+                        JSON.stringify(userData),
+                    );
+                }
+            } catch (e) {
+                // Silently fail - continue with sharing
+            }
+        }
+
+        // Essayer d'abord le Web Share API
         if (navigator.share) {
-            await navigator.share({
-                title: title,
-                url: url,
-            });
-        } else {
-            // Fallback: copier dans le presse-papiers
-            await navigator.clipboard.writeText(url);
-            showToastNotification("Lien copié ! 📋", "success");
+            try {
+                await navigator.share({
+                    title: title,
+                    url: url,
+                });
+                showToastNotification("Partagé avec succès! 🚀", "success");
+                return;
+            } catch (shareError) {
+                // Si l'utilisateur annule le partage, ne pas afficher d'erreur
+                if (shareError.name !== "AbortError") {
+                    console.error("Share API error:", shareError);
+                    // Continuer au fallback
+                } else {
+                    return; // L'utilisateur a annulé
+                }
+            }
+        }
+
+        // Fallback: copier dans le presse-papiers
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(url);
+                showToastNotification(
+                    "Lien copié dans le presse-papiers! 📋",
+                    "success",
+                );
+                // Afficher une popup de confirmation sur PC
+                showCopyConfirmationPopup();
+            } else {
+                // Fallback alternatif: créer un élément input temporaire
+                const tempInput = document.createElement("input");
+                tempInput.type = "text";
+                tempInput.value = url;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand("copy");
+                document.body.removeChild(tempInput);
+                showToastNotification(
+                    "Lien copié dans le presse-papiers! 📋",
+                    "success",
+                );
+                // Afficher une popup de confirmation sur PC
+                showCopyConfirmationPopup();
+            }
+        } catch (clipboardError) {
+            console.error("Clipboard error:", clipboardError);
+            showToastNotification(
+                "Impossible de copier le lien. Essayez manuellement.",
+                "error",
+            );
         }
     } catch (e) {
         console.error("Share error:", e);
+        showToastNotification("Erreur lors du partage", "error");
     }
 };
+
+// Exposer les fonctions de partage globalement
+window.getShareCount = getShareCount;
+window.incrementShareCount = incrementShareCount;
 
 /**
  * Obtenir la liste des utilisateurs suivis
@@ -407,6 +917,7 @@ function getFollowingList(userId) {
 window.showFriendJoinedNotification = showFriendJoinedNotification;
 window.calculateUserReachStats = calculateUserReachStats;
 window.getContributorBadgeHtml = getContributorBadgeHtml;
+window.notifyBadgeUnlock = notifyBadgeUnlock;
 
 /**
  * Injecter les widgets de croissance virale dans le profil
@@ -7419,10 +7930,13 @@ function renderBadges(badgesList) {
 
 function renderUserBadges(userId) {
     const verificationHtml = renderVerificationBadgeById(userId);
+    const contributorBadgeHtml = getContributorBadgeHtml(userId);
     const userBadges = getUserBadges(userId);
-    if (!verificationHtml && userBadges.length === 0) return "";
+    if (!verificationHtml && !contributorBadgeHtml && userBadges.length === 0)
+        return "";
     return `
 <div class="badge-container">
+            ${contributorBadgeHtml || ""}
             ${verificationHtml || ""}
             ${userBadges.map((b) => generateBadge(b.type, b.label)).join("")}
 </div>
@@ -10085,27 +10599,9 @@ async function renderDiscoverGrid() {
         }
         return;
     }
+    // Ne pas afficher le message vide si allUsers est vide par erreur - utiliser skeleton à la place
     if (allUsers.length === 0) {
-        if (
-            window.LoadingStateManager &&
-            typeof LoadingStateManager.showEmptyState === "function"
-        ) {
-            LoadingStateManager.showEmptyState(
-                grid,
-                "👥",
-                "Aucune trajectoire à explorer",
-                "Revenez plus tard pour découvrir de nouvelles trajectoires.",
-                { text: "Actualiser", action: "location.reload()" },
-            );
-        } else {
-            grid.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">👥</div>
-                    <h3>Aucune trajectoire à explorer</h3>
-                    <p>Revenez plus tard pour découvrir de nouvelles trajectoires.</p>
-                </div>
-            `;
-        }
+        showDiscoverSkeleton(grid);
         return;
     }
 
@@ -11504,7 +12000,7 @@ async function renderImmersiveFeed(contents) {
                             }
                         </div>
                         
-                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top: -0.8rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top: 0.4rem;">
                             <h2>${cleanTitle}</h2>
                             <div class="post-stats" style="display:flex; gap:1rem;">
                                 <div class="stat-pill" title="Vues">
@@ -11519,7 +12015,7 @@ async function renderImmersiveFeed(contents) {
                         </div>
                         
                         <div class="immersive-description-wrapper" data-content-id="${content.contentId}">
-                            <p class="immersive-description" onclick="event.stopPropagation(); expandImmersiveDescription('${content.contentId}', ${inlineJsString(fullDescription)}, ${content.views || 0}, ${content.encouragementsCount || 0})">${immersiveDescription}</p>
+                            <p class="immersive-description" onclick="event.stopPropagation(); expandImmersiveDescription('${content.contentId}', ${inlineJsString(fullDescription)})">${immersiveDescription}</p>
                         </div>
                         ${moodActionsHtml}
                         ${immersiveReplyHtml}
@@ -11541,7 +12037,6 @@ async function renderImmersiveFeed(contents) {
                         </div>
                         <div class="badges-immersive">
                             ${badgesHtml}
-                            ${getContributorBadgeHtml(content.userId)}
                             ${renderShareButton({ contentId: content.contentId, className: "btn-share-post-immersive" })}
                         </div>
                     </div>
@@ -11603,6 +12098,8 @@ async function openImmersive(startUserId, startContentId = null) {
     overlay.style.display = "block";
     overlay.classList.add("immersive-clean-mode");
     document.body.style.overflow = "hidden";
+    // Ajouter une classe au body pour masquer les boutons "Ajouter une mise à jour"
+    document.body.classList.add("immersive-mode-active");
     // Marquer l'immersif comme ouvert pour éviter les rafraîchissements indésirables
     window.__immersiveOpen = true;
     handleLoginPromptContext();
@@ -11756,7 +12253,6 @@ async function openImmersive(startUserId, startContentId = null) {
             <div id="immersive-header-container">
                 ${headerHtml}
             </div>
-            ${renderImmersiveMetadataHint()}
             <div id="immersive-content-container">
                 ${initialContentHtml}
                 <div id="immersive-load-sentinel" style="width:100%;height:4px"></div>
@@ -11771,7 +12267,6 @@ async function openImmersive(startUserId, startContentId = null) {
             </div>
 `;
         applyImmersiveMetadataPreference(overlay);
-        setupImmersiveMetadataHint(overlay);
 
         try {
             initXeraCarousels(overlay);
@@ -11896,6 +12391,8 @@ function closeImmersive() {
     overlay.style.display = "none";
     overlay.classList.remove("immersive-clean-mode");
     document.body.style.overflow = "auto";
+    // Retirer la classe pour afficher à nouveau les boutons "Ajouter une mise à jour"
+    document.body.classList.remove("immersive-mode-active");
     loginPromptImmersiveViews = 0;
     handleLoginPromptContext();
     // Nettoyage des états liés à l'immersif
@@ -12194,65 +12691,6 @@ async function waitForImmersiveFeedContent() {
     return [];
 }
 
-const IMMERSIVE_METADATA_HINT_KEY = "xera_immersive_metadata_hint_clicked";
-
-function hasSeenImmersiveMetadataHint() {
-    try {
-        return localStorage.getItem(IMMERSIVE_METADATA_HINT_KEY) === "1";
-    } catch (error) {
-        return window.__immersiveMetadataHintSeen === true;
-    }
-}
-
-function markImmersiveMetadataHintSeen() {
-    window.__immersiveMetadataHintSeen = true;
-    try {
-        localStorage.setItem(IMMERSIVE_METADATA_HINT_KEY, "1");
-    } catch (error) {
-        // ignore storage restrictions
-    }
-}
-
-function renderImmersiveMetadataHint() {
-    if (hasSeenImmersiveMetadataHint()) return "";
-    return `
-        <button type="button" class="immersive-metadata-hint" id="immersive-metadata-hint" aria-label="Afficher les métadonnées">
-            <span>Clique sur le média pour afficher les métadonnées</span>
-        </button>
-    `;
-}
-
-function setupImmersiveMetadataHint(root = document) {
-    const hint = root.querySelector?.("#immersive-metadata-hint");
-    if (!hint) return;
-
-    hint.addEventListener("click", (event) => {
-        event.stopPropagation();
-        dismissImmersiveMetadataHint({ showMetadata: true });
-    });
-}
-
-function dismissImmersiveMetadataHint({ showMetadata = false } = {}) {
-    const hint = document.getElementById("immersive-metadata-hint");
-    if (!hint) return;
-
-    if (showMetadata) {
-        const activeContentId = window.__activeImmersiveContentId || "";
-        const activeSelector =
-            activeContentId && window.CSS?.escape
-                ? `.immersive-post[data-content-id="${CSS.escape(activeContentId)}"]`
-                : "";
-        const activePost =
-            (activeSelector && document.querySelector(activeSelector)) ||
-            document.querySelector(".immersive-post");
-        if (activePost) setImmersivePostUi(activePost, true);
-    }
-
-    markImmersiveMetadataHintSeen();
-    hint.classList.add("is-dismissed");
-    setTimeout(() => hint.remove(), 240);
-}
-
 function applyImmersiveMetadataPreference(root = document) {
     const visible = getImmersiveMetadataPreference();
     root.querySelectorAll?.(".immersive-post").forEach((post) => {
@@ -12301,9 +12739,6 @@ function setupImmersiveFullscreenToggle(root = document) {
                 if (!post) return;
                 const shouldShow = !getImmersiveMetadataPreference();
                 setImmersivePostUi(post, shouldShow);
-                if (shouldShow) {
-                    dismissImmersiveMetadataHint();
-                }
             });
         });
 }
@@ -16971,6 +17406,7 @@ async function openCreateMenu(
     preSelectedArcId = null,
     existingContent = null,
 ) {
+    // Vérifications rapides avant d'afficher le modal
     if (!currentUser || currentUser.id !== userId) return;
     const profile = getCurrentUserProfile();
     if (isUserBanned(profile)) {
@@ -16984,55 +17420,83 @@ async function openCreateMenu(
         return;
     }
 
-    // Get user ARCs for selection
+    // Afficher le modal IMMÉDIATEMENT avec un contenu vide
+    const modal = document.getElementById("create-modal");
+    const container = modal.querySelector(".create-container");
+
+    // Loading state: affiche un message simple rapidement
+    container.innerHTML = `
+<div class="settings-section" style="text-align: center; padding: 2rem;">
+            <button type="button" class="create-close" onclick="closeCreateMenu()">✕</button>
+            <div style="margin-top: 2rem;">
+                <div style="display: inline-block; width: 32px; height: 32px; border: 3px solid var(--border-color); border-top-color: var(--accent-color); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <p style="margin-top: 1rem; color: var(--text-secondary);">Chargement du formulaire...</p>
+            </div>
+</div>
+    `;
+
+    modal.style.display = "block";
+    modal.offsetHeight; // Force reflow
+    modal.classList.add("active");
+
+    // Charger les ARCs en arrière-plan avec timeout
     let arcs = [];
     try {
-        const { data: ownedArcs } = await supabase
-            .from("arcs")
-            .select("id, title, user_id")
-            .eq("user_id", userId)
-            .eq("status", "in_progress");
-        let collabArcs = [];
-        try {
-            const { data: collabRows } = await supabase
-                .from("arc_collaborations")
-                .select("arc_id")
-                .eq("collaborator_id", userId)
-                .eq("status", "accepted");
-            const collabArcIds = Array.from(
-                new Set(
-                    (collabRows || []).map((r) => r.arc_id).filter(Boolean),
-                ),
-            );
-            if (collabArcIds.length > 0) {
-                const { data: collabData } = await supabase
-                    .from("arcs")
-                    .select("id, title, user_id")
-                    .in("id", collabArcIds)
-                    .eq("status", "in_progress");
-                collabArcs = collabData || [];
-            }
-        } catch (e) {
-            console.error(
-                "Error fetching collaborative arcs for create menu",
-                e,
-            );
-        }
-
-        const arcMap = new Map();
-        (ownedArcs || []).forEach((arc) =>
-            arcMap.set(arc.id, { ...arc, _collabRole: "owner" }),
+        // Timeout de 3 secondes pour éviter de bloquer indéfiniment
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout")), 3000),
         );
-        (collabArcs || []).forEach((arc) => {
-            if (!arcMap.has(arc.id))
-                arcMap.set(arc.id, {
-                    ...arc,
-                    _collabRole: "collaborator",
-                });
-        });
-        arcs = Array.from(arcMap.values());
+        const arcPromise = (async () => {
+            const { data: ownedArcs } = await supabase
+                .from("arcs")
+                .select("id, title, user_id")
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            let collabArcs = [];
+            try {
+                const { data: collabRows } = await supabase
+                    .from("arc_collaborations")
+                    .select("arc_id")
+                    .eq("collaborator_id", userId)
+                    .eq("status", "accepted");
+                const collabArcIds = Array.from(
+                    new Set(
+                        (collabRows || []).map((r) => r.arc_id).filter(Boolean),
+                    ),
+                );
+                if (collabArcIds.length > 0) {
+                    const { data: collabData } = await supabase
+                        .from("arcs")
+                        .select("id, title, user_id")
+                        .in("id", collabArcIds)
+                        .eq("status", "in_progress");
+                    collabArcs = collabData || [];
+                }
+            } catch (e) {
+                console.error(
+                    "Error fetching collaborative arcs for create menu",
+                    e,
+                );
+            }
+
+            const arcMap = new Map();
+            (ownedArcs || []).forEach((arc) =>
+                arcMap.set(arc.id, { ...arc, _collabRole: "owner" }),
+            );
+            (collabArcs || []).forEach((arc) => {
+                if (!arcMap.has(arc.id))
+                    arcMap.set(arc.id, {
+                        ...arc,
+                        _collabRole: "collaborator",
+                    });
+            });
+            return Array.from(arcMap.values());
+        })();
+
+        arcs = await Promise.race([arcPromise, timeoutPromise]);
     } catch (e) {
-        console.error("Error fetching arcs for create menu", e);
+        console.error("Error fetching arcs for create menu:", e);
+        arcs = [];
     }
 
     // BLOCKAGE: Si l'utilisateur n'a pas d'ARC en cours, le forcer à en créer un
@@ -17056,9 +17520,6 @@ async function openCreateMenu(
         }
         return;
     }
-
-    const modal = document.getElementById("create-modal");
-    const container = modal.querySelector(".create-container");
 
     // Calculate next day ou utiliser jour existant si édition
     const contents = getUserContentLocal(userId);
@@ -17144,6 +17605,13 @@ async function openCreateMenu(
     const subtitle = isEdit
         ? `Modifier la mise à jour du jour ${nextDay}`
         : `Update = mise à jour rapide (texte + photo optionnelle). Annonce = étape majeure partagée publiquement.`;
+
+    // Remove old form element to detach previous event listeners - check it's in the modal
+    const oldForm = modal.querySelector("#create-form");
+    if (oldForm) {
+        const newForm = oldForm.cloneNode(false);
+        oldForm.parentNode.replaceChild(newForm, oldForm);
+    }
 
     container.innerHTML = `
 <div class="settings-section">
@@ -17282,9 +17750,9 @@ async function openCreateMenu(
 </div>
     `;
 
+    // Ensure modal is visible
     modal.style.display = "block";
-    // Force reflow
-    modal.offsetHeight;
+    modal.offsetHeight; // Force reflow
     modal.classList.add("active");
 
     // Select elements globally for this function scope
@@ -18000,9 +18468,14 @@ async function openCreateMenu(
     }
 
     // Handle form submission
-    document
-        .getElementById("create-form")
-        .addEventListener("submit", async (e) => {
+    const createForm = modal.querySelector("#create-form");
+    if (!createForm) {
+        console.error("Error: create-form not found in modal");
+        return;
+    }
+
+    try {
+        createForm.addEventListener("submit", async (e) => {
             e.preventDefault();
             if (isMediaUploadInProgress) {
                 alert(
@@ -18217,6 +18690,9 @@ async function openCreateMenu(
                 btnSave.textContent = originalText;
             }
         });
+    } catch (e) {
+        console.error("Error attaching form submit listener:", e);
+    }
 }
 
 /* ========================================
@@ -18420,6 +18896,8 @@ window.requestAccountDeletion = requestAccountDeletion;
 
 document.addEventListener("DOMContentLoaded", function () {
     setupPwaSwUpdateReload();
+    // Initialiser les meta tags OG rapidement pour le partage social
+    initializeOpenGraphFromUrl();
     initializeApp();
 });
 window.openCreateMenu = openCreateMenu;
@@ -18451,6 +18929,13 @@ function subscribeToRealtime() {
         return () => {
             if (timer) clearTimeout(timer);
             timer = setTimeout(() => {
+                // Éviter de rafraîchir si les données sont en train de se charger
+                if (!window.hasLoadedUsers) {
+                    console.log(
+                        "Données en cours de chargement, skip discover refresh",
+                    );
+                    return;
+                }
                 if (typeof renderDiscoverGrid === "function") {
                     renderDiscoverGrid();
                 }
@@ -18942,12 +19427,7 @@ function loadAllCarouselImagesSequentially() {
 /**
  * Expand immersive description to show full text and views
  */
-function expandImmersiveDescription(
-    contentId,
-    fullDescription,
-    views,
-    encouragements,
-) {
+function expandImmersiveDescription(contentId, fullDescription) {
     const wrapper = document.querySelector(
         `.immersive-description-wrapper[data-content-id="${contentId}"]`,
     );
@@ -18968,18 +19448,6 @@ function expandImmersiveDescription(
     // Expand the description
     descriptionEl.classList.add("expanded");
     descriptionEl.textContent = fullDescription || "Pas de description";
-
-    // Add views row
-    const viewsHtml = `
-        <div class="expanded-views-row">
-            <div class="view-stat" title="Vues">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                <span>${formatCompactCount(views || 0)}</span>
-            </div>
-        </div>
-    `;
-
-    descriptionEl.insertAdjacentHTML("afterend", viewsHtml);
 }
 
 /**
