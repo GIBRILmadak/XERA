@@ -3524,18 +3524,97 @@ async function sweepReturnReminderEmails(now = new Date()) {
     };
 }
 
+async function sweepReturnReminderPush(now = new Date()) {
+    const { data: subs, error } = await supabase
+        .from("push_subscriptions")
+        .select("*")
+        .eq("reminder_enabled", true);
+
+    if (error) {
+        console.error("Push sweep fetch error:", error);
+        return { ok: false, error };
+    }
+
+    let sentCount = 0;
+    for (const sub of subs || []) {
+        if (!sub.endpoint || !sub.user_id) continue;
+
+        // On récupère le profil pour avoir le nom et les stats
+        const { data: user } = await supabase
+            .from("users")
+            .select("id, name, last_email_reminder_slot, last_inactive_reminder_sent_at, last_social_progress_email_sent_at")
+            .eq("id", sub.user_id)
+            .single();
+
+        if (!user) continue;
+
+        const timeZone = sub.reminder_timezone || "UTC";
+        const slot = resolveReminderSlot(now, timeZone);
+
+        if (!slot) continue;
+
+        // On réutilise la logique de campagne existante
+        const context = await buildEmailReminderContexts([user], now).then(m => m.get(user.id));
+        const campaign = selectReminderCampaign(user, context, now);
+
+        if (!campaign) continue;
+
+        // Éviter les doublons si déjà envoyé via cet endpoint pour ce slot
+        // On peut stocker un état simple dans metadata ou une table dédiée
+        // Pour simplifier ici, on utilise last_email_reminder_slot comme référence partagée
+        if (campaign.type === "daily_post" && user.last_email_reminder_slot === campaign.slotKey) {
+            continue;
+        }
+
+        try {
+            const pushPayload = JSON.stringify({
+                title: campaign.subject.replace("XERA - ", "XERA • "),
+                body: campaign.text.split("\n").filter(l => l.trim()).slice(1, 3).join(" "),
+                icon: "/icons/logo-192x192.png",
+                link: campaign.ctaUrl || "/index.html",
+                tag: `reminder-${campaign.type}-${user.id}`
+            });
+
+            await webpush.sendNotification({
+                endpoint: sub.endpoint,
+                keys: sub.keys
+            }, pushPayload);
+
+            sentCount++;
+
+            // Mettre à jour l'état utilisateur pour éviter les doublons
+            if (campaign.slotKey) {
+                await supabase.from("users").update({ last_email_reminder_slot: campaign.slotKey }).eq("id", user.id);
+            }
+        } catch (err) {
+            if (err.statusCode === 410 || err.statusCode === 404) {
+                // Subscription expirée ou invalide
+                await supabase.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+            }
+            console.warn("Push send failed for", sub.user_id, err.message);
+        }
+    }
+
+    return { ok: true, sentCount };
+}
+
 async function sendScheduledReturnReminders() {
     if (reminderSweepInFlight) return;
     reminderSweepInFlight = true;
 
     try {
-        await sweepReturnReminderEmails(new Date());
+        const now = new Date();
+        await Promise.all([
+            sweepReturnReminderEmails(now),
+            sweepReturnReminderPush(now)
+        ]);
     } catch (error) {
         console.error("Return reminder sweep error:", error);
     } finally {
         reminderSweepInFlight = false;
     }
 }
+
 
 function startReminderScheduler() {
     if (!supportsEmailReminders()) return;
@@ -5186,7 +5265,23 @@ app.post("/api/reminders/email/preferences", async (req, res) => {
     }
 });
 
+app.get("/api/cron/send-reminders", async (req, res) => {
+    const auth = authorizeCronRequest(req);
+    if (!auth.ok) {
+        return res.status(auth.status || 401).json({
+            error: auth.message || "Unauthorized cron request.",
+        });
+    }
+
+    await sendScheduledReturnReminders();
+
+    return res.status(200).json({
+        message: "Scheduled reminders (Email + Push) initiated.",
+    });
+});
+
 app.get("/api/cron/send-reminder-emails", async (req, res) => {
+
     const auth = authorizeCronRequest(req);
     if (!auth.ok) {
         return res.status(auth.status || 401).json({
