@@ -2,10 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/router?path=:path*" },
-    { "source": "/share/:path*", "destination": "/api/router?path=share/:path*" },
     { "source": "/", "destination": "/index.html" },
     { "source": "/login", "destination": "/login.html" },
-    { "source": "/profile", "destination": "/profile.html" },
+    { "source": "/profile", "destination": "/api/profile" },
     { "source": "/analytics", "destination": "/analytics.html" },
     { "source": "/admin", "destination": "/admin.html" },
     { "source": "/badges-admin", "destination": "/badges-admin.html" },
