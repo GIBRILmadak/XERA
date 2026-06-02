@@ -602,45 +602,13 @@ function getNextReminderDate(fromDate = new Date()) {
     return candidates[0] || null;
 }
 
-// Rappel quotidien pour revenir sur XERA (10h et 18h locale)
+// Rappel quotidien pour revenir sur XERA (Géré côté serveur via Push pour plus de fiabilité)
 function scheduleReturnReminder() {
-    if (typeof window === "undefined" || typeof Notification === "undefined")
-        return;
-    if (Notification.permission !== "granted") return;
-
-    if (returnReminderTimer) {
-        clearTimeout(returnReminderTimer);
-        returnReminderTimer = null;
-    }
-
-    const now = new Date();
-    const currentSlotKey = getReminderSlotKey(now);
-    const slots = loadReminderSlots();
-    if (currentSlotKey && slots[currentSlotKey] !== true) {
-        showReturnReminderNotification(now)
-            .then(() => {
-                slots[currentSlotKey] = true;
-                saveReminderSlots(slots);
-            })
-            .catch(() => {});
-    }
-
-    const nextReminderDate = getNextReminderDate(now);
-    if (!nextReminderDate) return;
-    const delayMs = Math.max(1000, nextReminderDate.getTime() - Date.now());
-
-    returnReminderTimer = setTimeout(async () => {
-        returnReminderTimer = null;
-        await showReturnReminderNotification(nextReminderDate);
-        const slotKey = getReminderSlotKey(nextReminderDate);
-        if (slotKey) {
-            const nextSlots = loadReminderSlots();
-            nextSlots[slotKey] = true;
-            saveReminderSlots(nextSlots);
-        }
-        scheduleReturnReminder();
-    }, delayMs);
+    // Cette fonction locale est conservée uniquement pour les rappels immédiats si l'onglet est ouvert,
+    // mais le vrai travail est maintenant fait par le serveur via Web Push (background).
+    console.log("Rappels programmés actifs (Relié au serveur Web Push)");
 }
+
 
 async function showReturnReminderNotification(reminderDate = new Date()) {
     const hour = reminderDate.getHours();
