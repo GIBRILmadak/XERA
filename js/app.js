@@ -293,11 +293,12 @@ function determineTrajectoryType(userId) {
     ).toLowerCase();
 
     // Comptes officiels / équipes / entreprises
+    if (userTitle.includes("team") || userTitle.includes("équipe")) {
+        return "team";
+    }
     if (
         userTitle.includes("official") ||
         userTitle.includes("officiel") ||
-        userTitle.includes("team") ||
-        userTitle.includes("équipe") ||
         userTitle.includes("owner") ||
         userName === "rize" ||
         userName.includes("rize team")
@@ -309,29 +310,163 @@ function determineTrajectoryType(userId) {
     if (
         textContent.includes("unreal") ||
         userTitle.includes("designer") ||
-        textContent.includes("motion")
+        textContent.includes("motion") ||
+        textContent.includes("blender") ||
+        textContent.includes("modelisation") ||
+        textContent.includes("illustration") ||
+        textContent.includes("artisan")
     )
         return "creative";
     if (
         textContent.includes("boss") ||
         textContent.includes("game") ||
-        textContent.includes("indie")
+        textContent.includes("indie") ||
+        textContent.includes("jeu")
     )
         return "creative";
-    if (textContent.includes("rize") && userTitle.includes("ceo"))
+    if (
+        textContent.includes("ceo") ||
+        textContent.includes("entreprise") ||
+        textContent.includes("startup") ||
+        textContent.includes("fondateur") ||
+        textContent.includes("co-founder")
+    )
         return "enterprise";
     if (
         textContent.includes("refonte") ||
         textContent.includes("ui") ||
-        textContent.includes("mobile")
+        textContent.includes("mobile") ||
+        textContent.includes("frontend") ||
+        textContent.includes("backend") ||
+        textContent.includes("fullstack") ||
+        textContent.includes("développeur") ||
+        textContent.includes("code") ||
+        textContent.includes("programmation") ||
+        textContent.includes("javascript") ||
+        textContent.includes("python") ||
+        textContent.includes("react")
     )
         return "tech";
     if (
         textContent.includes("architecture") ||
         textContent.includes("api") ||
-        textContent.includes("database")
+        textContent.includes("database") ||
+        textContent.includes("serveur") ||
+        textContent.includes("devops")
     )
         return "tech";
+
+    if (
+        textContent.includes("étudiant") ||
+        userTitle.includes("étudiant") ||
+        textContent.includes("formation") ||
+        textContent.includes("apprendre") ||
+        textContent.includes("study") ||
+        textContent.includes("cours") ||
+        textContent.includes("leçon") ||
+        textContent.includes("diplôme") ||
+        textContent.includes("certification") ||
+        textContent.includes("école") ||
+        textContent.includes("mentor")
+    )
+        return "education";
+
+    if (
+        textContent.includes("climat") ||
+        textContent.includes("impact") ||
+        textContent.includes("écologie") ||
+        textContent.includes("durable") ||
+        textContent.includes("social") ||
+        textContent.includes("ong") ||
+        textContent.includes("association") ||
+        textContent.includes("bénévole") ||
+        textContent.includes("environnement") ||
+        textContent.includes("vert")
+    )
+        return "impact";
+
+    if (
+        textContent.includes("finance") ||
+        textContent.includes("crypto") ||
+        textContent.includes("trading") ||
+        textContent.includes("bourse") ||
+        textContent.includes("invest") ||
+        textContent.includes("banque") ||
+        textContent.includes("bitcoin") ||
+        textContent.includes("nft") ||
+        textContent.includes("argent") ||
+        textContent.includes("budget")
+    )
+        return "finance";
+
+    if (
+        textContent.includes("artiste") ||
+        textContent.includes("peinture") ||
+        textContent.includes("musique") ||
+        textContent.includes("écriture") ||
+        userTitle.includes("artiste") ||
+        textContent.includes("sculpture") ||
+        textContent.includes("spectacle") ||
+        textContent.includes("danse") ||
+        textContent.includes("expo")
+    )
+        return "artist";
+
+    if (
+        textContent.includes("santé") ||
+        textContent.includes("fitness") ||
+        textContent.includes("yoga") ||
+        textContent.includes("nutrition") ||
+        textContent.includes("médical") ||
+        textContent.includes("médecin") ||
+        textContent.includes("docteur") ||
+        textContent.includes("hôpital") ||
+        textContent.includes("musculation") ||
+        textContent.includes("running")
+    )
+        return "health";
+
+    if (
+        textContent.includes("électronique") ||
+        textContent.includes("robotique") ||
+        textContent.includes("iot") ||
+        textContent.includes("hardware") ||
+        textContent.includes("matériel") ||
+        textContent.includes("pcb") ||
+        textContent.includes("soudure") ||
+        textContent.includes("arduino") ||
+        textContent.includes("raspberry") ||
+        textContent.includes("capteur")
+    )
+        return "hardware";
+
+    if (
+        textContent.includes("marketing") ||
+        textContent.includes("growth") ||
+        textContent.includes("ads") ||
+        textContent.includes("seo") ||
+        textContent.includes("vente") ||
+        textContent.includes("copywriting") ||
+        textContent.includes("branding") ||
+        textContent.includes("publicité") ||
+        textContent.includes("funnel") ||
+        textContent.includes("saas")
+    )
+        return "marketing";
+
+    if (
+        textContent.includes("recherche") ||
+        textContent.includes("science") ||
+        textContent.includes("chercheur") ||
+        textContent.includes("phd") ||
+        textContent.includes("labo") ||
+        textContent.includes("étude") ||
+        textContent.includes("thèse") ||
+        textContent.includes("data") ||
+        textContent.includes("statistique") ||
+        textContent.includes("analyse")
+    )
+        return "research";
 
     return "solo";
 }
@@ -357,9 +492,24 @@ function generateBadge(badgeType, label) {
         "creative",
         "tech",
         "solo",
+        "education",
+        "impact",
+        "finance",
+        "artist",
+        "health",
+        "hardware",
+        "marketing",
+        "research",
     ]);
     if (iconTypes.has(badgeType)) {
-        const iconPath = `./icons/${badgeType}.svg`;
+        let iconName = badgeType;
+        if (badgeType === "creative") iconName = "créatif";
+        if (badgeType === "team") iconName = "collectif";
+        if (badgeType === "education") iconName = "éducation";
+        if (badgeType === "health") iconName = "santé";
+        if (badgeType === "research") iconName = "recherche";
+
+        const iconPath = `./icons/${iconName}.svg`;
         return `
             <div class="badge" title="${label}">
                 <img src="${iconPath}" alt="${label}" class="badge-icon" />
@@ -400,6 +550,14 @@ function getUserBadges(userId) {
             enterprise: "Entreprise",
             creative: "Créatif",
             tech: "Tech",
+            education: "Éducation",
+            impact: "Impact Social",
+            finance: "Finance",
+            artist: "Artiste",
+            health: "Santé & Bien-être",
+            hardware: "Hardware",
+            marketing: "Marketing",
+            research: "Recherche",
         };
         badges.push({ type: trajectoryType, label: labels[trajectoryType] });
     }
