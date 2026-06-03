@@ -28,6 +28,21 @@ let followedUserIdsCacheOwner = null;
 let followedUserIdsCacheUpdatedAt = 0;
 let discoverVideoObserver = null;
 let discoverRenderSequence = 0;
+const INITIAL_DATA_TIMEOUT_MS = 12000;
+const INITIAL_AUTH_TIMEOUT_MS = 8000;
+
+function withTimeout(promise, timeoutMs, label = "Operation") {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+            reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+    });
+
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+        clearTimeout(timeoutId);
+    });
+}
 
 // Pagination système pour le feed discover
 const DISCOVER_ITEMS_PER_PAGE = 20;
@@ -2030,7 +2045,11 @@ async function initializeApp() {
                 : null;
 
         // Vérifier la session avec Supabase
-        const user = await checkAuth();
+        const user = await withTimeout(
+            checkAuth(),
+            INITIAL_AUTH_TIMEOUT_MS,
+            "Auth check",
+        );
         if (!user && profileOnlyPage && !initialProfileId) {
             clearTimeout(safetyTimeout);
             window.location.href = "login.html";
@@ -2066,7 +2085,18 @@ async function initializeApp() {
             if (discoverAvailable) {
                 navigateTo("discover");
             }
-            await Promise.all([loadAllData(), heroVisibilityPromise]);
+            await Promise.all([
+                withTimeout(
+                    loadAllData(),
+                    INITIAL_DATA_TIMEOUT_MS,
+                    "Initial private data load",
+                ),
+                withTimeout(
+                    heroVisibilityPromise,
+                    INITIAL_AUTH_TIMEOUT_MS,
+                    "Hero visibility load",
+                ),
+            ]);
         } else if (savedSession) {
             if (typeof ToastManager !== "undefined") {
                 ToastManager.info(
@@ -2078,10 +2108,32 @@ async function initializeApp() {
                 SessionManager.clearSession();
             }
             updateNavigation(false);
-            await Promise.all([loadPublicData(), heroVisibilityPromise]);
+            await Promise.all([
+                withTimeout(
+                    loadPublicData(),
+                    INITIAL_DATA_TIMEOUT_MS,
+                    "Initial public data load",
+                ),
+                withTimeout(
+                    heroVisibilityPromise,
+                    INITIAL_AUTH_TIMEOUT_MS,
+                    "Hero visibility load",
+                ),
+            ]);
         } else {
             updateNavigation(false);
-            await Promise.all([loadPublicData(), heroVisibilityPromise]);
+            await Promise.all([
+                withTimeout(
+                    loadPublicData(),
+                    INITIAL_DATA_TIMEOUT_MS,
+                    "Initial public data load",
+                ),
+                withTimeout(
+                    heroVisibilityPromise,
+                    INITIAL_AUTH_TIMEOUT_MS,
+                    "Hero visibility load",
+                ),
+            ]);
         }
 
         if (skipLanding && discoverAvailable) {
@@ -3187,7 +3239,11 @@ async function loadAllData() {
 
         // S'assurer que l'utilisateur connecté a un profil
         if (window.currentUser) {
-            const ensuredProfile = await ensureUserProfile(window.currentUser);
+            const ensuredProfile = await withTimeout(
+                ensureUserProfile(window.currentUser),
+                INITIAL_AUTH_TIMEOUT_MS,
+                "Current profile ensure",
+            );
             const safeProfile = sanitizeUserMedia(ensuredProfile);
             const mergedProfile =
                 safeProfile && typeof applyUserUpdateToCache === "function"
@@ -3202,7 +3258,11 @@ async function loadAllData() {
         }
 
         // Charger tous les utilisateurs
-        const usersResult = await getAllUsers();
+        const usersResult = await withTimeout(
+            getAllUsers(),
+            INITIAL_DATA_TIMEOUT_MS,
+            "Users load",
+        );
         if (!usersResult.success) {
             allUsers = [];
             window.userLoadError =
@@ -3218,8 +3278,10 @@ async function loadAllData() {
             window.currentUser &&
             !allUsers.find((u) => u.id === window.currentUser.id)
         ) {
-            const userProfileResult = await getUserProfile(
-                window.currentUser.id,
+            const userProfileResult = await withTimeout(
+                getUserProfile(window.currentUser.id),
+                INITIAL_AUTH_TIMEOUT_MS,
+                "Current profile load",
             );
             if (userProfileResult.success) {
                 allUsers.push(sanitizeUserMedia(userProfileResult.data));
@@ -3227,13 +3289,25 @@ async function loadAllData() {
         }
 
         // Charger les badges vérifiés avant de rendre les annonces pour que le badge apparaisse
-        await fetchVerifiedBadges();
+        await withTimeout(
+            fetchVerifiedBadges(),
+            INITIAL_AUTH_TIMEOUT_MS,
+            "Verified badges load",
+        );
         await Promise.all([
-            preloadUserContents(allUsers, {
-                publicOnly: false,
-                fallbackContentsByUser,
-            }),
-            fetchAdminAnnouncements(),
+            withTimeout(
+                preloadUserContents(allUsers, {
+                    publicOnly: false,
+                    fallbackContentsByUser,
+                }),
+                INITIAL_DATA_TIMEOUT_MS,
+                "Private content preload",
+            ),
+            withTimeout(
+                fetchAdminAnnouncements(),
+                INITIAL_AUTH_TIMEOUT_MS,
+                "Admin announcements load",
+            ),
         ]);
 
         window.hasLoadedUsers = true;
@@ -3241,6 +3315,8 @@ async function loadAllData() {
         console.error("Erreur chargement données:", error);
         window.userLoadError =
             error.message || "Erreur de chargement des données";
+        window.hasLoadedUsers = true;
+    } finally {
         window.hasLoadedUsers = true;
     }
 }
@@ -3253,7 +3329,11 @@ async function loadPublicData() {
         const fallbackContentsByUser = snapshotUserContents();
         resetLoadedCollections();
 
-        const usersResult = await getAllUsers();
+        const usersResult = await withTimeout(
+            getAllUsers(),
+            INITIAL_DATA_TIMEOUT_MS,
+            "Public users load",
+        );
         if (!usersResult.success) {
             allUsers = [];
             window.userLoadError =
@@ -3264,13 +3344,25 @@ async function loadPublicData() {
 
         allUsers = (usersResult.data || []).map((u) => sanitizeUserMedia(u));
         // Même ordre côté public pour assurer l'affichage correct des badges dans les annonces
-        await fetchVerifiedBadges();
+        await withTimeout(
+            fetchVerifiedBadges(),
+            INITIAL_AUTH_TIMEOUT_MS,
+            "Public verified badges load",
+        );
         await Promise.all([
-            preloadUserContents(allUsers, {
-                publicOnly: true,
-                fallbackContentsByUser,
-            }),
-            fetchAdminAnnouncements(),
+            withTimeout(
+                preloadUserContents(allUsers, {
+                    publicOnly: true,
+                    fallbackContentsByUser,
+                }),
+                INITIAL_DATA_TIMEOUT_MS,
+                "Public content preload",
+            ),
+            withTimeout(
+                fetchAdminAnnouncements(),
+                INITIAL_AUTH_TIMEOUT_MS,
+                "Public announcements load",
+            ),
         ]);
 
         window.hasLoadedUsers = true;
@@ -3278,6 +3370,8 @@ async function loadPublicData() {
         console.error("Erreur chargement données publiques:", error);
         window.userLoadError =
             error.message || "Erreur de chargement des données";
+        window.hasLoadedUsers = true;
+    } finally {
         window.hasLoadedUsers = true;
     }
 }
@@ -7787,7 +7881,7 @@ function determineTrajectoryType(userId) {
         userTitle.includes("officiel") ||
         userTitle.includes("owner") ||
         userName === "rize" ||
-        userName.includes("rize team")h
+        userName.includes("rize team")
     ) {
         return "enterprise";
     }
@@ -8047,16 +8141,6 @@ function getUserBadges(userId) {
         badges.push({
             type: trajectoryType,
             label: labels[trajectoryType],
-        });
-    }
-
-            hardware: "Hardware",
-            marketing: "Marketing",
-            research: "Recherche",
-        };
-        badges.push({
-            type: trajectoryType,
-            label: labels[badgeType] || labels[trajectoryType],
         });
     }
 
@@ -10742,14 +10826,6 @@ async function renderDiscoverGrid() {
         }
     }
 
-    let liveStreams = [];
-    try {
-        liveStreams = await getLiveStreamsForDiscover();
-    } catch (error) {
-        console.error("Erreur chargement lives discover:", error);
-    }
-    if (renderSequence !== discoverRenderSequence) return;
-
     // Afficher un état de chargement si les données ne sont pas encore là
     if (!window.hasLoadedUsers) {
         showDiscoverSkeleton(grid);
@@ -10778,11 +10854,41 @@ async function renderDiscoverGrid() {
         }
         return;
     }
-    // Ne pas afficher le message vide si allUsers est vide par erreur - utiliser skeleton à la place
     if (allUsers.length === 0) {
-        showDiscoverSkeleton(grid);
+        if (
+            window.LoadingStateManager &&
+            typeof LoadingStateManager.showEmptyState === "function"
+        ) {
+            LoadingStateManager.showEmptyState(
+                grid,
+                "👥",
+                "Aucun profil à afficher",
+                "Les données ont été chargées, mais aucun profil public n'est disponible pour le moment.",
+                { text: "Actualiser", action: "location.reload()" },
+            );
+        } else {
+            grid.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">👥</div>
+                    <h3>Aucun profil à afficher</h3>
+                    <p>Les données ont été chargées, mais aucun profil public n'est disponible pour le moment.</p>
+                </div>
+            `;
+        }
         return;
     }
+
+    let liveStreams = [];
+    try {
+        liveStreams = await withTimeout(
+            getLiveStreamsForDiscover(),
+            INITIAL_AUTH_TIMEOUT_MS,
+            "Discover live streams load",
+        );
+    } catch (error) {
+        console.error("Erreur chargement lives discover:", error);
+    }
+    if (renderSequence !== discoverRenderSequence) return;
 
     let usersToDisplay = [...allUsers];
     const currentFilter = window.discoverFilter || "all";

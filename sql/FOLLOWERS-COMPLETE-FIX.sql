@@ -18,6 +18,13 @@
 -- ÉTAPE 1: Vérifier/Ajouter la colonne followers_count dans users
 -- ========================================
 ALTER TABLE users ADD COLUMN IF NOT EXISTS followers_count INTEGER DEFAULT 0;
+UPDATE users SET followers_count = 0 WHERE followers_count IS NULL;
+ALTER TABLE users ALTER COLUMN followers_count SET DEFAULT 0;
+ALTER TABLE users ALTER COLUMN followers_count SET NOT NULL;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_followers_count_non_negative;
+ALTER TABLE users
+    ADD CONSTRAINT users_followers_count_non_negative
+    CHECK (followers_count >= 0);
 
 -- ========================================
 -- ÉTAPE 2: Créer/Corriger la table followers
@@ -31,6 +38,13 @@ CREATE TABLE IF NOT EXISTS followers (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(follower_id, following_id)
 );
+
+DELETE FROM followers WHERE follower_id = following_id;
+
+ALTER TABLE followers DROP CONSTRAINT IF EXISTS followers_no_self_follow;
+ALTER TABLE followers
+    ADD CONSTRAINT followers_no_self_follow
+    CHECK (follower_id <> following_id);
 
 -- Créer les index pour améliorer les performances
 CREATE INDEX IF NOT EXISTS idx_followers_follower_id ON followers(follower_id);
