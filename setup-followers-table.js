@@ -27,6 +27,16 @@ async function setupFollowersTable() {
 
     // SQL à exécuter
     const sql = `
+        -- Colonne cache: 0 par défaut, jamais NULL, jamais négative
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS followers_count INTEGER DEFAULT 0;
+        UPDATE users SET followers_count = 0 WHERE followers_count IS NULL;
+        ALTER TABLE users ALTER COLUMN followers_count SET DEFAULT 0;
+        ALTER TABLE users ALTER COLUMN followers_count SET NOT NULL;
+        ALTER TABLE users DROP CONSTRAINT IF EXISTS users_followers_count_non_negative;
+        ALTER TABLE users
+            ADD CONSTRAINT users_followers_count_non_negative
+            CHECK (followers_count >= 0);
+
         -- Table pour gérer les relations suivant/suivi entre utilisateurs
         CREATE TABLE IF NOT EXISTS followers (
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -35,6 +45,13 @@ async function setupFollowersTable() {
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             UNIQUE(follower_id, following_id)
         );
+
+        DELETE FROM followers WHERE follower_id = following_id;
+
+        ALTER TABLE followers DROP CONSTRAINT IF EXISTS followers_no_self_follow;
+        ALTER TABLE followers
+            ADD CONSTRAINT followers_no_self_follow
+            CHECK (follower_id <> following_id);
 
         -- Index pour les performances
         CREATE INDEX IF NOT EXISTS idx_followers_follower_id ON followers(follower_id);
@@ -60,26 +77,47 @@ async function setupFollowersTable() {
 
         -- Trigger pour mettre à jour le compteur de followers
         CREATE OR REPLACE FUNCTION update_followers_count()
-        RETURNS TRIGGER AS $$
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        SECURITY DEFINER
+        SET search_path = public, pg_catalog
+        AS $$
+        DECLARE
+            v_user_id UUID;
+            v_count INTEGER;
         BEGIN
             IF TG_OP = 'INSERT' THEN
-                UPDATE users SET followers_count = COALESCE(followers_count, 0) + 1 WHERE id = NEW.following_id;
-                RETURN NEW;
+                v_user_id := NEW.following_id;
             ELSIF TG_OP = 'DELETE' THEN
-                UPDATE users SET followers_count = GREATEST(COALESCE(followers_count, 0) - 1, 0) WHERE id = OLD.following_id;
-                RETURN OLD;
+                v_user_id := OLD.following_id;
             END IF;
-            RETURN NULL;
+
+            SELECT COUNT(DISTINCT follower_id)
+            INTO v_count
+            FROM followers
+            WHERE following_id = v_user_id;
+
+            UPDATE users
+            SET followers_count = COALESCE(v_count, 0),
+                updated_at = NOW()
+            WHERE id = v_user_id;
+
+            RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
         END;
-        $$ LANGUAGE plpgsql;
+        $$;
 
         -- Créer le trigger
         DROP TRIGGER IF EXISTS followers_count_update ON followers;
         CREATE TRIGGER followers_count_update AFTER INSERT OR DELETE ON followers
             FOR EACH ROW EXECUTE FUNCTION update_followers_count();
 
-        -- Ajouter la colonne followers_count s'il n'existe pas
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS followers_count INTEGER DEFAULT 0;
+        -- Recalcule tous les compteurs existants pour partir d'un état propre.
+        UPDATE users
+        SET followers_count = (
+            SELECT COUNT(DISTINCT follower_id)
+            FROM followers
+            WHERE followers.following_id = users.id
+        );
     `;
 
     try {

@@ -753,35 +753,36 @@ async function getFollowerIds(userId) {
     }
 }
 
-// Compter les followers - Utilise la colonne followers_count de la table users
+function normalizeFollowerCount(value) {
+    const count = Number(value);
+    return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+}
+
+// Compter les followers depuis la table de relations, puis fallback sur users.followers_count.
 async function getFollowerCount(userId) {
+    if (!userId) return 0;
     try {
-        // Récupérer directement la colonne followers_count au lieu de recompter
-        const { data, error } = await supabase
+        const { count, error } = await supabase
+            .from("followers")
+            .select("follower_id", { count: "exact", head: true })
+            .eq("following_id", userId);
+
+        if (!error) return normalizeFollowerCount(count);
+
+        console.error("Erreur comptage followers:", error);
+
+        const { data, error: profileError } = await supabase
             .from("users")
             .select("followers_count")
             .eq("id", userId)
             .single();
 
-        if (error) {
-            console.error("Erreur récupération followers_count:", error);
-            // Fallback: recompter manuellement si la colonne n'existe pas
-            const { count, countError } = await supabase
-                .from("followers")
-                .select("*", { count: "exact", head: true })
-                .eq("following_id", userId);
-
-            if (countError) {
-                console.error(
-                    "Erreur comptage followers fallback:",
-                    countError,
-                );
-                return 0;
-            }
-            return count || 0;
+        if (profileError) {
+            console.error("Erreur récupération followers_count:", profileError);
+            return 0;
         }
 
-        return data?.followers_count || 0;
+        return normalizeFollowerCount(data?.followers_count);
     } catch (error) {
         console.error("Exception in getFollowerCount:", error);
         return 0;
