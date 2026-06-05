@@ -14,7 +14,7 @@ module.exports = async (req, res) => {
     let title = "XERA | Tracez votre progression";
     let description = "Plateforme de suivi de progression transparente sans dopamine sociale.";
     let image = "https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png";
-    let url = `https://xera1.vercel.app/profile${userId ? '?id=' + userId : ''}`;
+    let url = `https://xera1.xyz/profile${userId ? '?id=' + userId : ''}`;
 
     if (userId) {
         try {

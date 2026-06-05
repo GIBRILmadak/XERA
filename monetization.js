@@ -16,7 +16,7 @@ export const VAPID_PRIVATE_KEY =
     process.env.VAPID_PRIVATE_KEY ||
     "6dmRHoFpyGEFgL487qqwBc9BQ184TC8N9Yd3siS94Skpka";
 export const PUSH_CONTACT_EMAIL =
-    process.env.PUSH_CONTACT_EMAIL || "mailto:notifications@xera.app";
+    process.env.PUSH_CONTACT_EMAIL || "mailto:hello@xera1.xyz";
 export const USD_TO_CDF_RATE_VALUE = Math.max(
     1,
     Number.parseFloat(process.env.USD_TO_CDF_RATE) || 2300,

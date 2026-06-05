@@ -1933,6 +1933,21 @@ nav {
     grid-column: 1 / -1;
 }
 
+.discover-slow-connection {
+    grid-column: 1 / -1;
+    width: min(100%, var(--feed-grid-max));
+    margin: 0 auto 0.85rem;
+    padding: 0.8rem 1rem;
+    border: 1px solid rgba(239, 68, 68, 0.34);
+    border-radius: 12px;
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    font-size: 0.94rem;
+    font-weight: 700;
+    line-height: 1.35;
+    text-align: center;
+}
+
 #discover .discover-grid > .user-card.discover-row-size-4 {
     grid-column: span 3;
 }
