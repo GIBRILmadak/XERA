@@ -5,7 +5,7 @@ module.exports = async (req, res) => {
     let title = "XERA | Tracez votre progression";
     let description = "XERA est la plateforme de suivi de progression transparente. Partagez vos victoires et vos échecs sans filtre.";
     let image = "https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png";
-    let url = "https://xera1.vercel.app/";
+    let url = "https://xera1.xyz/";
 
     try {
         const filePath = path.join(process.cwd(), 'index.html');

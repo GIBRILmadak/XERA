@@ -28,8 +28,16 @@ let followedUserIdsCacheOwner = null;
 let followedUserIdsCacheUpdatedAt = 0;
 let discoverVideoObserver = null;
 let discoverRenderSequence = 0;
-const INITIAL_DATA_TIMEOUT_MS = 12000;
 const INITIAL_AUTH_TIMEOUT_MS = 8000;
+const SLOW_CONNECTION_NOTICE_MS = 12000;
+const DISCOVER_DATA_RETRY_MS = 15000;
+const SLOW_CONNECTION_MESSAGE =
+    "Votre connexion semble lente ou instable. Le contenu continue de charger.";
+window.initialDataLoadInProgress = false;
+window.initialDataSlow = false;
+window.initialDataSlowMessage = "";
+let discoverDataRetryTimer = null;
+let discoverDataRetryInFlight = false;
 
 function withTimeout(promise, timeoutMs, label = "Operation") {
     let timeoutId;
@@ -42,6 +50,63 @@ function withTimeout(promise, timeoutMs, label = "Operation") {
     return Promise.race([promise, timeoutPromise]).finally(() => {
         clearTimeout(timeoutId);
     });
+}
+
+async function runInitialDataLoad(loader, label = "Initial data load") {
+    window.initialDataLoadInProgress = true;
+    window.initialDataSlow = false;
+    window.initialDataSlowMessage = "";
+
+    const slowTimer = setTimeout(() => {
+        window.initialDataSlow = true;
+        window.initialDataSlowMessage = SLOW_CONNECTION_MESSAGE;
+        console.warn(
+            `${label} is still pending after ${SLOW_CONNECTION_NOTICE_MS}ms`,
+        );
+        renderDiscoverGrid().catch(() => {});
+    }, SLOW_CONNECTION_NOTICE_MS);
+
+    try {
+        return await loader();
+    } finally {
+        clearTimeout(slowTimer);
+        window.initialDataLoadInProgress = false;
+        if (!window.userLoadError) {
+            window.initialDataSlow = false;
+            window.initialDataSlowMessage = "";
+        }
+    }
+}
+
+function clearDiscoverDataRetry() {
+    if (discoverDataRetryTimer) {
+        clearTimeout(discoverDataRetryTimer);
+        discoverDataRetryTimer = null;
+    }
+}
+
+function scheduleDiscoverDataRetry(reason = "empty discover") {
+    if (discoverDataRetryTimer || discoverDataRetryInFlight) return;
+
+    discoverDataRetryTimer = setTimeout(async () => {
+        discoverDataRetryTimer = null;
+        discoverDataRetryInFlight = true;
+        window.initialDataSlow = true;
+        window.initialDataSlowMessage = SLOW_CONNECTION_MESSAGE;
+
+        try {
+            if (window.currentUser) {
+                await loadAllData();
+            } else {
+                await loadPublicData();
+            }
+        } catch (error) {
+            console.warn(`Discover data retry failed (${reason}):`, error);
+        } finally {
+            discoverDataRetryInFlight = false;
+            renderDiscoverGrid().catch(() => {});
+        }
+    }, DISCOVER_DATA_RETRY_MS);
 }
 
 // Pagination système pour le feed discover
@@ -315,7 +380,7 @@ async function initializeOpenGraphFromUrl() {
  */
 function calculateUserReachStats(userId) {
     try {
-        const followers = getFollowerCount(userId);
+        const followers = getFollowerCountSnapshot(userId);
         const contents = getUserContentLocal(userId) || [];
         const totalViews = contents.reduce((sum, c) => sum + (c.views || 0), 0);
         const totalEncouragements = contents.reduce(
@@ -348,19 +413,51 @@ function calculateUserReachStats(userId) {
 /**
  * Compte les followers d'un utilisateur
  */
-function getFollowerCount(userId) {
+function normalizeFollowerCount(value) {
+    const count = Number(value);
+    return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+}
+
+function getFollowerCountSnapshot(userId) {
+    if (!userId) return 0;
+    return normalizeFollowerCount(getUser(userId)?.followers_count);
+}
+
+async function getFollowerCount(userId) {
     if (!window.supabase || !userId) return 0;
-    // Cette donnée devrait venir de la DB, pour MVP on utilise une approximation
-    const followers = new Set();
-    if (window.userContents && window.userContents[userId]) {
-        // Chaque utilisateur qui a interagi est un "contact potentiel"
-        Object.keys(window.userContents).forEach((uid) => {
-            if (uid !== userId && window.userContents[uid]?.length > 0) {
-                followers.add(uid);
-            }
-        });
+
+    try {
+        const { count, error } = await supabase
+            .from("followers")
+            .select("follower_id", { count: "exact", head: true })
+            .eq("following_id", userId);
+
+        if (!error) return normalizeFollowerCount(count);
+
+        console.error("Erreur comptage followers:", error);
+
+        const cachedUser = getUser(userId);
+        if (cachedUser && cachedUser.followers_count !== undefined) {
+            return normalizeFollowerCount(cachedUser.followers_count);
+        }
+
+        const { data, error: profileError } = await supabase
+            .from("users")
+            .select("followers_count")
+            .eq("id", userId)
+            .single();
+
+        if (profileError) {
+            console.error("Erreur récupération followers_count:", profileError);
+            return 0;
+        }
+
+        return normalizeFollowerCount(data?.followers_count);
+    } catch (error) {
+        console.error("Exception in getFollowerCount:", error);
+        const cachedUser = getUser(userId);
+        return normalizeFollowerCount(cachedUser?.followers_count);
     }
-    return followers.size;
 }
 
 /**
@@ -2000,14 +2097,9 @@ async function initializeApp() {
     const safetyTimeout = setTimeout(() => {
         if (document.querySelector(".loading-state-container")) {
             console.warn("Initialization timed out");
-            if (grid)
-                LoadingStateManager.showEmptyState(
-                    grid,
-                    "⚠️",
-                    "Délai dépassé",
-                    "Le serveur met trop de temps à répondre.",
-                    { text: "Réessayer", action: "location.reload()" },
-                );
+            window.initialDataSlow = true;
+            window.initialDataSlowMessage = SLOW_CONNECTION_MESSAGE;
+            if (grid) showDiscoverSkeleton(grid, 8, { showSlowNotice: true });
             if (waitMessage) waitMessage.classList.add("is-hidden");
         }
     }, 60000);
@@ -2086,11 +2178,7 @@ async function initializeApp() {
                 navigateTo("discover");
             }
             await Promise.all([
-                withTimeout(
-                    loadAllData(),
-                    INITIAL_DATA_TIMEOUT_MS,
-                    "Initial private data load",
-                ),
+                runInitialDataLoad(loadAllData, "Initial private data load"),
                 withTimeout(
                     heroVisibilityPromise,
                     INITIAL_AUTH_TIMEOUT_MS,
@@ -2109,11 +2197,7 @@ async function initializeApp() {
             }
             updateNavigation(false);
             await Promise.all([
-                withTimeout(
-                    loadPublicData(),
-                    INITIAL_DATA_TIMEOUT_MS,
-                    "Initial public data load",
-                ),
+                runInitialDataLoad(loadPublicData, "Initial public data load"),
                 withTimeout(
                     heroVisibilityPromise,
                     INITIAL_AUTH_TIMEOUT_MS,
@@ -2123,11 +2207,7 @@ async function initializeApp() {
         } else {
             updateNavigation(false);
             await Promise.all([
-                withTimeout(
-                    loadPublicData(),
-                    INITIAL_DATA_TIMEOUT_MS,
-                    "Initial public data load",
-                ),
+                runInitialDataLoad(loadPublicData, "Initial public data load"),
                 withTimeout(
                     heroVisibilityPromise,
                     INITIAL_AUTH_TIMEOUT_MS,
@@ -3258,11 +3338,7 @@ async function loadAllData() {
         }
 
         // Charger tous les utilisateurs
-        const usersResult = await withTimeout(
-            getAllUsers(),
-            INITIAL_DATA_TIMEOUT_MS,
-            "Users load",
-        );
+        const usersResult = await getAllUsers();
         if (!usersResult.success) {
             allUsers = [];
             window.userLoadError =
@@ -3289,25 +3365,15 @@ async function loadAllData() {
         }
 
         // Charger les badges vérifiés avant de rendre les annonces pour que le badge apparaisse
-        await withTimeout(
-            fetchVerifiedBadges(),
-            INITIAL_AUTH_TIMEOUT_MS,
-            "Verified badges load",
-        );
+        await fetchVerifiedBadges().catch((error) => {
+            console.warn("Verified badges load skipped:", error);
+        });
         await Promise.all([
-            withTimeout(
-                preloadUserContents(allUsers, {
-                    publicOnly: false,
-                    fallbackContentsByUser,
-                }),
-                INITIAL_DATA_TIMEOUT_MS,
-                "Private content preload",
-            ),
-            withTimeout(
-                fetchAdminAnnouncements(),
-                INITIAL_AUTH_TIMEOUT_MS,
-                "Admin announcements load",
-            ),
+            preloadUserContents(allUsers, {
+                publicOnly: false,
+                fallbackContentsByUser,
+            }),
+            fetchAdminAnnouncements(),
         ]);
 
         window.hasLoadedUsers = true;
@@ -3329,11 +3395,7 @@ async function loadPublicData() {
         const fallbackContentsByUser = snapshotUserContents();
         resetLoadedCollections();
 
-        const usersResult = await withTimeout(
-            getAllUsers(),
-            INITIAL_DATA_TIMEOUT_MS,
-            "Public users load",
-        );
+        const usersResult = await getAllUsers();
         if (!usersResult.success) {
             allUsers = [];
             window.userLoadError =
@@ -3344,25 +3406,15 @@ async function loadPublicData() {
 
         allUsers = (usersResult.data || []).map((u) => sanitizeUserMedia(u));
         // Même ordre côté public pour assurer l'affichage correct des badges dans les annonces
-        await withTimeout(
-            fetchVerifiedBadges(),
-            INITIAL_AUTH_TIMEOUT_MS,
-            "Public verified badges load",
-        );
+        await fetchVerifiedBadges().catch((error) => {
+            console.warn("Public verified badges load skipped:", error);
+        });
         await Promise.all([
-            withTimeout(
-                preloadUserContents(allUsers, {
-                    publicOnly: true,
-                    fallbackContentsByUser,
-                }),
-                INITIAL_DATA_TIMEOUT_MS,
-                "Public content preload",
-            ),
-            withTimeout(
-                fetchAdminAnnouncements(),
-                INITIAL_AUTH_TIMEOUT_MS,
-                "Public announcements load",
-            ),
+            preloadUserContents(allUsers, {
+                publicOnly: true,
+                fallbackContentsByUser,
+            }),
+            fetchAdminAnnouncements(),
         ]);
 
         window.hasLoadedUsers = true;
@@ -7872,7 +7924,7 @@ function determineTrajectoryType(userId) {
     const userTitle = (user.title || "").toLowerCase();
     const userName = (user.name || "").toLowerCase();
 
-    // Chttps://xera1.vercel.app/profile?user=0dd3d23d-1c2d-4db2-b664-7066b3179b8domptes officiels / équipes / entreprises
+    // Comptes officiels / équipes / entreprises
     if (userTitle.includes("team") || userTitle.includes("équipe")) {
         return "team";
     }
@@ -9074,8 +9126,19 @@ window.toggleDiscoverFilter = function (filter) {
 window.loadNextDiscoverPage = loadNextDiscoverPage;
 window.setupDiscoverPaginationObserver = setupDiscoverPaginationObserver;
 
-function showDiscoverSkeleton(grid, count = 8) {
+function showDiscoverSkeleton(grid, count = 8, options = {}) {
     if (!grid) return;
+    const showSlowNotice =
+        options.showSlowNotice === true || window.initialDataSlow === true;
+    const noticeMessage =
+        options.message ||
+        window.initialDataSlowMessage ||
+        SLOW_CONNECTION_MESSAGE;
+    const slowNoticeHtml = showSlowNotice
+        ? `<div class="discover-slow-connection" role="status" aria-live="polite">${escapeHtml(
+              noticeMessage,
+          )}</div>`
+        : "";
     const skeletons = Array.from({ length: count })
         .map(
             (_, index) => `
@@ -9093,7 +9156,7 @@ function showDiscoverSkeleton(grid, count = 8) {
         `,
         )
         .join("");
-    grid.innerHTML = `<div class="discover-skeleton-grid">${skeletons}</div>`;
+    grid.innerHTML = `${slowNoticeHtml}<div class="discover-skeleton-grid">${skeletons}</div>`;
 }
 
 function getDiscoverSectionTitle(filter, section) {
@@ -9129,43 +9192,6 @@ function buildDiscoverSectionItem(filter, section, count) {
             </div>
         `,
     };
-}
-
-function getDiscoverEmptyState(filter) {
-    const states = {
-        live: {
-            title: "Aucun live en ce moment",
-            message:
-                "Revenez un peu plus tard ou repassez sur Tout pour explorer les trajectoires.",
-        },
-        video: {
-            title: "Aucune vidéo à afficher",
-            message:
-                "Le feed Tout contient peut-être déjà des images, textes ou projets récents.",
-        },
-        projects: {
-            title: "Aucun projet filtré",
-            message:
-                "Repassez sur Tout pour voir toutes les trajectoires disponibles.",
-        },
-        following: {
-            title: "Aucune trajectoire suivie",
-            message:
-                "Suivez quelques créateurs ou repassez sur Tout pour découvrir du contenu.",
-        },
-        recent: {
-            title: "Rien de récent dans ce filtre",
-            message:
-                "Repassez sur Tout pour explorer les trajectoires disponibles.",
-        },
-    };
-    return (
-        states[filter] || {
-            title: "Aucune trajectoire à explorer",
-            message:
-                "Revenez plus tard pour découvrir de nouvelles trajectoires.",
-        }
-    );
 }
 
 function matchesDiscoverFilter(item, currentFilter, followedSet = new Set()) {
@@ -10828,53 +10854,26 @@ async function renderDiscoverGrid() {
 
     // Afficher un état de chargement si les données ne sont pas encore là
     if (!window.hasLoadedUsers) {
-        showDiscoverSkeleton(grid);
+        showDiscoverSkeleton(grid, 8, {
+            showSlowNotice: window.initialDataSlow === true,
+        });
         return;
     }
     if (window.userLoadError) {
-        if (
-            window.LoadingStateManager &&
-            typeof LoadingStateManager.showEmptyState === "function"
-        ) {
-            LoadingStateManager.showEmptyState(
-                grid,
-                "⚠️",
-                "Impossible de charger le contenu",
-                window.userLoadError,
-                { text: "Réessayer", action: "location.reload()" },
-            );
-        } else {
-            grid.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">⚠️</div>
-                    <h3>Impossible de charger le contenu</h3>
-                    <p>${window.userLoadError}</p>
-                </div>
-            `;
-        }
+        scheduleDiscoverDataRetry("load error");
+        showDiscoverSkeleton(grid, 8, {
+            showSlowNotice: true,
+            message: SLOW_CONNECTION_MESSAGE,
+        });
         return;
     }
     if (allUsers.length === 0) {
-        if (
-            window.LoadingStateManager &&
-            typeof LoadingStateManager.showEmptyState === "function"
-        ) {
-            LoadingStateManager.showEmptyState(
-                grid,
-                "👥",
-                "Aucun profil à afficher",
-                "Les données ont été chargées, mais aucun profil public n'est disponible pour le moment.",
-                { text: "Actualiser", action: "location.reload()" },
-            );
-        } else {
-            grid.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">👥</div>
-                    <h3>Aucun profil à afficher</h3>
-                    <p>Les données ont été chargées, mais aucun profil public n'est disponible pour le moment.</p>
-                </div>
-            `;
-        }
+        scheduleDiscoverDataRetry("no users");
+        showDiscoverSkeleton(grid, 8, {
+            showSlowNotice:
+                window.initialDataSlow === true ||
+                window.initialDataLoadInProgress === false,
+        });
         return;
     }
 
@@ -11007,6 +11006,7 @@ async function renderDiscoverGrid() {
     });
 
     if (renderedItems.length > 0) {
+        clearDiscoverDataRetry();
         assignDiscoverRowLayout(renderedItems);
 
         // Implémenter la pagination: afficher seulement les 20 premiers éléments
@@ -11029,28 +11029,11 @@ async function renderDiscoverGrid() {
         return;
     }
 
-    const emptyState = getDiscoverEmptyState(currentFilter);
-
-    if (
-        window.LoadingStateManager &&
-        typeof LoadingStateManager.showEmptyState === "function"
-    ) {
-        LoadingStateManager.showEmptyState(
-            grid,
-            "👥",
-            emptyState.title,
-            emptyState.message,
-            { text: "Actualiser", action: "location.reload()" },
-        );
-    } else {
-        grid.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">👥</div>
-                <h3>${emptyState.title}</h3>
-                <p>${emptyState.message}</p>
-            </div>
-`;
-    }
+    scheduleDiscoverDataRetry("no discover items");
+    showDiscoverSkeleton(grid, 8, {
+        showSlowNotice: true,
+        message: SLOW_CONNECTION_MESSAGE,
+    });
     if (waitMessage) waitMessage.classList.add("is-hidden");
 }
 

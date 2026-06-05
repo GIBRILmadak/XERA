@@ -13,10 +13,14 @@ const {
     SUPABASE_SERVICE_ROLE_KEY,
     VAPID_PUBLIC_KEY,
     VAPID_PRIVATE_KEY,
-    PUSH_CONTACT_EMAIL = "mailto:notif.xera@zohomail.com",
+    PUSH_CONTACT_EMAIL = "mailto:hello@xera1.xyz",
     RETURN_REMINDER_HOURS = "10,18",
     RETURN_REMINDER_WINDOW_MINUTES = "15",
     RETURN_REMINDER_SWEEP_MS = "60000",
+    RETURN_REMINDER_EMAIL_PROVIDER = "none",
+    RETURN_REMINDER_EMAIL_FROM = "XERA <hello@xera1.xyz>",
+    RETURN_REMINDER_EMAIL_API_KEY = "",
+    RETURN_REMINDER_EMAIL_REPLY_TO = "hello@xera1.xyz",
 } = process.env;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -383,6 +387,80 @@ async function sendPushForDirectMessage(messageRow) {
     );
     for (const sub of subs) {
         await sendPushToSubscription(sub, payload);
+    }
+
+    // New: Email notification for DMs
+    try {
+        await sendEmailForDirectMessage(messageRow, senderUser?.name || "", recipientIds);
+    } catch (err) {
+        console.error("DM email notification error:", err);
+    }
+}
+
+async function sendEmailForDirectMessage(messageRow, senderName, recipientIds) {
+    if (RETURN_REMINDER_EMAIL_PROVIDER !== "resend" || !RETURN_REMINDER_EMAIL_API_KEY) return;
+
+    // Only send to recipients who have email reminders enabled
+    const { data: users, error } = await supabase
+        .from("users")
+        .select("id, email_reminder_enabled")
+        .in("id", recipientIds)
+        .eq("email_reminder_enabled", true);
+
+    if (error || !users || users.length === 0) return;
+
+    for (const user of users) {
+        try {
+            const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(user.id);
+            if (authError || !authUser?.user?.email) continue;
+
+            const recipientEmail = authUser.user.email;
+            const senderLabel = senderName || "Un utilisateur";
+            const bodyPreview = messageRow.body || (messageRow.media_type ? `[${messageRow.media_type}]` : "Nouveau message");
+
+            const chatUrl = `${PRIMARY_ORIGIN.replace(/\/$/, "")}/index.html?messages=1&dm=${encodeURIComponent(messageRow.sender_id)}`;
+
+            const emailHtml = `
+<!doctype html>
+<html lang="fr">
+  <body style="margin:0;padding:24px;background:#f5f7fb;font-family:Arial,sans-serif;color:#111827;">
+    <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:20px;padding:32px;border:1px solid #e5e7eb;">
+      <div style="margin-bottom:24px;text-align:left;">
+        <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA Logo" style="width:48px;height:48px;border-radius:10px;" />
+      </div>
+      <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;margin-bottom:12px;">Nouveau Message</div>
+      <p style="margin:0 0 12px;font-size:16px;line-height:1.6;color:#334155;">Bonjour,</p>
+      <h1 style="margin:0 0 16px;font-size:24px;line-height:1.2;color:#0f172a;">${senderLabel} vous a envoyé un message</h1>
+      <div style="background:#f8fafc;padding:16px;border-radius:12px;margin-bottom:24px;color:#334155;font-style:italic;border-left:4px solid #e2e8f0;">
+        "${bodyPreview}"
+      </div>
+      <div style="margin-top:24px;">
+        <a href="${chatUrl}" style="display:inline-block;padding:12px 24px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">Répondre sur XERA</a>
+      </div>
+      <p style="margin:32px 0 0;padding-top:24px;border-top:1px solid #f1f5f9;font-size:13px;line-height:1.6;color:#64748b;">
+        Vous recevez cet email car vous avez activé les notifications XERA.
+      </p>
+    </div>
+  </body>
+</html>`;
+
+            await fetch("https://api.resend.com/emails", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${RETURN_REMINDER_EMAIL_API_KEY}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    from: RETURN_REMINDER_EMAIL_FROM,
+                    to: [recipientEmail],
+                    subject: `XERA - Nouveau message de ${senderLabel}`,
+                    html: emailHtml,
+                    reply_to: RETURN_REMINDER_EMAIL_REPLY_TO
+                }),
+            });
+        } catch (e) {
+            console.warn("Failed to send DM email to user:", user.id, e);
+        }
     }
 }
 

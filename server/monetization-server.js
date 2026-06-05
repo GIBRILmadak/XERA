@@ -26,14 +26,14 @@ const {
     SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzYnVhZ3F3anB0eWhhdmlua3hnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTk1MjUzMywiZXhwIjoyMDg1NTI4NTMzfQ._aEaTXFxqpfx64bts6Z7FoP3L4oHMGcqoi08yREU33s",
     VAPID_PUBLIC_KEY = "BDyU4kv_cnxruA5n_i3kw0-ipEXZTINrLmwVAhyyFhXsIVC6eImDqhkLVLs77Fl-TJdyOJVZsnp-k6z_7bu0bTM",
     VAPID_PRIVATE_KEY = "6dmRHoFpyGEFgL487qqwBc9BQ184TC8N9Yd3siS94Skpka",
-    PUSH_CONTACT_EMAIL = "mailto:notif.xera@zohomail.com",
+    PUSH_CONTACT_EMAIL = "mailto:hello@xera1.xyz",
     RETURN_REMINDER_HOURS = "10,18",
     RETURN_REMINDER_WINDOW_MINUTES = "15",
     RETURN_REMINDER_SWEEP_MS = "600000",
     RETURN_REMINDER_EMAIL_ENABLED = "1",
     RETURN_REMINDER_EMAIL_PROVIDER = "none",
-    RETURN_REMINDER_EMAIL_FROM = "XERA <notif.xera@zohomail.com>",
-    RETURN_REMINDER_EMAIL_REPLY_TO = "",
+    RETURN_REMINDER_EMAIL_FROM = "XERA <hello@xera1.xyz>",
+    RETURN_REMINDER_EMAIL_REPLY_TO = "hello@xera1.xyz",
     RETURN_REMINDER_EMAIL_API_KEY = "",
     RETURN_REMINDER_EMAIL_WEBHOOK_URL = "",
     RETURN_REMINDER_EMAIL_WEBHOOK_TOKEN = "",
@@ -2934,12 +2934,17 @@ function buildReminderEmailLayout({
 <html lang="fr">
   <body style="margin:0;padding:24px;background:#f5f7fb;font-family:Arial,sans-serif;color:#111827;">
     <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:20px;padding:32px;border:1px solid #e5e7eb;">
+      <div style="margin-bottom:24px;text-align:left;">
+        <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA Logo" style="width:48px;height:48px;border-radius:10px;" />
+      </div>
       <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;margin-bottom:12px;">${escapeHtmlAttr(eyebrow || "XERA")}</div>
       <p style="margin:0 0 12px;font-size:16px;line-height:1.6;color:#334155;">${escapeHtmlAttr(safeGreeting)}</p>
       <h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#0f172a;">${escapeHtmlAttr(safeHeadline)}</h1>
       ${htmlParagraphs}
-      <a href="${escapeHtmlAttr(safeCtaUrl)}" style="display:inline-block;padding:12px 20px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-weight:700;">${escapeHtmlAttr(safeCtaLabel)}</a>
-      <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#64748b;">${escapeHtmlAttr(safeFooter)}</p>
+      <div style="margin-top:24px;">
+        <a href="${escapeHtmlAttr(safeCtaUrl)}" style="display:inline-block;padding:12px 24px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">${escapeHtmlAttr(safeCtaLabel)}</a>
+      </div>
+      <p style="margin:32px 0 0;padding-top:24px;border-top:1px solid #f1f5f9;font-size:13px;line-height:1.6;color:#64748b;">${escapeHtmlAttr(safeFooter)}</p>
     </div>
   </body>
 </html>`.trim(),
@@ -3037,63 +3042,35 @@ function buildInactiveReengagementCampaign(user, context, now) {
 
     const arcTitle =
         String(context.activeArcs[0]?.title || "").trim() || "ton projet";
-    const ctaUrl = buildCreateReminderUrl(user.id);
-    const greeting = user.name ? `Bonjour ${user.name},` : "Bonjour,";
-    const variants = [
-        {
-            subject: `XERA - ${arcTitle} t'attend toujours`,
-            headline: "On peut reprendre tranquillement.",
-            bodyLines: [
-                `"${arcTitle}" est toujours la.`,
-                `Cela fait environ ${noRecentPost ? context.projectAgeDays : context.inactivityDays} jours depuis ta derniere update, mais tu peux reprendre sans pression.`,
-            ],
-            ctaLabel: "Revenir sur mon projet",
-        },
-        {
-            subject: "XERA - Ca fait un moment. On reprend ensemble ?",
-            headline: "Ton projet n'est pas perdu.",
-            bodyLines: [
-                `Si tu veux, on te ramene directement a "${arcTitle}".`,
-                "Pas besoin de revenir avec quelque chose de parfait. Une petite mise a jour suffit.",
-            ],
-            ctaLabel: "Relancer mon projet",
-        },
-        {
-            subject: `XERA - ${arcTitle} peut repartir aujourd'hui`,
-            headline: "Ton elan peut revenir plus vite que tu ne le penses.",
-            bodyLines: [
-                `On n'a pas vu de nouvelle avancee recente sur "${arcTitle}".`,
-                "Si tu veux reprendre le fil aujourd'hui, XERA t'attend au bon endroit.",
-            ],
-            ctaLabel: "Revenir sur XERA",
-        },
-        {
-            subject: `XERA - Tu peux revenir la ou tu t'etais arrete`,
-            headline: "Tu peux revenir la ou tu t'etais arrete.",
-            bodyLines: [
-                `Ton projet "${arcTitle}" est encore en cours.`,
-                "On te remet directement dans l'app pour reprendre sans friction.",
-            ],
-            ctaLabel: "Continuer mon projet",
-        },
+    const ctaUrl = `${PRIMARY_ORIGIN.replace(/\/$/, "")}/index.html?dashboard=1`;
+    const greeting = user.name ? `Salut ${user.name},` : "Salut,";
+
+    const subject = "Ça bouge fort sur XERA 🚀 (tu manques à l'appel)";
+    const headline = "Ça fait une semaine que tu ne t'es pas connecté, et franchement, tu rates pas mal de choses.";
+    const bodyLines = [
+        "Pendant ces 7 jours, la communauté n'a pas chômé : certains ont scalé leurs projets à une vitesse folle, d'autres ont carrément impressionné des partenaires tech et de gros investisseurs.",
+        "La tech et le business n'attendent pas. Ton projet est toujours là où tu l'as laissé, mais le marché, lui, avance.",
+        "Reprends les commandes avant de prendre du retard :"
     ];
-    const variant = pickDeterministicVariant(
-        `inactive:${user.id}:${context.dateKey}`,
-        variants,
-    );
+    const ctaLabel = "Retourner sur mon tableau de bord";
+
     const layout = buildReminderEmailLayout({
-        eyebrow: "On pense a ton projet",
+        eyebrow: "REPRENDS L'AVANTAGE",
         greeting,
-        headline: variant.headline,
-        bodyLines: variant.bodyLines,
-        ctaLabel: variant.ctaLabel,
+        headline,
+        bodyLines,
+        ctaLabel,
         ctaUrl,
     });
 
     return {
         type: "inactive_week",
-        subject: variant.subject,
+        subject,
         html: layout.html,
+        text: layout.text,
+        ctaUrl,
+    };
+}
         text: layout.text,
         ctaUrl,
     };
