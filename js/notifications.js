@@ -457,7 +457,7 @@ function renderNotificationPermissionCTA() {
                 setupPushNotifications();
                 ToastManager?.success(
                     "Notifications activées",
-                    "Nous vous avertirons comme sur YouTube.",
+                    "Nous vous avertirons directement sur votre appareil.",
                 );
             }
             closeCta();

@@ -1841,6 +1841,7 @@ async function buildCreatorWalletOverview(userId) {
     let videoPending = 0;
 
     revenueTransactions.forEach((tx) => {
+        if (!tx) return;
         const net = resolveTransactionNetAmount(tx);
         if (tx.type === "support") {
             if (tx.status === "succeeded") supportAvailable += net;
@@ -1859,6 +1860,7 @@ async function buildCreatorWalletOverview(userId) {
         videoAvailable = 0;
         videoPending = 0;
         videoPayouts.forEach((payout) => {
+            if (!payout) return;
             const net = roundMoney(payout.amount_net_creator);
             if (payout.status === "paid") videoAvailable += net;
             if (["pending", "processing"].includes(payout.status)) {
@@ -1870,6 +1872,7 @@ async function buildCreatorWalletOverview(userId) {
     let pendingWithdrawals = 0;
     let paidWithdrawals = 0;
     withdrawals.forEach((withdrawal) => {
+        if (!withdrawal) return;
         if (["pending", "processing"].includes(withdrawal.status)) {
             pendingWithdrawals += roundMoney(withdrawal.amountUsd);
         }
