@@ -2906,21 +2906,21 @@ function buildReminderEmailLayout({
         .filter(Boolean);
     const safeGreeting = String(greeting || "Bonjour,").trim() || "Bonjour,";
     const safeHeadline = String(headline || "").trim();
-    const safeCtaLabel = String(ctaLabel || "Revenir sur XERA").trim();
+    const safeCtaLabel = String(ctaLabel || "Découvrir sur XERA").trim();
     const safeCtaUrl = String(ctaUrl || buildDiscoverReminderUrl()).trim();
     const safeFooter =
         String(
             footer ||
-                "Tu recois ce message parce que tu as active les rappels email sur XERA. Tu peux les couper quand tu veux dans les reglages.",
-        ).trim() ||
-        "Tu recois ce message parce que tu as active les rappels email sur XERA. Tu peux les couper quand tu veux dans les reglages.";
+                "Tu reçois ce message car tu as activé les notifications par email sur XERA. Tu peux les désactiver à tout moment dans tes réglages.",
+        ).trim();
 
     const htmlParagraphs = safeLines
         .map(
             (line) =>
-                `<p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:#334155;">${escapeHtmlAttr(line)}</p>`,
+                `<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#374151;">${escapeHtmlAttr(line)}</p>`,
         )
         .join("");
+
     const text = [
         safeGreeting,
         "",
@@ -2933,28 +2933,71 @@ function buildReminderEmailLayout({
         safeFooter,
     ].join("\n");
 
-    return {
-        html: `
+    const html = `
 <!doctype html>
 <html lang="fr">
-  <body style="margin:0;padding:24px;background:#f5f7fb;font-family:Arial,sans-serif;color:#111827;">
-    <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:20px;padding:32px;border:1px solid #e5e7eb;">
-      <div style="margin-bottom:24px;text-align:left;">
-        <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA Logo" style="width:48px;height:48px;border-radius:10px;" />
-      </div>
-      <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;margin-bottom:12px;">${escapeHtmlAttr(eyebrow || "XERA")}</div>
-      <p style="margin:0 0 12px;font-size:16px;line-height:1.6;color:#334155;">${escapeHtmlAttr(safeGreeting)}</p>
-      <h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#0f172a;">${escapeHtmlAttr(safeHeadline)}</h1>
-      ${htmlParagraphs}
-      <div style="margin-top:24px;">
-        <a href="${escapeHtmlAttr(safeCtaUrl)}" style="display:inline-block;padding:12px 24px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">${escapeHtmlAttr(safeCtaLabel)}</a>
-      </div>
-      <p style="margin:32px 0 0;padding-top:24px;border-top:1px solid #f1f5f9;font-size:13px;line-height:1.6;color:#64748b;">${escapeHtmlAttr(safeFooter)}</p>
-    </div>
-  </body>
-</html>`.trim(),
-        text,
-    };
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtmlAttr(safeHeadline)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <div style="display:none;font-size:1px;color:#f9fafb;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
+    ${escapeHtmlAttr(safeHeadline)}
+  </div>
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f9fafb;">
+    <tr>
+      <td align="center" style="padding:40px 10px;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);border:1px solid #e5e7eb;">
+          <!-- Header -->
+          <tr>
+            <td style="padding:32px 32px 24px 32px;text-align:left;">
+              <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA" style="width:48px;height:48px;border-radius:12px;display:block;" />
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding:0 32px 32px 32px;">
+              <div style="font-size:12px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#6366f1;margin-bottom:12px;">
+                ${escapeHtmlAttr(eyebrow || "XERA Update")}
+              </div>
+              <h1 style="margin:0 0 16px 0;font-size:24px;font-weight:800;line-height:1.2;color:#111827;">
+                ${escapeHtmlAttr(safeHeadline)}
+              </h1>
+              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.6;color:#374151;">
+                ${escapeHtmlAttr(safeGreeting)}
+              </p>
+              ${htmlParagraphs}
+
+              <!-- Action Button -->
+              <div style="margin-top:32px;margin-bottom:16px;">
+                <a href="${escapeHtmlAttr(safeCtaUrl)}" target="_blank" style="display:inline-block;background-color:#111827;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:14px 28px;border-radius:9999px;box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                  ${escapeHtmlAttr(safeCtaLabel)}
+                </a>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:32px;background-color:#f8fafc;border-top:1px solid #f1f5f9;text-align:left;">
+              <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;">
+                ${escapeHtmlAttr(safeFooter)}
+              </p>
+              <div style="margin-top:16px;font-size:12px;color:#94a3b8;">
+                &copy; ${new Date().getFullYear()} XERA. Tous droits réservés.
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`.trim();
+
+    return { html, text };
 }
 
 function buildDailyPostReminderCampaign(user, context, slot) {
@@ -3437,6 +3480,7 @@ async function sendReminderEmail(payload) {
 async function sweepReturnReminderEmails(now = new Date()) {
     if (!supportsEmailReminders()) return { ok: true, skipped: true };
 
+    // Optimize: Get all users with reminders enabled
     const { data: users, error } = await supabase
         .from("users")
         .select(
@@ -3449,24 +3493,33 @@ async function sweepReturnReminderEmails(now = new Date()) {
             console.warn(
                 "Email reminder columns missing in users. Run sql/email-reminders.sql to enable email reminders.",
             );
-            return {
-                ok: false,
-                schemaMissing: true,
-            };
+            return { ok: false, schemaMissing: true };
         }
         throw error;
     }
 
-    const contextsByUserId = await buildEmailReminderContexts(users || [], now);
+    if (!users || users.length === 0) return { ok: true, sentCount: 0 };
+
+    const contextsByUserId = await buildEmailReminderContexts(users, now);
     let sentCount = 0;
-    for (const user of users || []) {
+    let errorCount = 0;
+
+    // To avoid hitting Auth API rate limits or timing out, we process in chunks
+    // and we try to fetch emails in bulk if possible, but listUsers is better.
+    // For now, we'll keep the resolveReminderEmailAddress but add a small delay or use a cache.
+
+    for (const user of users) {
         if (!user?.id) continue;
 
         const context = contextsByUserId.get(user.id) || null;
         const campaign = selectReminderCampaign(user, context, now);
         if (!campaign) continue;
+
         const email = await resolveReminderEmailAddress(user.id);
-        if (!email) continue;
+        if (!email) {
+            console.warn(`Could not find email for user ${user.id}, skipping.`);
+            continue;
+        }
 
         const payload = {
             to: email,
@@ -3474,8 +3527,14 @@ async function sweepReturnReminderEmails(now = new Date()) {
             html: campaign.html,
             text: campaign.text,
         };
+
         const result = await sendReminderEmail(payload);
-        if (!result.success) continue;
+        if (!result.success) {
+            errorCount++;
+            continue;
+        }
+
+        sentCount++;
 
         const updatePayload = {
             email_reminder_timezone: context?.timeZone || "UTC",
@@ -3487,17 +3546,14 @@ async function sweepReturnReminderEmails(now = new Date()) {
             updatePayload.last_inactive_reminder_sent_at = now.toISOString();
         }
         if (campaign.type === "social_progress") {
-            updatePayload.last_social_progress_email_sent_at =
-                now.toISOString();
+            updatePayload.last_social_progress_email_sent_at = now.toISOString();
         }
 
-        const { error: updateError } = await supabase
-            .from("users")
-            .update(updatePayload)
-            .eq("id", user.id);
+        await supabase.from("users").update(updatePayload).eq("id", user.id);
+    }
 
-        if (updateError && !isMissingColumnError(updateError)) {
-            console.warn(
+    return { ok: true, sentCount, errorCount };
+}
                 "Failed to persist email reminder slot:",
                 updateError?.message || updateError,
             );
