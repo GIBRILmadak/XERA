@@ -3414,10 +3414,9 @@ async function sendReminderEmail(payload) {
     }
 
     try {
-        // S'assurer que fetch est disponible (polyfill pour Node < 18)
         const nodeFetch = typeof fetch !== "undefined" ? fetch : globalThis.fetch;
         if (typeof nodeFetch !== "function") {
-            throw new Error("La fonction 'fetch' n'est pas disponible dans cet environnement Node.js.");
+            throw new Error("La fonction 'fetch' n'est pas disponible dans cet environnement.");
         }
 
         let response = null;
@@ -3428,8 +3427,10 @@ async function sendReminderEmail(payload) {
                 to: [payload.to],
                 subject: payload.subject,
                 html: payload.html || "",
-                text: payload.text || "",
             };
+            if (payload.text) {
+                body.text = payload.text;
+            }
             if (REMINDER_EMAIL_REPLY_TO) {
                 body.reply_to = REMINDER_EMAIL_REPLY_TO;
             }
@@ -3437,17 +3438,15 @@ async function sendReminderEmail(payload) {
             response = await nodeFetch("https://api.resend.com/emails", {
                 method: "POST",
                 headers: {
-                    Authorization: `Bearer ${REMINDER_EMAIL_API_KEY}`,
+                    "Authorization": `Bearer ${REMINDER_EMAIL_API_KEY}`,
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify(body),
             });
         } else if (REMINDER_EMAIL_PROVIDER === "webhook") {
-            const headers = {
-                "Content-Type": "application/json",
-            };
+            const headers = { "Content-Type": "application/json" };
             if (REMINDER_EMAIL_WEBHOOK_TOKEN) {
-                headers.Authorization = `Bearer ${REMINDER_EMAIL_WEBHOOK_TOKEN}`;
+                headers["Authorization"] = `Bearer ${REMINDER_EMAIL_WEBHOOK_TOKEN}`;
             }
 
             response = await nodeFetch(REMINDER_EMAIL_WEBHOOK_URL, {
@@ -3463,16 +3462,20 @@ async function sendReminderEmail(payload) {
             return { success: false, skipped: true };
         }
 
-        if (!response?.ok) {
-            const details = await response.text().catch(() => "");
-            throw new Error(
-                `Email provider error ${response?.status || "unknown"} ${details.slice(0, 280)}`.trim(),
-            );
+        const resData = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            const errorMsg = resData.message || resData.error || `Provider error ${response.status}`;
+            console.error("Email delivery failed:", { status: response.status, error: errorMsg });
+            return {
+                success: false,
+                error: errorMsg
+            };
         }
 
-        return { success: true };
+        return { success: true, id: resData.id };
     } catch (error) {
-        console.warn("Reminder email send failed:", error?.message || error);
+        console.error("Reminder email send exception:", error);
         return { success: false, error: error?.message || String(error) };
     }
 }
@@ -4178,22 +4181,23 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
         let lastErrorMessage = "";
 
         while (true) {
-            const { data, error } = await supabase.auth.admin.listUsers({
+            const { data, error: listError } = await supabase.auth.admin.listUsers({
                 page,
                 perPage,
             });
 
-            if (error) throw error;
+            if (listError) {
+                console.error("Supabase listUsers error:", listError);
+                throw new Error(`Erreur Supabase: ${listError.message || "Impossible de lister les utilisateurs."}`);
+            }
 
             const users = data.users || [];
             if (users.length === 0) {
                 break;
             }
 
-            // To avoid timeouts on serverless (Vercel), we process users in chunks
-            // and we use parallel sending for each chunk.
             const userChunks = [];
-            const chunkSize = 10;
+            const chunkSize = 8; // Slightly smaller chunks to be safe
             for (let i = 0; i < users.length; i += chunkSize) {
                 userChunks.push(users.slice(i, i + chunkSize));
             }
@@ -4201,16 +4205,15 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
             for (const chunk of userChunks) {
                 const results = await Promise.all(
                     chunk.map(async (user) => {
-                        if (!user.email) {
-                            return { skipped: true };
-                        }
+                        if (!user.email) return { skipped: true };
                         const payload = {
                             to: user.email,
                             subject: `XERA - ${subject}`,
                             html: layout.html,
                             text: layout.text,
                         };
-                        return { ...(await sendReminderEmail(payload)), userId: user.id };
+                        const emailResult = await sendReminderEmail(payload);
+                        return { ...emailResult, userId: user.id };
                     })
                 );
 
@@ -4225,9 +4228,7 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
                     } else {
                         failedCount++;
                         if (!lastErrorMessage) {
-                            lastErrorMessage = String(
-                                result?.error?.message || result?.error || "",
-                            ).trim();
+                            lastErrorMessage = result.error || "Erreur inconnue fournisseur.";
                         }
                     }
                 }
@@ -4272,7 +4273,7 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
         });
     } catch (error) {
         console.error("Admin broadcast email error:", error);
-        return res.status(500).json({ error: "Erreur serveur." });
+        return res.status(500).json({ error: error?.message || "Erreur serveur interne lors de l'envoi du broadcast." });
     }
 });
 
