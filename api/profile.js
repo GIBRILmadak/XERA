@@ -11,8 +11,9 @@ module.exports = async (req, res) => {
     const dayNumber = req.query.day;
     const postId = req.query.post;
 
-    let title = "XERA | Tracez votre progression";
-    let description = "Plateforme de suivi de progression transparente sans dopamine sociale.";
+    let title = "XERA Protocol | Web3 Developer Reputation & Build Certification";
+    let description = "Immutable build certification and on-chain developer reputation. Document your software execution, build in public, and create a cryptographic professional history.";
+    let keywords = "XERA protocol, Web3 developer reputation, On-chain build certification, Cryptographic developer resume, Proof of execution, Build in public tool, On-chain attestation, Software builder portfolio";
     let image = "https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png";
     let url = `https://xera1.xyz/profile${userId ? '?id=' + userId : ''}`;
 
@@ -25,8 +26,9 @@ module.exports = async (req, res) => {
                 .single();
 
             if (user) {
-                title = `${user.name} | XERA`;
-                description = user.bio || `Découvrez la trajectoire de ${user.name} sur XERA.`;
+                title = `${user.name} | Cryptographic Proof of Building on XERA`;
+                description = user.bio || `Explore the on-chain development history and immutable build certification of ${user.name} on XERA Protocol.`;
+                keywords = `${user.name}, ${user.title || ''}, XERA protocol, Web3 developer reputation, On-chain attestation, Build in public, Proof of Building`.replace(/,,/g, ',');
                 image = user.avatar || image;
 
                 if (dayNumber || postId) {
@@ -68,6 +70,10 @@ module.exports = async (req, res) => {
         };
 
         html = html.replace(/<title>.*?<\/title>/is, `<title>${title}</title>`);
+
+        // Keywords
+        html = injectMeta(html, 'keywords', keywords, true);
+        html = injectMeta(html, 'description', description, true);
 
         // OG
         html = injectMeta(html, 'og:title', title);
