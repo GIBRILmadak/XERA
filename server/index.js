@@ -426,33 +426,34 @@ async function sendEmailForDirectMessage(messageRow, senderName, recipientIds) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nouveau message sur XERA</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f9fafb;">
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f3f4f6;">
     <tr>
       <td align="center" style="padding:40px 10px;">
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1);border:1px solid #e5e7eb;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background-color:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 10px 15px -3px rgba(0, 0, 0, 0.1);border:1px solid #e5e7eb;">
           <tr>
-            <td style="padding:32px 32px 24px 32px;">
-              <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA" style="width:48px;height:48px;border-radius:10px;display:block;" />
+            <td style="padding:40px 40px 24px 40px;">
+              <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA" style="width:56px;height:56px;border-radius:14px;display:block;" />
             </td>
           </tr>
           <tr>
-            <td style="padding:0 32px 32px 32px;">
-              <div style="font-size:12px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#6366f1;margin-bottom:12px;">Nouveau Message</div>
-              <h1 style="margin:0 0 16px 0;font-size:24px;font-weight:800;line-height:1.2;color:#111827;">${senderLabel} vous a envoyé un message</h1>
-              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.6;color:#374151;">Bonjour,</p>
-              <div style="background-color:#f8fafc;padding:20px;border-radius:12px;margin-bottom:24px;border-left:4px solid #e2e8f0;">
-                <p style="margin:0;font-size:16px;line-height:1.6;color:#334155;font-style:italic;">"${bodyPreview}"</p>
+            <td style="padding:0 40px 40px 40px;">
+              <div style="font-size:12px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#6366f1;margin-bottom:16px;">Nouveau Message</div>
+              <h1 style="margin:0 0 20px 0;font-size:26px;font-weight:900;line-height:1.2;color:#111827;letter-spacing:-0.02em;">${senderLabel} vous a envoyé un message</h1>
+              <p style="margin:0 0 24px 0;font-size:17px;line-height:1.6;color:#1f2937;">Bonjour,</p>
+              <div style="background-color:#f8fafc;padding:24px;border-radius:16px;margin-bottom:32px;border-left:4px solid #6366f1;">
+                <p style="margin:0;font-size:16px;line-height:1.6;color:#374151;font-style:italic;">"${bodyPreview}"</p>
               </div>
               <div style="margin-top:32px;">
-                <a href="${chatUrl}" target="_blank" style="display:inline-block;background-color:#111827;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:12px 24px;border-radius:9999px;">Répondre sur XERA</a>
+                <a href="${chatUrl}" target="_blank" style="display:inline-block;background-color:#000000;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 28px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1);">Répondre sur XERA</a>
               </div>
             </td>
           </tr>
           <tr>
-            <td style="padding:32px;background-color:#f8fafc;border-top:1px solid #f1f5f9;">
-              <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;">
+            <td style="padding:32px;background-color:#f9fafb;border-top:1px solid #f1f5f9;">
+              <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">
                 Vous recevez cet email car vous avez activé les notifications XERA.
               </p>
             </td>
@@ -464,20 +465,26 @@ async function sendEmailForDirectMessage(messageRow, senderName, recipientIds) {
 </body>
 </html>`;
 
-            const response = await fetch("https://api.resend.com/emails", {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${RETURN_REMINDER_EMAIL_API_KEY}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    from: RETURN_REMINDER_EMAIL_FROM,
-                    to: [recipientEmail],
-                    subject: `XERA - Nouveau message de ${senderLabel}`,
-                    html: emailHtml,
-                    reply_to: RETURN_REMINDER_EMAIL_REPLY_TO
-                }),
-            });
+            const response = await (async () => {
+                const nodeFetch = typeof fetch !== "undefined" ? fetch : globalThis.fetch;
+                if (typeof nodeFetch !== "function") {
+                    throw new Error("fetch is not defined");
+                }
+                return nodeFetch("https://api.resend.com/emails", {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${RETURN_REMINDER_EMAIL_API_KEY}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        from: RETURN_REMINDER_EMAIL_FROM,
+                        to: [recipientEmail],
+                        subject: `XERA - Nouveau message de ${senderLabel}`,
+                        html: emailHtml,
+                        reply_to: RETURN_REMINDER_EMAIL_REPLY_TO
+                    }),
+                });
+            })();
 
             if (!response.ok) {
                 const errorText = await response.text();

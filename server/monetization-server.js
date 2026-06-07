@@ -2941,38 +2941,38 @@ function buildReminderEmailLayout({
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtmlAttr(safeHeadline)}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
-  <div style="display:none;font-size:1px;color:#f9fafb;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <div style="display:none;font-size:1px;color:#f3f4f6;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
     ${escapeHtmlAttr(safeHeadline)}
   </div>
-  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f9fafb;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f3f4f6;">
     <tr>
       <td align="center" style="padding:40px 10px;">
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);border:1px solid #e5e7eb;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background-color:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);border:1px solid #e5e7eb;">
           <!-- Header -->
           <tr>
-            <td style="padding:32px 32px 24px 32px;text-align:left;">
-              <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA" style="width:48px;height:48px;border-radius:12px;display:block;" />
+            <td style="padding:40px 40px 24px 40px;text-align:left;">
+              <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA" style="width:56px;height:56px;border-radius:14px;display:block;" />
             </td>
           </tr>
 
           <!-- Content -->
           <tr>
-            <td style="padding:0 32px 32px 32px;">
-              <div style="font-size:12px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#6366f1;margin-bottom:12px;">
+            <td style="padding:0 40px 40px 40px;">
+              <div style="font-size:12px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#6366f1;margin-bottom:16px;">
                 ${escapeHtmlAttr(eyebrow || "XERA Update")}
               </div>
-              <h1 style="margin:0 0 16px 0;font-size:24px;font-weight:800;line-height:1.2;color:#111827;">
+              <h1 style="margin:0 0 20px 0;font-size:28px;font-weight:900;line-height:1.2;color:#111827;letter-spacing:-0.02em;">
                 ${escapeHtmlAttr(safeHeadline)}
               </h1>
-              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.6;color:#374151;">
+              <p style="margin:0 0 24px 0;font-size:17px;line-height:1.6;color:#1f2937;">
                 ${escapeHtmlAttr(safeGreeting)}
               </p>
               ${htmlParagraphs}
 
               <!-- Action Button -->
-              <div style="margin-top:32px;margin-bottom:16px;">
-                <a href="${escapeHtmlAttr(safeCtaUrl)}" target="_blank" style="display:inline-block;background-color:#111827;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:14px 28px;border-radius:9999px;box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+              <div style="margin-top:40px;margin-bottom:16px;">
+                <a href="${escapeHtmlAttr(safeCtaUrl)}" target="_blank" style="display:inline-block;background-color:#000000;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:16px 32px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1);">
                   ${escapeHtmlAttr(safeCtaLabel)}
                 </a>
               </div>
@@ -2981,11 +2981,11 @@ function buildReminderEmailLayout({
 
           <!-- Footer -->
           <tr>
-            <td style="padding:32px;background-color:#f8fafc;border-top:1px solid #f1f5f9;text-align:left;">
-              <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;">
+            <td style="padding:40px;background-color:#f9fafb;border-top:1px solid #f1f5f9;text-align:left;">
+              <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">
                 ${escapeHtmlAttr(safeFooter)}
               </p>
-              <div style="margin-top:16px;font-size:12px;color:#94a3b8;">
+              <div style="margin-top:24px;font-size:12px;color:#9ca3af;font-weight:500;">
                 &copy; ${new Date().getFullYear()} XERA. Tous droits réservés.
               </div>
             </td>
@@ -3480,7 +3480,6 @@ async function sendReminderEmail(payload) {
 async function sweepReturnReminderEmails(now = new Date()) {
     if (!supportsEmailReminders()) return { ok: true, skipped: true };
 
-    // Optimize: Get all users with reminders enabled
     const { data: users, error } = await supabase
         .from("users")
         .select(
@@ -3504,10 +3503,6 @@ async function sweepReturnReminderEmails(now = new Date()) {
     let sentCount = 0;
     let errorCount = 0;
 
-    // To avoid hitting Auth API rate limits or timing out, we process in chunks
-    // and we try to fetch emails in bulk if possible, but listUsers is better.
-    // For now, we'll keep the resolveReminderEmailAddress but add a small delay or use a cache.
-
     for (const user of users) {
         if (!user?.id) continue;
 
@@ -3516,10 +3511,7 @@ async function sweepReturnReminderEmails(now = new Date()) {
         if (!campaign) continue;
 
         const email = await resolveReminderEmailAddress(user.id);
-        if (!email) {
-            console.warn(`Could not find email for user ${user.id}, skipping.`);
-            continue;
-        }
+        if (!email) continue;
 
         const payload = {
             to: email,
@@ -3553,19 +3545,6 @@ async function sweepReturnReminderEmails(now = new Date()) {
     }
 
     return { ok: true, sentCount, errorCount };
-}
-                "Failed to persist email reminder slot:",
-                updateError?.message || updateError,
-            );
-        }
-
-        sentCount += 1;
-    }
-
-    return {
-        ok: true,
-        sentCount,
-    };
 }
 
 async function sweepReturnReminderPush(now = new Date()) {
@@ -4211,29 +4190,45 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
                 break;
             }
 
-            for (const user of users) {
-                if (!user.email) {
-                    skippedCount += 1;
-                    continue;
-                }
-                attemptedCount += 1;
+            // To avoid timeouts on serverless (Vercel), we process users in chunks
+            // and we use parallel sending for each chunk.
+            const userChunks = [];
+            const chunkSize = 10;
+            for (let i = 0; i < users.length; i += chunkSize) {
+                userChunks.push(users.slice(i, i + chunkSize));
+            }
 
-                const payload = {
-                    to: user.email,
-                    subject: `XERA - ${subject}`,
-                    html: layout.html,
-                    text: layout.text,
-                };
+            for (const chunk of userChunks) {
+                const results = await Promise.all(
+                    chunk.map(async (user) => {
+                        if (!user.email) {
+                            return { skipped: true };
+                        }
+                        const payload = {
+                            to: user.email,
+                            subject: `XERA - ${subject}`,
+                            html: layout.html,
+                            text: layout.text,
+                        };
+                        return { ...(await sendReminderEmail(payload)), userId: user.id };
+                    })
+                );
 
-                const result = await sendReminderEmail(payload);
-                if (result.success) {
-                    sentCount++;
-                } else {
-                    failedCount++;
-                    if (!lastErrorMessage) {
-                        lastErrorMessage = String(
-                            result?.error?.message || result?.error || "",
-                        ).trim();
+                for (const result of results) {
+                    if (result.skipped) {
+                        skippedCount++;
+                        continue;
+                    }
+                    attemptedCount++;
+                    if (result.success) {
+                        sentCount++;
+                    } else {
+                        failedCount++;
+                        if (!lastErrorMessage) {
+                            lastErrorMessage = String(
+                                result?.error?.message || result?.error || "",
+                            ).trim();
+                        }
                     }
                 }
             }
