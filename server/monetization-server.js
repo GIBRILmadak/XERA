@@ -1853,10 +1853,12 @@ async function buildCreatorWalletOverview(userId) {
         }
     });
 
+    // Correction de la logique de revenus vidéo si les transactions ne sont pas encore créées
     const hasVideoRevenueTransactions = revenueTransactions.some(
         (tx) => tx.type === "video_rpm",
     );
     if (!hasVideoRevenueTransactions) {
+        // Si pas de transactions de type video_rpm, on se base sur les payouts calculés
         videoAvailable = 0;
         videoPending = 0;
         videoPayouts.forEach((payout) => {
@@ -3369,6 +3371,12 @@ async function sendReminderEmail(payload) {
     }
 
     try {
+        // S'assurer que fetch est disponible (polyfill pour Node < 18)
+        const nodeFetch = typeof fetch !== "undefined" ? fetch : globalThis.fetch;
+        if (typeof nodeFetch !== "function") {
+            throw new Error("La fonction 'fetch' n'est pas disponible dans cet environnement Node.js.");
+        }
+
         let response = null;
 
         if (REMINDER_EMAIL_PROVIDER === "resend") {
@@ -3383,7 +3391,7 @@ async function sendReminderEmail(payload) {
                 body.reply_to = REMINDER_EMAIL_REPLY_TO;
             }
 
-            response = await fetch("https://api.resend.com/emails", {
+            response = await nodeFetch("https://api.resend.com/emails", {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${REMINDER_EMAIL_API_KEY}`,
@@ -3399,7 +3407,7 @@ async function sendReminderEmail(payload) {
                 headers.Authorization = `Bearer ${REMINDER_EMAIL_WEBHOOK_TOKEN}`;
             }
 
-            response = await fetch(REMINDER_EMAIL_WEBHOOK_URL, {
+            response = await nodeFetch(REMINDER_EMAIL_WEBHOOK_URL, {
                 method: "POST",
                 headers,
                 body: JSON.stringify({
@@ -3422,7 +3430,7 @@ async function sendReminderEmail(payload) {
         return { success: true };
     } catch (error) {
         console.warn("Reminder email send failed:", error?.message || error);
-        return { success: false, error };
+        return { success: false, error: error?.message || String(error) };
     }
 }
 

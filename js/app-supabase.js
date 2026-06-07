@@ -9142,7 +9142,7 @@ function showDiscoverSkeleton(grid, count = 8, options = {}) {
     const skeletons = Array.from({ length: count })
         .map(
             (_, index) => `
-            <article class="discover-skeleton-card ${index % 5 === 0 ? "discover-skeleton-card--wide" : ""}" aria-hidden="true">
+            <article class="discover-skeleton-card" aria-hidden="true">
                 <div class="discover-skeleton-media"></div>
                 <div class="discover-skeleton-body">
                     <div class="discover-skeleton-line discover-skeleton-line--title"></div>
@@ -10592,16 +10592,8 @@ function nextDiscoverLayoutRandom(seed) {
 }
 
 function chooseDiscoverRowSize(remaining, seed) {
-    if (remaining <= 4) return { rowSize: remaining, seed };
-    if (remaining === 5 || remaining === 6) return { rowSize: 3, seed };
-    if (remaining === 8) return { rowSize: 4, seed };
-
-    const candidates = [3, 4].filter((size) => remaining - size !== 1);
-    const random = nextDiscoverLayoutRandom(seed);
-    return {
-        rowSize: candidates[random.value >= 0.5 ? candidates.length - 1 : 0],
-        seed: random.seed,
-    };
+    // Force 3 colonnes sur PC (chaque carte prendra span 4 dans une grille de 12)
+    return { rowSize: Math.min(3, remaining), seed };
 }
 
 function assignDiscoverRowLayout(renderedItems) {
