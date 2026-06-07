@@ -593,7 +593,7 @@ export async function activateSubscription({
         const { data: existing } = await supabase
             .from("transactions")
             .select("id")
-            .eq("metadata->>transaction_ref_id", String(transactionRefId))
+            .eq("metadata->transaction_ref_id", String(transactionRefId))
             .eq("status", "succeeded")
             .maybeSingle();
         if (existing?.id && existing.id !== pendingTransactionId) {
@@ -864,7 +864,7 @@ export async function confirmSupportPayment({
             .from("transactions")
             .select("id")
             .eq("type", "support")
-            .eq("metadata->>transaction_ref_id", String(transactionRefId))
+            .eq("metadata->transaction_ref_id", String(transactionRefId))
             .eq("status", "succeeded")
             .maybeSingle();
         if (existingError) throw existingError;

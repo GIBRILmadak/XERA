@@ -82,8 +82,11 @@ if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
 // Firebase Admin (FCM / APNs via FCM)
 let firebaseAdminInitialized = false;
 let firebaseAdmin = null;
+/*
 try {
     firebaseAdmin = require("firebase-admin");
+*/
+/*
     const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } =
         process.env;
 
@@ -110,6 +113,7 @@ try {
 } catch (err) {
     console.info("firebase-admin not installed; native push disabled.");
 }
+*/
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -148,6 +152,9 @@ app.use(
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     }),
 );
+
+// Simple health check
+app.get("/api/health", (req, res) => res.json({ ok: true, timestamp: new Date().toISOString() }));
 
 const APP_PROFILE_CACHE_TTL_MS = Math.max(
     5000,
@@ -2078,7 +2085,7 @@ async function activateSubscription({
         const { data: existing } = await supabase
             .from("transactions")
             .select("id")
-            .eq("metadata->>transaction_ref_id", String(transactionRefId))
+            .eq("metadata->transaction_ref_id", String(transactionRefId))
             .eq("status", "succeeded")
             .maybeSingle();
         if (existing?.id && existing.id !== pendingTransactionId) {
@@ -2609,7 +2616,7 @@ async function confirmSupportPayment({
             .from("transactions")
             .select("id")
             .eq("type", "support")
-            .eq("metadata->>transaction_ref_id", String(transactionRefId))
+            .eq("metadata->transaction_ref_id", String(transactionRefId))
             .eq("status", "succeeded")
             .maybeSingle();
         if (existingError) throw existingError;
@@ -3414,9 +3421,9 @@ async function sendReminderEmail(payload) {
     }
 
     try {
-        const nodeFetch = typeof fetch !== "undefined" ? fetch : globalThis.fetch;
-        if (typeof nodeFetch !== "function") {
-            throw new Error("La fonction 'fetch' n'est pas disponible dans cet environnement.");
+        const nf = typeof fetch !== "undefined" ? fetch : globalThis.fetch;
+        if (typeof nf !== "function") {
+            throw new Error("fetch is not defined");
         }
 
         let response = null;
@@ -3428,14 +3435,10 @@ async function sendReminderEmail(payload) {
                 subject: payload.subject,
                 html: payload.html || "",
             };
-            if (payload.text) {
-                body.text = payload.text;
-            }
-            if (REMINDER_EMAIL_REPLY_TO) {
-                body.reply_to = REMINDER_EMAIL_REPLY_TO;
-            }
+            if (payload.text) body.text = payload.text;
+            if (REMINDER_EMAIL_REPLY_TO) body.reply_to = REMINDER_EMAIL_REPLY_TO;
 
-            response = await nodeFetch("https://api.resend.com/emails", {
+            response = await nf("https://api.resend.com/emails", {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${REMINDER_EMAIL_API_KEY}`,
@@ -3449,7 +3452,7 @@ async function sendReminderEmail(payload) {
                 headers["Authorization"] = `Bearer ${REMINDER_EMAIL_WEBHOOK_TOKEN}`;
             }
 
-            response = await nodeFetch(REMINDER_EMAIL_WEBHOOK_URL, {
+            response = await nf(REMINDER_EMAIL_WEBHOOK_URL, {
                 method: "POST",
                 headers,
                 body: JSON.stringify({
@@ -3462,20 +3465,28 @@ async function sendReminderEmail(payload) {
             return { success: false, skipped: true };
         }
 
-        const resData = await response.json().catch(() => ({}));
+        if (!response) return { success: false, error: "No response from provider" };
+
+        let resData = {};
+        try {
+            const text = await response.text();
+            try {
+                resData = JSON.parse(text);
+            } catch (e) {
+                resData = { _raw: text };
+            }
+        } catch (e) {
+            // ignore
+        }
 
         if (!response.ok) {
-            const errorMsg = resData.message || resData.error || `Provider error ${response.status}`;
-            console.error("Email delivery failed:", { status: response.status, error: errorMsg });
-            return {
-                success: false,
-                error: errorMsg
-            };
+            const errorMsg = resData.message || resData.error || resData._raw || `HTTP ${response.status}`;
+            return { success: false, error: errorMsg };
         }
 
         return { success: true, id: resData.id };
     } catch (error) {
-        console.error("Reminder email send exception:", error);
+        console.error("sendReminderEmail error:", error);
         return { success: false, error: error?.message || String(error) };
     }
 }
@@ -4187,57 +4198,37 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
             });
 
             if (listError) {
-                console.error("Supabase listUsers error:", listError);
-                throw new Error(`Erreur Supabase: ${listError.message || "Impossible de lister les utilisateurs."}`);
+                throw new Error(`Supabase Auth error: ${listError.message}`);
             }
 
             const users = data.users || [];
-            if (users.length === 0) {
-                break;
-            }
+            if (users.length === 0) break;
 
-            const userChunks = [];
-            const chunkSize = 8; // Slightly smaller chunks to be safe
-            for (let i = 0; i < users.length; i += chunkSize) {
-                userChunks.push(users.slice(i, i + chunkSize));
-            }
+            for (const user of users) {
+                if (!user.email) {
+                    skippedCount++;
+                    continue;
+                }
+                attemptedCount++;
 
-            for (const chunk of userChunks) {
-                const results = await Promise.all(
-                    chunk.map(async (user) => {
-                        if (!user.email) return { skipped: true };
-                        const payload = {
-                            to: user.email,
-                            subject: `XERA - ${subject}`,
-                            html: layout.html,
-                            text: layout.text,
-                        };
-                        const emailResult = await sendReminderEmail(payload);
-                        return { ...emailResult, userId: user.id };
-                    })
-                );
+                const payload = {
+                    to: user.email,
+                    subject: `XERA - ${subject}`,
+                    html: layout.html,
+                    text: layout.text,
+                };
 
-                for (const result of results) {
-                    if (result.skipped) {
-                        skippedCount++;
-                        continue;
-                    }
-                    attemptedCount++;
-                    if (result.success) {
-                        sentCount++;
-                    } else {
-                        failedCount++;
-                        if (!lastErrorMessage) {
-                            lastErrorMessage = result.error || "Erreur inconnue fournisseur.";
-                        }
-                    }
+                const emailResult = await sendReminderEmail(payload);
+                if (emailResult.success) {
+                    sentCount++;
+                } else {
+                    failedCount++;
+                    if (!lastErrorMessage) lastErrorMessage = emailResult.error;
                 }
             }
 
-            if (users.length < perPage) {
-                break;
-            }
-            page += 1;
+            if (users.length < perPage) break;
+            page++;
         }
 
         if (attemptedCount === 0) {
@@ -4273,7 +4264,11 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
         });
     } catch (error) {
         console.error("Admin broadcast email error:", error);
-        return res.status(500).json({ error: error?.message || "Erreur serveur interne lors de l'envoi du broadcast." });
+        res.setHeader("Content-Type", "application/json");
+        return res.status(500).send(JSON.stringify({
+            error: error?.message || "Erreur serveur interne",
+            details: String(error)
+        }));
     }
 });
 
@@ -4398,7 +4393,7 @@ app.get("/api/admin/subscription-payments", async (req, res) => {
                 "id, from_user_id, to_user_id, amount_gross, currency, status, description, metadata, created_at, updated_at",
             )
             .eq("type", "subscription")
-            .eq("metadata->>payment_provider", "maishapay")
+            .filter("metadata->payment_provider", "eq", "maishapay")
             .order("created_at", { ascending: false })
             .limit(limit);
 
@@ -4474,7 +4469,7 @@ app.post("/api/admin/subscription-payments/confirm", async (req, res) => {
             )
             .eq("id", paymentId)
             .eq("type", "subscription")
-            .eq("metadata->>payment_provider", "maishapay")
+            .filter("metadata->payment_provider", "eq", "maishapay")
             .maybeSingle();
         if (paymentError) throw paymentError;
         if (!paymentRow) {
@@ -4562,7 +4557,7 @@ app.post("/api/admin/subscription-payments/fail", async (req, res) => {
             .select("id, status, metadata")
             .eq("id", paymentId)
             .eq("type", "subscription")
-            .eq("metadata->>payment_provider", "maishapay")
+            .filter("metadata->payment_provider", "eq", "maishapay")
             .maybeSingle();
         if (paymentError) throw paymentError;
         if (!paymentRow) {
@@ -5982,8 +5977,12 @@ app.get("/api/admin/bots/status", async (req, res) => {
             forcePosts: !!forcePostsEnabled,
         });
     } catch (e) {
-        console.error("/api/admin/bots/status error", e?.message || e);
-        return res.status(500).send("Erreur interne");
+        console.error("/api/admin/bots/status error", e);
+        res.setHeader("Content-Type", "application/json");
+        return res.status(500).send(JSON.stringify({
+            error: "Erreur serveur interne (bots status)",
+            details: e?.message || String(e)
+        }));
     }
 });
 
