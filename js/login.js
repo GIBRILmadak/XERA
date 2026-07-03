@@ -1,0 +1,882 @@
+/* ========================================
+   LOGIQUE DE LA PAGE LOGIN
+   ======================================== */
+
+let isSignUpMode = false;
+const redirectTarget = new URLSearchParams(window.location.search).get(
+    "redirect",
+);
+
+function resolveRedirectTarget() {
+    if (!redirectTarget) {
+        return window.XeraRouter?.buildUrl
+            ? window.XeraRouter.buildUrl("discover")
+            : "index.html";
+    }
+    if (
+        redirectTarget.startsWith("http://") ||
+        redirectTarget.startsWith("https://")
+    ) {
+        try {
+            const targetUrl = new URL(redirectTarget);
+            if (targetUrl.origin === window.location.origin) {
+                return window.XeraRouter?.toCleanUrl
+                    ? window.XeraRouter.toCleanUrl(targetUrl.toString())
+                    : targetUrl.toString();
+            }
+        } catch (_) {
+            return window.XeraRouter?.buildUrl
+                ? window.XeraRouter.buildUrl("discover")
+                : "index.html";
+        }
+        return window.XeraRouter?.buildUrl
+            ? window.XeraRouter.buildUrl("discover")
+            : "index.html";
+    }
+    if (redirectTarget.startsWith("/")) {
+        return redirectTarget;
+    }
+    return window.XeraRouter?.toCleanUrl
+        ? window.XeraRouter.toCleanUrl(redirectTarget)
+        : redirectTarget;
+}
+
+// Éléments DOM
+const authForm = document.getElementById("auth-form");
+const emailInput = document.getElementById("email");
+const passwordInput = document.getElementById("password");
+const usernameInput = document.getElementById("username");
+const confirmPasswordInput = document.getElementById("confirm-password");
+const usernameGroup = document.getElementById("username-group");
+const confirmPasswordGroup = document.getElementById("confirm-password-group");
+const credentialsGroup = document.getElementById("credentials-group");
+const submitBtn = document.getElementById("submit-btn");
+const btnText = document.getElementById("btn-text");
+const btnLoader = document.getElementById("btn-loader");
+const toggleLink = document.getElementById("toggle-link");
+const toggleText = document.getElementById("toggle-text");
+const formTitle = document.getElementById("form-title");
+const formSubtitle = document.getElementById("form-subtitle");
+const errorMessage = document.getElementById("error-message");
+const successMessage = document.getElementById("success-message");
+const forgotPasswordLink = document.getElementById("forgot-password-link");
+const forgotPassword = document.getElementById("forgot-password");
+const googleSigninBtn = document.getElementById("google-signin-btn");
+const passwordToggle = document.getElementById("password-toggle");
+const confirmPasswordToggle = document.getElementById(
+    "confirm-password-toggle",
+);
+const rememberMeContainer = document.getElementById("remember-me-container");
+const rememberMeCheckbox = document.getElementById("remember-me");
+
+// Wizard SignUp elements
+const signupStep1 = document.getElementById("signup-step-1");
+const signupStep2 = document.getElementById("signup-step-2");
+const signupStepPro = document.getElementById("signup-step-pro");
+const subtypeOptionsContainer = document.getElementById(
+    "subtype-options-container",
+);
+const step2BackBtn = document.getElementById("step-2-back");
+const step2Title = document.getElementById("step-2-title");
+
+// Arborescence de choix pour l'inscription
+const SIGNUP_FLOW = {
+    personnel: {
+        label: "Personnel",
+        isPro: false,
+        fields: ["names", "email", "password"],
+    },
+    pro: {
+        label: "Communauté / Entreprise",
+        isPro: true,
+        subcategories: {
+            entreprise: {
+                label: "Entreprise",
+                structures: {
+                    startup: {
+                        label: "Startup",
+                        fields: ["orgName", "industry", "email", "password"],
+                    },
+                    pme: {
+                        label: "PME",
+                        fields: ["orgName", "industry", "email", "password"],
+                    },
+                    grand_groupe: {
+                        label: "Grand Groupe",
+                        fields: [
+                            "orgName",
+                            "industry",
+                            "website",
+                            "email",
+                            "password",
+                        ],
+                    },
+                    investisseur: {
+                        label: "Investisseur",
+                        fields: ["orgName", "website", "email", "password"],
+                    },
+                },
+            },
+            communaute: {
+                label: "Communauté",
+                structures: {
+                    association: {
+                        label: "Association",
+                        fields: ["orgName", "bio", "email", "password"],
+                    },
+                    club: {
+                        label: "Club",
+                        fields: ["orgName", "bio", "email", "password"],
+                    },
+                    ecole: {
+                        label: "École",
+                        fields: ["orgName", "website", "email", "password"],
+                    },
+                    incubateur: {
+                        label: "Incubateur",
+                        fields: ["orgName", "website", "email", "password"],
+                    },
+                },
+            },
+        },
+    },
+};
+
+let signupState = {
+    mainType: null, // 'personnel' | 'pro'
+    subcategory: null, // 'entreprise' | 'communaute'
+    structure: null, // 'startup' | 'pme' ...
+    currentStep: 1,
+};
+
+// Fonctions pour gérer "Se souvenir de moi"
+function saveRememberMe(email, remember) {
+    if (remember) {
+        localStorage.setItem("rize-remember-email", email);
+        localStorage.setItem("rize-remember-me", "true");
+    } else {
+        localStorage.removeItem("rize-remember-email");
+        localStorage.removeItem("rize-remember-me");
+    }
+}
+
+function loadRememberMe() {
+    const rememberMe = localStorage.getItem("rize-remember-me") === "true";
+    const savedEmail = localStorage.getItem("rize-remember-email");
+
+    if (rememberMe && savedEmail) {
+        emailInput.value = savedEmail;
+        rememberMeCheckbox.checked = true;
+        return { email: savedEmail, remember: true };
+    }
+
+    if (localStorage.getItem("rize-remember-me") === null) {
+        localStorage.setItem("rize-remember-me", "true");
+        rememberMeCheckbox.checked = true;
+        return { email: "", remember: true };
+    }
+
+    return { email: "", remember: false };
+}
+
+// Vérifier si l'utilisateur est déjà connecté
+async function checkExistingSession() {
+    try {
+        // Vérifier si checkAuth existe
+        if (typeof checkAuth !== "function") {
+            console.error("checkAuth n'est pas disponible");
+            return null;
+        }
+
+        const user = await checkAuth();
+        if (user) {
+            // Rediriger vers la page principale
+            window.location.href = resolveRedirectTarget();
+        }
+    } catch (error) {
+        console.error("Erreur verification session:", error);
+    }
+}
+
+// Afficher un message d'erreur
+function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.style.display = "block";
+    successMessage.style.display = "none";
+
+    setTimeout(() => {
+        errorMessage.style.display = "none";
+    }, 5000);
+}
+
+// Afficher un message de succès
+function showSuccess(message) {
+    successMessage.textContent = message;
+    successMessage.style.display = "block";
+    errorMessage.style.display = "none";
+
+    setTimeout(() => {
+        successMessage.style.display = "none";
+    }, 5000);
+}
+
+// Afficher un message de succès persistant avec bouton de fermeture
+function showPersistentSuccess(message) {
+    successMessage.innerHTML = "";
+
+    const container = document.createElement("div");
+    container.style.cssText =
+        "display: flex; justify-content: space-between; align-items: start;";
+
+    const textSpan = document.createElement("span");
+    textSpan.textContent = message;
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.style.cssText =
+        "background: none; border: none; color: inherit; cursor: pointer; padding: 0; margin-left: 10px; opacity: 0.7; min-width: 24px; display: flex; align-items: center; justify-content: center;";
+    closeBtn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+    `;
+
+    closeBtn.onclick = function () {
+        successMessage.style.display = "none";
+    };
+
+    container.appendChild(textSpan);
+    container.appendChild(closeBtn);
+    successMessage.appendChild(container);
+
+    successMessage.style.display = "block";
+    errorMessage.style.display = "none";
+}
+
+// Convertir les erreurs d'authentification en messages utiles
+function formatAuthError(result) {
+    const rawMessage = String(result?.error || "").trim();
+    const lowerMessage = rawMessage.toLowerCase();
+    const errorCode = String(result?.code || "").toLowerCase();
+    const errorStatus = Number(result?.status);
+
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        return "Vous êtes hors connexion. Vérifiez Internet puis réessayez.";
+    }
+
+    if (
+        errorCode.includes("network") ||
+        lowerMessage.includes("failed to fetch")
+    ) {
+        return "Connexion au serveur impossible. Réessayez dans quelques secondes.";
+    }
+
+    if (
+        errorCode === "email_not_confirmed" ||
+        lowerMessage.includes("email not confirmed")
+    ) {
+        return "Vérifiez votre boîte mail pour confirmer votre compte avant de vous connecter.";
+    }
+
+    if (
+        errorCode === "invalid_credentials" ||
+        lowerMessage.includes("invalid login credentials")
+    ) {
+        return "Email ou mot de passe incorrect.";
+    }
+
+    if (
+        errorCode === "user_already_exists" ||
+        lowerMessage.includes("user already registered")
+    ) {
+        return "Un compte existe déjà avec cet email.";
+    }
+
+    if (errorStatus === 429 || lowerMessage.includes("too many requests")) {
+        return "Trop de tentatives. Patientez un instant puis réessayez.";
+    }
+
+    return rawMessage || "Une opération a échoué. Veuillez réessayer.";
+}
+
+// Toggle entre connexion et inscription
+function toggleMode(keepMessages = false) {
+    try {
+        isSignUpMode = !isSignUpMode;
+
+        console.log("Toggling mode to:", isSignUpMode ? "SignUp" : "Login");
+
+        if (isSignUpMode) {
+            // Mode inscription - Start Wizard
+            signupState = {
+                mainType: null,
+                subcategory: null,
+                structure: null,
+                currentStep: 1,
+            };
+            showSignupStep(1);
+            if (formTitle) formTitle.textContent = "Créer votre compte";
+            if (formSubtitle)
+                formSubtitle.textContent = "Rejoignez la communauté XERA";
+            if (usernameGroup) usernameGroup.style.display = "block";
+            if (confirmPasswordGroup)
+                confirmPasswordGroup.style.display = "block";
+            if (forgotPasswordLink) forgotPasswordLink.style.display = "none";
+            if (rememberMeContainer) rememberMeContainer.style.display = "none";
+            if (btnText) btnText.textContent = "Créer mon compte";
+            if (toggleText) toggleText.textContent = "Déjà un compte ?";
+            if (toggleLink) toggleLink.textContent = "Se connecter";
+            if (usernameInput) usernameInput.required = true;
+            if (confirmPasswordInput) confirmPasswordInput.required = true;
+        } else {
+            // Mode connexion
+            signupStep1.style.display = "none";
+            signupStep2.style.display = "none";
+            credentialsGroup.style.display = "block";
+            if (formTitle) formTitle.textContent = "Bienvenue sur XERA";
+            if (formSubtitle)
+                formSubtitle.textContent = "Connectez-vous pour continuer";
+            if (usernameGroup) usernameGroup.style.display = "none";
+            if (confirmPasswordGroup)
+                confirmPasswordGroup.style.display = "none";
+            if (forgotPasswordLink) forgotPasswordLink.style.display = "block";
+            if (rememberMeContainer)
+                rememberMeContainer.style.display = "block";
+            if (btnText) btnText.textContent = "Se connecter";
+            if (toggleText) toggleText.textContent = "Pas encore de compte ?";
+            if (toggleLink) toggleLink.textContent = "Créer un compte";
+            if (usernameInput) usernameInput.required = false;
+            if (confirmPasswordInput) confirmPasswordInput.required = false;
+        }
+
+        // Reset form
+        if (authForm) authForm.reset();
+        if (!keepMessages) {
+            if (errorMessage) errorMessage.style.display = "none";
+            if (successMessage) successMessage.style.display = "none";
+        }
+        resetPasswordVisibility();
+    } catch (error) {
+        console.error("Error in toggleMode:", error);
+    }
+}
+
+function showSignupStep(step) {
+    signupState.currentStep = step;
+
+    // Hide all steps
+    signupStep1.style.display = "none";
+    signupStep2.style.display = "none";
+    if (signupStepPro) signupStepPro.style.display = "none";
+    credentialsGroup.style.display = "none";
+    submitBtn.style.display = "none";
+
+    if (step === 1) {
+        signupStep1.style.display = "block";
+    } else if (step === 2) {
+        // Sélection de la sous-catégorie (Entreprise vs Communauté)
+        renderSubcategories();
+        signupStep2.style.display = "block";
+    } else if (step === 3) {
+        // Sélection de la structure fine (Startup vs PME vs ...)
+        renderStructures();
+        signupStep2.style.display = "block";
+    } else if (step === 4) {
+        // Formulaire final
+        renderFinalForm();
+    }
+}
+
+function renderSubcategories() {
+    if (step2Title) step2Title.textContent = "Choisissez le type d'institution";
+    subtypeOptionsContainer.innerHTML = "";
+
+    const subs = SIGNUP_FLOW.pro.subcategories;
+    Object.keys(subs).forEach((key) => {
+        const div = document.createElement("div");
+        div.className = "subtype-option";
+        div.textContent = subs[key].label;
+        div.onclick = () => {
+            signupState.subcategory = key;
+            showSignupStep(3);
+        };
+        subtypeOptionsContainer.appendChild(div);
+    });
+
+    step2BackBtn.onclick = () => showSignupStep(1);
+}
+
+function renderStructures() {
+    if (step2Title)
+        step2Title.textContent = `Type de ${SIGNUP_FLOW.pro.subcategories[signupState.subcategory].label}`;
+    subtypeOptionsContainer.innerHTML = "";
+
+    const structures =
+        SIGNUP_FLOW.pro.subcategories[signupState.subcategory].structures;
+    Object.keys(structures).forEach((key) => {
+        const div = document.createElement("div");
+        div.className = "subtype-option";
+        div.textContent = structures[key].label;
+        div.onclick = () => {
+            signupState.structure = key;
+            showSignupStep(4);
+        };
+        subtypeOptionsContainer.appendChild(div);
+    });
+
+    step2BackBtn.onclick = () => showSignupStep(2);
+}
+
+function renderFinalForm() {
+    credentialsGroup.style.display = "block";
+    submitBtn.style.display = "flex";
+
+    // Déterminer quels champs afficher
+    let fields = [];
+    if (signupState.mainType === "personnel") {
+        fields = SIGNUP_FLOW.personnel.fields;
+        if (formSubtitle)
+            formSubtitle.textContent = "Création de compte personnel";
+    } else {
+        const struct =
+            SIGNUP_FLOW.pro.subcategories[signupState.subcategory].structures[
+                signupState.structure
+            ];
+        fields = struct.fields;
+        if (formSubtitle) formSubtitle.textContent = `Compte ${struct.label}`;
+    }
+
+    // Toggle Visibility of form groups
+    const personalNamesGroup = document.getElementById("personal-names-group");
+    const orgNameGroup = document.querySelector(
+        "#signup-step-pro .form-group:has(#org-name)",
+    );
+    const orgBioGroup = document.querySelector(
+        "#signup-step-pro .form-group:has(#org-bio)",
+    );
+    const orgIndustryGroup = document.querySelector(
+        "#signup-step-pro .form-group:has(#org-industry)",
+    );
+    const orgWebsiteGroup = document.querySelector(
+        "#signup-step-pro .form-group:has(#org-website)",
+    );
+
+    // Personnel fields
+    if (personalNamesGroup) {
+        personalNamesGroup.style.display = fields.includes("names")
+            ? "block"
+            : "none";
+        const fn = document.getElementById("first-name");
+        const ln = document.getElementById("last-name");
+        if (fn) fn.required = fields.includes("names");
+        if (ln) ln.required = fields.includes("names");
+    }
+
+    // Pro fields
+    const hasProFields = fields.some((f) =>
+        ["orgName", "bio", "industry", "website"].includes(f),
+    );
+    if (signupStepPro) {
+        signupStepPro.style.display = hasProFields ? "block" : "none";
+        const wizardNavPro = signupStepPro.querySelector(".wizard-nav");
+        if (wizardNavPro) wizardNavPro.style.display = "none";
+
+        if (hasProFields) {
+            if (orgNameGroup)
+                orgNameGroup.style.display = fields.includes("orgName")
+                    ? "block"
+                    : "none";
+            if (orgBioGroup)
+                orgBioGroup.style.display = fields.includes("bio")
+                    ? "block"
+                    : "none";
+            if (orgIndustryGroup)
+                orgIndustryGroup.style.display = fields.includes("industry")
+                    ? "block"
+                    : "none";
+            if (orgWebsiteGroup)
+                orgWebsiteGroup.style.display = fields.includes("website")
+                    ? "block"
+                    : "none";
+
+            const orgNameInput = document.getElementById("org-name");
+            if (orgNameInput)
+                orgNameInput.required = fields.includes("orgName");
+        }
+    }
+
+    // Username hint
+    if (usernameGroup) {
+        usernameGroup.style.display = "block";
+        const hint = document.getElementById("username-hint");
+        if (hint) {
+            hint.style.display = "block";
+            hint.textContent =
+                signupState.mainType === "personnel"
+                    ? "Ce sera votre @handle public."
+                    : "L'identifiant URL de votre institution.";
+        }
+    }
+}
+
+function handleAccountTypeSelection(type) {
+    // Normalisation pour éviter les bugs de casse
+    const normalizedType = type.toLowerCase();
+
+    console.log("Account type selected:", normalizedType);
+
+    // Cas 1: Personnel -> Direct au formulaire final
+    if (normalizedType === "personnel") {
+        signupState.mainType = "personnel";
+        signupState.subcategory = null;
+        signupState.structure = null;
+        showSignupStep(4);
+        return;
+    }
+
+    // Cas Pro (Entreprise ou Communauté)
+    signupState.mainType = "pro";
+
+    // Si on a déjà choisi la sous-catégorie (Entreprise/Communauté) au premier écran
+    if (normalizedType === "entreprise" || normalizedType === "communaute") {
+        signupState.subcategory = normalizedType;
+        showSignupStep(3); // On saute l'étape 2, direction la sélection de structure
+    } else {
+        // Fallback si bouton "Pro" générique
+        showSignupStep(2);
+    }
+}
+
+// Initialiser les clics sur les options de type de compte
+document.querySelectorAll(".account-option").forEach((opt) => {
+    opt.onclick = () => handleAccountTypeSelection(opt.dataset.type);
+});
+
+if (step2BackBtn) {
+    step2BackBtn.onclick = () => showSignupStep(1);
+}
+
+// Gérer la soumission du formulaire
+async function handleSubmit(e) {
+    e.preventDefault();
+
+    // Récupération des valeurs
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    const username = usernameInput ? usernameInput.value.trim() : "";
+    const confirmPassword = confirmPasswordInput
+        ? confirmPasswordInput.value
+        : "";
+
+    // Validation de base
+    if (!email || !password) {
+        showError("Veuillez remplir tous les champs obligatoires.");
+        return;
+    }
+
+    if (isSignUpMode) {
+        if (!username) {
+            showError("Veuillez entrer un nom d'utilisateur.");
+            return;
+        }
+        if (password.length < 6) {
+            showError("Le mot de passe doit contenir au moins 6 caractères.");
+            return;
+        }
+        if (password !== confirmPassword) {
+            showError("Les mots de passe ne correspondent pas.");
+            return;
+        }
+    }
+
+    // UI Loading state
+    submitBtn.disabled = true;
+    if (btnText) btnText.style.display = "none";
+    if (btnLoader) btnLoader.style.display = "block";
+
+    try {
+        if (isSignUpMode) {
+            // Construction des métadonnées Supabase (user_metadata)
+            const metadata = {
+                account_type:
+                    signupState.mainType === "personnel" ? "personal" : "pro",
+                account_subtype:
+                    signupState.mainType === "personnel"
+                        ? "personal"
+                        : signupState.structure || signupState.mainType,
+                onboarding_completed: signupState.mainType !== "pro",
+                display_name: username,
+            };
+
+            // Ajout des infos spécifiques selon le type
+            if (signupState.mainType === "personnel") {
+                metadata.first_name = document
+                    .getElementById("first-name")
+                    ?.value.trim();
+                metadata.last_name = document
+                    .getElementById("last-name")
+                    ?.value.trim();
+                metadata.full_name =
+                    `${metadata.first_name} ${metadata.last_name}`.trim();
+            } else {
+                metadata.org_name = document
+                    .getElementById("org-name")
+                    ?.value.trim();
+                metadata.org_bio = document
+                    .getElementById("org-bio")
+                    ?.value.trim();
+                metadata.org_industry =
+                    document.getElementById("org-industry")?.value;
+                metadata.org_website = document
+                    .getElementById("org-website")
+                    ?.value.trim();
+                metadata.full_name = metadata.org_name;
+            }
+
+            // Appel de la fonction signUp (définie dans supabase-config.js)
+            if (typeof signUp !== "function") {
+                throw new Error(
+                    "La fonction d'inscription n'est pas chargée. Veuillez rafraîchir la page.",
+                );
+            }
+
+            const result = await signUp(email, password, username, metadata);
+
+            if (result.success) {
+                showPersistentSuccess(
+                    "Compte créé ! Un email de confirmation a été envoyé à " +
+                        email,
+                );
+                setTimeout(() => {
+                    toggleMode(true);
+                    emailInput.value = email;
+                }, 3000);
+            } else {
+                showError(formatAuthError(result));
+            }
+        } else {
+            // Connexion
+            const rememberMe = rememberMeCheckbox
+                ? rememberMeCheckbox.checked
+                : true;
+
+            if (typeof updateSessionStorage === "function") {
+                updateSessionStorage(rememberMe);
+            }
+
+            if (typeof signIn !== "function") {
+                throw new Error("La fonction de connexion n'est pas chargée.");
+            }
+
+            const result = await signIn(email, password);
+
+            if (result.success) {
+                saveRememberMe(email, rememberMe);
+                showSuccess("Connexion réussie ! Redirection...");
+
+                const user = result.data;
+                const accountType =
+                    user?.user_metadata?.account_type ||
+                    user?.account_type ||
+                    "personal";
+                const normalizedAccountType = String(accountType)
+                    .trim()
+                    .toLowerCase();
+                const isPro = [
+                    "community",
+                    "enterprise",
+                    "company",
+                    "pro",
+                    "communauté",
+                    "entreprise",
+                    "institution",
+                    "organization",
+                    "organisation",
+                    "org",
+                    "team",
+                ].includes(normalizedAccountType);
+
+                const onboardingCompleted =
+                    user?.user_metadata?.onboarding_completed === true ||
+                    user?.onboarding_completed === true;
+
+                setTimeout(() => {
+                    if (isPro && !onboardingCompleted && user?.id) {
+                        const target =
+                            typeof window.buildProfileUrl === "function"
+                                ? window.buildProfileUrl(
+                                      user.id,
+                                      normalizedAccountType,
+                                  )
+                                : window.XeraRouter?.buildUrl
+                                  ? window.XeraRouter.buildUrl(
+                                        isPro ? "pagepro" : "profile",
+                                        {
+                                            query: { user: user.id },
+                                        },
+                                    )
+                                  : `${isPro ? "pagepro" : "profile"}?user=${encodeURIComponent(user.id)}`;
+                        window.location.href = target;
+                        return;
+                    }
+                    window.location.href = resolveRedirectTarget();
+                }, 1000);
+            } else {
+                showError(formatAuthError(result));
+            }
+        }
+    } catch (error) {
+        console.error("Erreur handleSubmit:", error);
+        showError(error.message || "Une erreur imprévue est survenue.");
+    } finally {
+        submitBtn.disabled = false;
+        if (btnText) btnText.style.display = "block";
+        if (btnLoader) btnLoader.style.display = "none";
+    }
+}
+
+// Fonctions pour toggle password visibility
+function togglePasswordVisibility(inputId, toggleBtnId) {
+    const input = document.getElementById(inputId);
+    const toggleBtn = document.getElementById(toggleBtnId);
+
+    if (input.type === "password") {
+        input.type = "text";
+        toggleBtn.setAttribute("data-visible", "true");
+    } else {
+        input.type = "password";
+        toggleBtn.setAttribute("data-visible", "false");
+    }
+}
+
+function resetPasswordVisibility() {
+    passwordInput.type = "password";
+    confirmPasswordInput.type = "password";
+    passwordToggle.setAttribute("data-visible", "false");
+    confirmPasswordToggle.setAttribute("data-visible", "false");
+}
+
+// Gérer le reset de mot de passe
+async function handleForgotPassword() {
+    const email = emailInput.value.trim();
+
+    if (!email) {
+        showError("Veuillez entrer votre adresse email.");
+        return;
+    }
+
+    try {
+        const result = await resetPassword(email);
+
+        if (result.success) {
+            showSuccess(
+                "Un email de réinitialisation a été envoyé à votre adresse email.",
+            );
+        } else {
+            showError(
+                result.error ||
+                    "Erreur lors de l'envoi de l'email de réinitialisation.",
+            );
+        }
+    } catch (error) {
+        console.error("Erreur reset password:", error);
+        showError("Une erreur est survenue. Veuillez réessayer.");
+    }
+}
+
+// Gérer la connexion avec Google
+async function handleGoogleSignIn() {
+    try {
+        googleSigninBtn.disabled = true;
+        googleSigninBtn.innerHTML =
+            '<svg class="btn-loader" style="animation: spin 1s linear infinite;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg><span>Signing in...</span>';
+
+        const result = await signInWithGoogle();
+
+        if (result.success) {
+            // La redirection sera gérée automatiquement par Supabase
+            showSuccess("Redirection vers Google...");
+        } else {
+            showError(
+                result.error || "Erreur lors de la connexion avec Google.",
+            );
+        }
+    } catch (error) {
+        console.error("Erreur Google signin:", error);
+        showError("Une erreur est survenue. Veuillez réessayer.");
+    } finally {
+        // Reset button state
+        googleSigninBtn.disabled = false;
+        googleSigninBtn.innerHTML =
+            '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg><span>Continuer avec Google</span>';
+    }
+}
+
+// Event listeners
+if (toggleLink) {
+    toggleLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        toggleMode();
+    });
+}
+
+if (authForm) {
+    authForm.addEventListener("submit", handleSubmit);
+}
+
+// Password toggle listeners
+if (passwordToggle) {
+    passwordToggle.addEventListener("click", () => {
+        togglePasswordVisibility("password", "password-toggle");
+    });
+}
+
+if (confirmPasswordToggle) {
+    confirmPasswordToggle.addEventListener("click", () => {
+        togglePasswordVisibility("confirm-password", "confirm-password-toggle");
+    });
+}
+
+// Forgot password listener
+if (forgotPassword) {
+    forgotPassword.addEventListener("click", (e) => {
+        e.preventDefault();
+        handleForgotPassword();
+    });
+}
+
+// Google signin listener
+if (googleSigninBtn) {
+    googleSigninBtn.addEventListener("click", handleGoogleSignIn);
+}
+
+// Initialisation de la page
+document.addEventListener("DOMContentLoaded", () => {
+    // Initialiser les clics sur les options de type de compte pour le wizard
+    document.querySelectorAll(".account-option").forEach((opt) => {
+        opt.onclick = () => handleAccountTypeSelection(opt.dataset.type);
+    });
+
+    // Charger les préférences "Se souvenir de moi"
+    const savedData = loadRememberMe();
+
+    // Vérifier si on revient d'un reset de mot de passe
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("reset") === "true") {
+        // Si on a un token de reset, afficher une interface pour le nouveau mot de passe
+        // Pour l'instant, on affiche juste un message
+        showSuccess(
+            "Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.",
+        );
+    }
+
+    // Afficher le lien "mot de passe oublié" et la checkbox par défaut en mode connexion
+    if (!isSignUpMode) {
+        forgotPasswordLink.style.display = "block";
+        rememberMeContainer.style.display = "block";
+    }
+});
+
+// Vérifier la session au chargement
+checkExistingSession();

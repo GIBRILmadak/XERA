@@ -1,0 +1,8 @@
+npm verb cli /usr/bin/node /usr/bin/npm
+npm info using npm@9.2.0
+npm info using node@v20.19.4
+npm verb title npm install
+npm verb argv "install" "--loglevel" "verbose"
+npm verb logfile logs-max:10 dir:/home/g/.npm/_logs/2026-04-17T09_05_19_467Z-
+npm verb logfile /home/g/.npm/_logs/2026-04-17T09_05_19_467Z-debug-0.log
+npm verb shrinkwrap failed to load node_modules/.package-lock.json out of date, updated: node_modules

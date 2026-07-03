@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Badges | XERA</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="icon" type="image/svg+xml" href="icons/logo.png" />
+        <link rel="stylesheet" href="css/style.css" />
+        <link rel="stylesheet" href="css/search-notification.css" />
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    </head>
+    <body>
+        <div id="toast-container"></div>
+
+        <nav>
+            <a class="logo" href="index.html">
+                <div class="logo-img">
+                    <img src="icons/logo.png" alt="XERA - Logo" />
+                </div>
+                <span>XΞRA</span>
+            </a>
+            <div class="nav-links">
+                <a
+                    href="index.html#discover"
+                    class="notification-button nav-discover-btn"
+                    title="Découvrir"
+                    aria-label="Découvrir"
+                >
+                    <svg
+                        class="notification-icon nav-discover-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+                        <path d="M3 10.5L12 3l9 7.5"></path>
+                        <path d="M5 10v10h14V10"></path>
+                        <path d="M9 20v-6h6v6"></path>
+                    </svg>
+                </a>
+                <div
+                    class="notification-button profile-nav-button"
+                    onclick="handleProfileNavigation()"
+                    id="nav-profile"
+                    title="My Trajectory"
+                    aria-label="My Trajectory"
+                    role="button"
+                >
+                    <img
+                        id="nav-profile-avatar"
+                        class="notification-icon profile-nav-avatar"
+                        src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' rx='20' fill='%231f2937'/><circle cx='20' cy='16' r='6' fill='%23e5e7eb'/><path d='M8%2034c2.5-6%208-9%2012-9s9.5%203%2012%209' fill='%23e5e7eb'/></svg>"
+                        alt="Avatar utilisateur"
+                    />
+                </div>
+                <a href="login.html" id="nav-auth">Login / Register</a>
+            </div>
+        </nav>
+
+        <main id="badge-admin" class="settings-container admin-page"></main>
+
+        <script src="js/router.js"></script>
+        <script src="js/supabase-config.js"></script>
+        <script src="js/monetization-utils.js"></script>
+        <script src="js/app-supabase.js?v=20260318-4"></script>
+        <script type="module">
+            import { initBadgeAdminPage } from "./js/badges-admin.js";
+
+            document.addEventListener("DOMContentLoaded", async () => {
+                const user = await checkAuth();
+                const navAuth = document.getElementById("nav-auth");
+                const navProfile = document.getElementById("nav-profile");
+                if (!user) {
+                    if (navAuth) navAuth.style.display = "block";
+                    if (navProfile) navProfile.style.display = "none";
+                } else {
+                    if (navAuth) navAuth.style.display = "none";
+                    if (navProfile) {
+                        navProfile.style.display =
+                            navProfile.classList.contains("notification-button")
+                                ? "flex"
+                                : "block";
+                    }
+                }
+
+                const container = document.getElementById("badge-admin");
+                if (!user) {
+                    container.innerHTML = `
+                        <div class="settings-section">
+                            <h3>Login required</h3>
+                            <p style="color: var(--text-secondary);">Connectez-vous pour accéder.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                if (!isVerificationAdmin()) {
+                    container.innerHTML = `
+                        <div class="settings-section">
+                            <h3>Accès refusé</h3>
+                            <p style="color: var(--text-secondary);">Réservé aux admins vérification.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                initBadgeAdminPage({
+                    supabase,
+                    addVerifiedUserId: window.addVerifiedUserId,
+                    removeVerifiedUserId: window.removeVerifiedUserId,
+                    setupAdminUserSearch: window.setupAdminUserSearch,
+                    fetchVerifiedBadges: window.fetchVerifiedBadges,
+                    fetchVerificationRequests: window.fetchVerificationRequests,
+                    getVerifiedBadgeSets: window.getVerifiedBadgeSets,
+                });
+            });
+        </script>
+    </body>
+</html>
