@@ -9,7 +9,7 @@ const ANNUAL_DISCOUNT = 0.2;
 const PAYMENT_RETURN_PATH_PARAM = "return_path";
 
 let usdToCdfRate = 2300;
-let maishaPayConfig = {
+let kPayConfig = {
     callbackEnabled: true,
     gatewayMode: "1",
 };
@@ -180,7 +180,7 @@ async function resolvePaymentContext(params, user) {
         kind: PAYMENT_KIND_SUBSCRIPTION,
         planId: normalizePlan(params.get("plan")),
         billingCycle: normalizeBilling(params.get("billing")),
-        formActionPath: "/api/maishapay/checkout",
+        formActionPath: "/api/kpay/checkout",
         defaultCurrency: "USD",
         returnPath: userProfileReturnPath,
     };
@@ -249,7 +249,7 @@ async function resolveSupportContext(params, user) {
         amountUsd: Number.parseInt(String(rawAmount), 10),
         description:
             description || `Soutien pour ${creator.name || "ce créateur"}`,
-        formActionPath: "/api/maishapay/support-checkout",
+        formActionPath: "/api/kpay/support-checkout",
         defaultCurrency: "USD",
         returnPath,
     };
@@ -384,7 +384,7 @@ function hydrateSupportSummary(paymentContext, currency = "USD") {
         normalizedCurrency === "CDF"
             ? Math.round(paymentContext.amountUsd * usdToCdfRate)
             : Math.ceil(paymentContext.amountUsd);
-    const automaticConfirmation = maishaPayConfig.callbackEnabled !== false;
+    const automaticConfirmation = kPayConfig.callbackEnabled !== false;
 
     setText("summaryLabel", "Soutien choisi");
     setText("summaryCycle", "Soutien");
@@ -392,8 +392,8 @@ function hydrateSupportSummary(paymentContext, currency = "USD") {
     setText(
         "summarySub",
         automaticConfirmation
-            ? "Paiement MaishaPay avec crédit automatique du créateur après confirmation."
-            : "Paiement MaishaPay avec crédit du créateur après confirmation du paiement.",
+            ? "Paiement KPay avec crédit automatique du créateur après confirmation."
+            : "Paiement KPay avec crédit du créateur après confirmation du paiement.",
     );
     setText(
         "summaryAmount",
@@ -411,7 +411,7 @@ function hydrateSupportSummary(paymentContext, currency = "USD") {
         "paymentFormSubtitle",
         `Tu soutiens ${paymentContext.creatorName}. Sélectionne carte ou mobile money, puis la devise.`,
     );
-    setText("payButton", "Continuer vers MaishaPay");
+    setText("payButton", "Continuer vers KPay");
     document.title = `Soutenir ${paymentContext.creatorName} - XERA`;
 
     renderSummaryFeatures([
@@ -419,7 +419,7 @@ function hydrateSupportSummary(paymentContext, currency = "USD") {
         `Montant de soutien: ${formatCurrency(paymentContext.amountUsd, "USD")}`,
         automaticConfirmation
             ? "Le dashboard du créateur se mettra à jour automatiquement après confirmation."
-            : "Le soutien restera en attente tant que la confirmation MaishaPay n’est pas reçue.",
+            : "Le soutien restera en attente tant que la confirmation KPay n’est pas reçue.",
         "Le créateur pourra ensuite demander son retrait Mobile Money depuis son dashboard.",
     ]);
 }
@@ -442,7 +442,7 @@ function renderSummaryFeatures(features) {
 }
 
 function setupPaymentForm(user, paymentContext, accessToken = "") {
-    const form = document.getElementById("maishapay-form");
+    const form = document.getElementById("kpay-form");
     if (!form) return;
 
     const inputKind = document.getElementById("inputKind");
@@ -575,47 +575,51 @@ function setupPaymentForm(user, paymentContext, accessToken = "") {
             clearPaymentError();
             if (payButton) {
                 payButton.disabled = true;
-                payButton.textContent = "Connexion a MaishaPay...";
+                payButton.textContent = "Connexion a KPay...";
             }
 
             const submitMethod = String(
                 form.getAttribute("method") || "POST",
             ).toUpperCase();
+
+            // Dans le nouveau flux KPay, on s'attend à une redirection 302
+            // au lieu de recevoir du HTML à afficher directement.
             const response = await fetch(form.action, {
                 method: submitMethod,
                 headers: {
-                    Accept: "text/html",
+                    Accept: "application/json", // On attend l'URL de redirection
                     "Content-Type":
                         "application/x-www-form-urlencoded;charset=UTF-8",
                 },
                 body: new URLSearchParams(new FormData(form)).toString(),
                 credentials: "same-origin",
             });
+
+            if (response.status === 302 || response.redirected) {
+                window.location.href = response.url;
+                return;
+            }
+
             const responseText = await response.text();
 
             if (!response.ok) {
-                const errorCode =
-                    response.headers.get("X-Xera-Error-Code") || "UNKNOWN";
-                const errorCategory =
-                    response.headers.get("X-Xera-Error-Category") || "unknown";
-                console.error("Erreur checkout MaishaPay:", {
+                console.error("Erreur checkout KPay:", {
                     status: response.status,
-                    errorCode,
-                    errorCategory,
                     responseText,
                 });
                 showPaymentError(
                     extractPaymentResponseMessage(responseText) ||
-                        "Erreur MaishaPay.",
+                        "Erreur KPay.",
                 );
                 return;
             }
 
+            // Fallback si pas de redirection (pour compatibilité)
             document.open();
             document.write(responseText);
             document.close();
         } catch (error) {
-            console.error("Erreur checkout MaishaPay:", error);
+            console.error("Erreur checkout KPay:", error);
             showPaymentError("Impossible de contacter le serveur de paiement.");
         } finally {
             if (payButton?.isConnected) {
@@ -640,23 +644,23 @@ function setupPaymentHint(paymentContext) {
     const hint = document.querySelector(".payment-hint");
     if (!hint) return;
 
-    if (maishaPayConfig.callbackEnabled === false) {
+    if (kPayConfig.callbackEnabled === false) {
         hint.innerHTML =
             paymentContext.kind === PAYMENT_KIND_SUPPORT
                 ? `
                     <i class="fas fa-circle-info"></i>
-                    Soutien MaishaPay en direct. Sans callback public actif, la confirmation automatique restera en attente.
+                    Soutien KPay en direct. Sans callback public actif, la confirmation automatique restera en attente.
                 `
                 : `
                     <i class="fas fa-circle-info"></i>
-                    Paiement MaishaPay en direct. La validation automatique de l'abonnement est desactivee temporairement.
+                    Paiement KPay en direct. La validation automatique de l'abonnement est desactivee temporairement.
                 `;
         return;
     }
 
     hint.innerHTML = `
         <i class="fas fa-lock"></i>
-        Paiement securise via MaishaPay
+        Paiement securise via KPay
     `;
 }
 
@@ -698,9 +702,16 @@ function resolveApiBase() {
     if (bodyBase) return bodyBase;
 
     const { protocol, hostname } = window.location;
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-        return `${protocol}//${hostname}:5050`;
+    const localHosts = new Set(["localhost", "127.0.0.1", "0.0.0.0", "0"]);
+
+    if (localHosts.has(hostname)) {
+        return `${protocol}//127.0.0.1:5050`;
     }
+
+    if (hostname.endsWith(".local")) {
+        return `${protocol}//127.0.0.1:5050`;
+    }
+
     return window.location.origin;
 }
 
@@ -714,10 +725,10 @@ async function loadExchangeRate() {
         if (Number.isFinite(rate) && rate > 0) {
             usdToCdfRate = rate;
         }
-        if (data?.maishaPay && typeof data.maishaPay === "object") {
-            maishaPayConfig = {
-                ...maishaPayConfig,
-                ...data.maishaPay,
+        if (data?.kPay && typeof data.kPay === "object") {
+            kPayConfig = {
+                ...kPayConfig,
+                ...data.kPay,
             };
         }
     } catch (error) {

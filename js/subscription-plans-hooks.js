@@ -173,7 +173,7 @@
             );
             return;
         }
-        const url = new URL("subscription-payment.html", window.location.href);
+        const url = new URL("/api/kpay/checkout", window.location.origin);
         url.searchParams.set("plan", normalizedPlanId);
         url.searchParams.set("billing", normalizedBillingCycle);
         window.location.href = url.toString();

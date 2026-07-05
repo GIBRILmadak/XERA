@@ -34,7 +34,7 @@
                 padding: 40px;
                 display: flex;
                 flex-direction: column;
-                box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
                 position: relative;
                 transition: transform 0.3s;
             }
@@ -96,17 +96,47 @@
                 </a>
                 <div class="nav-links">
                     <a href="index.html"><i class="fas fa-home"></i> Accueil</a>
-                    <a href="#" onclick="history.back()"><i class="fas fa-arrow-left"></i> Retour</a>
+                    <a href="#" onclick="history.back()"
+                        ><i class="fas fa-arrow-left"></i> Retour</a
+                    >
                 </div>
             </nav>
 
             <section class="premium-hero">
-                <div style="max-width: 800px; margin: 0 auto;">
-                    <span class="hero-eyebrow" style="background: rgba(99, 102, 241, 0.2); color: #818cf8; padding: 6px 16px; border-radius: 99px; font-weight: 600; font-size: 0.9rem;">
+                <div style="max-width: 800px; margin: 0 auto">
+                    <span
+                        class="hero-eyebrow"
+                        style="
+                            background: rgba(99, 102, 241, 0.2);
+                            color: #818cf8;
+                            padding: 6px 16px;
+                            border-radius: 99px;
+                            font-weight: 600;
+                            font-size: 0.9rem;
+                        "
+                    >
                         <i class="fas fa-crown"></i> XERA ELITE ACCESS
                     </span>
-                    <h1 style="font-size: 3.5rem; margin: 20px 0; line-height: 1.1;">Recrutez les meilleurs talents du monde.</h1>
-                    <p style="font-size: 1.25rem; opacity: 0.8; line-height: 1.6;">Débloquez l'accès illimité à la base de données certifiée XERA et au moteur de recherche de talents Elite.</p>
+                    <h1
+                        style="
+                            font-size: 3.5rem;
+                            margin: 20px 0;
+                            line-height: 1.1;
+                        "
+                    >
+                        Recrutez les meilleurs talents du monde.
+                    </h1>
+                    <p
+                        style="
+                            font-size: 1.25rem;
+                            opacity: 0.8;
+                            line-height: 1.6;
+                        "
+                    >
+                        Débloquez l'accès illimité à la base de données
+                        certifiée XERA et au moteur de recherche de talents
+                        Elite.
+                    </p>
                 </div>
             </section>
 
@@ -117,13 +147,40 @@
                     <div class="price">40 USD <span>/ mois</span></div>
                     <p>Accès complet sans engagement à long terme.</p>
                     <ul class="premium-features">
-                        <li><i class="fas fa-check"></i> Recherche illimitée par domaine</li>
-                        <li><i class="fas fa-check"></i> Profils certifiés uniquement</li>
-                        <li><i class="fas fa-check"></i> Contact direct illimité</li>
-                        <li><i class="fas fa-check"></i> Filtres avancés du Momentum Engine</li>
-                        <li><i class="fas fa-check"></i> Support prioritaire 24/7</li>
+                        <li>
+                            <i class="fas fa-check"></i> Recherche illimitée par
+                            domaine
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i> Profils certifiés
+                            uniquement
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i> Contact direct illimité
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i> Filtres avancés du
+                            Momentum Engine
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i> Support prioritaire
+                            24/7
+                        </li>
                     </ul>
-                    <button class="btn btn-primary" style="width: 100%; justify-content: center; height: 55px;" onclick="subscribeElite('monthly')">CHOISIR LE MENSUEL</button>
+                    <a
+                        class="btn btn-primary"
+                        style="
+                            width: 100%;
+                            justify-content: center;
+                            height: 55px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                        "
+                        href="/api/kpay/checkout?plan=elite&billing=monthly"
+                        onclick="subscribeElite('monthly')"
+                        >CHOISIR LE MENSUEL</a
+                    >
                 </div>
 
                 <!-- Annuel -->
@@ -133,26 +190,77 @@
                     <div class="price">384 USD <span>/ an</span></div>
                     <p>La puissance maximale pour les recruteurs sérieux.</p>
                     <ul class="premium-features">
-                        <li><i class="fas fa-check"></i> Tout ce qui est dans le Mensuel</li>
-                        <li><i class="fas fa-check"></i> Économisez 96 USD par an</li>
-                        <li><i class="fas fa-check"></i> Badge Recruteur Gold</li>
-                        <li><i class="fas fa-check"></i> Rapports de tendances trimestriels</li>
-                        <li><i class="fas fa-check"></i> Accès anticipé aux nouveaux talents</li>
+                        <li>
+                            <i class="fas fa-check"></i> Tout ce qui est dans le
+                            Mensuel
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i> Économisez 96 USD par
+                            an
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i> Badge Recruteur Gold
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i> Rapports de tendances
+                            trimestriels
+                        </li>
+                        <li>
+                            <i class="fas fa-check"></i> Accès anticipé aux
+                            nouveaux talents
+                        </li>
                     </ul>
-                    <button class="btn btn-primary" style="width: 100%; justify-content: center; height: 55px;" onclick="subscribeElite('annual')">CHOISIR L'ANNUEL (ÉLITE)</button>
+                    <a
+                        class="btn btn-primary"
+                        style="
+                            width: 100%;
+                            justify-content: center;
+                            height: 55px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                        "
+                        href="/api/kpay/checkout?plan=elite&billing=annual"
+                        onclick="subscribeElite('annual')"
+                        >CHOISIR L'ANNUEL (ÉLITE)</a
+                    >
                 </div>
             </div>
 
-            <section style="text-align: center; padding: 50px 20px;">
-                <h2 style="margin-bottom: 40px;">Foire aux questions</h2>
-                <div style="max-width: 700px; margin: 0 auto; text-align: left;">
-                    <div style="margin-bottom: 25px;">
-                        <h4 style="margin-bottom: 10px; color: var(--text-primary);">Comment fonctionne l'abonnement ?</h4>
-                        <p style="color: var(--text-secondary);">Une fois votre paiement validé via MaishaPay, l'onglet "Explorer" de votre Page Pro se déverrouillera instantanément pour toute la durée de votre abonnement.</p>
+            <section style="text-align: center; padding: 50px 20px">
+                <h2 style="margin-bottom: 40px">Foire aux questions</h2>
+                <div style="max-width: 700px; margin: 0 auto; text-align: left">
+                    <div style="margin-bottom: 25px">
+                        <h4
+                            style="
+                                margin-bottom: 10px;
+                                color: var(--text-primary);
+                            "
+                        >
+                            Comment fonctionne l'abonnement ?
+                        </h4>
+                        <p style="color: var(--text-secondary)">
+                            Une fois votre paiement validé via KPay, l'onglet
+                            "Explorer" de votre Page Pro se déverrouillera
+                            instantanément pour toute la durée de votre
+                            abonnement.
+                        </p>
                     </div>
-                    <div style="margin-bottom: 25px;">
-                        <h4 style="margin-bottom: 10px; color: var(--text-primary);">Puis-je annuler à tout moment ?</h4>
-                        <p style="color: var(--text-secondary);">Oui, pour le plan mensuel, vous pouvez arrêter quand vous voulez depuis vos paramètres. Pour l'annuel, vous restez Elite jusqu'à la fin de la période payée.</p>
+                    <div style="margin-bottom: 25px">
+                        <h4
+                            style="
+                                margin-bottom: 10px;
+                                color: var(--text-primary);
+                            "
+                        >
+                            Puis-je annuler à tout moment ?
+                        </h4>
+                        <p style="color: var(--text-secondary)">
+                            Oui, pour le plan mensuel, vous pouvez arrêter quand
+                            vous voulez depuis vos paramètres. Pour l'annuel,
+                            vous restez Elite jusqu'à la fin de la période
+                            payée.
+                        </p>
                     </div>
                 </div>
             </section>
@@ -162,36 +270,48 @@
         <script src="js/supabase-config.js"></script>
         <script>
             async function subscribeElite(cycle) {
-                const { data: { user } } = await supabase.auth.getUser();
+                const {
+                    data: { user },
+                } = await supabase.auth.getUser();
 
                 if (!user) {
-                    const redirectUrl = window.location.pathname + window.location.search;
+                    const redirectUrl =
+                        window.location.pathname + window.location.search;
                     if (window.XeraRouter?.navigate) {
-                        window.XeraRouter.navigate('login', { query: { redirect: redirectUrl } });
+                        window.XeraRouter.navigate("login", {
+                            query: { redirect: redirectUrl },
+                        });
                     } else {
-                        window.location.href = 'login.html?redirect=' + encodeURIComponent(redirectUrl);
+                        window.location.href =
+                            "login.html?redirect=" +
+                            encodeURIComponent(redirectUrl);
                     }
                     return;
                 }
 
                 // Paramètres pour la redirection vers la page de paiement
                 const query = {
-                    kind: 'subscription',
-                    plan: 'elite',
+                    kind: "subscription",
+                    plan: "elite",
                     billing: cycle,
-                    return_path: 'profile.html?status=success&plan=elite'
+                    return_path: "profile.html?status=success&plan=elite",
                 };
 
                 // Construction de l'URL de redirection
-                let destination = 'subscription-payment.html';
+                let destination = "subscription-payment.html";
                 if (window.XeraRouter?.buildHtmlUrl) {
-                    destination = window.XeraRouter.buildHtmlUrl('subscriptionPayment', { query });
+                    destination = window.XeraRouter.buildHtmlUrl(
+                        "subscriptionPayment",
+                        { query },
+                    );
                 } else {
                     const searchParams = new URLSearchParams(query);
-                    destination += '?' + searchParams.toString();
+                    destination += "?" + searchParams.toString();
                 }
 
-                console.log(`Redirection vers le paiement Elite ${cycle} : ${destination}`);
+                console.log(
+                    `Redirection vers le paiement Elite ${cycle} : ${destination}`,
+                );
                 window.location.href = destination;
             }
         </script>

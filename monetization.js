@@ -22,20 +22,11 @@ export const USD_TO_CDF_RATE_VALUE = Math.max(
     Number.parseFloat(process.env.USD_TO_CDF_RATE) || 2300,
 );
 export const CALLBACK_BASE_URL = process.env.CALLBACK_BASE_URL || "";
-export const MAISHAPAY_USE_CALLBACK = process.env.MAISHAPAY_USE_CALLBACK || "1";
-export const MAISHAPAY_PUBLIC_KEY =
-    process.env.MAISHAPAY_PUBLIC_KEY ||
-    "MP-LIVEPK-Gl4b.T27YY9$ydZA$1uQq0jVo1D8lRhPJ7Vw0Z5vssuO1NU3n$$0OPOdzPf52qU01u3s0dS9VK2FB7z8IbqkbYO1r6PZblygvafZFQFyMOG$JBDq$zTfy/3C";
-export const MAISHAPAY_SECRET_KEY =
-    process.env.MAISHAPAY_SECRET_KEY ||
-    "MP-LIVESK-4PWp0AU4S0sfMqQ$E1Qpkl1jcq$zxCD3wy7jNYbGFCodo8qyX$vk$gU$quKhJrwtMwXuq363rvWAcNfeU6Z2GYLB5lNrvR4GNo/$NB10Kt/1oMyKQAAOJ2sY";
-export const MAISHAPAY_GATEWAY_MODE = process.env.MAISHAPAY_GATEWAY_MODE || "1";
-export const MAISHAPAY_CHECKOUT_URL =
-    process.env.MAISHAPAY_CHECKOUT_URL ||
-    "https://marchand.maishapay.online/payment/vers1.0/merchant/checkout";
-export const MAISHAPAY_CALLBACK_SECRET =
-    process.env.MAISHAPAY_CALLBACK_SECRET ||
-    "31aca49d0e1d9deeb8857a01eab9c38014508ad216b587ee9662823f6cd9a633";
+export const KPAY_USE_CALLBACK = process.env.KPAY_USE_CALLBACK || "1";
+export const KPAY_PUBLIC_KEY = process.env.KPAY_PUBLIC_KEY || "kpay_test_...";
+export const KPAY_SECRET_KEY = process.env.KPAY_SECRET_KEY || "sk_test_...";
+export const KPAY_CHECKOUT_URL = process.env.KPAY_CHECKOUT_URL || "https://admin.kpay.site";
+export const KPAY_CALLBACK_SECRET = process.env.KPAY_CALLBACK_SECRET || "...";
 export const SUPER_ADMIN_ID =
     process.env.SUPER_ADMIN_ID || "b0f9f893-1706-4721-899c-d26ad79afc86";
 
@@ -87,8 +78,8 @@ export const CALLBACK_ORIGIN = resolveCallbackOrigin(
     CALLBACK_BASE_URL,
     PRIMARY_ORIGIN,
 );
-export const MAISHAPAY_CALLBACK_ENABLED =
-    parseBooleanEnv(MAISHAPAY_USE_CALLBACK, true) && Boolean(CALLBACK_ORIGIN);
+export const KPAY_CALLBACK_ENABLED =
+    parseBooleanEnv(KPAY_USE_CALLBACK, true) && Boolean(CALLBACK_ORIGIN);
 
 export function resolveCallbackOrigin(callbackBaseUrl, primaryOrigin) {
     const explicitOrigin = stripTrailingSlash(callbackBaseUrl);
@@ -219,38 +210,15 @@ export function sendCheckoutErrorResponse(res, error, fallbackMessage) {
     return res.status(500).send(fallbackMessage);
 }
 
-// --- MaishaPay Specifics ---
-export const MAISHAPAY_PLANS = {
+// --- K-PAY Specifics ---
+export const KPAY_PLANS = {
     standard: 2.99,
     medium: 7.99,
     pro: 14.99,
 };
-export const WITHDRAWAL_MIN_USD = 5;
-export const SUPPORT_MIN_USD = 1;
-export const SUPPORT_MAX_USD = 1000;
-export const SUPPORTED_MOBILE_MONEY_PROVIDERS = new Set([
-    "airtel_money",
-    "orange_money",
-    "mpesa",
-    "afrimoney",
-    "other",
-]);
-export const MOBILE_MONEY_PROVIDER_LABELS = {
-    airtel_money: "Airtel Money",
-    orange_money: "Orange Money",
-    mpesa: "M-Pesa",
-    afrimoney: "Afrimoney",
-    other: "Autre",
-};
 
-export function isValidPlanId(value) {
-    return ["standard", "medium", "pro"].includes(
-        String(value || "").toLowerCase(),
-    );
-}
-
-export function computeMaishaPayAmount(plan, billingCycle, currency) {
-    const monthlyUsd = MAISHAPAY_PLANS[plan];
+export function computeKPayAmount(plan, billingCycle, currency) {
+    const monthlyUsd = KPAY_PLANS[plan];
     if (!monthlyUsd) return null;
     const amountUsd =
         billingCycle === "annual" ? monthlyUsd * 12 * 0.8 : monthlyUsd;
@@ -280,10 +248,10 @@ export function computeSupportCheckoutAmount(amountUsd, currency) {
     return Math.ceil(normalizedAmount);
 }
 
-export function inferMaishaPayKeyMode(value) {
+export function inferKPayKeyMode(value) {
     const key = String(value || "").toUpperCase();
-    if (key.startsWith("MP-LIVE")) return "live";
-    if (key.startsWith("MP-SB")) return "sandbox";
+    if (key.startsWith("KPAY_LIVE")) return "live";
+    if (key.startsWith("KPAY_TEST")) return "sandbox";
     return "unknown";
 }
 
@@ -295,21 +263,21 @@ export function maskKey(value, visible = 10) {
 }
 
 export function createSignedState(payload) {
-    if (!MAISHAPAY_CALLBACK_SECRET) return null;
+    if (!process.env.KPAY_CALLBACK_SECRET) return null;
     const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
     const signature = crypto
-        .createHmac("sha256", MAISHAPAY_CALLBACK_SECRET)
+        .createHmac("sha256", process.env.KPAY_CALLBACK_SECRET)
         .update(data)
         .digest("hex");
     return `${data}.${signature}`;
 }
 
 export function verifySignedState(state) {
-    if (!state || !MAISHAPAY_CALLBACK_SECRET) return null;
+    if (!state || !process.env.KPAY_CALLBACK_SECRET) return null;
     const [data, signature] = String(state).split(".");
     if (!data || !signature) return null;
     const expected = crypto
-        .createHmac("sha256", MAISHAPAY_CALLBACK_SECRET)
+        .createHmac("sha256", process.env.KPAY_CALLBACK_SECRET)
         .update(data)
         .digest("hex");
     const valid = crypto.timingSafeEqual(
@@ -328,9 +296,6 @@ export function verifySignedState(state) {
     }
 }
 
-export function renderMaishaPayCheckoutPage({ amount, currency, callbackUrl }) {
-    const callbackInput = callbackUrl
-        ? `\n          <input type="hidden" name="callbackUrl" value="${escapeHtmlAttr(callbackUrl)}">`
         : "";
 
     return `
@@ -338,14 +303,10 @@ export function renderMaishaPayCheckoutPage({ amount, currency, callbackUrl }) {
       <html lang="fr">
       <head>
         <meta charset="UTF-8">
-        <title>Redirection MaishaPay</title>
+        <title>Redirection KPay</title>
       </head>
       <body>
-        <p>Redirection vers MaishaPay...</p>
-        <form id="mpForm" action="${MAISHAPAY_CHECKOUT_URL}" method="POST">
-          <input type="hidden" name="gatewayMode" value="${escapeHtmlAttr(MAISHAPAY_GATEWAY_MODE)}">
-          <input type="hidden" name="publicApiKey" value="${escapeHtmlAttr(MAISHAPAY_PUBLIC_KEY)}">
-          <input type="hidden" name="secretApiKey" value="${escapeHtmlAttr(MAISHAPAY_SECRET_KEY)}">
+        <p>Redirection vers KPay...</p>
           <input type="hidden" name="montant" value="${escapeHtmlAttr(amount)}">
           <input type="hidden" name="devise" value="${escapeHtmlAttr(currency)}">${callbackInput}
         </form>
@@ -451,15 +412,15 @@ export async function createPendingSubscriptionPayment({
     const checkoutRefId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
     const metadata = {
-        payment_provider: "maishapay",
+        payment_provider: "kpay",
         checkout_ref_id: checkoutRefId,
         plan: String(plan || "").toLowerCase(),
         billing_cycle: String(billingCycle || "monthly").toLowerCase(),
         method: String(method || "card").toLowerCase(),
         provider: provider || null,
         wallet_id: walletId || null,
-        callback_enabled: MAISHAPAY_CALLBACK_ENABLED,
-        callback_origin: MAISHAPAY_CALLBACK_ENABLED ? CALLBACK_ORIGIN : null,
+        callback_enabled: KPAY_CALLBACK_ENABLED,
+        callback_origin: KPAY_CALLBACK_ENABLED ? CALLBACK_ORIGIN : null,
         checkout_started_at: nowIso,
     };
 
@@ -507,7 +468,7 @@ export async function createPendingSupportPayment({
     const checkoutRefId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
     const metadata = {
-        payment_provider: "maishapay",
+        payment_provider: "kpay",
         checkout_ref_id: checkoutRefId,
         support_kind: "direct",
         sender_name: senderName || "Utilisateur",
@@ -518,8 +479,8 @@ export async function createPendingSupportPayment({
         support_amount_usd: roundMoney(amountUsd),
         checkout_amount: checkoutAmount,
         checkout_currency: String(checkoutCurrency || "USD").toUpperCase(),
-        callback_enabled: MAISHAPAY_CALLBACK_ENABLED,
-        callback_origin: MAISHAPAY_CALLBACK_ENABLED ? CALLBACK_ORIGIN : null,
+        callback_enabled: KPAY_CALLBACK_ENABLED,
+        callback_origin: KPAY_CALLBACK_ENABLED ? CALLBACK_ORIGIN : null,
         checkout_started_at: nowIso,
     };
 
@@ -584,11 +545,11 @@ export async function activateSubscription({
     provider,
     walletId,
     pendingTransactionId,
-    confirmationSource = "maishapay_callback",
+    confirmationSource = "kpay_callback",
     confirmedBy,
     note,
 }) {
-    const paymentId = transactionRefId ? `maishapay_${transactionRefId}` : null;
+    const paymentId = transactionRefId ? `kpay_${transactionRefId}` : null;
     const normalizedPlan = String(plan || "").toLowerCase();
     const badgeForPlan =
         normalizedPlan === "pro" ? "verified_gold" : "verified";
@@ -731,7 +692,7 @@ export async function activateSubscription({
         typeof pendingPayment.metadata === "object"
             ? pendingPayment.metadata
             : {}),
-        payment_provider: "maishapay",
+        payment_provider: "kpay",
         payment_ref: paymentId,
         transaction_ref_id: transactionRefId || null,
         method,
@@ -803,7 +764,7 @@ export async function failPendingTransaction({
     transactionRefId,
     operatorRefId,
     reason,
-    confirmationSource = "maishapay_callback",
+    confirmationSource = "kpay_callback",
 }) {
     if (!pendingTransactionId) return null;
 
@@ -862,9 +823,9 @@ export async function confirmSupportPayment({
     pendingTransactionId,
     transactionRefId,
     operatorRefId,
-    confirmationSource = "maishapay_callback",
+    confirmationSource = "kpay_callback",
 }) {
-    const paymentId = transactionRefId ? `maishapay_${transactionRefId}` : null;
+    const paymentId = transactionRefId ? `kpay_${transactionRefId}` : null;
 
     let pendingPayment = null;
     if (pendingTransactionId) {
@@ -939,7 +900,7 @@ export async function confirmSupportPayment({
         typeof pendingPayment.metadata === "object"
             ? pendingPayment.metadata
             : {}),
-        payment_provider: "maishapay",
+        payment_provider: "kpay",
         payment_ref: paymentId,
         transaction_ref_id: transactionRefId || null,
         operator_ref_id: operatorRefId || null,

@@ -110,7 +110,7 @@ const PLANS = {
     },
 };
 
-// Règles de paiement (MaishaPay uniquement)
+// Règles de paiement (KPay uniquement)
 const PAYMENT_RULES = {
     commissionRate: 0.2,
     minTipAmount: 1.0,
@@ -1101,7 +1101,7 @@ async function getCreatorVideoPayouts(creatorId, options = {}) {
 }
 
 /* ========================================
-   PAIEMENTS (MAISHAPAY UNIQUEMENT)
+   PAIEMENTS (KPay UNIQUEMENT)
    ======================================== */
 
 function resolveMonetizationApiBase() {

@@ -30,7 +30,7 @@ const {
     RETURN_REMINDER_HOURS = "10,18",
     RETURN_REMINDER_WINDOW_MINUTES = "15",
     RETURN_REMINDER_SWEEP_MS = "600000",
-    RETURN_REMINDER_EMAIL_ENABLED = "1",
+    RETURN_REMINDER_EMAIL_ENABLED = "0",
     RETURN_REMINDER_EMAIL_PROVIDER = "none",
     RETURN_REMINDER_EMAIL_FROM = "XERA <hello@xera1.xyz>",
     RETURN_REMINDER_EMAIL_REPLY_TO = "hello@xera1.xyz",
@@ -39,17 +39,30 @@ const {
     RETURN_REMINDER_EMAIL_WEBHOOK_TOKEN = "",
     USD_TO_CDF_RATE = "2300",
     CALLBACK_BASE_URL = "",
-    MAISHAPAY_USE_CALLBACK = "1",
+    KPAY_USE_CALLBACK = "1",
 
-    MAISHAPAY_PUBLIC_KEY = "MP-LIVEPK-Gl4b.T27YY9$ydZA$1uQq0jVo1D8lRhPJ7Vw0Z5vssuO1NU3n$$0OPOdzPf52qU01u3s0dS9VK2FB7z8IbqkbYO1r6PZblygvafZFQFyMOG$JBDq$zTfy/3C",
+    KPAY_PUBLIC_KEY = process.env.KPAY_PUBLIC_KEY || "",
+    KPAY_SECRET_KEY = process.env.KPAY_SECRET_KEY || "",
 
-    MAISHAPAY_SECRET_KEY = "MP-LIVESK-4PWp0AU4S0sfMqQ$E1Qpkl1jcq$zxCD3wy7jNYbGFCodo8qyX$vk$gU$quKhJrwtMwXuq363rvWAcNfeU6Z2GYLB5lNrvR4GNo/$NB10Kt/1oMyKQAAOJ2sY",
-
-    MAISHAPAY_GATEWAY_MODE = "1",
-    MAISHAPAY_CHECKOUT_URL = "https://marchand.maishapay.online/payment/vers1.0/merchant/checkout",
-    MAISHAPAY_CALLBACK_SECRET = "31aca49d0e1d9deeb8857a01eab9c38014508ad216b587ee9662823f6cd9a633",
-    SUPER_ADMIN_ID = "b0f9f893-1706-4721-899c-d26ad79afc86",
+    KPAY_GATEWAY_MODE = process.env.KPAY_GATEWAY_MODE || "1",
+    KPAY_CHECKOUT_URL = process.env.KPAY_CHECKOUT_URL || "https://admin.kpay.site",
+    KPAY_CALLBACK_SECRET = process.env.KPAY_CALLBACK_SECRET || "",
+    SUPER_ADMIN_ID = process.env.SUPER_ADMIN_ID || "b0f9f893-1706-4721-899c-d26ad79afc86",
 } = process.env;
+
+// Validate configuration for production
+const isProduction = String(process.env.NODE_ENV || "").toLowerCase() === "production";
+if (isProduction) {
+    if (!KPAY_PUBLIC_KEY || KPAY_PUBLIC_KEY.includes("kpay_test")) {
+        console.error("CRITICAL: Missing or invalid KPAY_PUBLIC_KEY for production.");
+    }
+    if (!KPAY_SECRET_KEY || KPAY_SECRET_KEY.includes("sk_test")) {
+        console.error("CRITICAL: Missing or invalid KPAY_SECRET_KEY for production.");
+    }
+    if (!KPAY_CALLBACK_SECRET || KPAY_CALLBACK_SECRET === "...") {
+        console.error("CRITICAL: Missing or invalid KPAY_CALLBACK_SECRET for production.");
+    }
+}
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
@@ -125,7 +138,7 @@ function isLoopbackOrigin(origin) {
         const url = new URL(String(origin || "").trim());
         return (
             url.protocol === "http:" &&
-            (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+            ["localhost", "127.0.0.1", "0.0.0.0"].includes(url.hostname)
         );
     } catch (error) {
         return false;
@@ -175,8 +188,14 @@ function hasPublicCallbackBaseUrl(value) {
     try {
         const url = new URL(raw);
         const hostname = String(url.hostname || "").toLowerCase();
+        
+        // Autoriser localhost pour les tests en dehors de la production
+        const isProduction = String(process.env.NODE_ENV || "").toLowerCase() === "production";
+        if (hostname === "localhost" || hostname === "127.0.0.1") {
+            return !isProduction;
+        }
+
         if (url.protocol !== "https:") return false;
-        if (hostname === "localhost" || hostname === "127.0.0.1") return false;
         return true;
     } catch (error) {
         return false;
@@ -273,12 +292,8 @@ const CALLBACK_ORIGIN = resolveCallbackOrigin(
     CALLBACK_BASE_URL,
     PRIMARY_ORIGIN,
 );
-const MAISHAPAY_CALLBACK_ALLOWED = parseBooleanEnv(
-    MAISHAPAY_USE_CALLBACK,
-    true,
-);
-const MAISHAPAY_CALLBACK_ENABLED =
-    MAISHAPAY_CALLBACK_ALLOWED && Boolean(CALLBACK_ORIGIN);
+const KPAY_CALLBACK_ALLOWED = parseBooleanEnv(KPAY_USE_CALLBACK, true);
+const KPAY_CALLBACK_ENABLED = KPAY_CALLBACK_ALLOWED && Boolean(CALLBACK_ORIGIN);
 const DEFAULT_SHARE_IMAGE_URL = `${PRIMARY_ORIGIN}/icons/logo-512x512.png`;
 
 function escapeHtmlText(value) {
@@ -475,8 +490,8 @@ async function handleProfileSharePage(req, res) {
     }
 }
 
-function getMaishaPayCallbackConfig(req) {
-    if (!MAISHAPAY_CALLBACK_ALLOWED) {
+function getKPayCallbackConfig(req) {
+    if (!KPAY_CALLBACK_ALLOWED) {
         return {
             callbackEnabled: false,
             callbackOrigin: "",
@@ -533,7 +548,7 @@ const REMINDER_SWEEP_MS = Math.max(
 );
 const REMINDER_EMAIL_ENABLED = parseBooleanEnv(
     RETURN_REMINDER_EMAIL_ENABLED,
-    true,
+    false, // Default to false in local development to avoid noise
 );
 const REMINDER_EMAIL_PROVIDER = String(RETURN_REMINDER_EMAIL_PROVIDER || "none")
     .trim()
@@ -607,7 +622,7 @@ function computePremiumFeatures(plan) {
     return features;
 }
 
-const MAISHAPAY_PLANS = {
+const KPAY_PLANS = {
     standard: 2.99,
     medium: 7.99,
     pro: 14.99,
@@ -643,15 +658,15 @@ function isValidPlanId(value) {
     );
 }
 
-function computeMaishaPayAmount(plan, billingCycle, currency) {
-    const monthlyUsd = MAISHAPAY_PLANS[plan];
+function computeKPayAmount(plan, billingCycle, currency) {
+    const monthlyUsd = KPAY_PLANS[plan];
     if (!monthlyUsd) return null;
     const amountUsd =
         billingCycle === "annual" ? monthlyUsd * 12 * 0.8 : monthlyUsd;
     if (String(currency).toUpperCase() === "CDF") {
         return Math.round(amountUsd * USD_TO_CDF_RATE_VALUE);
     }
-    // MaishaPay: on affiche les prix décimaux côté UI, mais on facture un entier.
+    // KPay: on affiche les prix décimaux côté UI, mais on facture un entier.
     return Math.ceil(amountUsd);
 }
 
@@ -675,7 +690,7 @@ function computeSupportCheckoutAmount(amountUsd, currency) {
     return Math.ceil(normalizedAmount);
 }
 
-function inferMaishaPayKeyMode(value) {
+function inferKPayKeyMode(value) {
     const key = String(value || "").toUpperCase();
     if (key.startsWith("MP-LIVE")) return "live";
     if (key.startsWith("MP-SB")) return "sandbox";
@@ -697,25 +712,25 @@ function addMonths(date, months) {
 }
 
 function createSignedState(payload) {
-    if (!MAISHAPAY_CALLBACK_SECRET) return null;
+    if (!KPAY_CALLBACK_SECRET) return null;
     const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
     const signature = crypto
-        .createHmac("sha256", MAISHAPAY_CALLBACK_SECRET)
+        .createHmac("sha256", KPAY_CALLBACK_SECRET)
         .update(data)
         .digest("base64url");
     return `${data}.${signature}`;
 }
 
 function verifySignedState(state) {
-    if (!state || !MAISHAPAY_CALLBACK_SECRET) return null;
+    if (!state || !KPAY_CALLBACK_SECRET) return null;
     const [data, signature] = String(state).split(".");
     if (!data || !signature) return null;
     const expected = crypto
-        .createHmac("sha256", MAISHAPAY_CALLBACK_SECRET)
+        .createHmac("sha256", KPAY_CALLBACK_SECRET)
         .update(data)
         .digest("base64url");
     const expectedHex = crypto
-        .createHmac("sha256", MAISHAPAY_CALLBACK_SECRET)
+        .createHmac("sha256", KPAY_CALLBACK_SECRET)
         .update(data)
         .digest("hex");
     const validBase64Url =
@@ -889,13 +904,13 @@ async function createPendingSubscriptionPayment({
     provider,
     walletId,
     returnPath,
-    callbackEnabled = MAISHAPAY_CALLBACK_ENABLED,
+    callbackEnabled = KPAY_CALLBACK_ENABLED,
     callbackOrigin = CALLBACK_ORIGIN,
 }) {
     const checkoutRefId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
     const metadata = {
-        payment_provider: "maishapay",
+        payment_provider: "kpay",
         checkout_ref_id: checkoutRefId,
         plan: String(plan || "").toLowerCase(),
         billing_cycle: String(billingCycle || "monthly").toLowerCase(),
@@ -949,14 +964,14 @@ async function createPendingSupportPayment({
     senderName,
     recipientName,
     returnPath,
-    callbackEnabled = MAISHAPAY_CALLBACK_ENABLED,
+    callbackEnabled = KPAY_CALLBACK_ENABLED,
     callbackOrigin = CALLBACK_ORIGIN,
 }) {
     const checkoutRefId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
     const breakdown = computeSupportRevenueBreakdown(amountUsd);
     const metadata = {
-        payment_provider: "maishapay",
+        payment_provider: "kpay",
         checkout_ref_id: checkoutRefId,
         support_kind: "direct",
         sender_name: senderName || "Utilisateur",
@@ -1006,33 +1021,31 @@ async function createPendingSupportPayment({
     };
 }
 
-function renderMaishaPayCheckoutPage({ amount, currency, callbackUrl }) {
-    const callbackInput = callbackUrl
-        ? `\n          <input type="hidden" name="callbackUrl" value="${escapeHtmlAttr(callbackUrl)}">`
-        : "";
+async function initiateKPayPayment(amount, externalId, description, returnUrl) {
+    const response = await fetch(
+        "https://admin.kpay.site/api/v1/payments/init",
+        {
+            method: "POST",
+            headers: {
+                "X-API-Key": KPAY_PUBLIC_KEY,
+                "X-Secret-Key": KPAY_SECRET_KEY,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                amount,
+                externalId,
+                description,
+                returnUrl,
+                // Mode GATEWAY pour la redirection
+            }),
+        },
+    );
 
-    return `
-      <!doctype html>
-      <html lang="fr">
-      <head>
-        <meta charset="UTF-8">
-        <title>Redirection MaishaPay</title>
-      </head>
-      <body>
-        <p>Redirection vers MaishaPay...</p>
-        <form id="mpForm" action="${MAISHAPAY_CHECKOUT_URL}" method="POST">
-          <input type="hidden" name="gatewayMode" value="${escapeHtmlAttr(MAISHAPAY_GATEWAY_MODE)}">
-          <input type="hidden" name="publicApiKey" value="${escapeHtmlAttr(MAISHAPAY_PUBLIC_KEY)}">
-          <input type="hidden" name="secretApiKey" value="${escapeHtmlAttr(MAISHAPAY_SECRET_KEY)}">
-          <input type="hidden" name="montant" value="${escapeHtmlAttr(amount)}">
-          <input type="hidden" name="devise" value="${escapeHtmlAttr(currency)}">${callbackInput}
-        </form>
-        <script>
-          document.getElementById('mpForm').submit();
-        </script>
-      </body>
-      </html>
-    `;
+    if (!response.ok) {
+        throw new Error(`KPay API error: ${response.statusText}`);
+    }
+
+    return await response.json();
 }
 
 async function authenticateRequest(req) {
@@ -2074,11 +2087,11 @@ async function activateSubscription({
     provider,
     walletId,
     pendingTransactionId,
-    confirmationSource = "maishapay_callback",
+    confirmationSource = "kpay_callback",
     confirmedBy,
     note,
 }) {
-    const paymentId = transactionRefId ? `maishapay_${transactionRefId}` : null;
+    const paymentId = transactionRefId ? `kpay_${transactionRefId}` : null;
     const normalizedPlan = String(plan || "").toLowerCase();
     const badgeForPlan =
         normalizedPlan === "elite"
@@ -2220,7 +2233,7 @@ async function activateSubscription({
         typeof pendingPayment.metadata === "object"
             ? pendingPayment.metadata
             : {}),
-        payment_provider: "maishapay",
+        payment_provider: "kpay",
         payment_ref: paymentId,
         transaction_ref_id: transactionRefId || null,
         method,
@@ -2557,7 +2570,7 @@ async function failPendingTransaction({
     transactionRefId,
     operatorRefId,
     reason,
-    confirmationSource = "maishapay_callback",
+    confirmationSource = "kpay_callback",
 }) {
     if (!pendingTransactionId) return null;
 
@@ -2616,9 +2629,9 @@ async function confirmSupportPayment({
     pendingTransactionId,
     transactionRefId,
     operatorRefId,
-    confirmationSource = "maishapay_callback",
+    confirmationSource = "kpay_callback",
 }) {
-    const paymentId = transactionRefId ? `maishapay_${transactionRefId}` : null;
+    const paymentId = transactionRefId ? `kpay_${transactionRefId}` : null;
     const breakdown = computeSupportRevenueBreakdown(amountUsd);
 
     let pendingPayment = null;
@@ -2693,7 +2706,7 @@ async function confirmSupportPayment({
         typeof pendingPayment.metadata === "object"
             ? pendingPayment.metadata
             : {}),
-        payment_provider: "maishapay",
+        payment_provider: "kpay",
         payment_ref: paymentId,
         transaction_ref_id: transactionRefId || null,
         operator_ref_id: operatorRefId || null,
@@ -3717,15 +3730,15 @@ function startReminderScheduler() {
     });
 }
 
-// ==================== MAISHAPAY CHECKOUT ====================
+// ==================== KPAY CHECKOUT ====================
 
-async function handleMaishaPaySubscriptionCheckout(req, res) {
+async function handleKPaySubscriptionCheckout(req, res) {
     try {
-        if (!MAISHAPAY_PUBLIC_KEY || !MAISHAPAY_SECRET_KEY) {
-            return res.status(500).send("MaishaPay keys not configured");
+        if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
+            return res.status(500).send("KPay keys not configured");
         }
 
-        const callbackConfig = getMaishaPayCallbackConfig(req);
+        const callbackConfig = getKPayCallbackConfig(req);
 
         const {
             plan,
@@ -3747,7 +3760,7 @@ async function handleMaishaPaySubscriptionCheckout(req, res) {
         const currency = String(currencyRaw || "USD").toUpperCase();
         const allowedCurrencies = new Set(["USD", "CDF"]);
 
-        if (!MAISHAPAY_PLANS[planId]) {
+        if (!KPAY_PLANS[planId]) {
             return res.status(400).send("Plan invalide");
         }
         if (!allowedCurrencies.has(currency)) {
@@ -3777,7 +3790,7 @@ async function handleMaishaPaySubscriptionCheckout(req, res) {
             buildProfileReturnPath(userId),
         );
 
-        const amount = computeMaishaPayAmount(planId, billingCycle, currency);
+        const amount = computeKPayAmount(planId, billingCycle, currency);
         if (!amount) {
             return res.status(400).send("Montant invalide");
         }
@@ -3806,15 +3819,15 @@ async function handleMaishaPaySubscriptionCheckout(req, res) {
             if (!state) {
                 return res.status(500).send("Callback secret manquant");
             }
-            callbackUrl = `${callbackConfig.callbackOrigin}/api/maishapay/callback/${encodeURIComponent(state)}`;
+            callbackUrl = `${callbackConfig.callbackOrigin}/api/kpay/callback/${encodeURIComponent(state)}`;
         }
 
-        console.info("[MaishaPay checkout]", {
-            gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
-            publicKey: maskKey(MAISHAPAY_PUBLIC_KEY),
-            secretKey: maskKey(MAISHAPAY_SECRET_KEY),
-            publicKeyMode: inferMaishaPayKeyMode(MAISHAPAY_PUBLIC_KEY),
-            secretKeyMode: inferMaishaPayKeyMode(MAISHAPAY_SECRET_KEY),
+        console.info("[KPay checkout]", {
+            gatewayMode: String(KPAY_GATEWAY_MODE),
+            publicKey: maskKey(KPAY_PUBLIC_KEY),
+            secretKey: maskKey(KPAY_SECRET_KEY),
+            publicKeyMode: inferKPayKeyMode(KPAY_PUBLIC_KEY),
+            secretKeyMode: inferKPayKeyMode(KPAY_SECRET_KEY),
             callbackEnabled: callbackConfig.callbackEnabled,
             callbackOrigin: callbackConfig.callbackOrigin,
             pendingTransactionId: pendingPayment.id,
@@ -3825,32 +3838,39 @@ async function handleMaishaPaySubscriptionCheckout(req, res) {
             method: String(method || "card").toLowerCase(),
         });
 
-        setResponseHeader(res, "Content-Type", "text/html");
-        res.send(
-            renderMaishaPayCheckoutPage({
-                amount,
-                currency,
-                callbackUrl,
-            }),
+        // 1. Initialiser le paiement via KPay
+        const kpayRes = await initiateKPayPayment(
+            amount,
+            pendingPayment.checkoutRefId,
+            `Abonnement ${planId} (${billingCycle})`,
+            callbackUrl,
         );
+
+        if (!kpayRes.gatewayUrl) {
+            throw new Error("KPay n'a pas retourné d'URL de paiement.");
+        }
+
+        // 2. Rediriger l'utilisateur vers la gateway KPay
+        setResponseHeader(res, "Location", kpayRes.gatewayUrl);
+        res.status(302).send();
     } catch (error) {
-        console.error("MaishaPay checkout error:", error);
-        return sendCheckoutErrorResponse(res, error, "Erreur MaishaPay");
+        console.error("KPay checkout error:", error);
+        return sendCheckoutErrorResponse(res, error, "Erreur KPay");
     }
 }
 
 app.post(
-    ["/api/maishapay/checkout", "/api/checkout-subscription"],
-    handleMaishaPaySubscriptionCheckout,
+    ["/api/kpay/checkout", "/api/checkout-subscription"],
+    handleKPaySubscriptionCheckout,
 );
 
-async function handleMaishaPaySupportCheckout(req, res) {
+async function handleKPaySupportCheckout(req, res) {
     try {
-        if (!MAISHAPAY_PUBLIC_KEY || !MAISHAPAY_SECRET_KEY) {
-            return res.status(500).send("MaishaPay keys not configured");
+        if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
+            return res.status(500).send("KPay keys not configured");
         }
 
-        const callbackConfig = getMaishaPayCallbackConfig(req);
+        const callbackConfig = getKPayCallbackConfig(req);
 
         const {
             to_user_id: toUserId,
@@ -3990,13 +4010,13 @@ async function handleMaishaPaySupportCheckout(req, res) {
             if (!state) {
                 return res.status(500).send("Callback secret manquant");
             }
-            callbackUrl = `${callbackConfig.callbackOrigin}/api/maishapay/callback/${encodeURIComponent(state)}`;
+            callbackUrl = `${callbackConfig.callbackOrigin}/api/kpay/callback/${encodeURIComponent(state)}`;
         }
 
-        console.info("[MaishaPay support checkout]", {
-            gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
-            publicKey: maskKey(MAISHAPAY_PUBLIC_KEY),
-            secretKey: maskKey(MAISHAPAY_SECRET_KEY),
+        console.info("[KPay support checkout]", {
+            gatewayMode: String(KPAY_GATEWAY_MODE),
+            publicKey: maskKey(KPAY_PUBLIC_KEY),
+            secretKey: maskKey(KPAY_SECRET_KEY),
             callbackEnabled: callbackConfig.callbackEnabled,
             callbackOrigin: callbackConfig.callbackOrigin,
             pendingTransactionId: pendingPayment.id,
@@ -4009,26 +4029,34 @@ async function handleMaishaPaySupportCheckout(req, res) {
             method: String(method || "card").toLowerCase(),
         });
 
-        setResponseHeader(res, "Content-Type", "text/html");
-        res.send(
-            renderMaishaPayCheckoutPage({
-                amount: checkoutAmount,
-                currency,
-                callbackUrl,
-            }),
+        // 1. Initialiser le paiement via KPay
+        const kpayRes = await initiateKPayPayment(
+            checkoutAmount,
+            pendingPayment.checkoutRefId,
+            description ||
+                `Soutien pour ${recipientProfile.name || "un createur"}`,
+            callbackUrl,
         );
+
+        if (!kpayRes.gatewayUrl) {
+            throw new Error("KPay n'a pas retourné d'URL de paiement.");
+        }
+
+        // 2. Rediriger l'utilisateur vers la gateway KPay
+        setResponseHeader(res, "Location", kpayRes.gatewayUrl);
+        res.status(302).send();
     } catch (error) {
-        console.error("MaishaPay support checkout error:", error);
-        return sendCheckoutErrorResponse(res, error, "Erreur MaishaPay");
+        console.error("KPay support checkout error:", error);
+        return sendCheckoutErrorResponse(res, error, "Erreur KPay");
     }
 }
 
 app.post(
-    ["/api/maishapay/support-checkout", "/api/checkout-support"],
-    handleMaishaPaySupportCheckout,
+    ["/api/kpay/support-checkout", "/api/checkout-support"],
+    handleKPaySupportCheckout,
 );
 
-async function handleMaishaPayCallback(req, res) {
+async function handleKPayCallback(req, res) {
     try {
         const params = { ...req.query, ...req.body };
         const status = params.status ?? params.statusCode ?? "";
@@ -4099,7 +4127,7 @@ async function handleMaishaPayCallback(req, res) {
                     pendingTransactionId: callbackTransaction.id,
                     transactionRefId,
                     operatorRefId,
-                    confirmationSource: "maishapay_callback",
+                    confirmationSource: "kpay_callback",
                 });
             } else {
                 await activateSubscription({
@@ -4118,7 +4146,7 @@ async function handleMaishaPayCallback(req, res) {
                     provider: callbackMetadata.provider,
                     walletId: callbackMetadata.wallet_id,
                     pendingTransactionId: callbackTransaction.id,
-                    confirmationSource: "maishapay_callback",
+                    confirmationSource: "kpay_callback",
                 });
             }
         } else {
@@ -4128,7 +4156,7 @@ async function handleMaishaPayCallback(req, res) {
                 operatorRefId,
                 reason:
                     description || String(status || "Paiement non confirme"),
-                confirmationSource: "maishapay_callback",
+                confirmationSource: "kpay_callback",
             });
         }
 
@@ -4192,12 +4220,12 @@ async function handleMaishaPayCallback(req, res) {
       </html>
     `);
     } catch (error) {
-        console.error("MaishaPay callback error:", error);
+        console.error("KPay callback error:", error);
         res.status(500).send("Erreur callback");
     }
 }
 
-app.all("/api/maishapay/callback/:state?", handleMaishaPayCallback);
+app.all("/api/kpay/callback/:state?", handleKPayCallback);
 
 // ==================== ADMIN: BROADCAST EMAIL ====================
 
@@ -4464,7 +4492,7 @@ app.get("/api/admin/subscription-payments", async (req, res) => {
                 "id, from_user_id, to_user_id, amount_gross, currency, status, description, metadata, created_at, updated_at",
             )
             .eq("type", "subscription")
-            .eq("metadata->>payment_provider", "maishapay")
+            .eq("metadata->>payment_provider", "kpay")
             .order("created_at", { ascending: false })
             .limit(limit);
 
@@ -4540,7 +4568,7 @@ app.post("/api/admin/subscription-payments/confirm", async (req, res) => {
             )
             .eq("id", paymentId)
             .eq("type", "subscription")
-            .eq("metadata->>payment_provider", "maishapay")
+            .eq("metadata->>payment_provider", "kpay")
             .maybeSingle();
         if (paymentError) throw paymentError;
         if (!paymentRow) {
@@ -4628,7 +4656,7 @@ app.post("/api/admin/subscription-payments/fail", async (req, res) => {
             .select("id, status, metadata")
             .eq("id", paymentId)
             .eq("type", "subscription")
-            .eq("metadata->>payment_provider", "maishapay")
+            .eq("metadata->>payment_provider", "kpay")
             .maybeSingle();
         if (paymentError) throw paymentError;
         if (!paymentRow) {
@@ -5467,15 +5495,15 @@ app.get("/api/health", (_req, res) => {
 });
 
 function handlePublicConfig(req, res) {
-    const callbackConfig = getMaishaPayCallbackConfig(req);
+    const callbackConfig = getKPayCallbackConfig(req);
     res.json({
         usdToCdfRate: USD_TO_CDF_RATE_VALUE,
-        maishaPay: {
+        kPay: {
             callbackEnabled: callbackConfig.callbackEnabled,
             callbackOrigin: callbackConfig.callbackEnabled
                 ? callbackConfig.callbackOrigin
                 : null,
-            gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
+            gatewayMode: String(KPAY_GATEWAY_MODE),
         },
     });
 }
@@ -6981,13 +7009,13 @@ if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {
 
 // Démarrer le serveur (local/dev uniquement)
 if (isDirectRun) {
-    console.info("MaishaPay configuration summary:", {
-        gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
-        publicKey: maskKey(MAISHAPAY_PUBLIC_KEY),
-        secretKey: maskKey(MAISHAPAY_SECRET_KEY),
-        publicKeyMode: inferMaishaPayKeyMode(MAISHAPAY_PUBLIC_KEY),
-        secretKeyMode: inferMaishaPayKeyMode(MAISHAPAY_SECRET_KEY),
-        callbackEnabled: MAISHAPAY_CALLBACK_ENABLED,
+    console.info("KPay configuration summary:", {
+        gatewayMode: String(KPAY_GATEWAY_MODE),
+        publicKey: maskKey(KPAY_PUBLIC_KEY),
+        secretKey: maskKey(KPAY_SECRET_KEY),
+        publicKeyMode: inferKPayKeyMode(KPAY_PUBLIC_KEY),
+        secretKeyMode: inferKPayKeyMode(KPAY_SECRET_KEY),
+        callbackEnabled: KPAY_CALLBACK_ENABLED,
         callbackOrigin: CALLBACK_ORIGIN,
     });
 
@@ -7008,9 +7036,8 @@ module.exports = app;
 module.exports.sweepExpiredSubscriptions = sweepExpiredSubscriptions;
 module.exports.sweepReturnReminderEmails = sweepReturnReminderEmails;
 module.exports.sendScheduledReturnReminders = sendScheduledReturnReminders;
-module.exports.handleMaishaPaySubscriptionCheckout =
-    handleMaishaPaySubscriptionCheckout;
-module.exports.handleMaishaPaySupportCheckout = handleMaishaPaySupportCheckout;
-module.exports.handleMaishaPayCallback = handleMaishaPayCallback;
+module.exports.handleKPaySubscriptionCheckout = handleKPaySubscriptionCheckout;
+module.exports.handleKPaySupportCheckout = handleKPaySupportCheckout;
+module.exports.handleKPayCallback = handleKPayCallback;
 module.exports.handlePublicConfig = handlePublicConfig;
 module.exports.evaluateTechBadges = evaluateTechBadges;

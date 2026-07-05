@@ -30,7 +30,7 @@
    - followers_count: integer
 
 2. **subscriptions**
-   - Gestion des abonnements via MaishaPay
+   - Gestion des abonnements via KPay
 
 3. **transactions**
    - Soutiens et revenus (commission 20% calculée auto)
@@ -54,7 +54,7 @@
 ### Palier Medium ($6.00/mois)
 - Tout le Standard +
 - Recevoir des soutiens (80% net)
-- Transferts MaishaPay
+- Transferts KPay
 - Nécessite 1000 abonnés
 
 ### Palier Pro ($10.00/mois)
@@ -65,11 +65,11 @@
 
 ## API Endpoints
 
-- `POST /api/maishapay/checkout` - Démarrer un paiement d’abonnement
-- `GET|POST /api/maishapay/callback` - Callback MaishaPay
+- `POST /api/kpay/checkout` - Démarrer un paiement d’abonnement
+- `GET|POST /api/kpay/callback` - Callback KPay
 - `GET /api/creator-revenue/:userId` - Revenus créateur
 - `GET /api/admin/subscription-payments` - Liste des paiements d'abonnement en attente
-- `POST /api/admin/subscription-payments/confirm` - Confirmer un encaissement MaishaPay et activer le palier
+- `POST /api/admin/subscription-payments/confirm` - Confirmer un encaissement KPay et activer le palier
 - `POST /api/admin/subscription-payments/fail` - Marquer une tentative comme non confirmée
 
 ## Intégration Frontend
@@ -96,18 +96,18 @@
 
 Variables d'environnement à ajouter:
 ```
-MAISHAPAY_PUBLIC_KEY=your_public_key
-MAISHAPAY_SECRET_KEY=your_secret_key
-MAISHAPAY_CALLBACK_SECRET=your_callback_secret
-MAISHAPAY_USE_CALLBACK=0
+KPAY_PUBLIC_KEY=your_public_key
+KPAY_SECRET_KEY=your_secret_key
+KPAY_CALLBACK_SECRET=your_callback_secret
+KPAY_USE_CALLBACK=0
 # Optionnel en local: 0 pour désactiver le sweep d'expiration des abonnements
 SUBSCRIPTION_SWEEP_MS=0
 ```
 
 Notes:
-- `MAISHAPAY_USE_CALLBACK=0` desactive l'envoi du `callbackUrl` a MaishaPay.
-- Passe a `1` uniquement quand tu as une URL HTTPS publique et stable pour `/api/maishapay/callback`.
-- Avec `MAISHAPAY_USE_CALLBACK=0`, les tentatives de paiement sont enregistrees en attente puis confirmees depuis `admin.html` apres verification de l'encaissement sur le compte MaishaPay.
+- `KPAY_USE_CALLBACK=0` desactive l'envoi du `callbackUrl` a KPay.
+- Passe a `1` uniquement quand tu as une URL HTTPS publique et stable pour `/api/kpay/callback`.
+- Avec `KPAY_USE_CALLBACK=0`, les tentatives de paiement sont enregistrees en attente puis confirmees depuis `admin.html` apres verification de l'encaissement sur le compte KPay.
 - Pour activer le portefeuille createur et les retraits Mobile Money, execute aussi `sql/monetization-wallet.sql` dans Supabase SQL Editor.
 - Pour forcer la regle `video > 60 sec` dans les vues monetisees et recalculer les payouts video ouverts, execute aussi `sql/monetization-video-eligibility-fix.sql`.
 

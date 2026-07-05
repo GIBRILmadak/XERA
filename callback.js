@@ -10,7 +10,7 @@ import {
 } from "../lib/monetization";
 
 export default async function handler(req, res) {
-    // MaishaPay peut appeler en GET ou POST selon la config
+    // kpay peut appeler en GET ou POST selon la config
     const params = req.method === "POST" ? req.body : req.query;
     const { status, description, transactionRefId, operatorRefId, state } =
         params;
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
                     pendingTransactionId: payload.pending_transaction_id,
                     transactionRefId,
                     operatorRefId,
-                    confirmationSource: "maishapay_callback",
+                    confirmationSource: "kpay_callback",
                 });
             } else {
                 await activateSubscription({
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
                     provider: payload.provider,
                     walletId: payload.wallet_id,
                     pendingTransactionId: payload.pending_transaction_id,
-                    confirmationSource: "maishapay_callback",
+                    confirmationSource: "kpay_callback",
                 });
             }
         } else {
@@ -68,7 +68,7 @@ export default async function handler(req, res) {
                 operatorRefId,
                 reason:
                     description || String(status || "Paiement non confirme"),
-                confirmationSource: "maishapay_callback",
+                confirmationSource: "kpay_callback",
             });
         }
 

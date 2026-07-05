@@ -233,7 +233,7 @@
         Object.freeze({
             id: "video-monetization",
             question: "Comment fonctionne la monétisation vidéo ?",
-            answer: "Avec le plan Pro, vous gagnez $0.40 pour chaque 1000 vues sur vos vidéos de plus de 60 secondes. Les revenus sont calculés mensuellement et versés sur votre compte MaishaPay, moins la commission de 20% de XERA.",
+            answer: "Avec le plan Pro, vous gagnez $0.40 pour chaque 1000 vues sur vos vidéos de plus de 60 secondes. Les revenus sont calculés mensuellement et versés sur votre compte KPay, moins la commission de 20% de XERA.",
         }),
         Object.freeze({
             id: "switch-plan",
@@ -243,7 +243,7 @@
         Object.freeze({
             id: "payouts",
             question: "Comment sont payés les revenus ?",
-            answer: "Les revenus sont versés via MaishaPay. Vous devez avoir un compte MaishaPay vérifié (KYC) pour recevoir les paiements. Les revenus des soutiens sont disponibles immédiatement, tandis que les revenus vidéo sont calculés et payés mensuellement.",
+            answer: "Les revenus sont versés via KPay. Vous devez avoir un compte KPay vérifié (KYC) pour recevoir les paiements. Les revenus des soutiens sont disponibles immédiatement, tandis que les revenus vidéo sont calculés et payés mensuellement.",
         }),
         Object.freeze({
             id: "followers-threshold",

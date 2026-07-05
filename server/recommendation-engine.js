@@ -557,7 +557,6 @@ module.exports = {
     // Exports pour tests/debug
     calculateEngagementScore,
     calculateCreatorQuality,
-    calculateFreshnessScore,
     calculateMomentumBonus,
     calculateRetentionScore,
     calculateVirialityScore,

@@ -6,16 +6,16 @@ import {
     computeSupportCheckoutAmount,
     createPendingSupportPayment,
     createSignedState,
-    renderMaishaPayCheckoutPage,
+    renderkpayCheckoutPage,
     sanitizeReturnPath,
     buildProfileReturnPath,
     sanitizePayoutText,
-    MAISHAPAY_CALLBACK_ENABLED,
+    kpay_CALLBACK_ENABLED,
     CALLBACK_ORIGIN,
-    MAISHAPAY_PUBLIC_KEY,
-    MAISHAPAY_SECRET_KEY,
-    MAISHAPAY_GATEWAY_MODE,
-    inferMaishaPayKeyMode,
+    kpay_PUBLIC_KEY,
+    kpay_SECRET_KEY,
+    kpay_GATEWAY_MODE,
+    inferkpayKeyMode,
     maskKey,
     SUPPORT_MIN_USD,
     SUPPORT_MAX_USD,
@@ -41,8 +41,8 @@ export default async function handler(req, res) {
             return_path: rawReturnPath,
         } = req.body;
 
-        if (!MAISHAPAY_PUBLIC_KEY || !MAISHAPAY_SECRET_KEY) {
-            return res.status(500).send("MaishaPay keys not configured");
+        if (!kpay_PUBLIC_KEY || !kpay_SECRET_KEY) {
+            return res.status(500).send("kpay keys not configured");
         }
 
         const fromUserId = await resolveUserId(accessToken, fallbackUserId);
@@ -145,7 +145,7 @@ export default async function handler(req, res) {
         });
 
         let callbackUrl = null;
-        if (MAISHAPAY_CALLBACK_ENABLED) {
+        if (kpay_CALLBACK_ENABLED) {
             const statePayload = {
                 payment_kind: "support",
                 from_user_id: fromUserId,
@@ -169,14 +169,14 @@ export default async function handler(req, res) {
             if (!state) {
                 return res.status(500).send("Callback secret manquant");
             }
-            callbackUrl = `${CALLBACK_ORIGIN}/api/maishapay/callback/${encodeURIComponent(state)}`;
+            callbackUrl = `${CALLBACK_ORIGIN}/api/kpay/callback/${encodeURIComponent(state)}`;
         }
 
-        console.info("[MaishaPay support checkout]", {
-            gatewayMode: String(MAISHAPAY_GATEWAY_MODE),
-            publicKey: maskKey(MAISHAPAY_PUBLIC_KEY),
-            secretKey: maskKey(MAISHAPAY_SECRET_KEY),
-            callbackEnabled: MAISHAPAY_CALLBACK_ENABLED,
+        console.info("[kpay support checkout]", {
+            gatewayMode: String(kpay_GATEWAY_MODE),
+            publicKey: maskKey(kpay_PUBLIC_KEY),
+            secretKey: maskKey(kpay_SECRET_KEY),
+            callbackEnabled: kpay_CALLBACK_ENABLED,
             callbackOrigin: CALLBACK_ORIGIN,
             pendingTransactionId: pendingPayment.id,
             checkoutRefId: pendingPayment.checkoutRefId,
@@ -190,7 +190,7 @@ export default async function handler(req, res) {
 
         res.set("Content-Type", "text/html");
         res.send(
-            renderMaishaPayCheckoutPage({
+            renderkpayCheckoutPage({
                 amount: checkoutAmount,
                 currency,
                 callbackUrl,
@@ -198,6 +198,6 @@ export default async function handler(req, res) {
         );
     } catch (err) {
         console.error("Support Checkout Error:", err);
-        return sendCheckoutErrorResponse(res, err, "Erreur MaishaPay");
+        return sendCheckoutErrorResponse(res, err, "Erreur kpay");
     }
 }

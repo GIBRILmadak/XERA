@@ -76,9 +76,9 @@
         }
         return Boolean(
             window.React &&
-                window.ReactDOM &&
-                window.ReactDOM.createRoot &&
-                typeof Hooks.useSubscriptionPlansController === "function",
+            window.ReactDOM &&
+            window.ReactDOM.createRoot &&
+            typeof Hooks.useSubscriptionPlansController === "function",
         );
     }
 
@@ -179,30 +179,71 @@
                 );
             });
 
-            root?.querySelectorAll(".plan-detail-card .price").forEach((priceEl) => {
-                const planId =
-                    priceEl.closest(".plan-detail-card")?.getAttribute(
-                        "data-plan-id",
-                    ) || getPlanIdFromCard(priceEl.closest(".plan-detail-card"));
+            root?.querySelectorAll(".plan-detail-card .price").forEach(
+                (priceEl) => {
+                    const planId =
+                        priceEl
+                            .closest(".plan-detail-card")
+                            ?.getAttribute("data-plan-id") ||
+                        getPlanIdFromCard(priceEl.closest(".plan-detail-card"));
 
+                    if (!planId) return;
+
+                    const price = Data.getPlanPriceViewModel(
+                        planId,
+                        billingCycle,
+                    );
+                    priceEl.textContent = "";
+
+                    priceEl.appendChild(
+                        document.createTextNode(price.formattedAmount),
+                    );
+
+                    const suffix = document.createElement("span");
+                    suffix.textContent = price.suffix;
+                    priceEl.appendChild(suffix);
+
+                    if (price.savingsLabel) {
+                        const savings = document.createElement("small");
+                        savings.className = "annual-savings";
+                        savings.textContent = price.savingsLabel;
+                        priceEl.appendChild(savings);
+                    }
+                },
+            );
+
+            // Met à jour les href de secours vers KPay pour refléter le cycle de facturation
+            root?.querySelectorAll(".plan-detail-card").forEach((cardEl) => {
+                const planId =
+                    cardEl.getAttribute("data-plan-id") ||
+                    getPlanIdFromCard(cardEl);
                 if (!planId) return;
 
-                const price = Data.getPlanPriceViewModel(planId, billingCycle);
-                priceEl.textContent = "";
+                const actionEl = cardEl.querySelector(".btn-subscribe");
+                if (!actionEl) return;
 
-                priceEl.appendChild(
-                    document.createTextNode(price.formattedAmount),
-                );
-
-                const suffix = document.createElement("span");
-                suffix.textContent = price.suffix;
-                priceEl.appendChild(suffix);
-
-                if (price.savingsLabel) {
-                    const savings = document.createElement("small");
-                    savings.className = "annual-savings";
-                    savings.textContent = price.savingsLabel;
-                    priceEl.appendChild(savings);
+                // Only update anchors (fallback). If element is an <a>, set correct href.
+                try {
+                    if (
+                        actionEl.tagName &&
+                        actionEl.tagName.toLowerCase() === "a"
+                    ) {
+                        const url = new URL(
+                            actionEl.href,
+                            window.location.origin,
+                        );
+                        url.pathname = "/api/kpay/checkout";
+                        url.searchParams.set("plan", planId);
+                        url.searchParams.set("billing", billingCycle);
+                        actionEl.href = url.toString();
+                    }
+                } catch (e) {
+                    // Fallback string construction
+                    actionEl.href =
+                        "/api/kpay/checkout?plan=" +
+                        encodeURIComponent(planId) +
+                        "&billing=" +
+                        encodeURIComponent(billingCycle);
                 }
             });
         }
@@ -242,7 +283,10 @@
                     "success",
                 );
 
-                if (currentUser?.id && typeof window.updateUserPlan === "function") {
+                if (
+                    currentUser?.id &&
+                    typeof window.updateUserPlan === "function"
+                ) {
                     try {
                         await window.updateUserPlan(
                             currentUser.id,
@@ -377,8 +421,7 @@
                     return false;
                 }
 
-                const isAlreadyOpen =
-                    targetButton.classList.contains("active");
+                const isAlreadyOpen = targetButton.classList.contains("active");
 
                 hideAllFaqs();
                 if (!isAlreadyOpen) {
@@ -508,10 +551,8 @@
                         },
                         e("img", {
                             id: "navAvatar",
-                            className:
-                                "notification-icon profile-nav-avatar",
-                            src:
-                                props.avatarUrl || Data.DEFAULT_NAV_AVATAR,
+                            className: "notification-icon profile-nav-avatar",
+                            src: props.avatarUrl || Data.DEFAULT_NAV_AVATAR,
                             alt: "Avatar utilisateur",
                         }),
                     ),
@@ -651,7 +692,7 @@
                                 className: "hero-card-foot",
                             },
                             e("i", { className: "fas fa-lock" }),
-                            " Paiement via MaishaPay",
+                            " Paiement via KPay",
                         ),
                     ),
                 ),
@@ -664,10 +705,7 @@
                 plan.id,
                 props.billingCycle,
             );
-            const isCurrent = Data.isCurrentPlan(
-                props.currentPlan,
-                plan.id,
-            );
+            const isCurrent = Data.isCurrentPlan(props.currentPlan, plan.id);
             const buttonClassName = isCurrent
                 ? "btn-subscribe btn-current"
                 : "btn-subscribe";
@@ -814,8 +852,7 @@
                             "button",
                             {
                                 className:
-                                    "faq-question" +
-                                    (isOpen ? " active" : ""),
+                                    "faq-question" + (isOpen ? " active" : ""),
                                 "data-faq-id": item.id,
                                 type: "button",
                                 onClick: () => props.onToggleFaq(item.id),
@@ -847,8 +884,7 @@
             return e(
                 "div",
                 {
-                    className:
-                        "modal" + (props.isOpen ? " active" : ""),
+                    className: "modal" + (props.isOpen ? " active" : ""),
                     id: "confirmModal",
                     onClick: (event) => {
                         if (event.target === event.currentTarget) {
@@ -934,7 +970,7 @@
                             e("i", {
                                 className: "fas fa-info-circle",
                             }),
-                            " Vous serez redirigé vers MaishaPay pour finaliser le paiement sécurisé.",
+                            " Vous serez redirigé vers KPay pour finaliser le paiement sécurisé.",
                         ),
                         e(
                             "button",
@@ -1009,16 +1045,12 @@
 
         try {
             const didMount = ReactCore?.mountIsland
-                ? ReactCore.mountIsland(
-                      root,
-                      () => e(SubscriptionPlansPage),
-                      {
-                          captureMarkup: true,
-                          fallbackMarkup,
-                          name: "subscriptionPlans",
-                          strict: true,
-                      },
-                  )
+                ? ReactCore.mountIsland(root, () => e(SubscriptionPlansPage), {
+                      captureMarkup: true,
+                      fallbackMarkup,
+                      name: "subscriptionPlans",
+                      strict: true,
+                  })
                 : false;
 
             if (didMount) {
@@ -1028,11 +1060,7 @@
             const reactRoot = window.ReactDOM.createRoot(root);
             root.__xeraReactRoot = reactRoot;
             reactRoot.render(
-                e(
-                    React.StrictMode,
-                    null,
-                    e(SubscriptionPlansPage),
-                ),
+                e(React.StrictMode, null, e(SubscriptionPlansPage)),
             );
         } catch (error) {
             console.error(

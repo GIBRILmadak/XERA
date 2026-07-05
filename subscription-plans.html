@@ -134,7 +134,7 @@
                             </li>
                         </ul>
                         <div class="hero-card-foot">
-                            <i class="fas fa-lock"></i> Paiement via MaishaPay
+                            <i class="fas fa-lock"></i> Paiement via KPay
                         </div>
                     </div>
                 </div>
@@ -144,7 +144,10 @@
             <div class="plans-container">
                 <div class="plans-grid">
                     <!-- Plan Standard -->
-                    <div class="plan-detail-card standard" data-plan-id="standard">
+                    <div
+                        class="plan-detail-card standard"
+                        data-plan-id="standard"
+                    >
                         <div class="plan-icon">
                             <i class="fas fa-check-circle"></i>
                         </div>
@@ -180,13 +183,14 @@
                             </li>
                         </ul>
 
-                        <button
+                        <a
                             class="btn-subscribe"
                             data-plan="standard"
+                            href="/api/kpay/checkout?plan=standard&billing=monthly"
                             onclick="selectSubscription('standard')"
                         >
                             Choisir Standard
-                        </button>
+                        </a>
                     </div>
 
                     <!-- Plan Medium -->
@@ -225,12 +229,12 @@
                                 Notifications automatiques aux followers quand
                                 vous lancez un live
                             </li>
-                            
+
                             <li>
                                 <i class="fas fa-check"></i>
                                 Fonctionnalités de monétisation
                             </li>
-                        
+
                             <li>
                                 <i class="fas fa-star"></i>
                                 Statistiques détaillées des revenus
@@ -241,17 +245,21 @@
                             </li>
                         </ul>
 
-                        <button
+                        <a
                             class="btn-subscribe"
                             data-plan="medium"
+                            href="/api/kpay/checkout?plan=medium&billing=monthly"
                             onclick="selectSubscription('medium')"
-                            >
+                        >
                             Choisir Medium
-                        </button>
+                        </a>
                     </div>
 
                     <!-- Plan Pro -->
-                    <div class="plan-detail-card pro recommended" data-plan-id="pro">
+                    <div
+                        class="plan-detail-card pro recommended"
+                        data-plan-id="pro"
+                    >
                         <div class="plan-icon">
                             <i class="fas fa-crown"></i>
                         </div>
@@ -264,7 +272,7 @@
                         </p>
 
                         <ul class="plan-features-list">
-                             <li>
+                            <li>
                                 <i class="fas fa-check"></i>
                                 Badge de vérification bleu
                             </li>
@@ -285,7 +293,7 @@
                                 Notifications automatiques aux followers quand
                                 vous lancez un live
                             </li>
-                            
+
                             <li>
                                 <i class="fas fa-check"></i>
                                 Fonctionnalités de monétisation
@@ -306,7 +314,7 @@
                                 <i class="fas fa-check"></i>
                                 Lives privés réservés aux followers
                             </li>
-                             <li>
+                            <li>
                                 <i class="fas fa-star"></i>
                                 Statistiques détaillées des revenus
                             </li>
@@ -328,13 +336,14 @@
                             </li>
                         </ul>
 
-                        <button
+                        <a
                             class="btn-subscribe"
                             data-plan="pro"
+                            href="/api/kpay/checkout?plan=pro&billing=monthly"
                             onclick="selectSubscription('pro')"
                         >
                             Choisir Pro
-                        </button>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -344,7 +353,11 @@
                 <h2>Questions fréquentes</h2>
 
                 <div class="faq-item">
-                    <button class="faq-question" data-faq-id="monetization" onclick="toggleFaq(this)">
+                    <button
+                        class="faq-question"
+                        data-faq-id="monetization"
+                        onclick="toggleFaq(this)"
+                    >
                         Comment fonctionne la monétisation ?
                         <i class="fas fa-chevron-down"></i>
                     </button>
@@ -360,7 +373,11 @@
                 </div>
 
                 <div class="faq-item">
-                    <button class="faq-question" data-faq-id="commission" onclick="toggleFaq(this)">
+                    <button
+                        class="faq-question"
+                        data-faq-id="commission"
+                        onclick="toggleFaq(this)"
+                    >
                         Quelle commission prend XERA ?
                         <i class="fas fa-chevron-down"></i>
                     </button>
@@ -375,7 +392,11 @@
                 </div>
 
                 <div class="faq-item">
-                    <button class="faq-question" data-faq-id="video-monetization" onclick="toggleFaq(this)">
+                    <button
+                        class="faq-question"
+                        data-faq-id="video-monetization"
+                        onclick="toggleFaq(this)"
+                    >
                         Comment fonctionne la monétisation vidéo ?
                         <i class="fas fa-chevron-down"></i>
                     </button>
@@ -384,14 +405,18 @@
                             Avec le plan Pro, vous gagnez $0.40 pour chaque 1000
                             vues sur vos vidéos de plus de 60 secondes. Les
                             revenus sont calculés mensuellement et versés sur
-                            votre compte MaishaPay, moins la commission de 20%
-                            de XERA.
+                            votre compte KPay, moins la commission de 20% de
+                            XERA.
                         </p>
                     </div>
                 </div>
 
                 <div class="faq-item">
-                    <button class="faq-question" data-faq-id="switch-plan" onclick="toggleFaq(this)">
+                    <button
+                        class="faq-question"
+                        data-faq-id="switch-plan"
+                        onclick="toggleFaq(this)"
+                    >
                         Puis-je changer de plan à tout moment ?
                         <i class="fas fa-chevron-down"></i>
                     </button>
@@ -407,23 +432,31 @@
                 </div>
 
                 <div class="faq-item">
-                    <button class="faq-question" data-faq-id="payouts" onclick="toggleFaq(this)">
+                    <button
+                        class="faq-question"
+                        data-faq-id="payouts"
+                        onclick="toggleFaq(this)"
+                    >
                         Comment sont payés les revenus ?
                         <i class="fas fa-chevron-down"></i>
                     </button>
                     <div class="faq-answer">
                         <p>
-                            Les revenus sont versés via MaishaPay. Vous devez
-                            avoir un compte MaishaPay vérifié (KYC) pour
-                            recevoir les paiements. Les revenus des soutiens
-                            sont disponibles immédiatement, tandis que les
-                            revenus vidéo sont calculés et payés mensuellement.
+                            Les revenus sont versés via KPay. Vous devez avoir
+                            un compte KPay vérifié (KYC) pour recevoir les
+                            paiements. Les revenus des soutiens sont disponibles
+                            immédiatement, tandis que les revenus vidéo sont
+                            calculés et payés mensuellement.
                         </p>
                     </div>
                 </div>
 
                 <div class="faq-item">
-                    <button class="faq-question" data-faq-id="followers-threshold" onclick="toggleFaq(this)">
+                    <button
+                        class="faq-question"
+                        data-faq-id="followers-threshold"
+                        onclick="toggleFaq(this)"
+                    >
                         Que se passe-t-il si je descends en dessous de 1000
                         abonnés ?
                         <i class="fas fa-chevron-down"></i>
@@ -455,7 +488,7 @@
                         </div>
                         <p class="confirm-note">
                             <i class="fas fa-info-circle"></i>
-                            Vous serez redirigé vers MaishaPay pour finaliser le
+                            Vous serez redirigé vers KPay pour finaliser le
                             paiement sécurisé.
                         </p>
                         <button
