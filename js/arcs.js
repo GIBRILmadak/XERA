@@ -348,112 +348,125 @@ function renderArcCreationForm(arcToEdit = null) {
     }
 
     createContainer.innerHTML = `
-        <div class="arc-creation-header">
-            <h2>${title}</h2>
-            <p>Qu'est-ce qu'un Projet ? Un conteneur d'objectifs reliant vos mises à jour quotidiennes à votre résultat.</p>
-        </div>
-
-        <form id="create-arc-form" class="arc-form">
-            ${isEdit ? `<input type="hidden" name="arc_id" value="${arcToEdit.id}">` : ""}
-            
-            <div class="form-group">
-                <label for="arc-title">Titre de votre projet *</label>
-                <input type="text" id="arc-title" name="title" placeholder="Ex: 30 jours pour..." required class="form-input large-input" value="${xeraEscapeHtml(defaultTitleValue)}">
-            </div>
-
-            <div class="form-group">
-                <label for="arc-goal">Objectif final *</label>
-                <textarea id="arc-goal" name="goal" placeholder="Ex: Site en ligne le 1er mars" rows="2" class="form-input" required>${xeraEscapeHtml(defaultGoalValue)}</textarea>
-            </div>
-
-            ${
-                inspiredSeed
-                    ? `<div class="xera-growth-seed">
-                        <strong>ARC inspiré</strong>
-                        <span>Cette base vient d'une trajectoire existante. Ajustez-la pour construire votre version.</span>
-                    </div>`
-                    : ""
-            }
-
-            <div class="form-group">
-                <label for="arc-stage-level">Niveau du projet</label>
-                <select id="arc-stage-level" name="stage_level" class="form-input">
-                    ${ARC_STAGE_OPTIONS.map((item) => `<option value="${item.value}" ${defaultStageLevel === item.value ? "selected" : ""}>${item.label}</option>`).join("")}
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>Matching opportunité (optionnel)</label>
-                <div class="arc-intent-grid">
-                    ${ARC_OPPORTUNITY_OPTIONS.map(
-                        (item) => `
-                        <label class="arc-intent-item">
-                            <input
-                                type="checkbox"
-                                name="opportunity_intents"
-                                value="${item.value}"
-                                ${selectedOpportunityIntents.includes(item.value) ? "checked" : ""}
-                            >
-                            <span>${item.label}</span>
-                        </label>
-                    `,
-                    ).join("")}
+        <div class="arc-create-card">
+            <div class="arc-creation-header arc-creation-header-inline">
+                <div>
+                    <h2>${title}</h2>
+                    <p class="arc-create-subtitle">Qu'est-ce qu'un Projet ? Un conteneur d'objectifs reliant vos mises à jour quotidiennes à votre résultat.</p>
                 </div>
-                <p class="form-hint">Laissez vide pour un partage public sans ciblage spécifique.</p>
+                <button type="button" class="cover-action" onclick="document.getElementById('arc-cover-file').click()">Ajouter une couverture</button>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="arc-start-date">Date de début *</label>
-                    <input type="date" id="arc-start-date" name="start_date" class="form-input" value="${defaultStartDate}" required>
+            <form id="create-arc-form" class="arc-form">
+                ${isEdit ? `<input type="hidden" name="arc_id" value="${arcToEdit.id}">` : ""}
+
+                <div class="form-group form-group-title">
+                    <label for="arc-title">Titre de votre projet *</label>
+                    <input type="text" id="arc-title" name="title" placeholder="Ex: 30 jours pour..." required class="form-input large-input" value="${xeraEscapeHtml(defaultTitleValue)}">
                 </div>
-                <div class="form-group">
-                    <label for="arc-end-date">Date de fin *</label>
-                    <input type="date" id="arc-end-date" name="end_date" class="form-input" value="${defaultEndDate}" required>
-                </div>
-            </div>
 
-            <div class="form-group">
-                <label for="arc-description">Description (Optionnel)</label>
-                <textarea id="arc-description" name="description" placeholder="Détails supplémentaires..." rows="3" class="form-input">${xeraEscapeHtml(defaultDescriptionValue)}</textarea>
-            </div>
-
-            <div class="form-group">
-                <label>Couverture du projet (Image ou Vidéo)</label>
-                <div id="arc-cover-upload-container">
-                    <div class="upload-zone" id="arc-cover-dropzone" style="border: 2px dashed var(--border-color); padding: 2rem; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.3s ease; background: rgba(255,255,255,0.02);">
-                        <div id="arc-cover-preview-container" style="${isEdit && arcToEdit.media_url ? "display: block;" : "display: none;"} margin-bottom: 1rem;">
-                            ${isEdit && arcToEdit.media_url ? (arcToEdit.media_type === "video" ? `<video src="${arcToEdit.media_url}" controls style="max-width: 100%; max-height: 200px; border-radius: 8px;"></video>` : `<img src="${arcToEdit.media_url}" style="max-width: 100%; max-height: 200px; border-radius: 8px;">`) : ""}
-                        </div>
-	                        <div id="arc-cover-loader" style="display: none; margin-bottom: 1rem;">
-	                            <div class="loading-spinner" style="display:inline-block;"></div>
-	                            <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Upload en cours...</p>
-	                            <div class="xera-upload-progress">
-	                                <div id="arc-cover-progress-bar" class="xera-upload-progress-bar is-indeterminate"></div>
-	                            </div>
-	                            <div id="arc-cover-progress-label" class="xera-upload-progress-label"></div>
-	                        </div>
-                        <div id="arc-cover-placeholder" style="${isEdit && arcToEdit.media_url ? "display: none;" : ""}">
-                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-secondary); margin-bottom: 0.5rem;">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="17 8 12 3 7 8"></polyline>
-                                <line x1="12" y1="3" x2="12" y2="15"></line>
-                            </svg>
-                            <p style="color: var(--text-secondary); font-size: 0.9rem;">Cliquez ou glissez une couverture</p>
-                            <p style="color: var(--text-secondary); font-size: 0.75rem; opacity: 0.7;">JPG, PNG, GIF, MP4</p>
-                        </div>
+                <div class="form-group form-group-inline">
+                    <div class="mini-field">
+                        <label for="arc-goal">Objectif final *</label>
+                        <textarea id="arc-goal" name="goal" placeholder="Ex: Site en ligne le 1er mars" rows="2" class="form-input" required>${xeraEscapeHtml(defaultGoalValue)}</textarea>
                     </div>
-                    <input type="file" id="arc-cover-file" accept="image/*,video/*" style="display: none;">
-                    <input type="hidden" name="media_url" id="arc-media-url" value="${isEdit && arcToEdit.media_url ? arcToEdit.media_url : ""}">
-                    <input type="hidden" name="media_type" id="arc-media-type" value="${isEdit && arcToEdit.media_type ? arcToEdit.media_type : ""}">
+                    <div class="mini-field">
+                        <label for="arc-stage-level">Niveau du projet</label>
+                        <select id="arc-stage-level" name="stage_level" class="form-input">
+                            ${ARC_STAGE_OPTIONS.map((item) => `<option value="${item.value}" ${defaultStageLevel === item.value ? "selected" : ""}>${item.label}</option>`).join("")}
+                        </select>
+                    </div>
                 </div>
-            </div>
 
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary btn-large">${btnText}</button>
-                <button type="button" class="btn btn-ghost btn-large" onclick="closeCreateModal()">Annuler</button>
-            </div>
-        </form>
+                ${
+                    inspiredSeed
+                        ? `<div class="xera-growth-seed">
+                            <strong>ARC inspiré</strong>
+                            <span>Cette base vient d'une trajectoire existante. Ajustez-la pour construire votre version.</span>
+                        </div>`
+                        : ""
+                }
+
+                <div class="form-group">
+                    <label for="arc-description">Description</label>
+                    <textarea id="arc-description" name="description" placeholder="Détails supplémentaires..." rows="5" class="form-input large-textarea">${xeraEscapeHtml(defaultDescriptionValue)}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Matching opportunité (optionnel)</label>
+                    <div class="arc-intent-grid">
+                        ${ARC_OPPORTUNITY_OPTIONS.map(
+                            (item) => `
+                            <label class="arc-intent-item">
+                                <input
+                                    type="checkbox"
+                                    name="opportunity_intents"
+                                    value="${item.value}"
+                                    ${selectedOpportunityIntents.includes(item.value) ? "checked" : ""}
+                                >
+                                <span>${item.label}</span>
+                            </label>
+                        `,
+                        ).join("")}
+                    </div>
+                    <p class="form-hint">Laissez vide pour un partage public sans ciblage spécifique.</p>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="arc-start-date">Date de début *</label>
+                        <input type="date" id="arc-start-date" name="start_date" class="form-input" value="${defaultStartDate}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="arc-end-date">Date de fin *</label>
+                        <input type="date" id="arc-end-date" name="end_date" class="form-input" value="${defaultEndDate}" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Couverture du projet</label>
+                    <div id="arc-cover-upload-container" class="media-upload-card">
+                        <div class="upload-zone" id="arc-cover-dropzone">
+                            <div id="arc-cover-preview-container" class="media-preview" style="${isEdit && arcToEdit.media_url ? "display: block;" : "display: none;"}">
+                                ${isEdit && arcToEdit.media_url ? (arcToEdit.media_type === "video" ? `<video src="${arcToEdit.media_url}" controls class="media-preview-video"></video>` : `<img src="${arcToEdit.media_url}" class="media-preview-image">`) : ""}
+                            </div>
+                            <div id="arc-cover-loader" class="upload-status" style="display: none;">
+                                <div class="loading-spinner"></div>
+                                <p>Upload en cours...</p>
+                                <div class="xera-upload-progress">
+                                    <div id="arc-cover-progress-bar" class="xera-upload-progress-bar is-indeterminate"></div>
+                                </div>
+                                <div id="arc-cover-progress-label" class="xera-upload-progress-label"></div>
+                            </div>
+                            <div id="arc-cover-placeholder" class="upload-placeholder" style="${isEdit && arcToEdit.media_url ? "display: none;" : ""}">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <p>Cliquer ou glisser une couverture</p>
+                                <p class="form-hint">JPG, PNG, GIF, MP4</p>
+                            </div>
+                        </div>
+                        <input type="file" id="arc-cover-file" accept="image/*,video/*" style="display: none;">
+                        <input type="hidden" name="media_url" id="arc-media-url" value="${isEdit && arcToEdit.media_url ? arcToEdit.media_url : ""}">
+                        <input type="hidden" name="media_type" id="arc-media-type" value="${isEdit && arcToEdit.media_type ? arcToEdit.media_type : ""}">
+                    </div>
+                </div>
+
+                <div class="form-actions form-actions-compact">
+                    <div class="footer-chip-row">
+                        <span class="footer-chip">Statut: ${defaultStageLevel}</span>
+                        <span class="footer-chip">Début: ${defaultStartDate}</span>
+                        <span class="footer-chip">Fin: ${defaultEndDate}</span>
+                    </div>
+                    <div class="form-buttons-right">
+                        <button type="button" class="btn btn-ghost btn-large" onclick="closeCreateModal()">Annuler</button>
+                        <button type="submit" class="btn btn-primary btn-large">${btnText}</button>
+                    </div>
+                </div>
+            </form>
+        </div>
     `;
 
     // Attach event listener
@@ -675,12 +688,25 @@ document.getElementById("create-modal")?.addEventListener("click", (e) => {
 
 async function getArcAuthUser() {
     if (window.currentUser && window.currentUser.id) return window.currentUser;
+    if (window.currentUserId) {
+        return { id: window.currentUserId };
+    }
     try {
-        const { data, error } = await supabase?.auth?.getUser?.();
-        if (!error && data?.user) {
-            window.currentUser = data.user;
-            window.currentUserId = data.user.id;
-            return data.user;
+        if (typeof supabase?.auth?.getUser === "function") {
+            const { data, error } = await supabase.auth.getUser();
+            if (!error && data?.user) {
+                window.currentUser = data.user;
+                window.currentUserId = data.user.id;
+                return data.user;
+            }
+        }
+        if (typeof supabase?.auth?.getSession === "function") {
+            const { data, error } = await supabase.auth.getSession();
+            if (!error && data?.session?.user) {
+                window.currentUser = data.session.user;
+                window.currentUserId = data.session.user.id;
+                return data.session.user;
+            }
         }
     } catch (e) {
         // ignore
@@ -885,7 +911,24 @@ async function handleCreateArc(e) {
 
     // Only set user_id and status on creation
     if (!arcId) {
-        arcData.user_id = authUser.id;
+        const resolvedUserId = authUser?.id || window.currentUserId || null;
+        if (!resolvedUserId) {
+            throw new Error(
+                "Impossible de déterminer l'utilisateur connecté pour la création de l'ARC.",
+            );
+        }
+
+        // Ensure the authenticated user has a public profile row before inserting into arcs.
+        if (typeof ensureUserProfile === "function") {
+            const profile = await ensureUserProfile(authUser);
+            if (!profile) {
+                throw new Error(
+                    "Impossible de créer l\'ARC car le profil utilisateur public est manquant.",
+                );
+            }
+        }
+
+        arcData.user_id = resolvedUserId;
         arcData.status = "in_progress";
         // Handle Organizational ARC
         if (window._pendingPageIdForArc) {
@@ -927,6 +970,22 @@ async function handleCreateArc(e) {
             delete fallbackArcData.stage_level;
             delete fallbackArcData.opportunity_intents;
             persistResult = await persistArc(fallbackArcData);
+            error = persistResult.error;
+            createdArc = persistResult.data || createdArc;
+        }
+
+        if (
+            error &&
+            typeof ensureUserProfile === "function" &&
+            error?.message &&
+            error.message.toLowerCase().includes("foreign key")
+        ) {
+            console.warn(
+                "Arc insert failed with foreign key error, ensuring user profile exists and retrying...",
+                error,
+            );
+            await ensureUserProfile(authUser);
+            persistResult = await persistArc(arcData);
             error = persistResult.error;
             createdArc = persistResult.data || createdArc;
         }

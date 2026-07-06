@@ -14886,7 +14886,10 @@ ${publicActivityHtml}
 
 function isPageProRoute() {
     try {
-        const pathname = String(window.location.pathname || "").replace(/\/+$/, "");
+        const pathname = String(window.location.pathname || "").replace(
+            /\/+$/,
+            "",
+        );
         if (pathname === "/pagepro") return true;
 
         const params = new URLSearchParams(window.location.search);
@@ -18699,14 +18702,20 @@ async function openCreateMenu(
     }
 
     container.innerHTML = `
-<div class="settings-section">
+<div class="settings-section create-card-panel">
             <button type="button" class="create-close" onclick="closeCreateMenu()">✕</button>
-            <div class="settings-header" style="border:none; margin-bottom:1rem; padding-bottom:0;">
-                <h2>${title}</h2>
-                <p>${subtitle}</p>
+            <div class="settings-header settings-header-inline">
+                <div>
+                    <h2>${title}</h2>
+                    <p>${subtitle}</p>
+                </div>
+                <div class="create-top-actions">
+                    <span class="mini-badge">${isEdit ? "Édition" : "Nouvelle trace"}</span>
+                    <button type="button" class="cover-action" onclick="document.getElementById('create-media-file').click()">Ajouter un média</button>
+                </div>
             </div>
 
-            <form id="create-form">
+            <form id="create-form" class="create-form-grid">
                 ${isEdit ? `<input type="hidden" id="content-id" value="${existingContent.contentId || existingContent.id}">` : ""}
                 <div class="form-group">
                     <label>Mode de publication</label>
@@ -18785,11 +18794,9 @@ async function openCreateMenu(
                     </div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group media-upload-group">
                     <label>Média</label>
-                    
-                    <!-- Upload Zone for Image/Video -->
-	                    <div id="media-upload-container">
+                    <div id="media-upload-container" class="media-upload-card">
 	                        <div class="upload-zone" id="create-media-dropzone" style="border: 2px dashed var(--border-color); padding: 2rem; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.3s ease; background: rgba(255,255,255,0.02);">
 	                            <div id="create-media-preview-container" style="display: none; margin-bottom: 1rem;">
 	                                <!-- Preview will be inserted here -->
