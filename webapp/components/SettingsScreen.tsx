@@ -217,7 +217,13 @@ const initialValues = {
     darkMode: true,
 };
 
-const SettingsScreen: React.FC = () => {
+type SettingsScreenProps = {
+    accountType?: string;
+};
+
+const SettingsScreen: React.FC<SettingsScreenProps> = ({
+    accountType = "personal",
+}) => {
     const [selectedCategoryId, setSelectedCategoryId] = useState("account");
     const [searchText, setSearchText] = useState("");
     const [toggles, setToggles] = useState(initialValues);
@@ -232,6 +238,16 @@ const SettingsScreen: React.FC = () => {
             ) ?? initialCategories[0],
         [selectedCategoryId],
     );
+
+    const isPro = useMemo(() => {
+        const t = String(accountType || "").toLowerCase();
+        return (
+            t === "pro" ||
+            t === "professional" ||
+            t === "business" ||
+            t === "company"
+        );
+    }, [accountType]);
 
     const visibleItems = useMemo(() => {
         const query = searchText.trim().toLowerCase();
@@ -265,6 +281,21 @@ const SettingsScreen: React.FC = () => {
                             Une expérience centralisée, organisée et premium.
                         </Text>
                     </View>
+                    {isPro ? (
+                        <View style={styles.proPillWrapper}>
+                            <View style={styles.proPill}>
+                                <Text style={styles.proBadge}>🏢</Text>
+                                <View style={{ marginLeft: 10 }}>
+                                    <Text style={styles.proPillTitle}>
+                                        Compte Professionnel
+                                    </Text>
+                                    <Text style={styles.proPillSub}>
+                                        Interface entreprise — outils avancés
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+                    ) : null}
                     <View style={styles.searchWrapper}>
                         <TextInput
                             style={styles.searchInput}
@@ -356,99 +387,275 @@ const SettingsScreen: React.FC = () => {
                                 {selectedCategory.items.length} éléments
                             </Text>
                         </View>
-
-                        {visibleItems.length === 0 ? (
-                            <View style={styles.emptyStateCard}>
-                                <Text style={styles.emptyStateTitle}>
-                                    Aucun réglage trouvé
-                                </Text>
-                                <Text style={styles.emptyStateText}>
-                                    Essayez un autre mot-clé ou sélectionnez une
-                                    autre catégorie.
-                                </Text>
-                            </View>
-                        ) : (
-                            visibleItems.map((item) => {
-                                const isToggle = item.actionType === "toggle";
-                                return (
-                                    <View
-                                        key={item.id}
-                                        style={styles.settingCard}
-                                    >
-                                        <View style={styles.settingLeft}>
-                                            <View
-                                                style={
-                                                    styles.settingIconWrapper
-                                                }
-                                            >
-                                                <Text
-                                                    style={styles.settingIcon}
-                                                >
-                                                    {item.icon}
-                                                </Text>
-                                            </View>
-                                            <View
-                                                style={styles.settingTextGroup}
-                                            >
-                                                <Text
-                                                    style={styles.settingTitle}
-                                                >
-                                                    {item.title}
-                                                </Text>
-                                                <Text
-                                                    style={
-                                                        styles.settingDescription
-                                                    }
-                                                >
-                                                    {item.description}
-                                                </Text>
-                                            </View>
+                        {isPro && selectedCategory.id === "account" ? (
+                            <>
+                                <View style={styles.proHero}>
+                                    <View style={styles.proHeroLeft}>
+                                        <View style={styles.settingIconWrapper}>
+                                            <Text style={styles.settingIcon}>🏢</Text>
                                         </View>
-                                        <View style={styles.settingRight}>
-                                            {isToggle ? (
-                                                <Switch
-                                                    trackColor={{
-                                                        false: "#3f3f46",
-                                                        true: "#7c3aed",
-                                                    }}
-                                                    thumbColor={
-                                                        toggles[
-                                                            item.field as keyof typeof toggles
-                                                        ]
-                                                            ? "#d8b4fe"
-                                                            : "#c4b5fd"
-                                                    }
-                                                    value={
-                                                        toggles[
-                                                            item.field as keyof typeof toggles
-                                                        ]
-                                                    }
-                                                    onValueChange={() =>
-                                                        toggleValue(item.field)
-                                                    }
-                                                />
-                                            ) : (
-                                                <>
-                                                    {item.extraLabel ? (
-                                                        <Text
-                                                            style={
-                                                                styles.optionLabel
-                                                            }
-                                                        >
-                                                            {item.extraLabel}
-                                                        </Text>
-                                                    ) : null}
-                                                    <Text
-                                                        style={styles.chevron}
-                                                    >
-                                                        ›
-                                                    </Text>
-                                                </>
-                                            )}
+                                        <View style={styles.settingTextGroup}>
+                                            <Text style={styles.companyName}>
+                                                Raison sociale • Exemple SARL
+                                            </Text>
+                                            <Text style={styles.companyMeta}>
+                                                Identifiant entreprise • FR-123456
+                                            </Text>
                                         </View>
                                     </View>
-                                );
-                            })
+                                    <View style={styles.proHeroRight}>
+                                        <View style={styles.verificationPill}>
+                                            <Text style={styles.verificationText}>
+                                                Certifié
+                                            </Text>
+                                        </View>
+                                        <TouchableOpacity
+                                            style={styles.manageBillingBtn}
+                                        >
+                                            <Text style={styles.manageBillingText}>
+                                                Gérer la facturation
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                <View style={styles.proGrid}>
+                                    <View style={styles.proCard}>
+                                        <Text style={styles.proCardTitle}>
+                                            Statistiques clés
+                                        </Text>
+                                        <Text style={styles.proMetricValue}>12,421</Text>
+                                        <Text style={styles.proMetricLabel}>
+                                            Visites profil (30j)
+                                        </Text>
+                                    </View>
+
+                                    <View style={styles.proCard}>
+                                        <Text style={styles.proCardTitle}>
+                                            Facturation
+                                        </Text>
+                                        <Text style={styles.proMetricValue}>Dernière facture • Juin</Text>
+                                        <Text style={styles.proMetricLabel}>
+                                            Méthode: Carte • **** 4242
+                                        </Text>
+                                    </View>
+
+                                    <View style={styles.proCard}>
+                                        <Text style={styles.proCardTitle}>
+                                            Équipe & Accès
+                                        </Text>
+                                        <Text style={styles.proMetricValue}>3 membres</Text>
+                                        <Text style={styles.proMetricLabel}>
+                                            Rôles, invitations et permissions
+                                        </Text>
+                                    </View>
+
+                                    <View style={styles.proCard}>
+                                        <Text style={styles.proCardTitle}>
+                                            Outils Pro
+                                        </Text>
+                                        <Text style={styles.proMetricValue}>API, Intégrations</Text>
+                                        <Text style={styles.proMetricLabel}>
+                                            Accès aux endpoints privés
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <View style={styles.sectionHeader}>
+                                    <Text style={styles.sectionTitle}>Paramètres</Text>
+                                    <Text style={styles.sectionBadge}>
+                                        {visibleItems.length} éléments
+                                    </Text>
+                                </View>
+
+                                {visibleItems.length === 0 ? (
+                                    <View style={styles.emptyStateCard}>
+                                        <Text style={styles.emptyStateTitle}>
+                                            Aucun réglage trouvé
+                                        </Text>
+                                        <Text style={styles.emptyStateText}>
+                                            Essayez un autre mot-clé ou sélectionnez une
+                                            autre catégorie.
+                                        </Text>
+                                    </View>
+                                ) : (
+                                    visibleItems.map((item) => {
+                                        const isToggle = item.actionType === "toggle";
+                                        return (
+                                            <View
+                                                key={item.id}
+                                                style={styles.settingCard}
+                                            >
+                                                <View style={styles.settingLeft}>
+                                                    <View
+                                                        style={
+                                                            styles.settingIconWrapper
+                                                        }
+                                                    >
+                                                        <Text
+                                                            style={styles.settingIcon}
+                                                        >
+                                                            {item.icon}
+                                                        </Text>
+                                                    </View>
+                                                    <View
+                                                        style={styles.settingTextGroup}
+                                                    >
+                                                        <Text
+                                                            style={styles.settingTitle}
+                                                        >
+                                                            {item.title}
+                                                        </Text>
+                                                        <Text
+                                                            style={
+                                                                styles.settingDescription
+                                                            }
+                                                        >
+                                                            {item.description}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                                <View style={styles.settingRight}>
+                                                    {isToggle ? (
+                                                        <Switch
+                                                            trackColor={{
+                                                                false: "#3f3f46",
+                                                                true: "#7c3aed",
+                                                            }}
+                                                            thumbColor={
+                                                                toggles[
+                                                                    item.field as keyof typeof toggles
+                                                                ]
+                                                                    ? "#d8b4fe"
+                                                                    : "#c4b5fd"
+                                                            }
+                                                            value={
+                                                                toggles[
+                                                                    item.field as keyof typeof toggles
+                                                                ]
+                                                            }
+                                                            onValueChange={() =>
+                                                                toggleValue(item.field)
+                                                            }
+                                                        />
+                                                    ) : (
+                                                        <>
+                                                            {item.extraLabel ? (
+                                                                <Text
+                                                                    style={
+                                                                        styles.optionLabel
+                                                                    }
+                                                                >
+                                                                    {item.extraLabel}
+                                                                </Text>
+                                                            ) : null}
+                                                            <Text
+                                                                style={styles.chevron}
+                                                            >
+                                                                ›
+                                                            </Text>
+                                                        </>
+                                                    )}
+                                                </View>
+                                            </View>
+                                        );
+                                    })
+                                )}
+                            </>
+                        ) : (
+                            visibleItems.length === 0 ? (
+                                <View style={styles.emptyStateCard}>
+                                    <Text style={styles.emptyStateTitle}>
+                                        Aucun réglage trouvé
+                                    </Text>
+                                    <Text style={styles.emptyStateText}>
+                                        Essayez un autre mot-clé ou sélectionnez une
+                                        autre catégorie.
+                                    </Text>
+                                </View>
+                            ) : (
+                                visibleItems.map((item) => {
+                                    const isToggle = item.actionType === "toggle";
+                                    return (
+                                        <View
+                                            key={item.id}
+                                            style={styles.settingCard}
+                                        >
+                                            <View style={styles.settingLeft}>
+                                                <View
+                                                    style={
+                                                        styles.settingIconWrapper
+                                                    }
+                                                >
+                                                    <Text
+                                                        style={styles.settingIcon}
+                                                    >
+                                                        {item.icon}
+                                                    </Text>
+                                                </View>
+                                                <View
+                                                    style={styles.settingTextGroup}
+                                                >
+                                                    <Text
+                                                        style={styles.settingTitle}
+                                                    >
+                                                        {item.title}
+                                                    </Text>
+                                                    <Text
+                                                        style={
+                                                            styles.settingDescription
+                                                        }
+                                                    >
+                                                        {item.description}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            <View style={styles.settingRight}>
+                                                {isToggle ? (
+                                                    <Switch
+                                                        trackColor={{
+                                                            false: "#3f3f46",
+                                                            true: "#7c3aed",
+                                                        }}
+                                                        thumbColor={
+                                                            toggles[
+                                                                item.field as keyof typeof toggles
+                                                            ]
+                                                                ? "#d8b4fe"
+                                                                : "#c4b5fd"
+                                                        }
+                                                        value={
+                                                            toggles[
+                                                                item.field as keyof typeof toggles
+                                                            ]
+                                                        }
+                                                        onValueChange={() =>
+                                                            toggleValue(item.field)
+                                                        }
+                                                    />
+                                                ) : (
+                                                    <>
+                                                        {item.extraLabel ? (
+                                                            <Text
+                                                                style={
+                                                                    styles.optionLabel
+                                                                }
+                                                            >
+                                                                {item.extraLabel}
+                                                            </Text>
+                                                        ) : null}
+                                                        <Text
+                                                            style={styles.chevron}
+                                                        >
+                                                            ›
+                                                        </Text>
+                                                    </>
+                                                )}
+                                            </View>
+                                        </View>
+                                    );
+                                })
+                            )
                         )}
                     </View>
                 </View>
