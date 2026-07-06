@@ -16257,6 +16257,14 @@ async function openSettings(userId) {
                         ${isSuperAdmin() ? `<span class="admin-badge">Super admin</span>` : isVerificationAdmin() ? `<span class="admin-badge">Admin mode</span>` : ""}
                     </div>
                     <p>Organisez votre compte, votre profil public et vos préférences depuis un seul espace.</p>
+                    <div class="settings-searchbar">
+                        <input
+                            type="search"
+                            class="settings-search-input"
+                            placeholder="Rechercher un réglage, section ou option"
+                            aria-label="Rechercher un réglage"
+                        />
+                    </div>
                 </div>
                 <button type="button" class="settings-close-btn" onclick="closeSettings()" aria-label="Fermer les réglages">
                     <svg viewBox="0 0 24 24" aria-hidden="true">

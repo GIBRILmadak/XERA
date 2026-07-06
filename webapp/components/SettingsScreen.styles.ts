@@ -1,0 +1,247 @@
+import { StyleSheet } from "react-native";
+
+export default StyleSheet.create({
+    screen: {
+        flex: 1,
+        backgroundColor: "#071128",
+    },
+    pageContainer: {
+        padding: 20,
+        paddingBottom: 40,
+    },
+    headerRow: {
+        width: "100%",
+        marginBottom: 24,
+        gap: 16,
+    },
+    titleBlock: {
+        flex: 1,
+        gap: 6,
+    },
+    pageTitle: {
+        color: "#f8fafc",
+        fontSize: 32,
+        fontWeight: "800",
+    },
+    pageSubtitle: {
+        color: "#94a3b8",
+        fontSize: 15,
+        lineHeight: 22,
+        maxWidth: 640,
+    },
+    searchWrapper: {
+        width: "100%",
+    },
+    searchInput: {
+        width: "100%",
+        backgroundColor: "#0e1525",
+        color: "#e2e8f0",
+        borderRadius: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        fontSize: 15,
+        borderWidth: 1,
+        borderColor: "#1e2742",
+    },
+    mainLayout: {
+        width: "100%",
+        gap: 20,
+    },
+    layoutRow: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+    },
+    layoutColumn: {
+        flexDirection: "column",
+    },
+    sidebar: {
+        borderRadius: 24,
+        backgroundColor: "#0e1728",
+        borderWidth: 1,
+        borderColor: "#1c283f",
+        padding: 18,
+        gap: 12,
+    },
+    sidebarLarge: {
+        flex: 0.33,
+        minWidth: 280,
+    },
+    sidebarMobile: {
+        width: "100%",
+    },
+    sidebarSectionTitle: {
+        color: "#c7d2fe",
+        fontSize: 14,
+        fontWeight: "700",
+        textTransform: "uppercase",
+        letterSpacing: 0.8,
+        marginBottom: 8,
+    },
+    sidebarItem: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        padding: 14,
+        borderRadius: 18,
+        backgroundColor: "transparent",
+    },
+    sidebarItemActive: {
+        backgroundColor: "#151f33",
+        borderColor: "#4f46e5",
+        borderWidth: 1,
+    },
+    sidebarIcon: {
+        fontSize: 20,
+        marginRight: 12,
+        lineHeight: 24,
+    },
+    sidebarTextGroup: {
+        flex: 1,
+    },
+    sidebarItemTitle: {
+        color: "#e2e8f0",
+        fontSize: 16,
+        fontWeight: "700",
+        marginBottom: 2,
+    },
+    sidebarItemTitleActive: {
+        color: "#d8b4fe",
+    },
+    sidebarItemDescription: {
+        color: "#94a3b8",
+        fontSize: 13,
+        lineHeight: 18,
+    },
+    contentArea: {
+        flex: 1,
+        minWidth: 0,
+        gap: 18,
+    },
+    breadcrumbs: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 10,
+    },
+    breadcrumbText: {
+        color: "#94a3b8",
+        fontSize: 13,
+    },
+    breadcrumbSeparator: {
+        color: "#475569",
+        fontSize: 12,
+    },
+    breadcrumbCurrent: {
+        color: "#f8fafc",
+        fontSize: 13,
+        fontWeight: "700",
+    },
+    sectionHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: 18,
+        borderRadius: 24,
+        backgroundColor: "#0f1727",
+        borderWidth: 1,
+        borderColor: "#1c293f",
+    },
+    sectionTitle: {
+        color: "#f8fafc",
+        fontSize: 22,
+        fontWeight: "800",
+    },
+    sectionDescription: {
+        color: "#94a3b8",
+        fontSize: 14,
+        lineHeight: 20,
+        marginTop: 6,
+        maxWidth: 520,
+    },
+    sectionBadge: {
+        color: "#c7d2fe",
+        fontSize: 13,
+        fontWeight: "700",
+        backgroundColor: "rgba(124, 58, 237, 0.12)",
+        paddingVertical: 6,
+        paddingHorizontal: 14,
+        borderRadius: 999,
+    },
+    emptyStateCard: {
+        marginTop: 12,
+        padding: 22,
+        borderRadius: 24,
+        backgroundColor: "#0f1728",
+        borderWidth: 1,
+        borderColor: "#1f2937",
+    },
+    emptyStateTitle: {
+        color: "#e2e8f0",
+        fontSize: 16,
+        fontWeight: "700",
+        marginBottom: 6,
+    },
+    emptyStateText: {
+        color: "#94a3b8",
+        fontSize: 14,
+        lineHeight: 20,
+    },
+    settingCard: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+        padding: 18,
+        marginTop: 12,
+        borderRadius: 24,
+        backgroundColor: "#0a1322",
+        borderWidth: 1,
+        borderColor: "#172135",
+    },
+    settingLeft: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 14,
+        flex: 1,
+        minWidth: 0,
+    },
+    settingIconWrapper: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        backgroundColor: "#151f33",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    settingIcon: {
+        fontSize: 22,
+    },
+    settingTextGroup: {
+        flex: 1,
+        minWidth: 0,
+    },
+    settingTitle: {
+        color: "#f8fafc",
+        fontSize: 16,
+        fontWeight: "700",
+        marginBottom: 2,
+    },
+    settingDescription: {
+        color: "#94a3b8",
+        fontSize: 13,
+        lineHeight: 19,
+    },
+    settingRight: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+    },
+    optionLabel: {
+        color: "#c7d2fe",
+        fontSize: 14,
+    },
+    chevron: {
+        color: "#94a3b8",
+        fontSize: 20,
+        fontWeight: "700",
+    },
+});

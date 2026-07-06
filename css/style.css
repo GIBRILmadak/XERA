@@ -10761,21 +10761,148 @@ html.light-mode .btn-theme-toggle:hover {
     min-height: 520px;
     margin: 0;
     padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 20px;
     background:
         linear-gradient(
             180deg,
-            rgba(255, 255, 255, 0.055),
-            rgba(255, 255, 255, 0.025)
+            rgba(30, 24, 60, 0.95),
+            rgba(6, 7, 17, 0.95)
         ),
-        rgba(5, 5, 5, 0.55);
-    box-shadow: none;
+        rgba(5, 5, 5, 0.85);
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
 }
 
 .settings-panel.active {
     display: block;
     animation: settingsPanelIn 0.22s ease both;
+}
+
+.settings-panel-intro {
+    padding: 1.35rem 1.5rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.42rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-panel-intro p {
+    color: rgba(238, 242, 255, 0.72);
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.settings-card-grid {
+    display: grid;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.settings-card {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 1.2rem 1.25rem;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-card:hover {
+    background: rgba(124, 58, 237, 0.08);
+}
+
+.settings-card-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.9rem;
+    min-width: 0;
+}
+
+.settings-card-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    background: rgba(124, 58, 237, 0.16);
+    color: #e9d5ff;
+    font-size: 1.15rem;
+}
+
+.settings-card-title {
+    color: #f8fafc;
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 0.2rem;
+}
+
+.settings-card-description {
+    color: rgba(226, 232, 240, 0.68);
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+.settings-card-action {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.settings-card-label {
+    color: #d8b4fe;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.settings-card-chevron {
+    font-size: 1.2rem;
+    color: rgba(226, 232, 240, 0.8);
+}
+
+#settings-modal .accordion-header {
+    border: 0;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px 18px 0 0;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+#settings-modal .accordion-header:hover {
+    background: rgba(124, 58, 237, 0.1);
+}
+
+#settings-modal .accordion-content {
+    padding: 0 1.5rem 1.5rem;
+    background: rgba(255, 255, 255, 0.015);
+}
+
+#settings-modal .form-group {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+#settings-modal .form-group:last-child {
+    margin-bottom: 0;
+}
+
+#settings-modal .form-input,
+#settings-modal select,
+#settings-modal textarea {
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #f8fafc;
+}
+
+#settings-modal .form-input:focus,
+#settings-modal select:focus,
+#settings-modal textarea:focus {
+    box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.14);
+    border-color: rgba(124, 58, 237, 0.4);
 }
 
 @keyframes settingsPanelIn {
