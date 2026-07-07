@@ -67,10 +67,10 @@ class ToastManager {
         toast.className = `toast ${type}`;
         
         const icons = {
-            success: '✓',
-            error: '✕', 
-            info: 'ℹ',
-            warning: '⚠'
+            success: '<i class="fas fa-check-circle"></i>',
+            error: '<i class="fas fa-times-circle"></i>',
+            info: '<i class="fas fa-info-circle"></i>',
+            warning: '<i class="fas fa-exclamation-triangle"></i>'
         };
         
         toast.innerHTML = `
@@ -79,7 +79,7 @@ class ToastManager {
                 <div class="toast-title">${title}</div>
                 <div class="toast-message">${message}</div>
             </div>
-            <button class="toast-close">✕</button>
+            <button class="toast-close"><i class="fas fa-times"></i></button>
         `;
         
         // Ajouter le toast
@@ -485,7 +485,7 @@ class FluidityEngine {
             z-index: 10000;
             transition: width 0.4s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.4s;
             pointer-events: none;
-            box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.5);
             opacity: 0;
         `;
         document.body.appendChild(bar);

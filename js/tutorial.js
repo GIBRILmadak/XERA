@@ -11,32 +11,36 @@ const GUEST_TUTORIAL_STEPS = [
     {
         id: "vision",
         title: "Standardiser la Confiance",
-        message: "Le but de XERA est de standardiser la confiance technique et d'éliminer l'asymétrie d'information entre les créateurs de technologie et le marché mondial. Prouvez votre valeur par l'action grâce à la <strong>Proof of Building</strong>.",
+        message:
+            "Le but de XERA est de standardiser la confiance technique et d'éliminer l'asymétrie d'information entre les créateurs de technologie et le marché mondial. Prouvez votre valeur par l'action grâce à la <strong>Proof of Building</strong>.",
         element: null,
-        position: "center"
+        position: "center",
     },
     {
         id: "builders",
         title: "🚀 Pour les Builders",
-        message: "Valorisation automatisée : Le protocole se connecte à vos flux (commits GitHub, DB) pour capturer l'exécution réelle. Propulsion internationale via le <strong>Momentum Engine</strong>.",
+        message:
+            "Valorisation automatisée : Le protocole se connecte à vos flux (commits GitHub, DB) pour capturer l'exécution réelle. Propulsion internationale via le <strong>Momentum Engine</strong>.",
         element: null,
-        position: "center"
+        position: "center",
     },
     {
         id: "investors",
         title: "💼 Pour les Investisseurs",
-        message: "Due Diligence technique infaillible et suivi de traction en temps réel. Auditez la capacité réelle d'exécution des équipes avant d'investir.",
+        message:
+            "Due Diligence technique infaillible et suivi de traction en temps réel. Auditez la capacité réelle d'exécution des équipes avant d'investir.",
         element: "nav a[onclick*='discover']",
-        position: "bottom"
+        position: "bottom",
     },
     {
         id: "cta",
         title: "Prêt à construire ?",
-        message: "Rejoignez l'infrastructure conçue pour transformer l'innovation technique quotidienne en un actif numérique certifié et immuable.",
+        message:
+            "Rejoignez l'infrastructure conçue pour transformer l'innovation technique quotidienne en un actif numérique certifié et immuable.",
         element: "#nav-auth",
         position: "bottom",
-        isCTA: true
-    }
+        isCTA: true,
+    },
 ];
 
 // Étapes pour les utilisateurs connectés (Onboarding produit)
@@ -44,31 +48,35 @@ const AUTH_TUTORIAL_STEPS = [
     {
         id: "welcome-auth",
         title: "Bienvenue, Builder",
-        message: "Votre compte est actif. Commençons par structurer votre trajectoire pour transformer vos efforts en autorité réelle.",
+        message:
+            "Votre compte est actif. Commençons par structurer votre trajectoire pour transformer vos efforts en autorité réelle.",
         element: null,
-        position: "center"
+        position: "center",
     },
     {
         id: "create-arc",
         title: "Définissez votre ARC",
-        message: "Tout commence par un Projet. C'est votre trajectoire publique sur 30, 60 ou 90 jours où nous capturons votre progression.",
+        message:
+            "Tout commence par un Projet. C'est votre trajectoire publique sur 30, 60 ou 90 jours où nous capturons votre progression.",
         element: ".profile-arc-btn, .btn-add",
-        position: "bottom"
+        position: "bottom",
     },
     {
         id: "post-trace",
         title: "Documentez l'effort",
-        message: "Publiez une Trace chaque jour. C'est la preuve concrète (Proof of Building) qui construit votre réputation mondiale.",
+        message:
+            "Publiez une Trace chaque jour. C'est la preuve concrète (Proof of Building) qui construit votre réputation mondiale.",
         element: ".btn-add",
-        position: "bottom"
+        position: "bottom",
     },
     {
         id: "discover-auth",
         title: "Le flux High-Signal",
-        message: "Explorez, validez et collaborez avec d'autres builders actifs pour accélérer votre propulsion.",
+        message:
+            "Explorez, validez et collaborez avec d'autres builders actifs pour accélérer votre propulsion.",
         element: "nav a[onclick*='discover']",
-        position: "bottom"
-    }
+        position: "bottom",
+    },
 ];
 
 class XeraTutorial {
@@ -88,6 +96,21 @@ class XeraTutorial {
         const guestCompleted = localStorage.getItem(XERA_GUEST_TUTORIAL_KEY);
         const authCompleted = localStorage.getItem(XERA_TUTORIAL_KEY);
 
+        // Ne jamais afficher le tutoriel pour les comptes Pro
+        try {
+            if (
+                !isGuest &&
+                window.currentUser &&
+                window.isProUser &&
+                window.isProUser(window.currentUser)
+            ) {
+                console.log("XeraTutorial: désactivé pour compte Pro.");
+                return;
+            }
+        } catch (e) {
+            console.warn("Erreur vérification Pro dans tutorial.init:", e);
+        }
+
         if (isGuest) {
             if (guestCompleted) return;
             this.steps = GUEST_TUTORIAL_STEPS;
@@ -101,9 +124,9 @@ class XeraTutorial {
                 const userId = window.currentUser.id;
                 // Only start if they have no arcs yet (real new user)
                 const { count } = await window.supabase
-                    .from('arcs')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('user_id', userId);
+                    .from("arcs")
+                    .select("*", { count: "exact", head: true })
+                    .eq("user_id", userId);
 
                 if (count === 0) {
                     setTimeout(() => this.start(), 3000);
@@ -130,7 +153,7 @@ class XeraTutorial {
         this.tooltip.className = "tutorial-tooltip-premium tutorial-v2";
         document.body.appendChild(this.tooltip);
 
-        window.addEventListener('resize', () => this.refreshPosition());
+        window.addEventListener("resize", () => this.refreshPosition());
     }
 
     next() {
@@ -145,9 +168,13 @@ class XeraTutorial {
     }
 
     showStep(step) {
-        const targetEl = step.element ? document.querySelector(step.element) : null;
+        const targetEl = step.element
+            ? document.querySelector(step.element)
+            : null;
 
-        document.querySelectorAll(".tutorial-highlight-premium").forEach(el => el.classList.remove("tutorial-highlight-premium"));
+        document
+            .querySelectorAll(".tutorial-highlight-premium")
+            .forEach((el) => el.classList.remove("tutorial-highlight-premium"));
 
         if (targetEl && targetEl.offsetParent !== null) {
             targetEl.classList.add("tutorial-highlight-premium");
@@ -166,7 +193,11 @@ class XeraTutorial {
         }
 
         const isLast = this.currentStepIndex === this.steps.length - 1;
-        const btnLabel = step.isCTA ? "Créer mon compte" : (isLast ? "Commencer" : "Continuer");
+        const btnLabel = step.isCTA
+            ? "Créer mon compte"
+            : isLast
+              ? "Commencer"
+              : "Continuer";
 
         this.tooltip.innerHTML = `
             <div class="tutorial-premium-content">
@@ -177,25 +208,29 @@ class XeraTutorial {
                 <h3>${step.title}</h3>
                 <div class="tutorial-text-body">${step.message}</div>
                 <div class="tutorial-premium-actions">
-                    <button class="btn-tutorial-next-premium ${step.isCTA ? 'btn-cta-pulse' : ''}">${btnLabel}</button>
+                    <button class="btn-tutorial-next-premium ${step.isCTA ? "btn-cta-pulse" : ""}">${btnLabel}</button>
                 </div>
             </div>
         `;
 
-        this.tooltip.querySelector(".btn-tutorial-next-premium").onclick = () => {
-            if (step.isCTA) {
-                window.location.href = "login.html";
-            } else {
-                this.next();
-            }
-        };
-        this.tooltip.querySelector(".btn-tutorial-skip-premium").onclick = () => this.complete();
+        this.tooltip.querySelector(".btn-tutorial-next-premium").onclick =
+            () => {
+                if (step.isCTA) {
+                    window.location.href = "login.html";
+                } else {
+                    this.next();
+                }
+            };
+        this.tooltip.querySelector(".btn-tutorial-skip-premium").onclick = () =>
+            this.complete();
     }
 
     refreshPosition() {
         if (this.currentStepIndex < 0) return;
         const step = this.steps[this.currentStepIndex];
-        const targetEl = step.element ? document.querySelector(step.element) : null;
+        const targetEl = step.element
+            ? document.querySelector(step.element)
+            : null;
         if (targetEl && targetEl.offsetParent !== null) {
             const rect = targetEl.getBoundingClientRect();
             this.positionTooltip(rect, step.position);
@@ -209,13 +244,16 @@ class XeraTutorial {
 
         if (position === "bottom") {
             top = targetRect.bottom + gap;
-            left = targetRect.left + (targetRect.width / 2) - (tooltipWidth / 2);
+            left = targetRect.left + targetRect.width / 2 - tooltipWidth / 2;
         } else if (position === "top") {
             top = targetRect.top - gap - 200;
-            left = targetRect.left + (targetRect.width / 2) - (tooltipWidth / 2);
+            left = targetRect.left + targetRect.width / 2 - tooltipWidth / 2;
         }
 
-        left = Math.max(20, Math.min(left, window.innerWidth - tooltipWidth - 20));
+        left = Math.max(
+            20,
+            Math.min(left, window.innerWidth - tooltipWidth - 20),
+        );
         if (top + 250 > window.innerHeight) {
             top = targetRect.top - gap - 200;
         }
@@ -228,14 +266,18 @@ class XeraTutorial {
     }
 
     complete() {
-        const key = window.currentUser ? XERA_TUTORIAL_KEY : XERA_GUEST_TUTORIAL_KEY;
+        const key = window.currentUser
+            ? XERA_TUTORIAL_KEY
+            : XERA_GUEST_TUTORIAL_KEY;
         localStorage.setItem(key, "true");
         if (this.overlay) this.overlay.remove();
         if (this.tooltip) this.tooltip.remove();
         this.overlay = null;
         this.tooltip = null;
-        document.querySelectorAll(".tutorial-highlight-premium").forEach(el => el.classList.remove("tutorial-highlight-premium"));
-        window.removeEventListener('resize', () => this.refreshPosition());
+        document
+            .querySelectorAll(".tutorial-highlight-premium")
+            .forEach((el) => el.classList.remove("tutorial-highlight-premium"));
+        window.removeEventListener("resize", () => this.refreshPosition());
     }
 }
 

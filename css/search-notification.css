@@ -437,9 +437,11 @@
     right: 2rem;
     min-width: 300px;
     max-width: 400px;
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
+    background: rgba(18, 18, 18, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
     padding: 1rem;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
     z-index: 3000;
@@ -447,6 +449,7 @@
     transform: translateX(400px);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
+    color: white;
 }
 
 .notification-toast.show {
@@ -461,8 +464,14 @@
 }
 
 .notification-toast-icon {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: #a78bfa; /* Violet */
 }
 
 .notification-toast-text {

@@ -299,7 +299,8 @@
                         The operating system for ambitious builders.
                     </h1>
                     <p class="hero-lede" data-i18n="heroLede">
-                        XERA helps founders, creators and teams turn progress into proof, visibility and momentum.
+                        XERA helps founders, creators and teams turn progress
+                        into proof, visibility and momentum.
                     </p>
                     <ul class="hero-bullets" id="hero-bullets">
                         <li data-i18n="heroBullet1">
@@ -447,10 +448,7 @@
                         <div id="search-results" class="search-results"></div>
                     </div>
 
-                    <div
-                        class="discover-filter"
-                        aria-label="Filtrer le feed"
-                    >
+                    <div class="discover-filter" aria-label="Filtrer le feed">
                         <button
                             class="filter-btn active"
                             data-filter="all"
@@ -572,6 +570,13 @@
         ></script>
         <script src="js/xera-react-core.js?v=20260424-1" defer></script>
         <script src="js/react-app.js?v=20260424-1" defer></script>
+
+        <style>
+            /* Hide hero for pro users */
+            body.is-pro #hero {
+                display: none !important;
+            }
+        </style>
 
         <script>
             // Initialiser les fonctionnalités au chargement
@@ -729,6 +734,15 @@
                             console.warn("Fullscreen request failed:", e);
                         }
                     });
+                }
+
+                // Add is-pro class to body if user is pro
+                if (
+                    window.currentUser &&
+                    window.isProUser &&
+                    window.isProUser(window.currentUser)
+                ) {
+                    document.body.classList.add("is-pro");
                 }
             });
         </script>

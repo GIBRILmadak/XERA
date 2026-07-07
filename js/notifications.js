@@ -263,21 +263,17 @@ function handleNewNotification(notification) {
 // Afficher un toast de notification
 function showNotificationToast(notification) {
     const toast = document.createElement("div");
-    toast.className = "notification-toast";
+    toast.className = "toast show"; // Utilisation de la classe .toast pour le design
     toast.innerHTML = `
-        <div class="notification-toast-content">
-            <div class="notification-toast-icon">${getNotificationIcon(notification.type)}</div>
-            <div class="notification-toast-text">
-                <div class="notification-toast-title">${getNotificationTitle(notification)}</div>
-                <div class="notification-toast-message">${notification.message}</div>
-            </div>
+        <div class="toast-icon">${getNotificationIcon(notification.type)}</div>
+        <div class="toast-content">
+            <div class="toast-title">${getNotificationTitle(notification)}</div>
+            <div class="toast-message">${notification.message}</div>
         </div>
+        <button class="toast-close"><i class="fas fa-times"></i></button>
     `;
 
     document.body.appendChild(toast);
-
-    // Animation d'entrée
-    setTimeout(() => toast.classList.add("show"), 100);
 
     // Retirer après 5 secondes
     setTimeout(() => {
@@ -286,7 +282,8 @@ function showNotificationToast(notification) {
     }, 5000);
 
     // Cliquer pour fermer
-    toast.addEventListener("click", () => {
+    toast.querySelector('.toast-close').addEventListener("click", (e) => {
+        e.stopPropagation();
         toast.classList.remove("show");
         setTimeout(() => toast.remove(), 300);
     });
@@ -295,25 +292,25 @@ function showNotificationToast(notification) {
 // Obtenir l'icône selon le type de notification
 function getNotificationIcon(type) {
     const icons = {
-        support: "💎",
-        follow: "🚀",
-        arc_follow: "📌",
-        new_update: "📝",
-        new_arc: "🏗️",
-        stream: "🔴",
-        live_start: "🔴",
-        encouragement: "✨",
-        peer_validation: "🤝",
-        peer_validation_high: "🔥",
-        announcement_reply: "💬",
-        collaboration: "🤝",
-        like: "❤️",
-        comment: "💬",
-        live_chat: "💬",
-        mention: "@",
-        achievement: "🏆",
+        support: '<i class="fas fa-gem"></i>',
+        follow: '<i class="fas fa-rocket"></i>',
+        arc_follow: '<i class="fas fa-thumbtack"></i>',
+        new_update: '<i class="fas fa-edit"></i>',
+        new_arc: '<i class="fas fa-drafting-compass"></i>',
+        stream: '<i class="fas fa-circle" style="color:red"></i>',
+        live_start: '<i class="fas fa-circle" style="color:red"></i>',
+        encouragement: '<i class="fas fa-magic"></i>',
+        peer_validation: '<i class="fas fa-handshake"></i>',
+        peer_validation_high: '<i class="fas fa-fire"></i>',
+        announcement_reply: '<i class="fas fa-comments"></i>',
+        collaboration: '<i class="fas fa-handshake"></i>',
+        like: '<i class="fas fa-heart"></i>',
+        comment: '<i class="fas fa-comment"></i>',
+        live_chat: '<i class="fas fa-comment"></i>',
+        mention: '<i class="fas fa-at"></i>',
+        achievement: '<i class="fas fa-trophy"></i>',
     };
-    return icons[type] || "🔔";
+    return icons[type] || '<i class="fas fa-bell"></i>';
 }
 
 // Obtenir le titre de la notification (Optimisé Neuro-Psychologie: Identité & Statut)

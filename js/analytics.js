@@ -613,7 +613,7 @@ function renderMonthlyChart({ year, monthIndex, daysInMonth, series, containerId
                     label: 'Succès',
                     data: series.success,
                     borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                    backgroundColor: 'rgba(139, 92, 246, 0.12)',
                     tension: 0.3
                 },
                 {

@@ -1,3 +1,4 @@
+// `isProUser` is provided globally by app-supabase.js (window.isProUser)
 /**
  * XERA PROFESSIONAL PAGES & CERTIFICATIONS
  * Gère la création de pages entreprises et la certification des talents
@@ -456,8 +457,11 @@ class XERAProfessionalManager {
             return;
         }
 
-        // Empêcher la création de doublons
-        if (document.querySelector(".tutorial-overlay-premium")) {
+        // Empêcher la création de doublons ou l'onboarding pour les comptes Pro
+        if (
+            document.querySelector(".tutorial-overlay-premium") ||
+            isProUser(window.currentUser)
+        ) {
             return;
         }
 
@@ -518,6 +522,15 @@ class XERAProfessionalManager {
                     this.myPageSlug = null;
                     navBtn.style.display = "none";
                 }
+                // Attacher un gestionnaire fiable utilisant l'instance courante
+                try {
+                    navBtn.onclick = () => this.navigateToMyPage();
+                } catch (e) {
+                    console.warn(
+                        "Impossible d'attacher onclick à nav-pro-page:",
+                        e,
+                    );
+                }
             }
 
             // Afficher l'onglet Talents si c'est un profil Pro/Institution
@@ -537,7 +550,8 @@ class XERAProfessionalManager {
             );
             if (profileBtn) {
                 // NE PAS AFFICHER SI C'EST DEJA PRO
-                const isAlreadyPro = hasPage || this.isNonPersonalAccount(window.currentUser);
+                const isAlreadyPro =
+                    hasPage || this.isNonPersonalAccount(window.currentUser);
                 profileBtn.style.display = isAlreadyPro ? "none" : "flex";
                 // AJOUT : Attacher l'événement pour démarrer la création
                 profileBtn.onclick = () => this.startCreatePage();
@@ -547,10 +561,10 @@ class XERAProfessionalManager {
 
             // Gérer l'état initial depuis l'URL (permet de rester sur la page au refresh)
             await this.handleInitialState();
-            
+
             // Si on a une page pro, empêcher le onboarding intempestif
             if (hasPage) {
-                firstPostOnboardingHandled = true; 
+                firstPostOnboardingHandled = true;
             }
         } catch (e) {
             console.error("InitNavigation Pro Page failed:", e);
@@ -642,7 +656,10 @@ class XERAProfessionalManager {
      * Crée une nouvelle page professionnelle
      */
     async createPage(data) {
-        const { data: { user }, error: authError } = await this.supabase.auth.getUser();
+        const {
+            data: { user },
+            error: authError,
+        } = await this.supabase.auth.getUser();
         if (authError || !user) throw new Error("Utilisateur non connecté");
 
         // Utiliser l'ID de l'utilisateur authentifié
@@ -686,9 +703,13 @@ class XERAProfessionalManager {
                 throw new Error("Ce nom de Page Pro est déjà utilisé.");
             }
             if (error.code === "23503") {
-                throw new Error("Erreur de compte : le profil utilisateur n'est pas correctement synchronisé avec la base de données.");
+                throw new Error(
+                    "Erreur de compte : le profil utilisateur n'est pas correctement synchronisé avec la base de données.",
+                );
             }
-            throw new Error(error.message || "Erreur lors de la création de la page.");
+            throw new Error(
+                error.message || "Erreur lors de la création de la page.",
+            );
         }
         return page;
     }
@@ -2643,6 +2664,23 @@ if (typeof window !== "undefined") {
             window.professionalManager = new XERAProfessionalManager(client);
             window.professionalManager.initNavigation().catch(console.warn);
             console.log("XERA Professional Manager initialized.");
+            // Delegated click handler so the nav button works even if re-rendered
+            if (!window._proNavDelegationHooked) {
+                document.addEventListener("click", (ev) => {
+                    const btn = ev.target.closest
+                        ? ev.target.closest("#nav-pro-page")
+                        : null;
+                    if (btn) {
+                        ev.preventDefault();
+                        try {
+                            window.professionalManager?.navigateToMyPage();
+                        } catch (e) {
+                            console.warn("navigateToMyPage failed:", e);
+                        }
+                    }
+                });
+                window._proNavDelegationHooked = true;
+            }
         } else {
             setTimeout(initManager, 100);
         }

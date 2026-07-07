@@ -254,6 +254,16 @@
         <!-- Script principal avec intégration Supabase -->
         <script src="js/app-supabase.js?v=20260502-3"></script>
 
+        <style>
+            /* Styles pour masquer le profil par défaut si c'est un compte Pro */
+            body.is-pro #profile {
+                display: none !important;
+            }
+            body:not(.is-pro) #pro-page {
+                display: none !important;
+            }
+        </style>
+
         <script>
             // Initialiser les fonctionnalités au chargement
             document.addEventListener("DOMContentLoaded", function () {

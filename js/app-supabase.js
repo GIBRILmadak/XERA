@@ -768,17 +768,16 @@ function renderFriendsOnXeraWidget(userId) {
 function showFriendJoinedNotification(friendId, friendName) {
     try {
         const notification = document.createElement("div");
-        notification.className = "friend-joined-toast";
+        notification.className = "toast show";
         notification.innerHTML = `
-            <div class="friend-joined-content">
-                <span class="toast-icon">🎉</span>
-                <div class="toast-text">
-                    <strong>${friendName}</strong> a rejoint XERA
-                </div>
-                <button class="toast-action" onclick="handleProfileClick('${friendId}', null, true)">
-                    Voir
-                </button>
+            <div class="toast-icon"><i class="fas fa-user-plus"></i></div>
+            <div class="toast-content">
+                <div class="toast-title">Nouvelle connexion</div>
+                <div class="toast-message"><strong>${friendName}</strong> a rejoint XERA</div>
             </div>
+            <button class="btn btn-primary btn-sm" onclick="handleProfileClick('${friendId}', null, true); this.closest('.toast').remove();">
+                Voir
+            </button>
         `;
 
         const container = document.getElementById("toast-container");
@@ -1246,6 +1245,29 @@ function isProAccountType(accountType, accountSubtype) {
         ].includes(value),
     );
 }
+
+function isProUser(user) {
+    if (!user) return false;
+    const normalizedPlan = normalizeAccountType(
+        user.plan ||
+            user.subscription_tier ||
+            user.role ||
+            user.account_type ||
+            user.user_metadata?.plan ||
+            user.user_metadata?.subscription_tier ||
+            user.user_metadata?.account_type,
+    );
+
+    return (
+        user.is_pro === true ||
+        user.isPro === true ||
+        normalizedPlan === "pro" ||
+        isProAccountType(user.account_type, user.account_subtype)
+    );
+}
+
+// Expose helper globally for legacy (non-module) scripts
+window.isProUser = isProUser;
 
 function buildProfileUrl(userId, accountType, accountSubtype) {
     if (!accountType && userId) {
@@ -2339,10 +2361,47 @@ async function initializeApp() {
                     window.XeraNudgeManager.checkActivity();
                 }
                 // Vérifier si le tutoriel est déjà terminé avant de lancer
-                const isTutorialCompleted = localStorage.getItem("xera-tutorial-completed") === "true";
+                const isTutorialCompleted =
+                    localStorage.getItem("xera-tutorial-completed") === "true";
                 if (window.XeraTutorial && !isTutorialCompleted) {
-                    console.log("Démarrage du tutoriel XERA...");
-                    window.XeraTutorial.init();
+                    // Ne pas lancer le tutoriel pour les comptes Pro
+                    try {
+                        const isPro =
+                            window.currentUser &&
+                            window.isProUser &&
+                            window.isProUser(window.currentUser);
+                        if (!isPro) {
+                            console.log("Démarrage du tutoriel XERA...");
+                            window.XeraTutorial.init();
+                        } else {
+                            console.log(
+                                "Tutoriel XERA ignoré pour compte Pro.",
+                            );
+                        }
+
+                        // Masquer le hero / CTA principal pour les comptes Pro
+                        try {
+                            if (isPro) {
+                                const hero = document.getElementById("hero");
+                                if (hero) {
+                                    hero.style.display = "none";
+                                    console.log("Hero masqué pour compte Pro.");
+                                }
+                            }
+                        } catch (hideErr) {
+                            console.warn(
+                                "Erreur masquage hero pour Pro:",
+                                hideErr,
+                            );
+                        }
+                    } catch (e) {
+                        console.warn(
+                            "Erreur vérification Pro pour tutoriel:",
+                            e,
+                        );
+                        // En cas d'erreur, démarrer par sécurité
+                        window.XeraTutorial.init();
+                    }
                 }
             } catch (err) {
                 console.warn("Erreur démarrage tutoriel/nudges:", err);
@@ -2517,21 +2576,60 @@ const ARC_COUNT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const userArcCounts = new Map();
 let heroStateSafetyTimeout = null;
 
+function applyProHeroVisibility() {
+    const isPro = Boolean(
+        window.currentUser &&
+        window.isProUser &&
+        window.isProUser(window.currentUser),
+    );
+
+    document.body.classList.toggle("xera-pro-account", isPro);
+
+    const hero = document.getElementById("hero");
+    if (hero) {
+        hero.style.display = isPro ? "none" : "";
+    }
+}
+window.applyProHeroVisibility = applyProHeroVisibility;
+
+const proHeroVisibilityObserver = new MutationObserver(() => {
+    try {
+        applyProHeroVisibility();
+    } catch (err) {
+        console.warn("Erreur revalidation hero Pro:", err);
+    }
+});
+
+if (document.body) {
+    proHeroVisibilityObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+    });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    applyProHeroVisibility();
+});
+window.addEventListener("load", () => {
+    applyProHeroVisibility();
+});
+
 function setHeroState(state) {
     const hero = document.getElementById("hero");
-    if (!hero) return;
-    hero.dataset.state = state;
-    hero.setAttribute(
-        "aria-busy",
-        state === HERO_STATE.LOADING ? "true" : "false",
-    );
-    hero.style.display = state === HERO_STATE.HIDDEN ? "none" : "";
+    if (hero) {
+        hero.dataset.state = state;
+        hero.setAttribute(
+            "aria-busy",
+            state === HERO_STATE.LOADING ? "true" : "false",
+        );
+        hero.style.display = state === HERO_STATE.HIDDEN ? "none" : "";
+    }
 
     if (state === HERO_STATE.LOADING) {
         clearTimeout(heroStateSafetyTimeout);
         heroStateSafetyTimeout = setTimeout(() => {
             // Fail-safe: avoid leaving the user with an empty viewport on very slow connections
-            if (hero.dataset.state === HERO_STATE.LOADING) {
+            if (hero && hero.dataset.state === HERO_STATE.LOADING) {
                 hero.dataset.state = HERO_STATE.VISIBLE;
                 hero.style.display = "";
                 hero.setAttribute("aria-busy", "false");
@@ -2599,7 +2697,21 @@ async function getUserArcCount(userId) {
 
 async function updateHeroVisibilityForUser(userId) {
     const hero = document.getElementById("hero");
-    if (!hero) return;
+    const profileHero = document.querySelector(".profile-hero");
+    if (!hero && !profileHero) return;
+
+    applyProHeroVisibility();
+
+    // Hide the onboarding hero for Pro accounts.
+    const user =
+        userId === window.currentUser?.id
+            ? window.currentUser
+            : getUser(userId);
+    if (isProUser(user)) {
+        setHeroState(HERO_STATE.HIDDEN);
+        return;
+    }
+
     // Not logged in -> show hero
     if (!userId) {
         setHeroState(HERO_STATE.VISIBLE);
@@ -3023,11 +3135,38 @@ function adjustNavForAccountType(user) {
     if (!navProfile) return;
 
     // Détecter si le compte est pro/entreprise
-    const accountType = user?.account_type || user?.user_metadata?.account_type || "";
-    const accountSubtype = user?.account_subtype || user?.user_metadata?.account_subtype || "";
-    
-    const isPro = ["community", "enterprise", "company", "pro", "communauté", "entreprise", "institution", "organization", "organisation", "org", "team"].includes(accountType.toLowerCase()) ||
-                  ["community", "enterprise", "company", "pro", "communauté", "entreprise", "institution", "organization", "organisation", "org", "team"].includes(accountSubtype.toLowerCase());
+    const accountType =
+        user?.account_type || user?.user_metadata?.account_type || "";
+    const accountSubtype =
+        user?.account_subtype || user?.user_metadata?.account_subtype || "";
+
+    const isPro =
+        [
+            "community",
+            "enterprise",
+            "company",
+            "pro",
+            "communauté",
+            "entreprise",
+            "institution",
+            "organization",
+            "organisation",
+            "org",
+            "team",
+        ].includes(accountType.toLowerCase()) ||
+        [
+            "community",
+            "enterprise",
+            "company",
+            "pro",
+            "communauté",
+            "entreprise",
+            "institution",
+            "organization",
+            "organisation",
+            "org",
+            "team",
+        ].includes(accountSubtype.toLowerCase());
 
     if (isPro) {
         navProfile.style.display = "none";
@@ -3035,7 +3174,6 @@ function adjustNavForAccountType(user) {
         navProfile.style.display = "flex";
     }
 }
-
 
 /* ========================================
    CHARGEMENT DES DONNÉES
@@ -3354,7 +3492,7 @@ async function loadAllData() {
                 INITIAL_AUTH_TIMEOUT_MS,
                 "Current profile ensure",
             );
-            
+
             // Masquer le bouton de trajectoire si c'est un compte PRO
             if (ensuredProfile) {
                 adjustNavForAccountType(ensuredProfile);
@@ -3365,12 +3503,12 @@ async function loadAllData() {
                 safeProfile && typeof applyUserUpdateToCache === "function"
                     ? applyUserUpdateToCache(safeProfile)
                     : safeProfile;
-            
+
             // Ajustement ici au cas où mergedProfile est utilisé pour le bouton
             if (mergedProfile) {
                 adjustNavForAccountType(mergedProfile);
             }
-                
+
             if (mergedProfile?.avatar) {
                 setNavProfileAvatar(
                     mergedProfile.avatar,
@@ -10419,8 +10557,8 @@ function renderUserCard(
             background: rgba(255,255,255,0.1);
 }
 .courage-btn.encouraged {
-            background: rgba(16, 185, 129, 0.1);
-            border-color: rgba(16, 185, 129, 0.3);
+            background: rgba(139, 92, 246, 0.1);
+            border-color: rgba(139, 92, 246, 0.3);
             color: #10b981;
 }
 .editorial-card.pro-card {
