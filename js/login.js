@@ -680,22 +680,44 @@ async function handleSubmit(e) {
                     user?.user_metadata?.account_type ||
                     user?.account_type ||
                     "personal";
+                const accountSubtype =
+                    user?.user_metadata?.account_subtype ||
+                    user?.account_subtype ||
+                    user?.accountSubtype ||
+                    "personal";
                 const normalizedAccountType = String(accountType)
                     .trim()
                     .toLowerCase();
-                const isPro = [
-                    "community",
-                    "enterprise",
-                    "company",
-                    "pro",
-                    "communauté",
-                    "entreprise",
-                    "institution",
-                    "organization",
-                    "organisation",
-                    "org",
-                    "team",
-                ].includes(normalizedAccountType);
+                const normalizedAccountSubtype = String(accountSubtype)
+                    .trim()
+                    .toLowerCase();
+                const isPro =
+                    [
+                        "community",
+                        "enterprise",
+                        "company",
+                        "pro",
+                        "communauté",
+                        "entreprise",
+                        "institution",
+                        "organization",
+                        "organisation",
+                        "org",
+                        "team",
+                    ].includes(normalizedAccountType) ||
+                    [
+                        "community",
+                        "enterprise",
+                        "company",
+                        "pro",
+                        "communauté",
+                        "entreprise",
+                        "institution",
+                        "organization",
+                        "organisation",
+                        "org",
+                        "team",
+                    ].includes(normalizedAccountSubtype);
 
                 const onboardingCompleted =
                     user?.user_metadata?.onboarding_completed === true ||

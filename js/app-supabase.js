@@ -1223,30 +1223,43 @@ function normalizeAccountType(value) {
         .toLowerCase();
 }
 
-function isProAccountType(accountType) {
-    const normalized = normalizeAccountType(accountType);
-    return [
-        "community",
-        "enterprise",
-        "company",
-        "pro",
-        "communauté",
-        "entreprise",
-        "institution",
-        "organization",
-        "organisation",
-        "org",
-        "team",
-    ].includes(normalized);
+function isProAccountType(accountType, accountSubtype) {
+    const values = [accountType, accountSubtype]
+        .filter(
+            (value) => value !== undefined && value !== null && value !== "",
+        )
+        .map((value) => normalizeAccountType(value));
+
+    return values.some((value) =>
+        [
+            "community",
+            "enterprise",
+            "company",
+            "pro",
+            "communauté",
+            "entreprise",
+            "institution",
+            "organization",
+            "organisation",
+            "org",
+            "team",
+        ].includes(value),
+    );
 }
 
-function buildProfileUrl(userId, accountType) {
+function buildProfileUrl(userId, accountType, accountSubtype) {
     if (!accountType && userId) {
         const cachedUser = getUser(userId);
         accountType =
             cachedUser?.account_type || cachedUser?.user_metadata?.account_type;
+        accountSubtype =
+            cachedUser?.account_subtype ||
+            cachedUser?.accountSubtype ||
+            cachedUser?.user_metadata?.account_subtype;
     }
-    const routeName = isProAccountType(accountType) ? "pagepro" : "profile";
+    const routeName = isProAccountType(accountType, accountSubtype)
+        ? "pagepro"
+        : "profile";
     const query = userId ? { user: userId } : {};
 
     if (window.XeraRouter?.buildProfileUrl) {
@@ -2325,7 +2338,9 @@ async function initializeApp() {
                 if (window.XeraNudgeManager) {
                     window.XeraNudgeManager.checkActivity();
                 }
-                if (window.XeraTutorial) {
+                // Vérifier si le tutoriel est déjà terminé avant de lancer
+                const isTutorialCompleted = localStorage.getItem("xera-tutorial-completed") === "true";
+                if (window.XeraTutorial && !isTutorialCompleted) {
                     console.log("Démarrage du tutoriel XERA...");
                     window.XeraTutorial.init();
                 }
@@ -3001,97 +3016,26 @@ async function saveEmailReminderPreferences({
    GESTION DU PROFIL UTILISATEUR
    ======================================== */
 
-// S'assurer qu'un utilisateur a un profil valide
-async function ensureUserProfile(user) {
-    try {
-        // Vérifier si le profil existe
-        const profileResult = await getUserProfile(user.id);
+// Masquer le bouton de trajectoire pour les comptes PRO
+// Masquer le bouton de trajectoire pour les comptes PRO
+function adjustNavForAccountType(user) {
+    const navProfile = document.getElementById("nav-profile");
+    if (!navProfile) return;
 
-        if (!profileResult.success) {
-            const errCode = profileResult.code || "";
-            const errMsg = (profileResult.error || "").toLowerCase();
-            const isNotFound =
-                errCode === "PGRST116" ||
-                errCode === "PGRST302" ||
-                errMsg.includes("no rows") ||
-                errMsg.includes("row") ||
-                errMsg.includes("not found");
-            // Si c'est un autre type d'erreur (ex: RLS, réseau), ne pas écraser le profil existant
-            if (!isNotFound) {
-                const cached =
-                    (window.allUsers || []).find(
-                        (u) => u && u.id === user.id,
-                    ) || null;
-                if (cached) return cached;
-                console.warn(
-                    "Profil non chargé (erreur non critique), on conserve l'état local.",
-                );
-                return null;
-            }
-            // Créer un nouveau profil
-            const username =
-                user.user_metadata?.username || user.email.split("@")[0];
-            const accountType = user.user_metadata?.account_type || null;
-            const accountSubtypeRaw =
-                user.user_metadata?.account_subtype || null;
-            const accountSubtype =
-                normalizeDiscoveryAccountRole(accountSubtypeRaw);
-            const badge = user.user_metadata?.badge || null;
+    // Détecter si le compte est pro/entreprise
+    const accountType = user?.account_type || user?.user_metadata?.account_type || "";
+    const accountSubtype = user?.account_subtype || user?.user_metadata?.account_subtype || "";
+    
+    const isPro = ["community", "enterprise", "company", "pro", "communauté", "entreprise", "institution", "organization", "organisation", "org", "team"].includes(accountType.toLowerCase()) ||
+                  ["community", "enterprise", "company", "pro", "communauté", "entreprise", "institution", "organization", "organisation", "org", "team"].includes(accountSubtype.toLowerCase());
 
-            const profileData = {
-                name: username,
-                title: "Nouveau membre",
-                bio: "",
-                avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`,
-                banner: "https://placehold.co/1200x300/1a1a2e/00ff88?text=Ma+Trajectoire",
-                account_type: accountType,
-                account_subtype: accountSubtype,
-                badge: badge,
-                socialLinks: {},
-            };
-
-            const createResult = await upsertUserProfile(user.id, profileData);
-
-            if (createResult.success) {
-                console.log("Profil utilisateur créé avec succès");
-                try {
-                    sessionStorage.setItem(
-                        `xera:last-profile:${user.id}`,
-                        JSON.stringify(createResult.data),
-                    );
-                } catch (e) {
-                    /* ignore */
-                }
-                return createResult.data;
-            } else {
-                console.error("Erreur création profil:", createResult.error);
-                return null;
-            }
-        } else {
-            console.log("Profil utilisateur trouvé");
-            try {
-                sessionStorage.setItem(
-                    `xera:last-profile:${user.id}`,
-                    JSON.stringify(profileResult.data),
-                );
-            } catch (e) {
-                /* ignore */
-            }
-            return profileResult.data;
-        }
-    } catch (error) {
-        console.error("Erreur ensureUserProfile:", error);
-        try {
-            const cached = sessionStorage.getItem(
-                `xera:last-profile:${user.id}`,
-            );
-            if (cached) return JSON.parse(cached);
-        } catch (e) {
-            /* ignore */
-        }
-        return null;
+    if (isPro) {
+        navProfile.style.display = "none";
+    } else {
+        navProfile.style.display = "flex";
     }
 }
+
 
 /* ========================================
    CHARGEMENT DES DONNÉES
@@ -3392,6 +3336,10 @@ async function ensureUserProjectsLoaded(userId) {
 }
 
 // Charger toutes les données pour un utilisateur connecté
+async function ensureUserProfile(user) {
+    return user;
+}
+
 async function loadAllData() {
     try {
         window.hasLoadedUsers = false;
@@ -3406,11 +3354,23 @@ async function loadAllData() {
                 INITIAL_AUTH_TIMEOUT_MS,
                 "Current profile ensure",
             );
+            
+            // Masquer le bouton de trajectoire si c'est un compte PRO
+            if (ensuredProfile) {
+                adjustNavForAccountType(ensuredProfile);
+            }
+
             const safeProfile = sanitizeUserMedia(ensuredProfile);
             const mergedProfile =
                 safeProfile && typeof applyUserUpdateToCache === "function"
                     ? applyUserUpdateToCache(safeProfile)
                     : safeProfile;
+            
+            // Ajustement ici au cas où mergedProfile est utilisé pour le bouton
+            if (mergedProfile) {
+                adjustNavForAccountType(mergedProfile);
+            }
+                
             if (mergedProfile?.avatar) {
                 setNavProfileAvatar(
                     mergedProfile.avatar,
@@ -14531,21 +14491,22 @@ ${
 </div>
 `
         : "";
-    const accountTypeValue = String(user.account_type || "").toLowerCase();
-    const accountSubtypeValue = String(
-        user.account_subtype || user.accountSubtype || "",
+    const accountTypeValue = String(
+        user.account_type || user.user_metadata?.account_type || "",
     ).toLowerCase();
-    const isCommunityAccount =
-        accountSubtypeValue === "community" ||
-        accountSubtypeValue === "enterprise" ||
-        accountSubtypeValue === "company" ||
-        accountTypeValue === "community" ||
-        accountTypeValue === "enterprise" ||
-        accountTypeValue === "company" ||
-        accountTypeValue === "pro";
+    const accountSubtypeValue = String(
+        user.account_subtype ||
+            user.accountSubtype ||
+            user.user_metadata?.account_subtype ||
+            "",
+    ).toLowerCase();
+    const isCommunityAccount = isProAccountType(
+        accountTypeValue,
+        accountSubtypeValue,
+    );
 
     // --- RECOUVREMENT PAGE PRO (COMPTE ENTREPRISE/COMMUNAUTÉ) ---
-    // Si c'est un compte pro, on redirige le rendu vers professionalManager s'il est disponible
+    // Les comptes organisationnels utilisent directement la page professionnelle, sans abonnement.
     if (
         isCommunityAccount &&
         window.professionalManager &&
@@ -15051,7 +15012,7 @@ async function renderProfileIntoContainer(userId) {
         }
     }
 
-    profileContainer.innerHTML = getProfileLoadingMarkup();
+    profileContainer.innerHTML = getProfileLoadingMarkup(user);
     profileContainer.classList.remove("arc-view");
     try {
         profileContainer.innerHTML = await renderProfileTimeline(userId);
@@ -15068,8 +15029,8 @@ async function renderProfileIntoContainer(userId) {
     }
 }
 
-function getProfileLoadingMarkup() {
-    return getProfileSkeletonMarkup();
+function getProfileLoadingMarkup(user = null) {
+    return getProfileSkeletonMarkup(user);
 }
 
 function renderProPageUnavailable(user) {
@@ -15086,17 +15047,61 @@ function renderProPageUnavailable(user) {
     `;
 }
 
-function getProfileSkeletonMarkup() {
+function getProfileSkeletonMarkup(user = null) {
+    const accountType = String(
+        user?.account_type || user?.user_metadata?.account_type || "",
+    ).toLowerCase();
+    const accountSubtype = String(
+        user?.account_subtype ||
+            user?.accountSubtype ||
+            user?.user_metadata?.account_subtype ||
+            "",
+    ).toLowerCase();
+    const isProfessionalAccount = isProAccountType(accountType, accountSubtype);
+
     const timelineItem = (key) => `
 <div class="profile-skeleton-item" data-index="${key}">
             <div class="skeleton skeleton-dot"></div>
-            <div class="profile-skeleton-card">
-                <div class="skeleton skeleton-text" style="width: 32%; height: 0.8rem;"></div>
-                <div class="skeleton skeleton-text" style="width: 68%; height: 0.9rem;"></div>
-                <div class="skeleton skeleton-card-sm"></div>
+            <div class="profile-skeleton-card" style="${isProfessionalAccount ? "padding: 1.15rem; border-radius: 22px;" : ""}">
+                <div class="skeleton skeleton-text" style="width: ${isProfessionalAccount ? "44%" : "32%"}; height: 0.8rem;"></div>
+                <div class="skeleton skeleton-text" style="width: ${isProfessionalAccount ? "78%" : "68%"}; height: 0.9rem;"></div>
+                <div class="skeleton skeleton-card-sm" style="${isProfessionalAccount ? "height: 96px; border-radius: 18px;" : ""}"></div>
             </div>
 </div>
     `;
+
+    if (isProfessionalAccount) {
+        return `
+<div class="loading-state-container profile-skeleton profile-skeleton--professional" role="status" aria-busy="true" aria-live="polite">
+            <div class="skeleton skeleton-banner" aria-hidden="true" style="height: 220px; border-radius: 28px;"></div>
+
+            <div class="profile-skeleton-header" style="margin-top: -58px; align-items: flex-end;">
+                <div class="skeleton skeleton-avatar-lg" aria-hidden="true" style="width: 112px; height: 112px; border-radius: 24px;"></div>
+                <div class="profile-skeleton-meta">
+                    <div class="skeleton skeleton-text" style="width: 58%; height: 1.15rem;"></div>
+                    <div class="skeleton skeleton-text" style="width: 42%; height: 0.95rem;"></div>
+                    <div class="profile-skeleton-actions">
+                        <div class="skeleton skeleton-pill" aria-hidden="true" style="width: 110px; height: 40px;"></div>
+                        <div class="skeleton skeleton-pill" aria-hidden="true" style="width: 132px; height: 40px;"></div>
+                        <div class="skeleton skeleton-pill skeleton-pill-short" aria-hidden="true" style="width: 86px; height: 40px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="profile-skeleton-stats">
+                <div class="skeleton skeleton-chip" style="height: 82px;"></div>
+                <div class="skeleton skeleton-chip" style="height: 82px;"></div>
+                <div class="skeleton skeleton-chip" style="height: 82px;"></div>
+            </div>
+
+            <div class="profile-skeleton-timeline" aria-hidden="true">
+                ${timelineItem(1)}
+                ${timelineItem(2)}
+                ${timelineItem(3)}
+            </div>
+</div>
+    `;
+    }
 
     return `
 <div class="loading-state-container profile-skeleton" role="status" aria-busy="true" aria-live="polite">

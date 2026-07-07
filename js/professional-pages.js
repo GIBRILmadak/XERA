@@ -15,21 +15,43 @@ class XERAProfessionalManager {
         window.userHasProPage = window.userHasProPage || false;
     }
 
+    normalizeAccountValues(user) {
+        return [
+            user?.account_type,
+            user?.user_metadata?.account_type,
+            user?.account_subtype,
+            user?.accountSubtype,
+            user?.user_metadata?.account_subtype,
+        ]
+            .filter(
+                (value) =>
+                    value !== undefined && value !== null && value !== "",
+            )
+            .map((value) => String(value).trim().toLowerCase());
+    }
+
+    isNonPersonalAccount(user) {
+        return this.normalizeAccountValues(user).some((value) =>
+            [
+                "team",
+                "enterprise",
+                "company",
+                "community",
+                "organization",
+                "organisation",
+                "org",
+                "pro",
+                "institution",
+            ].includes(value),
+        );
+    }
+
     /**
-     * Vérifie si l'utilisateur est éligible à avoir une page pro (Plan ou Type de compte)
+     * Vérifie si l'utilisateur est éligible à avoir une page pro.
+     * La création d'une page pro ne dépend plus d'un abonnement.
      */
     isEligibleForProPage(user) {
-        if (!user) return false;
-
-        // Plans payants sont éligibles
-        const plan = String(user.plan || "").toLowerCase();
-        const hasPaidPlan = ["standard", "medium", "pro"].includes(plan);
-
-        // Types de comptes organisation sont éligibles
-        const accountType = String(user.account_type || user.user_metadata?.account_type || "personal").toLowerCase();
-        const isOrgAccount = ["team", "enterprise", "company", "community", "organization", "org"].includes(accountType);
-
-        return hasPaidPlan || isOrgAccount;
+        return Boolean(user?.id);
     }
 
     notify(message, type = "info") {
@@ -103,21 +125,25 @@ class XERAProfessionalManager {
         if (needTokens.length === 0) return [];
 
         const employeeIds = new Set(
-            (employees || []).map((employee) => employee.user_id).filter(Boolean),
+            (employees || [])
+                .map((employee) => employee.user_id)
+                .filter(Boolean),
         );
 
         // --- MOMENTUM ENGINE : DEEP ANALYSIS ---
         // On récupère les profils avec Arcs (intentions), Contenus (vélocité) et Certifications (confiance)
         const { data, error } = await this.supabase
             .from("users")
-            .select(`
+            .select(
+                `
                 id, name, avatar, title, bio, account_subtype, badge, plan, updated_at,
                 content ( id, created_at, tags, title ),
-                arcs ( id, title, tags, opportunity_intents, description ),
+                arcs ( id, title, opportunity_intents, description ),
                 professional_certifications ( id, status )
-            `)
+            `,
+            )
             .neq("id", page.owner_id)
-            .order('updated_at', { ascending: false })
+            .order("updated_at", { ascending: false })
             .limit(100);
 
         if (error) {
@@ -126,48 +152,87 @@ class XERAProfessionalManager {
         }
 
         const now = new Date();
-        const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
         return (data || [])
             .filter((user) => user?.id && !employeeIds.has(user.id))
             .map((user) => {
                 // 1. CALCUL MOMENTUM (VÉLOCITÉ) : 1 post/jour = 100%
-                const recentPosts = (user.content || []).filter(c => new Date(c.created_at) >= sevenDaysAgo);
+                const recentPosts = (user.content || []).filter(
+                    (c) => new Date(c.created_at) >= sevenDaysAgo,
+                );
                 const velocity = recentPosts.length / 7;
                 const momentumPercent = Math.round(velocity * 100);
 
                 // 2. ANALYSE DU MATCHING PROFOND (TAGS ARCS + TRACES)
                 const userContentTokens = new Set([
-                    ...this.normalizeTokens(user.name + " " + user.title + " " + user.bio),
-                    ...(user.arcs || []).flatMap(arc => this.normalizeTokens(arc.title + " " + (arc.tags?.join(" ") || "") + " " + arc.description)),
-                    ...(user.content || []).flatMap(c => this.normalizeTokens(c.title + " " + (c.tags?.join(" ") || "")))
+                    ...this.normalizeTokens(
+                        user.name + " " + user.title + " " + user.bio,
+                    ),
+                    ...(user.arcs || []).flatMap((arc) =>
+                        this.normalizeTokens(
+                            arc.title +
+                                " " +
+                                (arc.tags?.join(" ") || "") +
+                                " " +
+                                arc.description,
+                        ),
+                    ),
+                    ...(user.content || []).flatMap((c) =>
+                        this.normalizeTokens(
+                            c.title + " " + (c.tags?.join(" ") || ""),
+                        ),
+                    ),
                 ]);
 
-                const matchedTokens = needTokens.filter(token => userContentTokens.has(token));
-                const matchRatio = matchedTokens.length / Math.max(1, needTokens.length);
+                const matchedTokens = needTokens.filter((token) =>
+                    userContentTokens.has(token),
+                );
+                const matchRatio =
+                    matchedTokens.length / Math.max(1, needTokens.length);
 
                 // Matching d'Intention (Golden Match)
                 // Analyse de l'audience cible (Collaborateurs, Investisseurs, Partenaires)
-                const userIntents = (user.arcs || []).flatMap(arc => arc.opportunity_intents || []);
+                const userIntents = (user.arcs || []).flatMap(
+                    (arc) => arc.opportunity_intents || [],
+                );
                 const pageBio = (page.bio || "").toLowerCase();
-                const isInvestorPage = pageBio.includes("invest") || page.industry?.toLowerCase().includes("finance");
-                const isRecruiterPage = pageBio.includes("recrut") || page.industry?.toLowerCase().includes("rh");
+                const isInvestorPage =
+                    pageBio.includes("invest") ||
+                    page.industry?.toLowerCase().includes("finance");
+                const isRecruiterPage =
+                    pageBio.includes("recrut") ||
+                    page.industry?.toLowerCase().includes("rh");
 
                 let goldenMatch = 0;
-                if (isInvestorPage && userIntents.includes("cherche_investissement")) goldenMatch = 25;
-                if (isRecruiterPage && userIntents.includes("open_to_recruit")) goldenMatch = 25;
+                if (
+                    isInvestorPage &&
+                    userIntents.includes("cherche_investissement")
+                )
+                    goldenMatch = 25;
+                if (isRecruiterPage && userIntents.includes("open_to_recruit"))
+                    goldenMatch = 25;
 
                 // 3. BOOST VÉRIFICATION INSTITUTIONNELLE
-                const isInstitutionVerified = (user.professional_certifications || []).some(cert => cert.status === 'active');
+                const isInstitutionVerified = (
+                    user.professional_certifications || []
+                ).some((cert) => cert.status === "active");
                 const verificationBoost = isInstitutionVerified ? 30 : 0;
 
                 // 4. BOOST ABONNEMENT PAYANT (Priorité SaaS)
-                const isPaidUser = ["standard", "medium", "pro"].includes(String(user.plan || "").toLowerCase());
+                const isPaidUser = ["standard", "medium", "pro"].includes(
+                    String(user.plan || "").toLowerCase(),
+                );
                 const subscriptionBoost = isPaidUser ? 20 : 0;
 
                 // --- SCORE FINAL ÉQUILIBRÉ ---
                 // Momentum (40%) + Match (30%) + Institution (15%) + Sub (15%) + GoldenMatch
-                const baseScore = (momentumPercent * 0.4) + (matchRatio * 100 * 0.3) + verificationBoost + subscriptionBoost + goldenMatch;
+                const baseScore =
+                    momentumPercent * 0.4 +
+                    matchRatio * 100 * 0.3 +
+                    verificationBoost +
+                    subscriptionBoost +
+                    goldenMatch;
                 const finalScore = Math.min(100, Math.round(baseScore));
 
                 return {
@@ -176,7 +241,7 @@ class XERAProfessionalManager {
                     momentum: momentumPercent,
                     matchedTokens,
                     isVerified: isInstitutionVerified,
-                    isPro: isPaidUser
+                    isPro: isPaidUser,
                 };
             })
             .sort((a, b) => b.matchScore - a.matchScore)
@@ -205,12 +270,18 @@ class XERAProfessionalManager {
                 ].join(" "),
             ),
         );
-        const matchedTokens = needTokens.filter((token) => profileTokens.has(token));
-        const missingTokens = needTokens.filter((token) => !profileTokens.has(token));
+        const matchedTokens = needTokens.filter((token) =>
+            profileTokens.has(token),
+        );
+        const missingTokens = needTokens.filter(
+            (token) => !profileTokens.has(token),
+        );
         const completeness = (user.title ? 8 : 0) + (user.bio ? 8 : 0);
         const score = Math.min(
             100,
-            Math.round((matchedTokens.length / needTokens.length) * 84 + completeness),
+            Math.round(
+                (matchedTokens.length / needTokens.length) * 84 + completeness,
+            ),
         );
 
         return { score, matchedTokens, missingTokens };
@@ -225,7 +296,8 @@ class XERAProfessionalManager {
             recommendedProfiles && recommendedProfiles.length > 0
                 ? Math.round(
                       recommendedProfiles.reduce(
-                          (total, profile) => total + Number(profile.matchScore || 0),
+                          (total, profile) =>
+                              total + Number(profile.matchScore || 0),
                           0,
                       ) / recommendedProfiles.length,
                   )
@@ -307,7 +379,9 @@ class XERAProfessionalManager {
                 <div class="pro-match-list">
                     ${profiles
                         .map((profile) => {
-                            const name = this.escapeHtml(profile.name || "Profil XERA");
+                            const name = this.escapeHtml(
+                                profile.name || "Profil XERA",
+                            );
                             const title = this.escapeHtml(
                                 profile.title ||
                                     profile.account_subtype ||
@@ -382,12 +456,8 @@ class XERAProfessionalManager {
             return;
         }
 
-        if (!this.isEligibleForProPage(window.currentUser)) {
-            this.notify(
-                "La Page Pro est disponible avec un plan payant ou un compte organisation.",
-                "info",
-            );
-            window.location.href = this.getUpgradeUrl();
+        // Empêcher la création de doublons
+        if (document.querySelector(".tutorial-overlay-premium")) {
             return;
         }
 
@@ -410,10 +480,14 @@ class XERAProfessionalManager {
         if (!window._proNavigationHooked) {
             const originalNavigateTo = window.navigateTo;
             window.navigateTo = (pageId, options) => {
-                if (pageId !== 'pro-page' && pageId !== 'talent-explorer' && pageId !== 'pro-settings') {
+                if (
+                    pageId !== "pro-page" &&
+                    pageId !== "talent-explorer" &&
+                    pageId !== "pro-settings"
+                ) {
                     this.syncUrl({ pro: null, explorer: null });
                 }
-                if (typeof originalNavigateTo === 'function') {
+                if (typeof originalNavigateTo === "function") {
                     originalNavigateTo(pageId, options);
                 }
             };
@@ -423,9 +497,9 @@ class XERAProfessionalManager {
         try {
             // Vérifier les pages possédées par l'utilisateur
             const { data: pages, error } = await this.supabase
-                .from('professional_pages')
-                .select('slug')
-                .eq('owner_id', window.currentUser.id);
+                .from("professional_pages")
+                .select("slug")
+                .eq("owner_id", window.currentUser.id);
 
             if (error) throw error;
 
@@ -448,14 +522,23 @@ class XERAProfessionalManager {
 
             // Afficher l'onglet Talents si c'est un profil Pro/Institution
             if (talentFilterBtn) {
-                const isPro = hasPage || (window.currentUser && ["recruiter", "investor"].includes(window.currentUser.account_subtype));
+                const isPro =
+                    hasPage ||
+                    (window.currentUser &&
+                        ["recruiter", "investor"].includes(
+                            window.currentUser.account_subtype,
+                        ));
                 talentFilterBtn.style.display = isPro ? "inline-flex" : "none";
             }
 
             // Rafraîchir l'affichage du profil si on est dessus
-            const profileBtn = document.querySelector(".settings-badge[title='Page Pro']");
+            const profileBtn = document.querySelector(
+                ".settings-badge[title='Page Pro']",
+            );
             if (profileBtn) {
-                profileBtn.style.display = hasPage ? "none" : "flex";
+                // NE PAS AFFICHER SI C'EST DEJA PRO
+                const isAlreadyPro = hasPage || this.isNonPersonalAccount(window.currentUser);
+                profileBtn.style.display = isAlreadyPro ? "none" : "flex";
                 // AJOUT : Attacher l'événement pour démarrer la création
                 profileBtn.onclick = () => this.startCreatePage();
             }
@@ -464,6 +547,11 @@ class XERAProfessionalManager {
 
             // Gérer l'état initial depuis l'URL (permet de rester sur la page au refresh)
             await this.handleInitialState();
+            
+            // Si on a une page pro, empêcher le onboarding intempestif
+            if (hasPage) {
+                firstPostOnboardingHandled = true; 
+            }
         } catch (e) {
             console.error("InitNavigation Pro Page failed:", e);
         }
@@ -554,8 +642,11 @@ class XERAProfessionalManager {
      * Crée une nouvelle page professionnelle
      */
     async createPage(data) {
-        const user = (await this.supabase.auth.getUser()).data.user;
-        if (!user) throw new Error("Utilisateur non connecté");
+        const { data: { user }, error: authError } = await this.supabase.auth.getUser();
+        if (authError || !user) throw new Error("Utilisateur non connecté");
+
+        // Utiliser l'ID de l'utilisateur authentifié
+        const ownerId = user.id;
 
         const pageName = String(data.name || "").trim();
         const slug = this.buildPageSlug(pageName);
@@ -567,7 +658,7 @@ class XERAProfessionalManager {
         }
 
         const payload = {
-            owner_id: user.id,
+            owner_id: ownerId, // ID fiable issu de l'auth
             name: pageName,
             slug: data.slug || slug,
             bio: data.bio || "",
@@ -577,20 +668,27 @@ class XERAProfessionalManager {
             talent_interests: data.talentInterests || [],
             avatar_url: data.avatarUrl,
             banner_url: data.bannerUrl,
-            website_url: data.websiteUrl || ""
+            website_url: data.websiteUrl || "",
         };
 
+        console.log("Tentative de création de page avec owner_id:", ownerId);
+        console.log("Payload complet:", payload);
+
         const { data: page, error } = await this.supabase
-            .from('professional_pages')
+            .from("professional_pages")
             .insert(payload)
             .select()
             .single();
 
         if (error) {
+            console.error("Supabase creation error:", error);
             if (error.code === "23505") {
                 throw new Error("Ce nom de Page Pro est déjà utilisé.");
             }
-            throw error;
+            if (error.code === "23503") {
+                throw new Error("Erreur de compte : le profil utilisateur n'est pas correctement synchronisé avec la base de données.");
+            }
+            throw new Error(error.message || "Erreur lors de la création de la page.");
         }
         return page;
     }
@@ -600,7 +698,7 @@ class XERAProfessionalManager {
      */
     async updatePage(pageId, updates) {
         const { data, error } = await this.supabase
-            .from('professional_pages')
+            .from("professional_pages")
             .update({
                 name: updates.name,
                 industry: updates.industry,
@@ -610,9 +708,9 @@ class XERAProfessionalManager {
                 banner_url: updates.bannerUrl,
                 website_url: updates.websiteUrl,
                 hiring_needs: updates.hiringNeeds,
-                updated_at: new Date().toISOString()
+                updated_at: new Date().toISOString(),
             })
-            .eq('id', pageId)
+            .eq("id", pageId)
             .select()
             .single();
 
@@ -624,7 +722,8 @@ class XERAProfessionalManager {
      * Certifie un utilisateur
      */
     async certifyUser(pageId, userId, type, details = {}) {
-        const finalTitle = details.title || (type === 'student' ? 'Étudiant' : 'Membre');
+        const finalTitle =
+            details.title || (type === "student" ? "Étudiant" : "Membre");
 
         const payload = {
             page_id: pageId,
@@ -632,14 +731,15 @@ class XERAProfessionalManager {
             type: type,
             title: finalTitle,
             department: details.department || null,
-            status: 'active',
-            start_date: details.startDate || new Date().toISOString().split('T')[0],
-            metadata: details.metadata || {}
+            status: "active",
+            start_date:
+                details.startDate || new Date().toISOString().split("T")[0],
+            metadata: details.metadata || {},
         };
 
         const { data: cert, error } = await this.supabase
-            .from('professional_certifications')
-            .upsert(payload, { onConflict: 'page_id, user_id, type' })
+            .from("professional_certifications")
+            .upsert(payload, { onConflict: "page_id, user_id, type" })
             .select()
             .single();
 
@@ -652,12 +752,12 @@ class XERAProfessionalManager {
      */
     async revokeCertification(certId) {
         const { data, error } = await this.supabase
-            .from('professional_certifications')
+            .from("professional_certifications")
             .update({
-                status: 'revoked',
-                updated_at: new Date().toISOString()
+                status: "revoked",
+                updated_at: new Date().toISOString(),
             })
-            .eq('id', certId)
+            .eq("id", certId)
             .select()
             .single();
 
@@ -670,9 +770,9 @@ class XERAProfessionalManager {
      */
     async deleteCertification(certId) {
         const { error } = await this.supabase
-            .from('professional_certifications')
+            .from("professional_certifications")
             .delete()
-            .eq('id', certId);
+            .eq("id", certId);
 
         if (error) throw error;
         return true;
@@ -685,9 +785,9 @@ class XERAProfessionalManager {
         if (!window.currentUser) return [];
 
         const { data, error } = await this.supabase
-            .from('professional_pages')
-            .select('*')
-            .eq('owner_id', window.currentUser.id);
+            .from("professional_pages")
+            .select("*")
+            .eq("owner_id", window.currentUser.id);
 
         if (error) throw error;
         return data || [];
@@ -702,9 +802,9 @@ class XERAProfessionalManager {
         }
 
         const { data, error } = await this.supabase
-            .from('professional_pages')
-            .select('*')
-            .eq('id', pageId)
+            .from("professional_pages")
+            .select("*")
+            .eq("id", pageId)
             .single();
 
         if (error) return null;
@@ -717,8 +817,9 @@ class XERAProfessionalManager {
      */
     async getUserCertifications(userId) {
         const { data, error } = await this.supabase
-            .from('professional_certifications')
-            .select(`
+            .from("professional_certifications")
+            .select(
+                `
                 *,
                 page:professional_pages (
                     id,
@@ -726,9 +827,10 @@ class XERAProfessionalManager {
                     slug,
                     avatar_url
                 )
-            `)
-            .eq('user_id', userId)
-            .eq('status', 'active');
+            `,
+            )
+            .eq("user_id", userId)
+            .eq("status", "active");
 
         if (error) throw error;
         return data || [];
@@ -739,8 +841,9 @@ class XERAProfessionalManager {
      */
     async getPageCertifications(pageId) {
         const { data, error } = await this.supabase
-            .from('professional_certifications')
-            .select(`
+            .from("professional_certifications")
+            .select(
+                `
                 *,
                 user:users (
                     id,
@@ -748,8 +851,9 @@ class XERAProfessionalManager {
                     avatar,
                     account_subtype
                 )
-            `)
-            .eq('page_id', pageId);
+            `,
+            )
+            .eq("page_id", pageId);
 
         if (error) throw error;
         return data || [];
@@ -794,7 +898,7 @@ class XERAProfessionalManager {
         modal.style.justifyContent = "center";
         modal.style.alignItems = "center";
 
-        await this.loadTeamTab(pageId, 'members');
+        await this.loadTeamTab(pageId, "members");
         this.attachTeamTabs(pageId);
     }
 
@@ -804,9 +908,9 @@ class XERAProfessionalManager {
     attachTeamTabs(pageId) {
         const modal = document.getElementById("team-management-modal");
         const tabs = modal.querySelectorAll(".tab-btn");
-        tabs.forEach(tab => {
+        tabs.forEach((tab) => {
             tab.onclick = async () => {
-                tabs.forEach(t => {
+                tabs.forEach((t) => {
                     t.classList.remove("active");
                     t.style.borderBottomColor = "transparent";
                 });
@@ -824,7 +928,7 @@ class XERAProfessionalManager {
         const container = document.getElementById("team-tab-content");
         container.innerHTML = `<div style="text-align:center; padding: 40px;"><div class="loading-spinner"></div></div>`;
 
-        if (tabName === 'members') {
+        if (tabName === "members") {
             const certs = await this.getPageCertifications(pageId);
             if (certs.length === 0) {
                 container.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-secondary);">Aucun membre certifié pour le moment.</p>`;
@@ -833,9 +937,11 @@ class XERAProfessionalManager {
 
             container.innerHTML = `
                 <div class="team-list" style="max-height: 400px; overflow-y: auto;">
-                    ${certs.map(cert => `
+                    ${certs
+                        .map(
+                            (cert) => `
                         <div class="team-member-item" style="display: flex; align-items: center; gap: 15px; padding: 15px; border: 2px solid #eee; border-radius: 12px; margin-bottom: 10px;">
-                            <img src="${cert.user?.avatar || 'https://placehold.co/50'}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+                            <img src="${cert.user?.avatar || "https://placehold.co/50"}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
                             <div style="flex: 1;">
                                 <div style="font-weight: 700;">${cert.user?.name}</div>
                                 <div style="font-size: 0.85rem; color: var(--text-secondary);">${cert.title} • ${cert.type}</div>
@@ -844,10 +950,12 @@ class XERAProfessionalManager {
                                 <button class="btn btn-secondary btn-sm" onclick="window.professionalManager.handleDeleteCert('${cert.id}', '${pageId}')" style="padding: 5px 12px; font-size: 0.8rem; background: #fee2e2; color: #dc2626; border-color: #fecaca;">Supprimer</button>
                             </div>
                         </div>
-                    `).join('')}
+                    `,
+                        )
+                        .join("")}
                 </div>
             `;
-        } else if (tabName === 'add') {
+        } else if (tabName === "add") {
             container.innerHTML = `
                 <div class="add-member-form">
                     <div class="form-group" style="margin-bottom: 20px;">
@@ -907,18 +1015,22 @@ class XERAProfessionalManager {
 
             // Recherche via Supabase (table users)
             const { data, error } = await this.supabase
-                .from('users')
-                .select('id, name, avatar')
-                .ilike('name', `%${val}%`)
+                .from("users")
+                .select("id, name, avatar")
+                .ilike("name", `%${val}%`)
                 .limit(5);
 
             if (!error && data.length > 0) {
-                results.innerHTML = data.map(u => `
-                    <div class="user-option" data-id="${u.id}" data-name="${u.name}" data-avatar="${u.avatar || ''}" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px;">
-                        <img src="${u.avatar || 'https://placehold.co/30'}" style="width: 30px; height: 30px; border-radius: 50%;">
+                results.innerHTML = data
+                    .map(
+                        (u) => `
+                    <div class="user-option" data-id="${u.id}" data-name="${u.name}" data-avatar="${u.avatar || ""}" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px;">
+                        <img src="${u.avatar || "https://placehold.co/30"}" style="width: 30px; height: 30px; border-radius: 50%;">
                         <span>${u.name}</span>
                     </div>
-                `).join('');
+                `,
+                    )
+                    .join("");
                 results.style.display = "block";
             } else {
                 results.style.display = "none";
@@ -930,7 +1042,8 @@ class XERAProfessionalManager {
             if (option) {
                 selectedUserId = option.dataset.id;
                 const name = option.dataset.name;
-                const avatar = option.dataset.avatar || 'https://placehold.co/50';
+                const avatar =
+                    option.dataset.avatar || "https://placehold.co/50";
 
                 preview.innerHTML = `
                     <img src="${avatar}" style="width: 50px; height: 50px; border-radius: 50%;">
@@ -946,12 +1059,14 @@ class XERAProfessionalManager {
                 input.parentElement.parentElement.style.display = "none";
                 details.style.display = "block";
 
-                document.getElementById("cancel-user-selection").onclick = () => {
-                    selectedUserId = null;
-                    preview.style.display = "none";
-                    input.parentElement.parentElement.style.display = "block";
-                    details.style.display = "none";
-                };
+                document.getElementById("cancel-user-selection").onclick =
+                    () => {
+                        selectedUserId = null;
+                        preview.style.display = "none";
+                        input.parentElement.parentElement.style.display =
+                            "block";
+                        details.style.display = "none";
+                    };
             }
         };
 
@@ -963,7 +1078,7 @@ class XERAProfessionalManager {
             try {
                 await this.certifyUser(pageId, selectedUserId, type, { title });
                 window.showToast?.("Utilisateur certifié avec succès !");
-                await this.loadTeamTab(pageId, 'members');
+                await this.loadTeamTab(pageId, "members");
                 const tabs = document.querySelectorAll(".tab-btn");
                 tabs[0].classList.add("active");
                 tabs[0].style.borderBottomColor = "#000";
@@ -980,7 +1095,7 @@ class XERAProfessionalManager {
         try {
             await this.deleteCertification(certId);
             window.showToast?.("Certification révoquée.");
-            await this.loadTeamTab(pageId, 'members');
+            await this.loadTeamTab(pageId, "members");
         } catch (err) {
             alert("Erreur: " + err.message);
         }
@@ -990,7 +1105,7 @@ class XERAProfessionalManager {
      * Ouvre les réglages de la page (React Component)
      */
     openPageSettings(pageId) {
-        if (typeof window.mountProSettings !== 'function') {
+        if (typeof window.mountProSettings !== "function") {
             alert("Le module de réglages n'est pas encore chargé.");
             return;
         }
@@ -1000,7 +1115,8 @@ class XERAProfessionalManager {
         if (!overlay) {
             overlay = document.createElement("div");
             overlay.id = "pro-settings-overlay";
-            overlay.className = "fixed inset-0 bg-black/90 z-[12000] flex items-center justify-center p-4 backdrop-blur-sm";
+            overlay.className =
+                "fixed inset-0 bg-black/90 z-[12000] flex items-center justify-center p-4 backdrop-blur-sm";
             document.body.appendChild(overlay);
         } else {
             overlay.style.display = "flex";
@@ -1028,12 +1144,12 @@ class XERAProfessionalManager {
      */
     async validateTrace(contentId, pageId) {
         const { data, error } = await this.supabase
-            .from('content')
+            .from("content")
             .update({
                 is_validated_pro: true,
-                validated_by_page_id: pageId
+                validated_by_page_id: pageId,
             })
-            .eq('id', contentId)
+            .eq("id", contentId)
             .select()
             .single();
 
@@ -1046,12 +1162,12 @@ class XERAProfessionalManager {
      */
     async invalidateTrace(contentId) {
         const { data, error } = await this.supabase
-            .from('content')
+            .from("content")
             .update({
                 is_validated_pro: false,
-                validated_by_page_id: null
+                validated_by_page_id: null,
             })
-            .eq('id', contentId)
+            .eq("id", contentId)
             .select()
             .single();
 
@@ -1068,10 +1184,10 @@ class XERAProfessionalManager {
 
         try {
             const { data: updates, error } = await this.supabase
-                .from('content')
-                .select('*')
-                .eq('page_id', pageId)
-                .order('created_at', { ascending: false });
+                .from("content")
+                .select("*")
+                .eq("page_id", pageId)
+                .order("created_at", { ascending: false });
 
             if (error) throw error;
 
@@ -1080,44 +1196,53 @@ class XERAProfessionalManager {
                 return;
             }
 
-            container.innerHTML = updates.map(update => {
-                // On utilise la fonction de rendu globale si disponible, sinon fallback
-                if (typeof window.renderProfileUpdateCard === 'function') {
-                    return window.renderProfileUpdateCard(update, {
-                        profileUserId: update.user_id,
-                        currentUserId: window.currentUserId
-                    });
-                }
+            container.innerHTML = updates
+                .map((update) => {
+                    // On utilise la fonction de rendu globale si disponible, sinon fallback
+                    if (typeof window.renderProfileUpdateCard === "function") {
+                        return window.renderProfileUpdateCard(update, {
+                            profileUserId: update.user_id,
+                            currentUserId: window.currentUserId,
+                        });
+                    }
 
-                // Fallback (ancien style amélioré)
-                return `
+                    // Fallback (ancien style amélioré)
+                    return `
                     <div class="timeline-card pro-feed-card" style="margin-bottom: 20px; padding: 25px;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
                             <h4 style="margin: 0; font-size: 1.2rem; font-family: var(--font-heading);">
-                                ${update.metadata?.sub_type === 'event' ? '<span style="background: #6366f1; color: #fff; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; vertical-align: middle; margin-right: 8px;">ÉVÉNEMENT</span>' : ''}
+                                ${update.metadata?.sub_type === "event" ? '<span style="background: #6366f1; color: #fff; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; vertical-align: middle; margin-right: 8px;">ÉVÉNEMENT</span>' : ""}
                                 ${update.title}
                             </h4>
                             <span style="font-size: 0.8rem; color: var(--text-secondary);">${new Date(update.created_at).toLocaleDateString()}</span>
                         </div>
 
-                        ${update.metadata?.sub_type === 'event' ? `
+                        ${
+                            update.metadata?.sub_type === "event"
+                                ? `
                             <div style="background: var(--bg-primary); padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #6366f1; display: flex; flex-wrap: wrap; gap: 15px; font-size: 0.85rem;">
-                                <span><i class="fas fa-calendar-alt" style="margin-right: 5px;"></i> ${update.metadata.event_date || 'Date à venir'}</span>
-                                <span><i class="fas fa-clock" style="margin-right: 5px;"></i> ${update.metadata.event_time || ''}</span>
-                                <span><i class="fas fa-map-marker-alt" style="margin-right: 5px;"></i> ${update.metadata.location || 'Lieu non défini'}</span>
+                                <span><i class="fas fa-calendar-alt" style="margin-right: 5px;"></i> ${update.metadata.event_date || "Date à venir"}</span>
+                                <span><i class="fas fa-clock" style="margin-right: 5px;"></i> ${update.metadata.event_time || ""}</span>
+                                <span><i class="fas fa-map-marker-alt" style="margin-right: 5px;"></i> ${update.metadata.location || "Lieu non défini"}</span>
                             </div>
-                        ` : ''}
+                        `
+                                : ""
+                        }
 
                         <p style="white-space: pre-wrap; color: var(--text-secondary); line-height: 1.6; margin-bottom: 15px;">${update.description}</p>
-                        ${update.media_url ? `
+                        ${
+                            update.media_url
+                                ? `
                             <div style="border-radius: 12px; overflow: hidden; margin-bottom: 15px; border: 1px solid var(--border-color);">
-                                ${update.type === 'video' ? `<video src="${update.media_url}" controls style="width: 100%;"></video>` : `<img src="${update.media_url}" style="width: 100%; object-fit: cover;">`}
+                                ${update.type === "video" ? `<video src="${update.media_url}" controls style="width: 100%;"></video>` : `<img src="${update.media_url}" style="width: 100%; object-fit: cover;">`}
                             </div>
-                        ` : ''}
+                        `
+                                : ""
+                        }
                     </div>
                 `;
-            }).join('');
-
+                })
+                .join("");
         } catch (err) {
             console.error(err);
             container.innerHTML = `<p style="color: #ef4444;">Erreur lors du chargement des actualités.</p>`;
@@ -1149,7 +1274,7 @@ class XERAProfessionalManager {
 
         const page = this.proPagesCache.get(content.validatedByPageId);
         const pageName = page ? page.name : "Organisation";
-        const pageAvatar = page?.avatar_url || 'icons/enterprise.svg';
+        const pageAvatar = page?.avatar_url || "icons/enterprise.svg";
 
         return `
             <div class="seal-of-approval" title="Validé officiellement par ${pageName}" style="display: flex; align-items: center; gap: 6px; background: #000; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 800; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.2); width: fit-content; margin-top: 5px;">
@@ -1162,7 +1287,7 @@ class XERAProfessionalManager {
     /**
      * Ouvre le menu de création LinkedIn-style pour les entreprises
      */
-    async openProfessionalCreateMenu(pageId, initialType = 'news') {
+    async openProfessionalCreateMenu(pageId, initialType = "news") {
         const page = await this.getPageInfo(pageId);
         if (!page) return;
 
@@ -1182,10 +1307,10 @@ class XERAProfessionalManager {
                 </div>
 
                 <div class="pro-create-tabs" style="display: flex; background: var(--bg-primary);">
-                    <button class="pro-tab-btn ${initialType === 'news' ? 'active' : ''}" data-type="news">
+                    <button class="pro-tab-btn ${initialType === "news" ? "active" : ""}" data-type="news">
                         <i class="fas fa-newspaper"></i> Actualité
                     </button>
-                    <button class="pro-tab-btn ${initialType === 'event' ? 'active' : ''}" data-type="event">
+                    <button class="pro-tab-btn ${initialType === "event" ? "active" : ""}" data-type="event">
                         <i class="fas fa-calendar-alt"></i> Événement
                     </button>
                 </div>
@@ -1212,8 +1337,10 @@ class XERAProfessionalManager {
 
         const self = this;
         const renderForm = (type) => {
-            const container = document.getElementById("pro-create-form-container");
-            if (type === 'news') {
+            const container = document.getElementById(
+                "pro-create-form-container",
+            );
+            if (type === "news") {
                 container.innerHTML = `
                     <div class="form-group" style="margin-bottom: 20px;">
                         <label>Titre de l'actualité</label>
@@ -1236,18 +1363,23 @@ class XERAProfessionalManager {
 
                 // Correction : Activation de l'autocomplétion sur le textarea
                 setTimeout(() => {
-                    const textarea = document.getElementById("pro-news-content");
-                    if (window.attachMentionAutocomplete) window.attachMentionAutocomplete(textarea);
+                    const textarea =
+                        document.getElementById("pro-news-content");
+                    if (window.attachMentionAutocomplete)
+                        window.attachMentionAutocomplete(textarea);
                 }, 50);
 
                 const fileInput = document.getElementById("pro-news-file");
                 fileInput.onchange = async (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
-                    const res = await window.uploadFile(file, 'pro-pages/news');
+                    const res = await window.uploadFile(file, "pro-pages/news");
                     if (res.success) {
-                        document.getElementById("pro-news-media-url").value = res.url;
-                        const preview = document.getElementById("pro-news-media-preview");
+                        document.getElementById("pro-news-media-url").value =
+                            res.url;
+                        const preview = document.getElementById(
+                            "pro-news-media-preview",
+                        );
                         preview.innerHTML = `<img src="${res.url}" style="width: 100%; border-radius: 8px; max-height: 200px; object-fit: cover;">`;
                         preview.style.display = "block";
                     }
@@ -1281,7 +1413,8 @@ class XERAProfessionalManager {
                 // Correction : Activation de l'autocomplétion sur le textarea
                 setTimeout(() => {
                     const textarea = document.getElementById("pro-event-desc");
-                    if (window.attachMentionAutocomplete) window.attachMentionAutocomplete(textarea);
+                    if (window.attachMentionAutocomplete)
+                        window.attachMentionAutocomplete(textarea);
                 }, 50);
             }
         };
@@ -1289,16 +1422,17 @@ class XERAProfessionalManager {
         renderForm(initialType);
 
         const tabs = modal.querySelectorAll(".pro-tab-btn");
-        tabs.forEach(tab => {
+        tabs.forEach((tab) => {
             tab.onclick = () => {
-                tabs.forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
+                tabs.forEach((t) => t.classList.remove("active"));
+                tab.classList.add("active");
                 renderForm(tab.dataset.type);
             };
         });
 
         document.getElementById("pro-submit-btn").onclick = async () => {
-            const activeType = modal.querySelector(".pro-tab-btn.active").dataset.type;
+            const activeType = modal.querySelector(".pro-tab-btn.active")
+                .dataset.type;
             const btn = document.getElementById("pro-submit-btn");
             btn.disabled = true;
             btn.innerText = "Publication...";
@@ -1307,37 +1441,47 @@ class XERAProfessionalManager {
                 let payload = {
                     page_id: pageId,
                     user_id: window.currentUserId,
-                    type: 'text', // Par défaut, sera écrasé si média présent
-                    state: 'success', // Ajout du state pour éviter la contrainte NOT NULL
+                    type: "text", // Par défaut, sera écrasé si média présent
+                    state: "success", // Ajout du state pour éviter la contrainte NOT NULL
                     day_number: 0, // Correction : ajout du day_number pour éviter l'erreur NOT NULL
                     created_at: new Date().toISOString(),
-                    metadata: {}
+                    metadata: {},
                 };
 
-                if (activeType === 'news') {
-                    payload.title = document.getElementById("pro-news-title").value;
-                    payload.description = document.getElementById("pro-news-content").value;
-                    payload.media_url = document.getElementById("pro-news-media-url").value;
-                    payload.type = payload.media_url ? 'image' : 'text';
-                    payload.metadata.sub_type = 'news';
+                if (activeType === "news") {
+                    payload.title =
+                        document.getElementById("pro-news-title").value;
+                    payload.description =
+                        document.getElementById("pro-news-content").value;
+                    payload.media_url =
+                        document.getElementById("pro-news-media-url").value;
+                    payload.type = payload.media_url ? "image" : "text";
+                    payload.metadata.sub_type = "news";
                 } else {
-                    payload.title = document.getElementById("pro-event-title").value;
-                    payload.description = document.getElementById("pro-event-desc").value;
-                    payload.type = 'text';
+                    payload.title =
+                        document.getElementById("pro-event-title").value;
+                    payload.description =
+                        document.getElementById("pro-event-desc").value;
+                    payload.type = "text";
                     payload.metadata = {
-                        sub_type: 'event',
-                        event_date: document.getElementById("pro-event-date").value,
-                        event_time: document.getElementById("pro-event-time").value,
-                        location: document.getElementById("pro-event-location").value
+                        sub_type: "event",
+                        event_date:
+                            document.getElementById("pro-event-date").value,
+                        event_time:
+                            document.getElementById("pro-event-time").value,
+                        location:
+                            document.getElementById("pro-event-location").value,
                     };
                 }
 
                 if (!payload.title || !payload.description) {
-                    throw new Error("Veuillez remplir les champs obligatoires.");
+                    throw new Error(
+                        "Veuillez remplir les champs obligatoires.",
+                    );
                 }
 
                 const { data: createdContent, error } = await this.supabase
-                    .from('content')
+                    .from("content")
                     .insert(payload)
                     .select()
                     .single();
@@ -1346,12 +1490,19 @@ class XERAProfessionalManager {
 
                 // Notification des mentions @
                 if (window.notifyMentions && createdContent) {
-                    window.notifyMentions(
-                        payload.description,
-                        createdContent.id,
-                        window.currentUserId,
-                        page.name || "Une Page Officielle"
-                    ).catch(e => console.warn("Mention notification failed (pro):", e));
+                    window
+                        .notifyMentions(
+                            payload.description,
+                            createdContent.id,
+                            window.currentUserId,
+                            page.name || "Une Page Officielle",
+                        )
+                        .catch((e) =>
+                            console.warn(
+                                "Mention notification failed (pro):",
+                                e,
+                            ),
+                        );
                 }
 
                 window.showToast?.("Publication réussie !");
@@ -1380,20 +1531,21 @@ class XERAProfessionalManager {
         this.syncUrl({ pro: slug, explorer: null });
 
         if (window.navigateTo) {
-            // On essaie de naviguer vers pro-page, sinon on reste sur le profil
-            const targetPage = document.getElementById("pro-page");
-            if (targetPage) {
-                window.navigateTo('pro-page');
-            }
+            // Désactivé temporairement pour debugging
+            console.log("Navigation vers pro-page sautée");
+            // const targetPage = document.getElementById("pro-page");
+            // if (targetPage) {
+            //     window.navigateTo("pro-page");
+            // }
         }
 
         proContainer.innerHTML = `<div style="text-align:center; padding: 100px;"><div class="loading-spinner"></div></div>`;
 
         try {
             const { data: page, error } = await this.supabase
-                .from('professional_pages')
-                .select('*')
-                .eq('slug', slug)
+                .from("professional_pages")
+                .select("*")
+                .eq("slug", slug)
                 .single();
 
             if (error || !page) throw new Error("Page introuvable");
@@ -1402,17 +1554,25 @@ class XERAProfessionalManager {
 
             // Récupérer les ARCs de l'organisation
             const { data: orgArcs } = await this.supabase
-                .from('arcs')
-                .select('*')
-                .eq('page_id', page.id)
-                .order('created_at', { ascending: false });
+                .from("arcs")
+                .select("*")
+                .eq("page_id", page.id)
+                .order("created_at", { ascending: false });
 
-            const avatar = page.avatar_url || 'icons/enterprise.svg';
-            const banner = page.banner_url || '';
-            const isOwner = window.currentUser && page.owner_id === window.currentUser.id;
-            const recommendedProfiles = await this.getRecommendedProfilesForPage(page, employees);
-            const recommendedProfilesHtml = this.renderRecommendedProfiles(recommendedProfiles, page);
-            const officialComparisonHtml = this.renderOfficialComparison(page, recommendedProfiles);
+            const avatar = page.avatar_url || "icons/enterprise.svg";
+            const banner = page.banner_url || "";
+            const isOwner =
+                window.currentUser && page.owner_id === window.currentUser.id;
+            const recommendedProfiles =
+                await this.getRecommendedProfilesForPage(page, employees);
+            const recommendedProfilesHtml = this.renderRecommendedProfiles(
+                recommendedProfiles,
+                page,
+            );
+            const officialComparisonHtml = this.renderOfficialComparison(
+                page,
+                recommendedProfiles,
+            );
 
             proContainer.innerHTML = `
                 <div class="profile-hero profile-hero--glam">
@@ -1426,8 +1586,8 @@ class XERAProfessionalManager {
                             </div>
                             <div class="profile-name-block">
                                 <span class="profile-section-kicker">${page.industry}</span>
-                                <h2>${typeof window.wrapUsernameLabel === 'function' ? window.wrapUsernameLabel(page.name) : page.name}</h2>
-                                <p class="profile-bio">${page.bio || 'Page Professionnelle certifiée'}</p>
+                                <h2>${typeof window.wrapUsernameLabel === "function" ? window.wrapUsernameLabel(page.name) : page.name}</h2>
+                                <p class="profile-bio">${page.bio || "Page Professionnelle certifiée"}</p>
 
                                 <div class="pro-page-stats" style="display: flex; gap: 20px; margin-top: 15px;">
                                     <div><strong>${employees.length}</strong> <span style="color: var(--text-secondary)">Membres certifiés</span></div>
@@ -1438,22 +1598,28 @@ class XERAProfessionalManager {
                         <div class="profile-signal-panel">
                              <span class="profile-section-kicker">Centres d'intérêts</span>
                              <div class="hiring-needs-list" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;">
-                                ${page.hiring_needs?.map(need => `<span class="badge" style="background: rgba(var(--primary-rgb), 0.1); color: var(--primary-color); border: 1px solid var(--primary-color);">${need}</span>`).join('') || 'Aucun centre d\'intérêt'}
+                                ${page.hiring_needs?.map((need) => `<span class="badge" style="background: rgba(var(--primary-rgb), 0.1); color: var(--primary-color); border: 1px solid var(--primary-color);">${need}</span>`).join("") || "Aucun centre d'intérêt"}
                              </div>
-                             ${page.website_url ? `<a href="${page.website_url}" target="_blank" class="btn btn-primary" style="margin-top: 15px; width: 100%; text-decoration: none; justify-content: center;">Visiter le site officiel</a>` : ''}
-                             ${isOwner ? `
+                             ${page.website_url ? `<a href="${page.website_url}" target="_blank" class="btn btn-primary" style="margin-top: 15px; width: 100%; text-decoration: none; justify-content: center;">Visiter le site officiel</a>` : ""}
+                             ${
+                                 isOwner
+                                     ? `
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
                                     <button class="btn btn-secondary" onclick="window.professionalManager.openTeamManagement('${page.id}')" style="justify-content: center; padding: 10px;">Gérer l'équipe</button>
                                     <button class="btn btn-secondary" onclick="window.professionalManager.openPageSettings('${page.id}')" style="justify-content: center; padding: 10px;">Réglages Page</button>
                                 </div>
-                             ` : ''}
+                             `
+                                     : ""
+                             }
                         </div>
                     </div>
                 </div>
 
                 <div class="pro-page-content" style="margin-top: 30px; display: grid; grid-template-columns: 1fr 320px; gap: 30px;">
                     <div class="pro-page-main">
-                        ${isOwner ? `
+                        ${
+                            isOwner
+                                ? `
                             <div class="pro-creation-bar">
                                 <div class="pro-creation-trigger">
                                     <img src="${avatar}" alt="Logo">
@@ -1474,29 +1640,39 @@ class XERAProfessionalManager {
                                     </div>
                                 </div>
                             </div>
-                        ` : ''}
+                        `
+                                : ""
+                        }
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                             <h3 class="section-title" style="margin-bottom: 0;">Projets d'Organisation (ARCs)</h3>
-                            ${isOwner ? `<button class="btn btn-secondary" onclick="window.professionalManager.openCreateOrgArc('${page.id}')" style="border-radius: 99px; padding: 8px 20px;">+ Nouveau Projet</button>` : ''}
+                            ${isOwner ? `<button class="btn btn-secondary" onclick="window.professionalManager.openCreateOrgArc('${page.id}')" style="border-radius: 99px; padding: 8px 20px;">+ Nouveau Projet</button>` : ""}
                         </div>
 
                         <div class="org-arcs-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-bottom: 40px;">
-                            ${orgArcs && orgArcs.length > 0 ? orgArcs.map(arc => `
+                            ${
+                                orgArcs && orgArcs.length > 0
+                                    ? orgArcs
+                                          .map(
+                                              (arc) => `
                                 <div class="timeline-card arc-card-pro" onclick="selectArc('${arc.id}', '${page.owner_id}')" style="cursor: pointer; padding: 20px; position: relative; border-left: 5px solid #000;">
                                     <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 800; color: var(--text-secondary); margin-bottom: 5px;">ARC OFFICIEL</div>
                                     <h4 style="margin: 0 0 10px 0; font-size: 1.2rem;">${arc.title}</h4>
-                                    <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 15px;">${arc.description || 'Aucune description.'}</p>
+                                    <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 15px;">${arc.description || "Aucune description."}</p>
                                     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem;">
-                                        <span class="badge" style="background: #000; color: #fff;">${arc.status === 'in_progress' ? 'En cours' : 'Terminé'}</span>
+                                        <span class="badge" style="background: #000; color: #fff;">${arc.status === "in_progress" ? "En cours" : "Terminé"}</span>
                                         <span style="font-weight: 600;">Voir la trajectoire →</span>
                                     </div>
                                 </div>
-                            `).join('') : '<p style="color: var(--text-secondary); font-style: italic; grid-column: 1/-1; text-align: center; padding: 30px; border: 2px dashed #eee; border-radius: 15px;">L\'organisation n\'a pas encore de projet public.</p>'}
+                            `,
+                                          )
+                                          .join("")
+                                    : "<p style=\"color: var(--text-secondary); font-style: italic; grid-column: 1/-1; text-align: center; padding: 30px; border: 2px dashed #eee; border-radius: 15px;\">L'organisation n'a pas encore de projet public.</p>"
+                            }
                         </div>
 
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                             <h3 class="section-title" style="margin-bottom: 0;">Actualités de l'entreprise</h3>
-                            ${isOwner ? `<button class="btn btn-primary" onclick="window.professionalManager.openCompanyPostMenu('${page.id}')" style="border-radius: 99px; padding: 8px 20px;">+ Publier une update</button>` : ''}
+                            ${isOwner ? `<button class="btn btn-primary" onclick="window.professionalManager.openCompanyPostMenu('${page.id}')" style="border-radius: 99px; padding: 8px 20px;">+ Publier une update</button>` : ""}
                         </div>
 
                         <div id="company-updates-container" style="margin-bottom: 40px;">
@@ -1505,19 +1681,27 @@ class XERAProfessionalManager {
 
                         <h3 class="section-title">À propos</h3>
                         <div class="timeline-card" style="margin-bottom: 30px; padding: 20px;">
-                            <p style="white-space: pre-wrap; line-height: 1.6; color: var(--text-secondary);">${page.description || 'Bienvenue sur notre page professionnelle.'}</p>
+                            <p style="white-space: pre-wrap; line-height: 1.6; color: var(--text-secondary);">${page.description || "Bienvenue sur notre page professionnelle."}</p>
                         </div>
 
                         <h3 class="section-title">Équipe Certifiée</h3>
                         <div class="employees-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
-                            ${employees.length > 0 ? employees.map(emp => `
+                            ${
+                                employees.length > 0
+                                    ? employees
+                                          .map(
+                                              (emp) => `
                                 <div class="timeline-card" style="text-align: center; cursor: pointer; padding: 20px;" onclick="navigateToUserProfile('${emp.user_id}')">
-                                    <img src="${emp.user?.avatar || 'https://placehold.co/100'}" style="width: 80px; height: 80px; border-radius: 50%; margin-bottom: 12px; object-fit: cover; border: 2px solid var(--border-color);">
+                                    <img src="${emp.user?.avatar || "https://placehold.co/100"}" style="width: 80px; height: 80px; border-radius: 50%; margin-bottom: 12px; object-fit: cover; border: 2px solid var(--border-color);">
                                     <div style="font-weight: 700; margin-bottom: 4px;">${emp.user?.name}</div>
                                     <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">${emp.title}</div>
-                                    ${emp.department ? `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px; opacity: 0.8;">${emp.department}</div>` : ''}
+                                    ${emp.department ? `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px; opacity: 0.8;">${emp.department}</div>` : ""}
                                 </div>
-                            `).join('') : '<p style="color: var(--text-secondary); font-style: italic;">Aucun membre certifié pour le moment.</p>'}
+                            `,
+                                          )
+                                          .join("")
+                                    : '<p style="color: var(--text-secondary); font-style: italic;">Aucun membre certifié pour le moment.</p>'
+                            }
                         </div>
                     </div>
 
@@ -1540,7 +1724,6 @@ class XERAProfessionalManager {
             `;
 
             await this.loadCompanyUpdates(page.id);
-
         } catch (err) {
             proContainer.innerHTML = `
                 <div class="empty-state">
@@ -1569,12 +1752,20 @@ class XERAProfessionalManager {
         // Persister dans l'URL
         this.syncUrl({ explorer: "1", pro: null });
 
-        if (window.navigateTo) window.navigateTo('pro-page');
+        if (window.navigateTo) window.navigateTo("pro-page");
         container.innerHTML = `<div style="text-align:center; padding: 100px;"><div class="loading-spinner"></div></div>`;
 
         const user = window.currentUser;
-        const isPremium = user && (user.plan === 'pro' || user.plan === 'medium' || user.plan === 'elite') && user.plan_status === 'active';
-        const expiryDate = user?.plan_ends_at ? new Date(user.plan_ends_at).toLocaleDateString('fr-FR') : "Illimitée";
+        const isPremium =
+            user &&
+            (this.isEligibleForProPage(user) ||
+                ((user.plan === "pro" ||
+                    user.plan === "medium" ||
+                    user.plan === "elite") &&
+                    user.plan_status === "active"));
+        const expiryDate = user?.plan_ends_at
+            ? new Date(user.plan_ends_at).toLocaleDateString("fr-FR")
+            : "Illimitée";
 
         container.innerHTML = `
             <div class="talent-explorer-page" style="padding: 20px; max-width: 1200px; margin: 0 auto; animation: fadeIn 0.4s ease-out;">
@@ -1587,10 +1778,10 @@ class XERAProfessionalManager {
                             <p style="color: var(--text-secondary); margin-top: 10px; font-size: 1.15rem; max-width: 600px;">Analysez le Momentum des élites et identifiez les meilleurs profils certifiés pour vos projets.</p>
                         </div>
                         <div style="text-align: right;">
-                            <span class="badge ${isPremium ? 'badge-premium' : 'badge-free'}" style="padding: 10px 20px; border-radius: 99px; font-weight: 800; letter-spacing: 1px; font-size: 0.75rem; background: ${isPremium ? 'var(--primary-color)' : 'var(--bg-primary)'}; color: ${isPremium ? '#fff' : 'var(--text-secondary)'}; border: 1px solid ${isPremium ? 'transparent' : 'var(--border-color)'};">
-                                ${isPremium ? 'ACCÈS PREMIUM ACTIF' : 'ACCÈS LIMITÉ'}
+                            <span class="badge ${isPremium ? "badge-premium" : "badge-free"}" style="padding: 10px 20px; border-radius: 99px; font-weight: 800; letter-spacing: 1px; font-size: 0.75rem; background: ${isPremium ? "var(--primary-color)" : "var(--bg-primary)"}; color: ${isPremium ? "#fff" : "var(--text-secondary)"}; border: 1px solid ${isPremium ? "transparent" : "var(--border-color)"};">
+                                ${isPremium ? "ACCÈS PREMIUM ACTIF" : "ACCÈS LIMITÉ"}
                             </span>
-                            ${isPremium ? `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 10px; font-weight: 600;">Abonnement jusqu'au : ${expiryDate}</div>` : ''}
+                            ${isPremium ? `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 10px; font-weight: 600;">Abonnement jusqu'au : ${expiryDate}</div>` : ""}
                         </div>
                     </div>
 
@@ -1604,7 +1795,7 @@ class XERAProfessionalManager {
                         <button class="talent-tab active" onclick="window.professionalManager.switchTalentTab('grid', event)">
                             <i class="fas fa-users" style="margin-right: 8px;"></i> Répertoire des Talents
                         </button>
-                        <button class="talent-tab" onclick="window.professionalManager.switchTalentTab('analytics', event)" ${!isPremium ? 'disabled title="Réservé aux membres Premium"' : ''}>
+                        <button class="talent-tab" onclick="window.professionalManager.switchTalentTab('analytics', event)" ${!isPremium ? 'disabled title="Réservé aux membres Premium"' : ""}>
                             <i class="fas fa-chart-line" style="margin-right: 8px;"></i> Analytics Mensuels
                         </button>
                     </div>
@@ -1619,9 +1810,9 @@ class XERAProfessionalManager {
         `;
 
         // Injecter styles pour les tabs si pas déjà présents
-        if (!document.getElementById('talent-explorer-styles')) {
-            const style = document.createElement('style');
-            style.id = 'talent-explorer-styles';
+        if (!document.getElementById("talent-explorer-styles")) {
+            const style = document.createElement("style");
+            style.id = "talent-explorer-styles";
             style.textContent = `
                 .talent-tab {
                     background: none; border: none; padding: 15px 5px; font-weight: 700; color: var(--text-secondary); cursor: pointer; position: relative; font-size: 1.05rem; transition: all 0.2s;
@@ -1645,9 +1836,11 @@ class XERAProfessionalManager {
 
         // Focus et event Enter
         setTimeout(() => {
-            const input = document.getElementById('talent-search-main');
+            const input = document.getElementById("talent-search-main");
             if (input) {
-                input.onkeypress = (e) => { if (e.key === 'Enter') this.handleTalentSearch(); };
+                input.onkeypress = (e) => {
+                    if (e.key === "Enter") this.handleTalentSearch();
+                };
                 input.focus();
             }
         }, 100);
@@ -1657,7 +1850,7 @@ class XERAProfessionalManager {
      * Gère la recherche dans le Talent Explorer
      */
     handleTalentSearch() {
-        const input = document.getElementById('talent-search-main');
+        const input = document.getElementById("talent-search-main");
         const query = input ? input.value.trim() : "";
         this.loadTalentExplorerData(query);
     }
@@ -1666,17 +1859,19 @@ class XERAProfessionalManager {
      * Bascule entre l'explorateur et les analytics
      */
     async switchTalentTab(tab, event) {
-        const container = document.getElementById('talent-explorer-content');
+        const container = document.getElementById("talent-explorer-content");
         if (!container) return;
 
-        const tabs = document.querySelectorAll('.talent-tab');
-        tabs.forEach(t => t.classList.remove('active'));
-        if (event) event.target.closest('.talent-tab').classList.add('active');
+        const tabs = document.querySelectorAll(".talent-tab");
+        tabs.forEach((t) => t.classList.remove("active"));
+        if (event) event.target.closest(".talent-tab").classList.add("active");
 
-        if (tab === 'grid') {
+        if (tab === "grid") {
             container.innerHTML = `<div id="talent-grid" class="talent-grid-standalone" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 30px;"></div>`;
-            this.loadTalentExplorerData(document.getElementById('talent-search-main')?.value || "");
-        } else if (tab === 'analytics') {
+            this.loadTalentExplorerData(
+                document.getElementById("talent-search-main")?.value || "",
+            );
+        } else if (tab === "analytics") {
             this.renderAnalyticsDashboard();
         }
     }
@@ -1685,7 +1880,7 @@ class XERAProfessionalManager {
      * Rendu du dashboard d'analytics pour les membres premium
      */
     renderAnalyticsDashboard() {
-        const container = document.getElementById('talent-explorer-content');
+        const container = document.getElementById("talent-explorer-content");
         if (!container) return;
 
         container.innerHTML = `
@@ -1726,14 +1921,18 @@ class XERAProfessionalManager {
                             </div>
                         </div>
                         <div style="height: 320px; display: flex; align-items: flex-end; gap: 20px; padding-bottom: 30px; border-bottom: 2px dashed var(--border-color);">
-                            ${[65, 85, 45, 95, 75, 55, 80].map((h, i) => `
-                                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 15px; position: relative;" title="${['React', 'AI', 'Web3', 'Design', 'BTP', 'Fintech', 'HR'][i]}: ${h}% match">
-                                    <div style="width: 100%; height: ${h * 2.5}px; background: ${i === 3 ? 'var(--primary-color)' : 'rgba(99, 102, 241, 0.2)'}; border-radius: 12px 12px 4px 4px; transition: all 1s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative;">
-                                        <span style="position: absolute; top: -25px; width: 100%; text-align: center; font-size: 0.8rem; font-weight: 800; color: ${i === 3 ? 'var(--primary-color)' : 'var(--text-secondary)'};">${h}%</span>
+                            ${[65, 85, 45, 95, 75, 55, 80]
+                                .map(
+                                    (h, i) => `
+                                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 15px; position: relative;" title="${["React", "AI", "Web3", "Design", "BTP", "Fintech", "HR"][i]}: ${h}% match">
+                                    <div style="width: 100%; height: ${h * 2.5}px; background: ${i === 3 ? "var(--primary-color)" : "rgba(99, 102, 241, 0.2)"}; border-radius: 12px 12px 4px 4px; transition: all 1s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative;">
+                                        <span style="position: absolute; top: -25px; width: 100%; text-align: center; font-size: 0.8rem; font-weight: 800; color: ${i === 3 ? "var(--primary-color)" : "var(--text-secondary)"};">${h}%</span>
                                     </div>
-                                    <span style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 700; transform: rotate(-45deg); white-space: nowrap; margin-top: 15px;">${['React', 'AI', 'Web3', 'Design', 'BTP', 'Fintech', 'HR'][i]}</span>
+                                    <span style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 700; transform: rotate(-45deg); white-space: nowrap; margin-top: 15px;">${["React", "AI", "Web3", "Design", "BTP", "Fintech", "HR"][i]}</span>
                                 </div>
-                            `).join('')}
+                            `,
+                                )
+                                .join("")}
                         </div>
                     </div>
 
@@ -1741,12 +1940,34 @@ class XERAProfessionalManager {
                         <h3 style="margin-top: 0; margin-bottom: 30px; font-size: 1.4rem;">Top Localisations Elite</h3>
                         <div style="display: grid; gap: 25px;">
                             ${[
-                                { city: 'Paris / Station F', val: 34, color: 'var(--primary-color)' },
-                                { city: 'Silicon Valley', val: 28, color: '#6366f1' },
-                                { city: 'London Hub', val: 18, color: '#818cf8' },
-                                { city: 'Berlin / Europe', val: 12, color: '#a5b4fc' },
-                                { city: 'Global Remote', val: 8, color: '#c7d2fe' }
-                            ].map(loc => `
+                                {
+                                    city: "Paris / Station F",
+                                    val: 34,
+                                    color: "var(--primary-color)",
+                                },
+                                {
+                                    city: "Silicon Valley",
+                                    val: 28,
+                                    color: "#6366f1",
+                                },
+                                {
+                                    city: "London Hub",
+                                    val: 18,
+                                    color: "#818cf8",
+                                },
+                                {
+                                    city: "Berlin / Europe",
+                                    val: 12,
+                                    color: "#a5b4fc",
+                                },
+                                {
+                                    city: "Global Remote",
+                                    val: 8,
+                                    color: "#c7d2fe",
+                                },
+                            ]
+                                .map(
+                                    (loc) => `
                                 <div>
                                     <div style="display: flex; justify-content: space-between; font-size: 0.95rem; margin-bottom: 8px;">
                                         <span style="font-weight: 700;">${loc.city}</span>
@@ -1756,7 +1977,9 @@ class XERAProfessionalManager {
                                         <div style="width: ${loc.val}%; height: 100%; background: ${loc.color}; border-radius: 10px; transition: width 1.5s ease-in-out;"></div>
                                     </div>
                                 </div>
-                            `).join('')}
+                            `,
+                                )
+                                .join("")}
                         </div>
                         <div style="margin-top: 40px; padding: 20px; background: var(--bg-primary); border-radius: 16px; border: 1px solid var(--border-color);">
                             <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
@@ -1774,7 +1997,7 @@ class XERAProfessionalManager {
      * Rendu du Paywall pour l'accès premium
      */
     renderTalentPaywall() {
-        const grid = document.getElementById('talent-grid');
+        const grid = document.getElementById("talent-grid");
         if (!grid) return;
 
         grid.innerHTML = `
@@ -1823,20 +2046,27 @@ class XERAProfessionalManager {
         const grid = document.getElementById("talent-grid");
         if (!grid) return;
 
-        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 100px; min-height: 400px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;"><div class="loading-spinner"></div><p style="color: var(--text-secondary); font-weight: 600;">Le Momentum Engine analyse les trajectoires en temps réel...</p></div>';
+        grid.innerHTML =
+            '<div style="grid-column: 1/-1; text-align: center; padding: 100px; min-height: 400px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;"><div class="loading-spinner"></div><p style="color: var(--text-secondary); font-weight: 600;">Le Momentum Engine analyse les trajectoires en temps réel...</p></div>';
 
         try {
             // Utilisation de la vue momentum_discovery_feed du Momentum Engine
             let supabaseQuery = this.supabase
-                .from('momentum_discovery_feed')
-                .select('id, name, avatar, title, bio, account_subtype, badge, momentum_score');
+                .from("momentum_discovery_feed")
+                .select(
+                    "id, name, avatar, title, bio, account_subtype, badge, momentum_score",
+                );
 
             if (query) {
-                supabaseQuery = supabaseQuery.or(`name.ilike.%${query}%,title.ilike.%${query}%,bio.ilike.%${query}%,account_subtype.ilike.%${query}%`);
+                supabaseQuery = supabaseQuery.or(
+                    `name.ilike.%${query}%,title.ilike.%${query}%,bio.ilike.%${query}%,account_subtype.ilike.%${query}%`,
+                );
             }
 
             // Tri par le score de momentum calculé en temps réel
-            supabaseQuery = supabaseQuery.order('momentum_score', { ascending: false }).limit(48);
+            supabaseQuery = supabaseQuery
+                .order("momentum_score", { ascending: false })
+                .limit(48);
 
             const { data: users, error } = await supabaseQuery;
 
@@ -1854,28 +2084,37 @@ class XERAProfessionalManager {
                 return;
             }
 
-            grid.innerHTML = users.map(user => {
-                const name = this.escapeHtml(user.name || "Talent Anonyme");
-                const title = this.escapeHtml(user.title || user.account_subtype || 'Membre Certifié');
-                const avatar = this.escapeHtml(user.avatar || 'https://placehold.co/120');
-                const score = user.momentum_score || 0;
+            grid.innerHTML = users
+                .map((user) => {
+                    const name = this.escapeHtml(user.name || "Talent Anonyme");
+                    const title = this.escapeHtml(
+                        user.title || user.account_subtype || "Membre Certifié",
+                    );
+                    const avatar = this.escapeHtml(
+                        user.avatar || "https://placehold.co/120",
+                    );
+                    const score = user.momentum_score || 0;
 
-                return `
+                    return `
                     <div class="talent-card-premium" style="padding: 35px 25px; display: flex; flex-direction: column; align-items: center; text-align: center; cursor: pointer;" onclick="navigateToUserProfile('${user.id}')">
                         <div style="position: relative; margin-bottom: 20px;">
                             <div style="width: 110px; height: 110px; border-radius: 50%; padding: 5px; background: linear-gradient(135deg, var(--primary-color), #818cf8); margin-bottom: 5px;">
                                 <img src="${avatar}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 4px solid var(--bg-secondary);">
                             </div>
-                            ${user.badge ? `
+                            ${
+                                user.badge
+                                    ? `
                                 <div style="position: absolute; bottom: 8px; right: 8px; background: #000; color: #fff; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; border: 3px solid var(--bg-secondary); box-shadow: 0 4px 10px rgba(0,0,0,0.3);" title="Profil Certifié Official">
                                     <i class="fas fa-check"></i>
                                 </div>
-                            ` : ''}
+                            `
+                                    : ""
+                            }
                         </div>
                         <h4 style="margin: 0 0 8px 0; font-size: 1.25rem; font-weight: 800; color: var(--text-primary);">${name}</h4>
                         <div style="font-size: 0.9rem; color: var(--primary-color); font-weight: 700; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px;">${title}</div>
                         <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; height: 3.8rem; font-style: italic;">
-                            "${user.bio || 'Ce talent développe actuellement son Momentum sur XERA via des trajectoires certifiées.'}"
+                            "${user.bio || "Ce talent développe actuellement son Momentum sur XERA via des trajectoires certifiées."}"
                         </p>
                         <div style="width: 100%; height: 1px; background: linear-gradient(to right, transparent, var(--border-color), transparent); margin-bottom: 20px;"></div>
                         <div style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
@@ -1884,8 +2123,8 @@ class XERAProfessionalManager {
                         </div>
                     </div>
                 `;
-            }).join('');
-
+                })
+                .join("");
         } catch (err) {
             console.error(err);
             grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 100px; color: #ef4444; background: rgba(239, 68, 68, 0.05); border-radius: 20px;">Erreur lors du chargement des profils via le Momentum Engine.</div>`;
@@ -1896,14 +2135,19 @@ class XERAProfessionalManager {
      * Rendu des placeholders floutés pour l'état non-premium
      */
     renderMockTalentGrid(returnHtml = false) {
-        const html = Array(12).fill(0).map(() => `
+        const html = Array(12)
+            .fill(0)
+            .map(
+                () => `
             <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 24px; padding: 35px 25px; display: flex; flex-direction: column; align-items: center; text-align: center;">
                 <div style="width: 100px; height: 100px; background: rgba(255,255,255,0.05); border-radius: 50%; margin-bottom: 20px;"></div>
                 <div style="height: 1.5rem; width: 70%; background: rgba(255,255,255,0.05); border-radius: 6px; margin-bottom: 10px;"></div>
                 <div style="height: 1rem; width: 40%; background: rgba(255,255,255,0.03); border-radius: 6px; margin-bottom: 20px;"></div>
                 <div style="height: 4rem; width: 100%; background: rgba(255,255,255,0.02); border-radius: 12px;"></div>
             </div>
-        `).join('');
+        `,
+            )
+            .join("");
 
         if (returnHtml) return html;
 
@@ -1923,12 +2167,16 @@ class XERAProfessionalManager {
         try {
             const formData = new FormData(form);
             const updates = {
-                name: formData.get('name'),
-                websiteUrl: formData.get('website_url'),
-                hiringNeeds: formData.get('hiring_needs').split(',').map(s => s.trim()).filter(Boolean),
-                bio: formData.get('bio'),
-                description: formData.get('description'),
-                industry: formData.get('industry')
+                name: formData.get("name"),
+                websiteUrl: formData.get("website_url"),
+                hiringNeeds: formData
+                    .get("hiring_needs")
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                bio: formData.get("bio"),
+                description: formData.get("description"),
+                industry: formData.get("industry"),
             };
 
             await this.updatePage(pageId, updates);
@@ -1959,7 +2207,7 @@ class XERAProfessionalOnboarding {
             avatarUrl: "",
             bannerUrl: "",
             hiringNeeds: [],
-            websiteUrl: ""
+            websiteUrl: "",
         };
         this.overlay = null;
         this.tooltip = null;
@@ -1989,7 +2237,7 @@ class XERAProfessionalOnboarding {
             "Ressources Humaines (RH) et Recrutement",
             "Santé, Social et Services à la personne",
             "Sciences, Recherche et Développement",
-            "Sport et Bien-être"
+            "Sport et Bien-être",
         ];
     }
 
@@ -2007,7 +2255,8 @@ class XERAProfessionalOnboarding {
         document.body.appendChild(this.overlay);
 
         this.tooltip = document.createElement("div");
-        this.tooltip.className = "tutorial-tooltip-premium tutorial-v2 onboarding-xxl";
+        this.tooltip.className =
+            "tutorial-tooltip-premium tutorial-v2 onboarding-xxl";
         this.tooltip.style.zIndex = "10001";
         this.tooltip.style.top = "50%";
         this.tooltip.style.left = "50%";
@@ -2021,7 +2270,7 @@ class XERAProfessionalOnboarding {
             {
                 title: "Nom de votre Page",
                 desc: "Choisissez un nom qui représente votre marque ou organisation. C'est l'identité de votre entité.",
-                content: `<div class="onboarding-step-content"><input type="text" id="onboarding-name" class="form-input" placeholder="Ex: XERA Corp" value="${this.data.name}"></div>`
+                content: `<div class="onboarding-step-content"><input type="text" id="onboarding-name" class="form-input" placeholder="Ex: XERA Corp" value="${this.data.name}"></div>`,
             },
             {
                 title: "Secteurs d'activité (Max 4)",
@@ -2031,24 +2280,28 @@ class XERAProfessionalOnboarding {
                         <div class="industry-search-container" style="position: relative;">
                             <input type="text" id="onboarding-industry-search" class="form-input" placeholder="Rechercher un secteur..." autocomplete="off">
                             <div id="onboarding-industry-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 100; max-height: 200px; overflow-y: auto;">
-                                ${this.industriesList.map(ind => `<div class="industry-option" style="padding: 10px; cursor: pointer;">${ind}</div>`).join('')}
+                                ${this.industriesList.map((ind) => `<div class="industry-option" style="padding: 10px; cursor: pointer;">${ind}</div>`).join("")}
                             </div>
                         </div>
                         <div id="selected-industries-list" class="selected-industries-chips">
-                            ${this.data.industries.map((ind, idx) => `
+                            ${this.data.industries
+                                .map(
+                                    (ind, idx) => `
                                 <div class="industry-chip">
                                     ${ind}
                                     <span class="remove-industry" data-index="${idx}">×</span>
                                 </div>
-                            `).join('')}
+                            `,
+                                )
+                                .join("")}
                         </div>
                     </div>
-                `
+                `,
             },
             {
                 title: "Mission & Description",
                 desc: "Racontez votre histoire. Une description solide (min 20 car.) donne de la crédibilité à votre organisation.",
-                content: `<div class="onboarding-step-content"><textarea id="onboarding-desc" class="form-input" placeholder="Détaillez vos missions, valeurs et projets..." style="min-height: 140px;">${this.data.description}</textarea></div>`
+                content: `<div class="onboarding-step-content"><textarea id="onboarding-desc" class="form-input" placeholder="Détaillez vos missions, valeurs et projets..." style="min-height: 140px;">${this.data.description}</textarea></div>`,
             },
             {
                 title: "Logo Officiel",
@@ -2056,12 +2309,12 @@ class XERAProfessionalOnboarding {
                 content: `
                     <div class="onboarding-step-content" style="text-align: center; padding: 20px;">
                         <label for="onboarding-avatar-file" class="custom-file-upload" style="display: block; margin-bottom: 10px; border: 3px dashed #000; padding: 30px; border-radius: 12px; background: #f9f9f9; color: #000; cursor: pointer;">
-                            ${this.data.avatarUrl ? `<img src="${this.data.avatarUrl}" style="width: 100px; height: 100px; border-radius: 12px; object-fit: cover;">` : 'Uploader votre LOGO (Requis)'}
+                            ${this.data.avatarUrl ? `<img src="${this.data.avatarUrl}" style="width: 100px; height: 100px; border-radius: 12px; object-fit: cover;">` : "Uploader votre LOGO (Requis)"}
                         </label>
                         <input type="file" id="onboarding-avatar-file" accept="image/*" style="display:none">
                         <div id="avatar-upload-status" style="font-size: 0.9rem; color: #000; font-weight: 700; margin-top: 10px;"></div>
                     </div>
-                `
+                `,
             },
             {
                 title: "Bannière (Optionnelle)",
@@ -2069,23 +2322,23 @@ class XERAProfessionalOnboarding {
                 content: `
                     <div class="onboarding-step-content" style="text-align: center; padding: 20px;">
                         <label for="onboarding-banner-file" class="custom-file-upload" style="display: block; margin-bottom: 10px; border: 3px dashed #000; padding: 30px; border-radius: 12px; background: #f9f9f9; color: #000; cursor: pointer;">
-                             ${this.data.bannerUrl ? `<img src="${this.data.bannerUrl}" style="width: 100%; height: 80px; border-radius: 8px; object-fit: cover;">` : 'Uploader une BANNIÈRE (Optionnelle)'}
+                             ${this.data.bannerUrl ? `<img src="${this.data.bannerUrl}" style="width: 100%; height: 80px; border-radius: 8px; object-fit: cover;">` : "Uploader une BANNIÈRE (Optionnelle)"}
                         </label>
                         <input type="file" id="onboarding-banner-file" accept="image/*" style="display:none">
                         <div id="banner-upload-status" style="font-size: 0.9rem; color: #000; font-weight: 700; margin-top: 10px;"></div>
                     </div>
-                `
+                `,
             },
             {
                 title: "Centres d'intérêts",
                 desc: "Dites-nous ce qui vous intéresse (compétences, techno, domaines). Le Momentum Engine personnalisera votre feed.",
-                content: `<div class="onboarding-step-content"><input type="text" id="onboarding-interests" class="form-input" placeholder="Ex: React, Intelligence Artificielle, BTP..." value="${this.data.hiringNeeds.join(', ')}"></div>`
+                content: `<div class="onboarding-step-content"><input type="text" id="onboarding-interests" class="form-input" placeholder="Ex: React, Intelligence Artificielle, BTP..." value="${this.data.hiringNeeds.join(", ")}"></div>`,
             },
             {
                 title: "Lien Officiel",
                 desc: "Ajoutez le site web ou un lien social principal. C'est essentiel pour rediriger votre audience.",
-                content: `<div class="onboarding-step-content"><input type="url" id="onboarding-website" class="form-input" placeholder="https://votreorganisation.com" value="${this.data.websiteUrl || ''}"></div>`
-            }
+                content: `<div class="onboarding-step-content"><input type="url" id="onboarding-website" class="form-input" placeholder="https://votreorganisation.com" value="${this.data.websiteUrl || ""}"></div>`,
+            },
         ];
 
         const step = steps[this.currentStep];
@@ -2103,7 +2356,7 @@ class XERAProfessionalOnboarding {
                     ${step.content}
                 </div>
                 <div class="tutorial-premium-actions" style="display: flex; gap: 15px; justify-content: flex-end;">
-                    ${this.currentStep > 0 ? `<button class="btn-tutorial-skip-premium" id="onboarding-prev" style="margin-right: auto;">Retour</button>` : ''}
+                    ${this.currentStep > 0 ? `<button class="btn-tutorial-skip-premium" id="onboarding-prev" style="margin-right: auto;">Retour</button>` : ""}
                     <button class="btn-tutorial-next-premium" id="onboarding-next">${isLast ? "Activer le Protocole ✨" : "Continuer"}</button>
                 </div>
             </div>
@@ -2113,32 +2366,58 @@ class XERAProfessionalOnboarding {
     }
 
     attachEvents() {
-        document.getElementById("onboarding-cancel").onclick = () => this.destroy();
+        document.getElementById("onboarding-cancel").onclick = () =>
+            this.destroy();
         const prevBtn = document.getElementById("onboarding-prev");
-        if (prevBtn) prevBtn.onclick = () => { this.saveCurrentStepData(); this.currentStep--; this.showStep(); };
+        if (prevBtn)
+            prevBtn.onclick = () => {
+                this.saveCurrentStepData();
+                this.currentStep--;
+                this.showStep();
+            };
 
         const nextBtn = document.getElementById("onboarding-next");
         nextBtn.onclick = async () => {
-            if (!(await this.validateCurrentStep())) return;
-            this.saveCurrentStepData();
-            if (this.currentStep < 6) {
-                this.currentStep++;
-                this.showStep();
-            } else {
-                await this.finish();
+            try {
+                const ok = await this.validateCurrentStep();
+                if (!ok) return;
+                this.saveCurrentStepData();
+                if (this.currentStep < 6) {
+                    this.currentStep++;
+                    this.showStep();
+                } else {
+                    await this.finish();
+                }
+            } catch (err) {
+                console.error("Onboarding next error:", err);
+                try {
+                    alert(
+                        `Erreur lors de l'étape d'onboarding: ${err?.message || err}`,
+                    );
+                } catch (e) {
+                    // ignore alert errors
+                }
             }
         };
 
         if (this.currentStep === 1) {
-            const searchInput = document.getElementById("onboarding-industry-search");
-            const resultsDiv = document.getElementById("onboarding-industry-results");
-            const chipsContainer = document.getElementById("selected-industries-list");
+            const searchInput = document.getElementById(
+                "onboarding-industry-search",
+            );
+            const resultsDiv = document.getElementById(
+                "onboarding-industry-results",
+            );
+            const chipsContainer = document.getElementById(
+                "selected-industries-list",
+            );
 
-            searchInput.onfocus = () => { resultsDiv.style.display = "block"; };
+            searchInput.onfocus = () => {
+                resultsDiv.style.display = "block";
+            };
             searchInput.oninput = (e) => {
                 const val = e.target.value.toLowerCase();
                 const options = resultsDiv.querySelectorAll(".industry-option");
-                options.forEach(opt => {
+                options.forEach((opt) => {
                     const text = opt.innerText.toLowerCase();
                     opt.style.display = text.includes(val) ? "block" : "none";
                 });
@@ -2176,7 +2455,7 @@ class XERAProfessionalOnboarding {
                 if (!file) return;
                 const status = document.getElementById("avatar-upload-status");
                 status.innerHTML = `<div class="loading-spinner" style="width:20px;height:20px;"></div> Uploading...`;
-                const res = await window.uploadFile(file, 'pro-pages/avatars');
+                const res = await window.uploadFile(file, "pro-pages/avatars");
                 if (res.success) {
                     this.data.avatarUrl = res.url;
                     this.showStep();
@@ -2194,7 +2473,7 @@ class XERAProfessionalOnboarding {
                 if (!file) return;
                 const status = document.getElementById("banner-upload-status");
                 status.innerHTML = `<div class="loading-spinner" style="width:20px;height:20px;"></div> Uploading...`;
-                const res = await window.uploadFile(file, 'pro-pages/banners');
+                const res = await window.uploadFile(file, "pro-pages/banners");
                 if (res.success) {
                     this.data.bannerUrl = res.url;
                     this.showStep();
@@ -2207,36 +2486,73 @@ class XERAProfessionalOnboarding {
     }
 
     async validateCurrentStep() {
-        switch(this.currentStep) {
+        switch (this.currentStep) {
             case 0:
-                const pageName = document.getElementById("onboarding-name").value.trim();
-                if (!pageName) { alert("Nom obligatoire."); return false; }
+                const pageName = document
+                    .getElementById("onboarding-name")
+                    .value.trim();
+                if (!pageName) {
+                    alert("Nom obligatoire.");
+                    return false;
+                }
                 try {
-                    const isAvailable = await this.manager.isPageNameAvailable(pageName);
+                    const isAvailable =
+                        await this.manager.isPageNameAvailable(pageName);
                     if (!isAvailable) {
-                        alert("Ce nom de Page Pro est déjà utilisé. Choisissez un autre nom.");
+                        alert(
+                            "Ce nom de Page Pro est déjà utilisé. Choisissez un autre nom.",
+                        );
                         return false;
                     }
                 } catch (error) {
-                    console.error("Vérification du nom de Page Pro impossible:", error);
-                    alert("Impossible de vérifier l'unicité du nom pour le moment.");
+                    console.error(
+                        "Vérification du nom de Page Pro impossible:",
+                        error,
+                    );
+                    alert(
+                        "Impossible de vérifier l'unicité du nom pour le moment.",
+                    );
                     return false;
                 }
                 return true;
             case 1:
-                if (this.data.industries.length === 0) { alert("Choisissez au moins 1 secteur."); return false; }
+                if (this.data.industries.length === 0) {
+                    alert("Choisissez au moins 1 secteur.");
+                    return false;
+                }
                 return true;
             case 2:
-                if (document.getElementById("onboarding-desc").value.trim().length < 20) { alert("Description trop courte (min 20 car.)."); return false; }
+                if (
+                    document.getElementById("onboarding-desc").value.trim()
+                        .length < 20
+                ) {
+                    alert("Description trop courte (min 20 car.).");
+                    return false;
+                }
                 return true;
             case 3:
-                if (!this.data.avatarUrl) { alert("Logo requis."); return false; }
+                if (!this.data.avatarUrl) {
+                    alert("Logo requis.");
+                    return false;
+                }
                 return true;
             case 5:
-                if (!document.getElementById("onboarding-interests").value.trim()) { alert("Centres d'intérêts requis."); return false; }
+                if (
+                    !document
+                        .getElementById("onboarding-interests")
+                        .value.trim()
+                ) {
+                    alert("Centres d'intérêts requis.");
+                    return false;
+                }
                 return true;
             case 6:
-                if (!document.getElementById("onboarding-website").value.trim()) { alert("Lien officiel requis."); return false; }
+                if (
+                    !document.getElementById("onboarding-website").value.trim()
+                ) {
+                    alert("Lien officiel requis.");
+                    return false;
+                }
                 return true;
         }
         return true;
@@ -2245,24 +2561,41 @@ class XERAProfessionalOnboarding {
     renderIndustryChips() {
         const container = document.getElementById("selected-industries-list");
         if (!container) return;
-        container.innerHTML = this.data.industries.map((ind, idx) => `
+        container.innerHTML = this.data.industries
+            .map(
+                (ind, idx) => `
             <div class="industry-chip">
                 ${ind}
                 <span class="remove-industry" data-index="${idx}">×</span>
             </div>
-        `).join('');
+        `,
+            )
+            .join("");
     }
 
     saveCurrentStepData() {
-        switch(this.currentStep) {
-            case 0: this.data.name = document.getElementById("onboarding-name").value.trim(); break;
-            case 2: this.data.description = document.getElementById("onboarding-desc").value; break;
+        switch (this.currentStep) {
+            case 0:
+                this.data.name = document
+                    .getElementById("onboarding-name")
+                    .value.trim();
+                break;
+            case 2:
+                this.data.description =
+                    document.getElementById("onboarding-desc").value;
+                break;
             case 5:
-                const interests = document.getElementById("onboarding-interests").value;
-                this.data.hiringNeeds = interests.split(',').map(s => s.trim()).filter(Boolean);
+                const interests = document.getElementById(
+                    "onboarding-interests",
+                ).value;
+                this.data.hiringNeeds = interests
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean);
                 break;
             case 6:
-                this.data.websiteUrl = document.getElementById("onboarding-website").value;
+                this.data.websiteUrl =
+                    document.getElementById("onboarding-website").value;
                 break;
         }
     }
@@ -2275,7 +2608,7 @@ class XERAProfessionalOnboarding {
         try {
             const finalData = {
                 ...this.data,
-                industry: this.data.industries.join(', ')
+                industry: this.data.industries.join(", "),
             };
             const newPage = await this.manager.createPage(finalData);
             window.showToast?.("Page Pro déployée avec succès !");
@@ -2300,9 +2633,12 @@ class XERAProfessionalOnboarding {
 }
 
 // Export pour usage global avec initialisation automatique
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
     const initManager = () => {
-        const client = window.supabaseClient || window.supabase || (typeof supabase !== 'undefined' ? supabase : null);
+        const client =
+            window.supabaseClient ||
+            window.supabase ||
+            (typeof supabase !== "undefined" ? supabase : null);
         if (client) {
             window.professionalManager = new XERAProfessionalManager(client);
             window.professionalManager.initNavigation().catch(console.warn);

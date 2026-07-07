@@ -296,20 +296,33 @@
         window.location.assign(destination);
     }
 
-    function buildProfileUrl(userId, accountType) {
-        const proLabels = [
-            "community",
-            "enterprise",
-            "company",
-            "pro",
-            "communauté",
-            "entreprise",
-            "institution",
-        ];
-        const isPro = proLabels.includes(
-            String(accountType || "").toLowerCase(),
-        );
+    function isProAccountType(accountType, accountSubtype) {
+        const values = [accountType, accountSubtype]
+            .filter(
+                (value) =>
+                    value !== undefined && value !== null && value !== "",
+            )
+            .map((value) => String(value).trim().toLowerCase());
 
+        return values.some((value) =>
+            [
+                "community",
+                "enterprise",
+                "company",
+                "pro",
+                "communauté",
+                "entreprise",
+                "institution",
+                "organization",
+                "organisation",
+                "org",
+                "team",
+            ].includes(value),
+        );
+    }
+
+    function buildProfileUrl(userId, accountType, accountSubtype) {
+        const isPro = isProAccountType(accountType, accountSubtype);
         const route = isPro ? "pagepro" : "profile";
         return buildHtmlUrl(route, {
             query: userId ? { user: userId } : {},
@@ -397,16 +410,12 @@
 
         const type =
             user.user_metadata?.account_type || user.account_type || "personal";
-        const proLabels = [
-            "community",
-            "enterprise",
-            "company",
-            "pro",
-            "communauté",
-            "entreprise",
-            "institution",
-        ];
-        const isPro = proLabels.includes(String(type).toLowerCase());
+        const subtype =
+            user.user_metadata?.account_subtype ||
+            user.account_subtype ||
+            user.accountSubtype ||
+            "personal";
+        const isPro = isProAccountType(type, subtype);
 
         navigate(isPro ? "pagepro" : "profile", {
             query: { user: user.id },
