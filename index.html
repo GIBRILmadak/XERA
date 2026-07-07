@@ -5,6 +5,11 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>XERA | Tracez votre progression</title>
         <link rel="manifest" href="/manifest.json" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+        <link rel="preconnect" href="https://unpkg.com" />
+        <link rel="dns-prefetch" href="//cdnjs.cloudflare.com" />
         <link rel="preload" as="image" href="icons/logo-192x192.png" />
         <link rel="preload" as="image" href="icons/logo-512x512.png" />
         <link
@@ -133,7 +138,22 @@
                     "",
             };
         </script>
-        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            (() => {
+                if (!("serviceWorker" in navigator)) return;
+                const registerSW = () => {
+                    navigator.serviceWorker
+                        .register("/sw.js")
+                        .catch(() => {});
+                };
+                if (document.readyState === "complete") {
+                    window.setTimeout(registerSW, 0);
+                } else {
+                    window.addEventListener("load", registerSW, { once: true });
+                }
+            })();
+        </script>
+        <script src="https://cdn.tailwindcss.com" defer></script>
         <link rel="stylesheet" href="css/style.css?v=20260502-3" />
         <link rel="stylesheet" href="css/search-notification.css" />
         <link rel="stylesheet" href="css/arcs.css" />
@@ -147,7 +167,7 @@
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
         />
-        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
     </head>
     <body class="has-mobile-nav">
         <div id="global-progress-bar-placeholder"></div>
@@ -535,30 +555,30 @@
         </div>
 
         <script src="js/telemetry.js" defer></script>
-        <script src="js/router.js"></script>
-        <script src="js/supabase-config.js"></script>
-        <script src="js/monetization-utils.js"></script>
-        <script src="js/monetization.js?v=20260319-1"></script>
-        <script src="js/monetization-ui.js?v=20260319-1"></script>
-        <script src="js/push-config.js"></script>
-        <script src="js/influence.js"></script>
-        <script src="js/i18n.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-        <script src="js/analytics.js"></script>
-        <script src="js/ux-enhancements.js"></script>
-        <script src="js/app-enhancements.js"></script>
-        <script src="js/premium-ui.js"></script>
+        <script src="js/router.js" defer></script>
+        <script src="js/supabase-config.js" defer></script>
+        <script src="js/monetization-utils.js" defer></script>
+        <script src="js/monetization.js?v=20260319-1" defer></script>
+        <script src="js/monetization-ui.js?v=20260319-1" defer></script>
+        <script src="js/push-config.js" defer></script>
+        <script src="js/influence.js" defer></script>
+        <script src="js/i18n.js" defer></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+        <script src="js/analytics.js" defer></script>
+        <script src="js/ux-enhancements.js" defer></script>
+        <script src="js/app-enhancements.js" defer></script>
+        <script src="js/premium-ui.js" defer></script>
         <script src="js/pwa-install.js" defer></script>
-        <script src="js/search.js"></script>
-        <script src="js/notifications.js?v=20260502-1"></script>
-        <script src="js/messages.js?v=20260502-3"></script>
-        <script src="js/file-upload.js"></script>
-        <script src="js/nudges.js"></script>
-        <script src="js/tutorial.js"></script>
-        <script src="js/arcs.js"></script>
-        <script src="js/professional-pages.js"></script>
+        <script src="js/search.js" defer></script>
+        <script src="js/notifications.js?v=20260502-1" defer></script>
+        <script src="js/messages.js?v=20260502-3" defer></script>
+        <script src="js/file-upload.js" defer></script>
+        <script src="js/nudges.js" defer></script>
+        <script src="js/tutorial.js" defer></script>
+        <script src="js/arcs.js" defer></script>
+        <script src="js/professional-pages.js" defer></script>
         <script src="js/pro-settings-component.js?v=20260424-1" defer></script>
-        <script src="js/app-supabase.js?v=20260502-3"></script>
+        <script src="js/app-supabase.js?v=20260502-3" defer></script>
         <script src="js/xera-platform-bridge.js?v=20260424-1" defer></script>
         <script
             src="https://unpkg.com/react@18/umd/react.production.min.js"
@@ -574,161 +594,167 @@
         <script src="js/react-app.js?v=20260424-1" defer></script>
 
         <script>
-            // Initialiser les fonctionnalités au chargement
+            // Initialiser les fonctionnalités au chargement, mais sans bloquer le rendu initial
             document.addEventListener("DOMContentLoaded", function () {
-                // Init i18n + language toggle
-                if (window.initI18n) {
-                    window.initI18n();
-                }
+                const initializeAppShell = () => {
+                    if (window.initI18n) {
+                        window.initI18n();
+                    }
 
-                // Initialiser la recherche
-                if (typeof initializeSearch === "function") {
-                    initializeSearch();
-                }
+                    if (typeof initializeSearch === "function") {
+                        initializeSearch();
+                    }
 
-                // Initialiser les notifications si l'utilisateur est connecté
-                if (
-                    window.currentUser &&
-                    typeof initializeNotifications === "function"
-                ) {
-                    initializeNotifications();
-                    document.getElementById("notification-btn").style.display =
-                        "flex";
-                }
-
-                // Bouton flottant de publication
-                const floatingBtn = document.getElementById(
-                    "floating-create-btn",
-                );
-                if (floatingBtn) {
-                    floatingBtn.addEventListener("click", () => {
-                        if (!window.currentUser) {
-                            alert(
-                                "Connectez-vous pour publier une mise à jour.",
-                            );
-                            return;
+                    if (
+                        window.currentUser &&
+                        typeof initializeNotifications === "function"
+                    ) {
+                        initializeNotifications();
+                        const notificationBtn = document.getElementById(
+                            "notification-btn",
+                        );
+                        if (notificationBtn) {
+                            notificationBtn.style.display = "flex";
                         }
-                        if (typeof window.openCreateMenu === "function") {
-                            window.openCreateMenu(window.currentUser.id);
-                        }
-                    });
-                }
+                    }
 
-                // Hero primary CTA
-                const heroStart = document.getElementById("hero-start-btn");
-                if (heroStart) {
-                    heroStart.addEventListener("click", () => {
-                        if (!window.currentUser) {
-                            window.location.href = "login.html";
-                            return;
-                        }
-                        if (typeof window.openCreateModal === "function") {
-                            window.openCreateModal();
-                        } else if (
-                            typeof window.openCreateMenu === "function"
-                        ) {
-                            window.openCreateMenu(window.currentUser.id);
-                        }
-                    });
-                }
-
-                // Hero watch demo -> scroll to discover
-                const heroWatch = document.getElementById("hero-watch-btn");
-                const heroVideo = document.getElementById("hero-demo-video");
-                const heroUnmute = document.getElementById("hero-unmute-btn");
-                const heroScrollCue =
-                    document.getElementById("hero-scroll-cue");
-
-                const scrollToDiscover = () => {
-                    const discover = document.getElementById("discover");
-                    if (discover) {
-                        discover.scrollIntoView({
-                            behavior: "smooth",
-                            block: "start",
+                    const floatingBtn = document.getElementById(
+                        "floating-create-btn",
+                    );
+                    if (floatingBtn) {
+                        floatingBtn.addEventListener("click", () => {
+                            if (!window.currentUser) {
+                                alert(
+                                    "Connectez-vous pour publier une mise à jour.",
+                                );
+                                return;
+                            }
+                            if (typeof window.openCreateMenu === "function") {
+                                window.openCreateMenu(window.currentUser.id);
+                            }
                         });
                     }
-                };
 
-                if (heroScrollCue) {
-                    heroScrollCue.addEventListener("click", scrollToDiscover);
-                    const toggleHeroScrollCue = () => {
-                        heroScrollCue.classList.toggle(
-                            "is-hidden",
-                            window.scrollY > 120,
-                        );
-                    };
-                    toggleHeroScrollCue();
-                    window.addEventListener("scroll", toggleHeroScrollCue, {
-                        passive: true,
-                    });
-                }
-
-                const openDemoFullscreen = async () => {
-                    if (!heroVideo) {
-                        scrollToDiscover();
-                        return;
-                    }
-                    try {
-                        heroVideo.controls = true;
-                        heroVideo.muted = false;
-                        if (heroUnmute) {
-                            heroUnmute.textContent = "🔊 Mute sound";
-                            heroUnmute.setAttribute("aria-pressed", "true");
-                        }
-                        // Fullscreen first for better UX, then play with sound
-                        if (heroVideo.requestFullscreen) {
-                            await heroVideo.requestFullscreen();
-                        } else if (heroVideo.webkitRequestFullscreen) {
-                            heroVideo.webkitRequestFullscreen();
-                        }
-                        await heroVideo.play();
-                    } catch (e) {
-                        console.warn(
-                            "Fullscreen request failed, scrolling instead:",
-                            e,
-                        );
-                        scrollToDiscover();
-                    }
-                };
-
-                if (heroWatch)
-                    heroWatch.addEventListener("click", openDemoFullscreen);
-
-                // Hero demo video: allow unmute toggle
-                if (heroVideo && heroUnmute) {
-                    heroUnmute.addEventListener("click", async () => {
-                        const willUnmute = heroVideo.muted;
-                        heroVideo.muted = !willUnmute;
-                        heroUnmute.textContent = heroVideo.muted
-                            ? "🔇 Tap for sound"
-                            : "🔊 Mute sound";
-                        try {
-                            await heroVideo.play();
-                        } catch (e) {
-                            console.warn("Hero video play blocked:", e);
-                        }
-                        heroUnmute.setAttribute(
-                            "aria-pressed",
-                            (!heroVideo.muted).toString(),
-                        );
-                    });
-
-                    // Fullscreen on click/tap
-                    heroVideo.addEventListener("click", async () => {
-                        try {
-                            if (document.fullscreenElement) {
-                                await document.exitFullscreen();
+                    const heroStart = document.getElementById("hero-start-btn");
+                    if (heroStart) {
+                        heroStart.addEventListener("click", () => {
+                            if (!window.currentUser) {
+                                window.location.href = "login.html";
                                 return;
+                            }
+                            if (typeof window.openCreateModal === "function") {
+                                window.openCreateModal();
+                            } else if (
+                                typeof window.openCreateMenu === "function"
+                            ) {
+                                window.openCreateMenu(window.currentUser.id);
+                            }
+                        });
+                    }
+
+                    const heroWatch = document.getElementById("hero-watch-btn");
+                    const heroVideo = document.getElementById("hero-demo-video");
+                    const heroUnmute = document.getElementById("hero-unmute-btn");
+                    const heroScrollCue =
+                        document.getElementById("hero-scroll-cue");
+
+                    const scrollToDiscover = () => {
+                        const discover = document.getElementById("discover");
+                        if (discover) {
+                            discover.scrollIntoView({
+                                behavior: "smooth",
+                                block: "start",
+                            });
+                        }
+                    };
+
+                    if (heroScrollCue) {
+                        heroScrollCue.addEventListener("click", scrollToDiscover);
+                        const toggleHeroScrollCue = () => {
+                            heroScrollCue.classList.toggle(
+                                "is-hidden",
+                                window.scrollY > 120,
+                            );
+                        };
+                        toggleHeroScrollCue();
+                        window.addEventListener("scroll", toggleHeroScrollCue, {
+                            passive: true,
+                        });
+                    }
+
+                    const openDemoFullscreen = async () => {
+                        if (!heroVideo) {
+                            scrollToDiscover();
+                            return;
+                        }
+                        try {
+                            heroVideo.controls = true;
+                            heroVideo.muted = false;
+                            if (heroUnmute) {
+                                heroUnmute.textContent = "🔊 Mute sound";
+                                heroUnmute.setAttribute("aria-pressed", "true");
                             }
                             if (heroVideo.requestFullscreen) {
                                 await heroVideo.requestFullscreen();
                             } else if (heroVideo.webkitRequestFullscreen) {
                                 heroVideo.webkitRequestFullscreen();
                             }
+                            await heroVideo.play();
                         } catch (e) {
-                            console.warn("Fullscreen request failed:", e);
+                            console.warn(
+                                "Fullscreen request failed, scrolling instead:",
+                                e,
+                            );
+                            scrollToDiscover();
                         }
+                    };
+
+                    if (heroWatch) {
+                        heroWatch.addEventListener("click", openDemoFullscreen);
+                    }
+
+                    if (heroVideo && heroUnmute) {
+                        heroUnmute.addEventListener("click", async () => {
+                            const willUnmute = heroVideo.muted;
+                            heroVideo.muted = !willUnmute;
+                            heroUnmute.textContent = heroVideo.muted
+                                ? "🔇 Tap for sound"
+                                : "🔊 Mute sound";
+                            try {
+                                await heroVideo.play();
+                            } catch (e) {
+                                console.warn("Hero video play blocked:", e);
+                            }
+                            heroUnmute.setAttribute(
+                                "aria-pressed",
+                                (!heroVideo.muted).toString(),
+                            );
+                        });
+
+                        heroVideo.addEventListener("click", async () => {
+                            try {
+                                if (document.fullscreenElement) {
+                                    await document.exitFullscreen();
+                                    return;
+                                }
+                                if (heroVideo.requestFullscreen) {
+                                    await heroVideo.requestFullscreen();
+                                } else if (heroVideo.webkitRequestFullscreen) {
+                                    heroVideo.webkitRequestFullscreen();
+                                }
+                            } catch (e) {
+                                console.warn("Fullscreen request failed:", e);
+                            }
+                        });
+                    }
+                };
+
+                if ("requestIdleCallback" in window) {
+                    window.requestIdleCallback(initializeAppShell, {
+                        timeout: 1500,
                     });
+                } else {
+                    window.setTimeout(initializeAppShell, 120);
                 }
             });
         </script>

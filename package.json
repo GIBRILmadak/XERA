@@ -18,5 +18,15 @@
         "express": "^4.19.2",
         "firebase-admin": "^14.1.0",
         "web-push": "^3.6.7"
-    }
+    },
+    "devDependencies": {},
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/GIBRILmadak/XERA.git"
+    },
+    "type": "commonjs",
+    "bugs": {
+        "url": "https://github.com/GIBRILmadak/XERA/issues"
+    },
+    "homepage": "https://github.com/GIBRILmadak/XERA#readme"
 }

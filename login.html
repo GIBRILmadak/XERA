@@ -24,6 +24,17 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="login-body has-mobile-nav">
+    <div id="auth-loading-overlay" class="auth-loading-overlay" aria-hidden="true" hidden>
+        <div class="auth-loading-card" role="status" aria-live="polite">
+            <div class="auth-loading-spinner"></div>
+            <h3 id="auth-loading-title">Vérification de votre session</h3>
+            <p id="auth-loading-message">Nous préparons votre accès à XERA...</p>
+            <div class="auth-loading-progress" aria-hidden="true">
+                <span id="auth-loading-progress"></span>
+            </div>
+        </div>
+    </div>
+
     <nav>
         <a
             class="logo"

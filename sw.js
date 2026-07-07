@@ -87,6 +87,22 @@ async function networkFirst(request) {
     }
 }
 
+async function staleWhileRevalidate(request) {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(request);
+
+    const fetchPromise = fetch(request)
+        .then((response) => {
+            if (response && response.ok) {
+                cache.put(request, response.clone());
+            }
+            return response;
+        })
+        .catch(() => cached || Response.error());
+
+    return cached || fetchPromise;
+}
+
 self.addEventListener("fetch", (event) => {
     const request = event.request;
 
@@ -101,8 +117,8 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
-    // Static assets: network-first so updates are visible immediately
-    event.respondWith(networkFirst(request));
+    // Static assets: stale-while-revalidate for faster repeat loads
+    event.respondWith(staleWhileRevalidate(request));
 });
 
 self.addEventListener("message", (event) => {

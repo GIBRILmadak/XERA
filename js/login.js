@@ -68,6 +68,10 @@ const confirmPasswordToggle = document.getElementById(
 );
 const rememberMeContainer = document.getElementById("remember-me-container");
 const rememberMeCheckbox = document.getElementById("remember-me");
+const authLoadingOverlay = document.getElementById("auth-loading-overlay");
+const authLoadingTitle = document.getElementById("auth-loading-title");
+const authLoadingMessage = document.getElementById("auth-loading-message");
+const authLoadingProgress = document.getElementById("auth-loading-progress");
 
 // Wizard SignUp elements
 const signupStep1 = document.getElementById("signup-step-1");
@@ -179,10 +183,40 @@ function loadRememberMe() {
     return { email: "", remember: false };
 }
 
+function showAuthLoading(message = "Vérification de votre session...") {
+    if (!authLoadingOverlay || !authLoadingTitle || !authLoadingMessage || !authLoadingProgress) {
+        return;
+    }
+
+    authLoadingTitle.textContent = "Patientez un instant";
+    authLoadingMessage.textContent = message;
+    authLoadingOverlay.hidden = false;
+    authLoadingOverlay.setAttribute("aria-hidden", "false");
+    authLoadingProgress.style.width = "20%";
+
+    requestAnimationFrame(() => {
+        authLoadingProgress.style.width = "80%";
+    });
+}
+
+function hideAuthLoading() {
+    if (!authLoadingOverlay || !authLoadingProgress) {
+        return;
+    }
+
+    authLoadingProgress.style.width = "100%";
+    window.setTimeout(() => {
+        authLoadingOverlay.hidden = true;
+        authLoadingOverlay.setAttribute("aria-hidden", "true");
+        authLoadingProgress.style.width = "0%";
+    }, 220);
+}
+
 // Vérifier si l'utilisateur est déjà connecté
 async function checkExistingSession() {
+    showAuthLoading("Nous vérifions votre session en cours...");
+
     try {
-        // Vérifier si checkAuth existe
         if (typeof checkAuth !== "function") {
             console.error("checkAuth n'est pas disponible");
             return null;
@@ -190,38 +224,54 @@ async function checkExistingSession() {
 
         const user = await checkAuth();
         if (user) {
-            // Rediriger vers la page principale
             window.location.href = resolveRedirectTarget();
         }
     } catch (error) {
         console.error("Erreur verification session:", error);
+    } finally {
+        hideAuthLoading();
     }
 }
 
 // Afficher un message d'erreur
+function setFormLoading(isLoading) {
+    if (!submitBtn) return;
+    submitBtn.disabled = isLoading;
+    submitBtn.setAttribute("aria-busy", String(isLoading));
+    if (btnText) {
+        btnText.style.display = isLoading ? "none" : "block";
+    }
+    if (btnLoader) {
+        btnLoader.style.display = isLoading ? "block" : "none";
+    }
+}
+
 function showError(message) {
+    if (!errorMessage) return;
     errorMessage.textContent = message;
     errorMessage.style.display = "block";
-    successMessage.style.display = "none";
+    if (successMessage) successMessage.style.display = "none";
 
     setTimeout(() => {
-        errorMessage.style.display = "none";
+        if (errorMessage) errorMessage.style.display = "none";
     }, 5000);
 }
 
 // Afficher un message de succès
 function showSuccess(message) {
+    if (!successMessage) return;
     successMessage.textContent = message;
     successMessage.style.display = "block";
-    errorMessage.style.display = "none";
+    if (errorMessage) errorMessage.style.display = "none";
 
     setTimeout(() => {
-        successMessage.style.display = "none";
+        if (successMessage) successMessage.style.display = "none";
     }, 5000);
 }
 
 // Afficher un message de succès persistant avec bouton de fermeture
 function showPersistentSuccess(message) {
+    if (!successMessage) return;
     successMessage.innerHTML = "";
 
     const container = document.createElement("div");
@@ -276,7 +326,7 @@ function formatAuthError(result) {
         errorCode === "email_not_confirmed" ||
         lowerMessage.includes("email not confirmed")
     ) {
-        return "Vérifiez votre boîte mail pour confirmer votre compte avant de vous connecter.";
+        return "Votre email n'a pas encore été confirmé. Vérifiez votre boîte mail ou demandez un nouveau mail de confirmation.";
     }
 
     if (
@@ -562,7 +612,7 @@ async function handleSubmit(e) {
     e.preventDefault();
 
     // Récupération des valeurs
-    const email = emailInput.value.trim();
+    const email = normalizeEmail(emailInput.value);
     const password = passwordInput.value;
     const username = usernameInput ? usernameInput.value.trim() : "";
     const confirmPassword = confirmPasswordInput
@@ -572,6 +622,11 @@ async function handleSubmit(e) {
     // Validation de base
     if (!email || !password) {
         showError("Veuillez remplir tous les champs obligatoires.");
+        return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showError("Veuillez entrer une adresse email valide.");
         return;
     }
 
@@ -590,10 +645,7 @@ async function handleSubmit(e) {
         }
     }
 
-    // UI Loading state
-    submitBtn.disabled = true;
-    if (btnText) btnText.style.display = "none";
-    if (btnLoader) btnLoader.style.display = "block";
+    setFormLoading(true);
 
     try {
         if (isSignUpMode) {
@@ -641,6 +693,14 @@ async function handleSubmit(e) {
                 );
             }
 
+            const rememberMe = rememberMeCheckbox
+                ? rememberMeCheckbox.checked
+                : true;
+
+            if (typeof updateSessionStorage === "function") {
+                updateSessionStorage(rememberMe);
+            }
+
             const result = await signUp(email, password, username, metadata);
 
             if (result.success) {
@@ -675,7 +735,7 @@ async function handleSubmit(e) {
                 saveRememberMe(email, rememberMe);
                 showSuccess("Connexion réussie ! Redirection...");
 
-                const user = result.data;
+                const user = result.data || (await checkAuth()) || null;
                 const accountType =
                     user?.user_metadata?.account_type ||
                     user?.account_type ||
@@ -730,9 +790,8 @@ async function handleSubmit(e) {
         console.error("Erreur handleSubmit:", error);
         showError(error.message || "Une erreur imprévue est survenue.");
     } finally {
-        submitBtn.disabled = false;
-        if (btnText) btnText.style.display = "block";
-        if (btnLoader) btnLoader.style.display = "none";
+        setFormLoading(false);
+        hideAuthLoading();
     }
 }
 
@@ -751,15 +810,17 @@ function togglePasswordVisibility(inputId, toggleBtnId) {
 }
 
 function resetPasswordVisibility() {
-    passwordInput.type = "password";
-    confirmPasswordInput.type = "password";
-    passwordToggle.setAttribute("data-visible", "false");
-    confirmPasswordToggle.setAttribute("data-visible", "false");
+    if (passwordInput) passwordInput.type = "password";
+    if (confirmPasswordInput) confirmPasswordInput.type = "password";
+    if (passwordToggle) passwordToggle.setAttribute("data-visible", "false");
+    if (confirmPasswordToggle) {
+        confirmPasswordToggle.setAttribute("data-visible", "false");
+    }
 }
 
 // Gérer le reset de mot de passe
 async function handleForgotPassword() {
-    const email = emailInput.value.trim();
+    const email = normalizeEmail(emailInput.value);
 
     if (!email) {
         showError("Veuillez entrer votre adresse email.");
@@ -787,16 +848,18 @@ async function handleForgotPassword() {
 
 // Gérer la connexion avec Google
 async function handleGoogleSignIn() {
+    if (!googleSigninBtn) return;
     try {
         googleSigninBtn.disabled = true;
         googleSigninBtn.innerHTML =
-            '<svg class="btn-loader" style="animation: spin 1s linear infinite;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg><span>Signing in...</span>';
+            '<svg class="btn-loader" style="animation: spin 1s linear infinite;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg><span>Connexion Google...</span>';
 
-        const result = await signInWithGoogle();
+        const result = await signInWithGoogle(
+            `${window.location.origin}/login.html?redirect=${encodeURIComponent(window.location.search || "")}`,
+        );
 
-        if (result.success) {
-            // La redirection sera gérée automatiquement par Supabase
-            showSuccess("Redirection vers Google...");
+        if (result.success && result.data?.url) {
+            window.location.href = result.data.url;
         } else {
             showError(
                 result.error || "Erreur lors de la connexion avec Google.",
@@ -806,7 +869,6 @@ async function handleGoogleSignIn() {
         console.error("Erreur Google signin:", error);
         showError("Une erreur est survenue. Veuillez réessayer.");
     } finally {
-        // Reset button state
         googleSigninBtn.disabled = false;
         googleSigninBtn.innerHTML =
             '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg><span>Continuer avec Google</span>';
@@ -873,8 +935,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Afficher le lien "mot de passe oublié" et la checkbox par défaut en mode connexion
     if (!isSignUpMode) {
-        forgotPasswordLink.style.display = "block";
-        rememberMeContainer.style.display = "block";
+        if (forgotPasswordLink) forgotPasswordLink.style.display = "block";
+        if (rememberMeContainer) rememberMeContainer.style.display = "block";
     }
 });
 
