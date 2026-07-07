@@ -122,17 +122,73 @@ function getDominantState(userId) {
 function getProfileTimeline(userId) {
     const contents = getUserContent(userId);
     const maxDay = contents.length > 0 ? contents[0].dayNumber : 0;
+    const contentsByDay = new Map(contents.map((c) => [c.dayNumber, c]));
 
     const timeline = [];
     for (let day = maxDay; day >= 1; day--) {
-        const dayContent = contents.find((c) => c.dayNumber === day);
+        const dayContent = contentsByDay.get(day) || null;
         timeline.push({
             dayNumber: day,
-            content: dayContent || null,
+            content: dayContent,
             state: dayContent ? dayContent.state : "empty",
         });
     }
     return timeline;
+}
+
+function formatProfileDate(dateValue) {
+    const date = new Date(dateValue);
+    return isNaN(date.getTime())
+        ? ""
+        : PROFILE_DATE_FORMATTER.format(date);
+}
+
+function renderTimelineHistory(userId) {
+    const timeline = getProfileTimeline(userId);
+
+    return timeline
+        .map((item) => {
+            if (item.state === "empty") {
+                return `
+                <div class="timeline-item item-empty">
+                    <div class="timeline-dot-badge">
+                        ${badgeSVGs.empty}
+                    </div>
+                    <div class="timeline-date">Jour ${item.dayNumber}</div>
+                    <div class="timeline-card" style="opacity: 0.5;">
+                        <span class="empty-indicator">Aucune mise à jour aujourd'hui.</span>
+                    </div>
+                </div>
+            `;
+            }
+
+            const content = item.content;
+            const itemClass = `item-${content.state}`;
+            const dateFormatted = formatProfileDate(content.createdAt || content.created_at);
+
+            let stateBadgeSvg = "";
+            if (content.state === "success") {
+                stateBadgeSvg = badgeSVGs.success;
+            } else if (content.state === "failure") {
+                stateBadgeSvg = badgeSVGs.failure;
+            } else if (content.state === "pause") {
+                stateBadgeSvg = badgeSVGs.pause;
+            }
+
+            return `
+            <div class="timeline-item ${itemClass}">
+                <div class="timeline-dot-badge filled">
+                    ${stateBadgeSvg}
+                </div>
+                <div class="timeline-date">${dateFormatted} - Jour ${content.dayNumber}</div>
+                <div class="timeline-card">
+                    <h4>${content.title}</h4>
+                    <p>${content.description}</p>
+                </div>
+            </div>
+        `;
+        })
+        .join("");
 }
 
 /* ========================================
@@ -1104,13 +1160,13 @@ function renderUserCard(userId) {
         if (latestContent.type === "video") {
             mediaHtml = `
                 <div class="card-media-wrap">
-                    <video id="video-${userId}" class="card-media" src="${latestContent.mediaUrl}" muted playsinline autoplay preload="metadata" tabindex="-1" data-user-id="${userId}" disablePictureInPicture></video>
+                    <video id="video-${userId}" class="card-media" data-src="${latestContent.mediaUrl}" muted playsinline preload="none" tabindex="-1" data-user-id="${userId}" disablePictureInPicture></video>
                 </div>
             `;
         } else if (latestContent.type === "image") {
             mediaHtml = `
                 <div class="card-media-wrap">
-                    <img class="card-media" src="${latestContent.mediaUrl}" alt="${latestContent.title || "Preview"}">
+                    <img class="card-media" data-src="${latestContent.mediaUrl}" loading="lazy" alt="${latestContent.title || "Preview"}">
                 </div>
             `;
         }
@@ -1278,6 +1334,57 @@ function renderProjectDoc(project) {
 }
 
 // Construire la timeline du profil
+const PROFILE_DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", {
+    month: "long",
+    day: "numeric",
+});
+
+function getLocalFollowerCount(userId) {
+    return mockUsers.reduce((count, user) => {
+        return count + (user.following?.includes(userId) ? 1 : 0);
+    }, 0);
+}
+
+function getLocalFollowingCount(userId) {
+    const user = getUser(userId);
+    return user?.following?.length || 0;
+}
+
+function refreshProfileFollowerCounts(userId) {
+    const followerEls = document.querySelectorAll(
+        ".profile-hero .follower-stat-count[data-count-type=followers]",
+    );
+    const followingEls = document.querySelectorAll(
+        ".profile-hero .follower-stat-count[data-count-type=following]",
+    );
+
+    const localFollowers = getLocalFollowerCount(userId);
+    const localFollowing = getLocalFollowingCount(userId);
+
+    followerEls.forEach((el) => {
+        el.textContent = String(localFollowers);
+    });
+    followingEls.forEach((el) => {
+        el.textContent = String(localFollowing);
+    });
+
+    if (typeof getFollowerCount === "function") {
+        Promise.all([
+            getFollowerCount(userId).catch(() => localFollowers),
+            typeof getFollowingCount === "function"
+                ? getFollowingCount(userId).catch(() => localFollowing)
+                : Promise.resolve(localFollowing),
+        ]).then(([remoteFollowers, remoteFollowing]) => {
+            followerEls.forEach((el) => {
+                el.textContent = String(remoteFollowers ?? localFollowers);
+            });
+            followingEls.forEach((el) => {
+                el.textContent = String(remoteFollowing ?? localFollowing);
+            });
+        });
+    }
+}
+
 function renderProfileTimeline(userId, viewerId = "user-1") {
     const user = getUser(userId);
     const viewer = getUser(viewerId);
@@ -1315,119 +1422,64 @@ function renderProfileTimeline(userId, viewerId = "user-1") {
         : "";
 
     // Stats de followers
-    const followerCount = getFollowerCount(userId);
-    const followingCount = getFollowingCount(userId);
+    const followerCount = getLocalFollowerCount(userId);
+    const followingCount = getLocalFollowingCount(userId);
 
     // Générer les items de timeline
-    const timelineItems = timeline
-        .map((item) => {
-            if (item.state === "empty") {
-                // Générer SVG pour vide
-                const emptyBadgeSvg = `
-                <div class="timeline-dot-badge">
-                    ${badgeSVGs.empty}
-                </div>
-            `;
-
-                return `
-                <div class="timeline-item item-empty">
-                    ${emptyBadgeSvg}
-                    <div class="timeline-date">Jour ${item.dayNumber}</div>
+    const latestItemHtml = (() => {
+        if (timeline.length === 0) return "";
+        const lastItem = timeline[timeline.length - 1];
+        if (lastItem.state === "empty") {
+            return `
+                <div class="timeline-item-latest">
+                    <div class="timeline-dot-badge">
+                        ${badgeSVGs.empty}
+                    </div>
+                    <div class="timeline-date">Jour ${lastItem.dayNumber}</div>
                     <div class="timeline-card" style="opacity: 0.5;">
                         <span class="empty-indicator">Aucune mise à jour aujourd'hui.</span>
                     </div>
                 </div>
             `;
-            }
+        }
 
-            const content = item.content;
-            const itemClass = `item-${content.state}`;
-            const dateFormatted = new Intl.DateTimeFormat("fr-FR", {
-                month: "long",
-                day: "numeric",
-            }).format(content.createdAt);
+        const content = lastItem.content;
+        let stateBadgeSvg = "";
+        if (content.state === "success") {
+            stateBadgeSvg = badgeSVGs.success;
+        } else if (content.state === "failure") {
+            stateBadgeSvg = badgeSVGs.failure;
+        } else if (content.state === "pause") {
+            stateBadgeSvg = badgeSVGs.pause;
+        }
+        const dateFormatted = formatProfileDate(content.createdAt || content.created_at);
 
-            // Générer SVG du badge selon l'état
-            let stateBadgeSvg = "";
-            if (content.state === "success") {
-                stateBadgeSvg = badgeSVGs.success;
-            } else if (content.state === "failure") {
-                stateBadgeSvg = badgeSVGs.failure;
-            } else if (content.state === "pause") {
-                stateBadgeSvg = badgeSVGs.pause;
-            }
-
-            return `
-            <div class="timeline-item ${itemClass}">
-                <div class="timeline-dot-badge filled">
-                    ${stateBadgeSvg}
+        return `
+                <div class="timeline-item-latest">
+                    <div class="timeline-dot-badge filled">
+                        ${stateBadgeSvg}
+                    </div>
+                    <div class="timeline-date">${dateFormatted} - Jour ${content.dayNumber}</div>
+                    <div class="timeline-card">
+                        <h4>${content.title}</h4>
+                        <p>${content.description}</p>
+                    </div>
                 </div>
-                <div class="timeline-date">${dateFormatted} - Jour ${content.dayNumber}</div>
-                <div class="timeline-card">
-                    <h4>${content.title}</h4>
-                    <p>${content.description}</p>
-                </div>
-            </div>
-        `;
-        })
-        .join("");
+            `;
+    })();
 
-    // Afficher seulement le dernier item et un bouton pour expand/collapse
-    const latestTimelineItem = timelineItems; // Tous les items par défaut cachés
     const timelineCollapsedHtml =
         timeline.length > 0
             ? `
         <div class="timeline-latest">
-            <div class="timeline-item-latest">
-                ${(() => {
-                    const lastItem = timeline[timeline.length - 1];
-                    if (lastItem.state === "empty") {
-                        return `
-                            <div class="timeline-dot-badge">
-                                ${badgeSVGs.empty}
-                            </div>
-                            <div class="timeline-date">Jour ${lastItem.dayNumber}</div>
-                            <div class="timeline-card" style="opacity: 0.5;">
-                                <span class="empty-indicator">Aucune mise à jour aujourd'hui.</span>
-                            </div>
-                        `;
-                    } else {
-                        const content = lastItem.content;
-                        let stateBadgeSvg = "";
-                        if (content.state === "success") {
-                            stateBadgeSvg = badgeSVGs.success;
-                        } else if (content.state === "failure") {
-                            stateBadgeSvg = badgeSVGs.failure;
-                        } else if (content.state === "pause") {
-                            stateBadgeSvg = badgeSVGs.pause;
-                        }
-                        const dateFormatted = new Intl.DateTimeFormat("fr-FR", {
-                            month: "long",
-                            day: "numeric",
-                        }).format(content.createdAt);
-
-                        return `
-                            <div class="timeline-dot-badge filled">
-                                ${stateBadgeSvg}
-                            </div>
-                            <div class="timeline-date">${dateFormatted} - Jour ${content.dayNumber}</div>
-                            <div class="timeline-card">
-                                <h4>${content.title}</h4>
-                                <p>${content.description}</p>
-                            </div>
-                        `;
-                    }
-                })()}
-            </div>
+            ${latestItemHtml}
             <button class="btn-toggle-timeline" onclick="toggleTimelineExpand(this)">
                 <span class="toggle-text">Afficher l'historique complet</span>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
             </button>
-            <div class="timeline-full hidden" id="timeline-full-${userId}">
-                ${timelineItems}
-            </div>
+            <div class="timeline-full hidden" id="timeline-full-${userId}"></div>
         </div>
     `
             : "";
@@ -1751,6 +1803,10 @@ function toggleTimelineExpand(button) {
         toggleText.textContent = "Afficher l'historique complet";
         button.classList.remove("expanded");
     } else {
+        if (!timelineFull.innerHTML.trim()) {
+            const profileId = timelineFull.id.replace("timeline-full-", "");
+            timelineFull.innerHTML = renderTimelineHistory(profileId);
+        }
         timelineFull.classList.remove("hidden");
         toggleText.textContent = "Masquer l'historique";
         button.classList.add("expanded");
@@ -1758,43 +1814,71 @@ function toggleTimelineExpand(button) {
 }
 
 // Setup video interactions: hover-play on desktop, autoplay muted on mobile
+function lazyLoadDiscoverMedia() {
+    const grid = document.querySelector(".discover-grid");
+    if (!grid || !window.IntersectionObserver) return;
+
+    const observer = new IntersectionObserver(
+        (entries, obs) => {
+            entries.forEach((entry) => {
+                if (!entry.isIntersecting) return;
+                const card = entry.target;
+                const image = card.querySelector("img.card-media[data-src]");
+                const video = card.querySelector("video.card-media[data-src]");
+
+                if (image && image.dataset.src) {
+                    image.src = image.dataset.src;
+                    image.removeAttribute("data-src");
+                }
+                if (video && video.dataset.src) {
+                    video.src = video.dataset.src;
+                    video.preload = "metadata";
+                    video.removeAttribute("data-src");
+                }
+
+                obs.unobserve(card);
+            });
+        },
+        { rootMargin: "250px 0px", threshold: 0.1 },
+    );
+
+    grid.querySelectorAll(".user-card").forEach((card) => observer.observe(card));
+    if (window.__discoverMediaObserver) {
+        window.__discoverMediaObserver.disconnect();
+    }
+    window.__discoverMediaObserver = observer;
+}
+
 function setupDiscoverVideoInteractions() {
+    const grid = document.querySelector(".discover-grid");
+    if (!grid) return;
+
     const isMobile = window.matchMedia("(max-width: 700px)").matches;
-    const cards = document.querySelectorAll(".user-card");
-
-    cards.forEach((card) => {
-        const video = card.querySelector("video.card-media");
+    grid.addEventListener("mouseover", (event) => {
+        const video = event.target.closest("video.card-media");
         if (!video) return;
-
-        // Ensure muted & playsinline for autoplay on mobile
         video.muted = true;
         video.playsInline = true;
-
-        if (isMobile) {
-            // try to autoplay muted videos on mobile
-            video.play().catch(() => {});
-        } else {
-            // desktop: play on hover, pause on leave
-            card.addEventListener("mouseenter", () => {
-                video.play().catch(() => {});
-            });
-            card.addEventListener("mouseleave", () => {
-                try {
-                    video.pause();
-                    video.currentTime = 0;
-                } catch (e) {}
-            });
-            video.addEventListener("mouseover", () =>
-                video.play().catch(() => {}),
-            );
-            video.addEventListener("mouseout", () => {
-                try {
-                    video.pause();
-                    video.currentTime = 0;
-                } catch (e) {}
-            });
-        }
+        video.play().catch(() => {});
     });
+
+    grid.addEventListener("mouseout", (event) => {
+        const video = event.target.closest("video.card-media");
+        if (!video) return;
+        try {
+            video.pause();
+            video.currentTime = 0;
+        } catch (e) {}
+    });
+
+    if (isMobile) {
+        grid.querySelectorAll("video.card-media").forEach((video) => {
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = "none";
+            // Do not autoplay all mobile videos to preserve bandwidth and CPU.
+        });
+    }
 }
 
 /* ========================================
@@ -1889,7 +1973,7 @@ function navigateToUserProfile(userId) {
     navigateTo("profile");
 }
 
-function toggleFollow(viewerId, targetUserId) {
+async function toggleFollow(viewerId, targetUserId) {
     if (isFollowing(viewerId, targetUserId)) {
         unfollowUser(viewerId, targetUserId);
     } else {
@@ -1904,15 +1988,7 @@ function toggleFollow(viewerId, targetUserId) {
         btn.innerHTML = `<img src="${isNowFollowing ? "icons/subscribed.svg" : "icons/subscribe.svg"}" class="btn-icon" style="width: 24px; height: 24px;">`;
     }
 
-    // Mettre à jour les compteurs
-    const userCard = document.querySelector(`.profile-hero`);
-    if (userCard) {
-        const followerCount = getFollowerCount(targetUserId);
-        const followerStats = userCard.querySelectorAll(".follower-stat-count");
-        if (followerStats[0]) {
-            followerStats[0].textContent = followerCount;
-        }
-    }
+    refreshProfileFollowerCounts(targetUserId);
 }
 
 function openImmersive(userId) {
@@ -1936,19 +2012,29 @@ function closeImmersive() {
    ======================================== */
 
 document.addEventListener("DOMContentLoaded", function () {
-    // Initialiser le thème
     initTheme();
 
-    // Remplir la grille Discover
     const grid = document.querySelector(".discover-grid");
-    grid.innerHTML = mockUsers
-        .map((user) => renderUserCard(user.userId))
-        .join("");
-
-    // Setup video interactions for discover cards (hover play on desktop, autoplay muted on mobile)
-    setupDiscoverVideoInteractions();
-
-    // Remplir la section profil
     const profileContainer = document.querySelector(".profile-container");
-    profileContainer.innerHTML = renderProfileTimeline("user-1");
+
+    const buildUI = () => {
+        if (grid) {
+            grid.innerHTML = mockUsers
+                .map((user) => renderUserCard(user.userId))
+                .join("");
+            lazyLoadDiscoverMedia();
+            setupDiscoverVideoInteractions();
+        }
+
+        if (profileContainer) {
+            profileContainer.innerHTML = renderProfileTimeline("user-1");
+            refreshProfileFollowerCounts("user-1");
+        }
+    };
+
+    if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(buildUI, { timeout: 500 });
+    } else {
+        setTimeout(buildUI, 120);
+    }
 });
