@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
     SafeAreaView,
     View,
@@ -228,8 +228,40 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     const [searchText, setSearchText] = useState("");
     const [toggles, setToggles] = useState(initialValues);
     const { width } = useWindowDimensions();
+    const scrollViewRef = useRef<ScrollView>(null);
+    const storage =
+        typeof globalThis !== "undefined"
+            ? (
+                  globalThis as typeof globalThis & {
+                      localStorage?: {
+                          getItem: (key: string) => string | null;
+                          setItem: (key: string, value: string) => void;
+                      };
+                  }
+              ).localStorage
+            : undefined;
 
     const isLargeScreen = width >= 860;
+
+    useEffect(() => {
+        try {
+            const saved = storage?.getItem("xera.settings.v1");
+            if (saved) {
+                const parsed = JSON.parse(saved) as Partial<typeof initialValues>;
+                setToggles((prev) => ({ ...prev, ...parsed }));
+            }
+        } catch {
+            // Ignore malformed saved settings and continue with defaults.
+        }
+    }, [storage]);
+
+    useEffect(() => {
+        try {
+            storage?.setItem("xera.settings.v1", JSON.stringify(toggles));
+        } catch {
+            // Ignore storage write errors in unsupported environments.
+        }
+    }, [storage, toggles]);
 
     const selectedCategory = useMemo(
         () =>
@@ -268,11 +300,19 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         }));
     };
 
+    const handleCategoryPress = (categoryId: string) => {
+        setSelectedCategoryId(categoryId);
+        setSearchText("");
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    };
+
     return (
         <SafeAreaView style={styles.screen}>
             <ScrollView
+                ref={scrollViewRef}
                 contentContainerStyle={styles.pageContainer}
                 keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
             >
                 <View style={styles.headerRow}>
                     <View style={styles.titleBlock}>
@@ -303,7 +343,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                             placeholderTextColor="#7c82a6"
                             value={searchText}
                             onChangeText={setSearchText}
+                            autoCapitalize="none"
+                            autoCorrect={false}
                         />
+                        <Text style={styles.saveHint}>Sauvegarde automatique</Text>
                     </View>
                 </View>
 
@@ -329,13 +372,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                             return (
                                 <TouchableOpacity
                                     key={category.id}
+                                    activeOpacity={0.8}
                                     style={[
                                         styles.sidebarItem,
                                         active && styles.sidebarItemActive,
                                     ]}
-                                    onPress={() =>
-                                        setSelectedCategoryId(category.id)
-                                    }
+                                    onPress={() => handleCategoryPress(category.id)}
                                 >
                                     <Text style={styles.sidebarIcon}>
                                         {category.icon}
@@ -481,11 +523,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                                 ) : (
                                     visibleItems.map((item) => {
                                         const isToggle = item.actionType === "toggle";
-                                        return (
-                                            <View
-                                                key={item.id}
-                                                style={styles.settingCard}
-                                            >
+                                        const cardContent = (
+                                            <>
                                                 <View style={styles.settingLeft}>
                                                     <View
                                                         style={
@@ -557,7 +596,21 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                                                         </>
                                                     )}
                                                 </View>
+                                            </>
+                                        );
+
+                                        return isToggle ? (
+                                            <View key={item.id} style={styles.settingCard}>
+                                                {cardContent}
                                             </View>
+                                        ) : (
+                                            <TouchableOpacity
+                                                key={item.id}
+                                                activeOpacity={0.85}
+                                                style={styles.settingCard}
+                                            >
+                                                {cardContent}
+                                            </TouchableOpacity>
                                         );
                                     })
                                 )}
@@ -576,11 +629,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                             ) : (
                                 visibleItems.map((item) => {
                                     const isToggle = item.actionType === "toggle";
-                                    return (
-                                        <View
-                                            key={item.id}
-                                            style={styles.settingCard}
-                                        >
+                                    const cardContent = (
+                                        <>
                                             <View style={styles.settingLeft}>
                                                 <View
                                                     style={
@@ -653,6 +703,20 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                                                 )}
                                             </View>
                                         </View>
+                                    );
+
+                                    return isToggle ? (
+                                        <View key={item.id} style={styles.settingCard}>
+                                            {cardContent}
+                                        </View>
+                                    ) : (
+                                        <TouchableOpacity
+                                            key={item.id}
+                                            activeOpacity={0.85}
+                                            style={styles.settingCard}
+                                        >
+                                            {cardContent}
+                                        </TouchableOpacity>
                                     );
                                 })
                             )

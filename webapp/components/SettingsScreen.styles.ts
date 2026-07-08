@@ -12,11 +12,15 @@ export default StyleSheet.create({
     headerRow: {
         width: "100%",
         marginBottom: 24,
-        gap: 16,
+        flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "flex-start",
     },
     titleBlock: {
         flex: 1,
-        gap: 6,
+        minWidth: 260,
+        marginRight: 16,
+        marginBottom: 12,
     },
     pageTitle: {
         color: "#f8fafc",
@@ -31,6 +35,12 @@ export default StyleSheet.create({
     },
     searchWrapper: {
         width: "100%",
+        marginTop: 4,
+    },
+    saveHint: {
+        marginTop: 8,
+        color: "#64748b",
+        fontSize: 12,
     },
     searchInput: {
         width: "100%",
@@ -45,7 +55,6 @@ export default StyleSheet.create({
     },
     mainLayout: {
         width: "100%",
-        gap: 20,
     },
     layoutRow: {
         flexDirection: "row",
@@ -65,9 +74,11 @@ export default StyleSheet.create({
     sidebarLarge: {
         flex: 0.33,
         minWidth: 280,
+        marginRight: 20,
     },
     sidebarMobile: {
         width: "100%",
+        marginBottom: 20,
     },
     sidebarSectionTitle: {
         color: "#c7d2fe",
@@ -114,7 +125,6 @@ export default StyleSheet.create({
     contentArea: {
         flex: 1,
         minWidth: 0,
-        gap: 18,
     },
     breadcrumbs: {
         flexDirection: "row",
