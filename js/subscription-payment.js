@@ -157,7 +157,7 @@ function normalizePaymentKind(kind) {
 }
 
 function normalizePlan(plan) {
-    const allowed = ["standard", "medium", "pro", "elite"];
+    const allowed = ["standard", "medium", "pro", "elite", "page_verification"];
     return allowed.includes(String(plan).toLowerCase())
         ? String(plan).toLowerCase()
         : "standard";

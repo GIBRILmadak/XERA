@@ -45,22 +45,31 @@ const {
     KPAY_SECRET_KEY = process.env.KPAY_SECRET_KEY || "",
 
     KPAY_GATEWAY_MODE = process.env.KPAY_GATEWAY_MODE || "1",
-    KPAY_CHECKOUT_URL = process.env.KPAY_CHECKOUT_URL || "https://admin.kpay.site",
+    KPAY_CHECKOUT_URL = process.env.KPAY_CHECKOUT_URL ||
+        "https://admin.kpay.site",
     KPAY_CALLBACK_SECRET = process.env.KPAY_CALLBACK_SECRET || "",
-    SUPER_ADMIN_ID = process.env.SUPER_ADMIN_ID || "b0f9f893-1706-4721-899c-d26ad79afc86",
+    SUPER_ADMIN_ID = process.env.SUPER_ADMIN_ID ||
+        "b0f9f893-1706-4721-899c-d26ad79afc86",
 } = process.env;
 
 // Validate configuration for production
-const isProduction = String(process.env.NODE_ENV || "").toLowerCase() === "production";
+const isProduction =
+    String(process.env.NODE_ENV || "").toLowerCase() === "production";
 if (isProduction) {
     if (!KPAY_PUBLIC_KEY || KPAY_PUBLIC_KEY.includes("kpay_test")) {
-        console.error("CRITICAL: Missing or invalid KPAY_PUBLIC_KEY for production.");
+        console.error(
+            "CRITICAL: Missing or invalid KPAY_PUBLIC_KEY for production.",
+        );
     }
     if (!KPAY_SECRET_KEY || KPAY_SECRET_KEY.includes("sk_test")) {
-        console.error("CRITICAL: Missing or invalid KPAY_SECRET_KEY for production.");
+        console.error(
+            "CRITICAL: Missing or invalid KPAY_SECRET_KEY for production.",
+        );
     }
     if (!KPAY_CALLBACK_SECRET || KPAY_CALLBACK_SECRET === "...") {
-        console.error("CRITICAL: Missing or invalid KPAY_CALLBACK_SECRET for production.");
+        console.error(
+            "CRITICAL: Missing or invalid KPAY_CALLBACK_SECRET for production.",
+        );
     }
 }
 
@@ -188,9 +197,10 @@ function hasPublicCallbackBaseUrl(value) {
     try {
         const url = new URL(raw);
         const hostname = String(url.hostname || "").toLowerCase();
-        
+
         // Autoriser localhost pour les tests en dehors de la production
-        const isProduction = String(process.env.NODE_ENV || "").toLowerCase() === "production";
+        const isProduction =
+            String(process.env.NODE_ENV || "").toLowerCase() === "production";
         if (hostname === "localhost" || hostname === "127.0.0.1") {
             return !isProduction;
         }
@@ -617,6 +627,11 @@ function computePremiumFeatures(plan) {
         features.realtime_analytics = true;
         features.data_export = true;
         features.maximum_visibility = true;
+    } else if (normalizedPlan === "page_verification") {
+        features.advanced_profile_customization = true;
+        features.priority_recommendations = true;
+        features.full_profile_customization = true;
+        features.maximum_visibility = true;
     }
 
     return features;
@@ -627,6 +642,7 @@ const KPAY_PLANS = {
     medium: 7.99,
     pro: 14.99,
     elite: 40.0,
+    page_verification: 25.0,
 };
 
 const USD_TO_CDF_RATE_VALUE = Math.max(
@@ -653,7 +669,7 @@ const MOBILE_MONEY_PROVIDER_LABELS = {
 };
 
 function isValidPlanId(value) {
-    return ["standard", "medium", "pro", "elite"].includes(
+    return ["standard", "medium", "pro", "elite", "page_verification"].includes(
         String(value || "").toLowerCase(),
     );
 }
@@ -2227,6 +2243,32 @@ async function activateSubscription({
         .select("*")
         .single();
     if (updateUserError) throw updateUserError;
+
+    if (normalizedPlan === "page_verification") {
+        try {
+            const { data: ownedPages, error: pagesError } = await supabase
+                .from("professional_pages")
+                .select("id")
+                .eq("owner_id", userId);
+            if (!pagesError && Array.isArray(ownedPages) && ownedPages.length) {
+                await Promise.all(
+                    ownedPages.map((page) =>
+                        supabase
+                            .from("verified_badges")
+                            .upsert(
+                                { user_id: page.id, type: "page" },
+                                { onConflict: "user_id,type" },
+                            ),
+                    ),
+                );
+            }
+        } catch (pageVerificationError) {
+            console.warn(
+                "Page verification activation warning:",
+                pageVerificationError,
+            );
+        }
+    }
 
     const mergedMetadata = {
         ...(pendingPayment?.metadata &&

@@ -27,6 +27,55 @@
         return null;
     }
 
+    function getUrlContext() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            return String(params.get("context") || "")
+                .trim()
+                .toLowerCase();
+        } catch (e) {
+            return "";
+        }
+    }
+
+    function readInitialSelectedPlan() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            return String(params.get("plan") || "")
+                .trim()
+                .toLowerCase();
+        } catch (e) {
+            return "";
+        }
+    }
+
+    function isPageAccount(user) {
+        if (!user) return false;
+        const values = [
+            user?.account_type,
+            user?.user_metadata?.account_type,
+            user?.account_subtype,
+            user?.accountSubtype,
+            user?.user_metadata?.account_subtype,
+        ]
+            .filter(Boolean)
+            .map((v) => String(v).trim().toLowerCase());
+
+        return values.some((value) =>
+            [
+                "team",
+                "enterprise",
+                "company",
+                "community",
+                "organization",
+                "organisation",
+                "org",
+                "pro",
+                "institution",
+            ].includes(value),
+        );
+    }
+
     function getFaqId(faqInput) {
         if (typeof faqInput === "string") {
             return faqInput;
@@ -348,6 +397,43 @@
                 }
 
                 await handlePaymentReturn();
+
+                // Adjust plan visibility for fallback DOM based on context and user type
+                try {
+                    const urlContext = getUrlContext();
+                    const initialSelected = readInitialSelectedPlan();
+                    let visiblePlanIds = Array.from(Data.PLAN_IDS || []);
+
+                    if (!isPageAccount(currentUser)) {
+                        visiblePlanIds = visiblePlanIds.filter(
+                            (id) => id !== "page_verification",
+                        );
+                    }
+
+                    if (
+                        (urlContext === "page-verification" ||
+                            initialSelected === "page_verification") &&
+                        isPageAccount(currentUser)
+                    ) {
+                        visiblePlanIds = ["page_verification"];
+                    }
+
+                    // Hide DOM cards that are not in visiblePlanIds
+                    const cards = root.querySelectorAll(".plan-detail-card");
+                    cards.forEach((card) => {
+                        const pid =
+                            card.getAttribute("data-plan-id") ||
+                            getPlanIdFromCard(card);
+                        if (!pid) return;
+                        if (!visiblePlanIds.includes(pid)) {
+                            card.style.display = "none";
+                        } else {
+                            card.style.display = "";
+                        }
+                    });
+                } catch (e) {
+                    console.warn("Erreur ajustement visibilité plans:", e);
+                }
             } catch (error) {
                 console.error("Erreur initialisation page plans:", error);
                 createFallbackNotification(
@@ -820,7 +906,7 @@
                     {
                         className: "plans-grid",
                     },
-                    Data.PLAN_IDS.map((planId) =>
+                    (props.planIds || Data.PLAN_IDS).map((planId) =>
                         e(PlanCard, {
                             key: planId,
                             billingCycle: props.billingCycle,
@@ -993,6 +1079,28 @@
             const state = subscriptionPlans.state;
             const actions = subscriptionPlans.actions;
 
+            const urlContext = getUrlContext();
+            const initialSelected = readInitialSelectedPlan();
+
+            // Determine which plans should be visible for this user/context
+            let visiblePlanIds = Array.from(Data.PLAN_IDS || []);
+
+            // Hide page-specific verification plan for personal accounts by default
+            if (!isPageAccount(state.currentUser)) {
+                visiblePlanIds = visiblePlanIds.filter(
+                    (id) => id !== "page_verification",
+                );
+            }
+
+            // If opened from a Page context or directly requested, show only page_verification for page accounts
+            if (
+                (urlContext === "page-verification" ||
+                    initialSelected === "page_verification") &&
+                isPageAccount(state.currentUser)
+            ) {
+                visiblePlanIds = ["page_verification"];
+            }
+
             ReactInner.useEffect(() => {
                 setActiveController({
                     closeConfirmModal: actions.closeConfirmModal,
@@ -1028,6 +1136,7 @@
                     billingCycle: state.billingCycle,
                     currentPlan: state.currentUser?.plan,
                     onSelectPlan: actions.selectSubscription,
+                    planIds: visiblePlanIds,
                 }),
                 e(FaqSection, {
                     activeFaqId: state.activeFaqId,

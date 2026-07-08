@@ -34,7 +34,7 @@
             navAvatarUrl: Data.DEFAULT_NAV_AVATAR,
             notifications: [],
             activeFaqId: null,
-            selectedPlanId: null,
+            selectedPlanId: readInitialSelectedPlan(),
             isConfirmModalOpen: false,
         };
     }
@@ -73,7 +73,9 @@
                 return {
                     ...state,
                     navAvatarUrl:
-                        action.payload || state.navAvatarUrl || Data.DEFAULT_NAV_AVATAR,
+                        action.payload ||
+                        state.navAvatarUrl ||
+                        Data.DEFAULT_NAV_AVATAR,
                 };
             case ACTIONS.ADD_NOTIFICATION:
                 return {
@@ -91,7 +93,9 @@
                 return {
                     ...state,
                     activeFaqId:
-                        state.activeFaqId === action.payload ? null : action.payload,
+                        state.activeFaqId === action.payload
+                            ? null
+                            : action.payload,
                 };
             case ACTIONS.SET_SELECTED_PLAN:
                 return {
@@ -110,7 +114,7 @@
 
     function enqueueNotification(dispatch, message, type) {
         const notification = {
-            id: `subscription-plans-notification-${Date.now()}-${notificationSequence += 1}`,
+            id: `subscription-plans-notification-${Date.now()}-${(notificationSequence += 1)}`,
             message: String(message || "").trim(),
             type: type || "info",
         };
@@ -182,9 +186,21 @@
     function readPaymentReturnParams() {
         const urlParams = new URLSearchParams(window.location.search);
         return {
-            status: String(urlParams.get("status") || "").trim().toLowerCase(),
-            plan: String(urlParams.get("plan") || "").trim().toLowerCase(),
+            status: String(urlParams.get("status") || "")
+                .trim()
+                .toLowerCase(),
+            plan: String(urlParams.get("plan") || "")
+                .trim()
+                .toLowerCase(),
         };
+    }
+
+    function readInitialSelectedPlan() {
+        const params = new URLSearchParams(window.location.search);
+        const requestedPlan = String(params.get("plan") || "")
+            .trim()
+            .toLowerCase();
+        return Data.normalizePlanId(requestedPlan);
     }
 
     function canBootstrapPage() {
@@ -303,7 +319,10 @@
                     }
 
                     const paymentReturn = readPaymentReturnParams();
-                    if (paymentReturn.status === "success" && paymentReturn.plan) {
+                    if (
+                        paymentReturn.status === "success" &&
+                        paymentReturn.plan
+                    ) {
                         enqueueNotification(
                             dispatch,
                             `Félicitations ! Votre abonnement ${paymentReturn.plan} est maintenant actif.`,
@@ -356,10 +375,7 @@
                         );
                     }
                 } catch (error) {
-                    console.error(
-                        "Erreur initialisation page plans:",
-                        error,
-                    );
+                    console.error("Erreur initialisation page plans:", error);
                     enqueueNotification(
                         dispatch,
                         "Une erreur est survenue lors du chargement des abonnements.",
@@ -423,10 +439,7 @@
                 payload: normalizedPlanId,
             });
 
-            navigateToSubscriptionPayment(
-                normalizedPlanId,
-                state.billingCycle,
-            );
+            navigateToSubscriptionPayment(normalizedPlanId, state.billingCycle);
             return true;
         }
 

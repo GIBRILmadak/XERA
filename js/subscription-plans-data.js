@@ -26,6 +26,10 @@
             text: "Badges bleu, medium ou gold",
         }),
         Object.freeze({
+            iconClass: "fas fa-shield-halved",
+            text: "Vérification premium pour Pages Pro",
+        }),
+        Object.freeze({
             iconClass: "fas fa-circle-check",
             text: "Monétisation et dons communautaires",
         }),
@@ -215,6 +219,39 @@
                 }),
             ]),
         }),
+        page_verification: Object.freeze({
+            id: "page_verification",
+            title: "Vérification Page Pro",
+            iconClass: "fas fa-shield-halved",
+            cardClassName: "page-verification",
+            monthlyPrice: 25,
+            description:
+                "Vérification premium pour Pages Pro : plus de visibilité, plus de crédibilité, badge de vérification et accès aux meilleurs profils.",
+            buttonLabel: "Payer la vérification",
+            badgeLabel: "Nouveau",
+            features: Object.freeze([
+                Object.freeze({
+                    iconClass: "fas fa-check",
+                    text: "Badge de vérification officiel sur la page",
+                }),
+                Object.freeze({
+                    iconClass: "fas fa-check",
+                    text: "Visibilité accrue dans Discover et recommandations",
+                }),
+                Object.freeze({
+                    iconClass: "fas fa-check",
+                    text: "Crédibilité renforcée auprès des talents et partenaires",
+                }),
+                Object.freeze({
+                    iconClass: "fas fa-check",
+                    text: "Accès prioritaire aux meilleurs profils du réseau",
+                }),
+                Object.freeze({
+                    iconClass: "fas fa-star",
+                    text: "Offre annuelle à 20 % de réduction",
+                }),
+            ]),
+        }),
     });
 
     const PLAN_IDS = Object.freeze(Object.keys(PLAN_DEFINITIONS));
@@ -247,7 +284,8 @@
         }),
         Object.freeze({
             id: "followers-threshold",
-            question: "Que se passe-t-il si je descends en dessous de 1000 abonnés ?",
+            question:
+                "Que se passe-t-il si je descends en dessous de 1000 abonnés ?",
             answer: "Si vous descendez en dessous de 1000 abonnés, votre statut de monétisation sera temporairement désactivé. Vous ne pourrez plus recevoir de nouveaux soutiens tant que vous n'aurez pas retrouvé 1000 abonnés. Vos revenus précédents restent à vous.",
         }),
     ]);

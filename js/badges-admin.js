@@ -18,6 +18,7 @@ export function initBadgeAdminPage({
         const sets = getVerifiedBadgeSets ? getVerifiedBadgeSets() : null;
         const creators = sets ? Array.from(sets.creators || []) : [];
         const staff = sets ? Array.from(sets.staff || []) : [];
+        const pages = sets ? Array.from(sets.pages || []) : [];
         const ids = [...creators, ...staff];
         const profilesResult = window.fetchUsersByIds
             ? await window.fetchUsersByIds(ids)
@@ -50,7 +51,77 @@ export function initBadgeAdminPage({
             ${creators.map((id) => item(id, "Créateur", "creator")).join("") || '<div class="verification-empty">Aucun</div>'}
             <div style="margin:1rem 0 0.5rem; font-weight:700;">Staff (${staff.length})</div>
             ${staff.map((id) => item(id, "Staff", "staff")).join("") || '<div class="verification-empty">Aucun</div>'}
+            <div style="margin:1rem 0 0.5rem; font-weight:700;">Pages Pro vérifiées (${pages.length})</div>
+            ${pages.length ? '<div id="badge-admin-pages"></div>' : '<div class="verification-empty">Aucune</div>'}
         `;
+
+        // Render pages separately to fetch page metadata
+        if (pages.length) {
+            try {
+                const { data: pageRows } = await supabase
+                    .from("professional_pages")
+                    .select("id, name, slug, avatar_url")
+                    .in("id", pages)
+                    .limit(100);
+
+                const pageMap = new Map((pageRows || []).map((p) => [p.id, p]));
+                const pagesHtml = pages
+                    .map((pid) => {
+                        const pg = pageMap.get(pid) || {
+                            name: pid,
+                            slug: pid,
+                            avatar_url: "icons/enterprise.svg",
+                        };
+                        return `
+                            <div class="verification-request-item" style="justify-content:space-between; gap:0.75rem;">
+                                <div style="display:flex; align-items:center; gap:0.6rem; min-width:0;">
+                                    <img src="${pg.avatar_url || "icons/enterprise.svg"}" alt="${pg.name}" style="width:32px; height:32px; border-radius:6px; object-fit:cover;">
+                                    <div style="display:flex; flex-direction:column; min-width:0;">
+                                        <span class="verification-request-name" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${pg.name}</span>
+                                        <span class="verification-request-id" style="color:var(--text-secondary); font-size:0.8rem;">${pg.slug || pg.id}</span>
+                                    </div>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:0.5rem;">
+                                    <span class="verification-request-type">Page Pro</span>
+                                    <button class="btn-cancel badge-remove-page-btn" data-page-id="${pid}" title="Retirer la vérification">Retirer</button>
+                                </div>
+                            </div>
+                        `;
+                    })
+                    .join("");
+                const pagesContainer =
+                    document.getElementById("badge-admin-pages");
+                if (pagesContainer) pagesContainer.innerHTML = pagesHtml;
+
+                // Bind remove page buttons
+                pagesContainer
+                    .querySelectorAll(".badge-remove-page-btn")
+                    .forEach((btn) => {
+                        btn.addEventListener("click", async () => {
+                            const pid = btn.dataset.pageId;
+                            try {
+                                btn.disabled = true;
+                                btn.classList.add("is-pending");
+                                await window.removeVerifiedPageId(pid);
+                                await fetchVerifiedBadges();
+                                await renderList();
+                            } catch (error) {
+                                console.error("Erreur retrait page:", error);
+                                ToastManager?.error(
+                                    "Erreur",
+                                    error?.message ||
+                                        "Impossible de retirer la vérification de la page.",
+                                );
+                            } finally {
+                                btn.disabled = false;
+                                btn.classList.remove("is-pending");
+                            }
+                        });
+                    });
+            } catch (e) {
+                console.error("Erreur fetch pages for badges:", e);
+            }
+        }
 
         // Bind remove buttons
         list.querySelectorAll(".badge-remove-btn").forEach((btn) => {
@@ -87,7 +158,8 @@ export function initBadgeAdminPage({
         }
         box.innerHTML = pendingRequestsCache
             .map((req) => {
-                const label = req.type === "staff" ? "Équipe/Entreprise" : "Créateur";
+                const label =
+                    req.type === "staff" ? "Équipe/Entreprise" : "Créateur";
                 const name = req.users?.name || "Utilisateur";
                 const avatar =
                     req.users?.avatar || "https://placehold.co/40?text=👤";
@@ -131,17 +203,27 @@ export function initBadgeAdminPage({
                         <option value="creator">Créateur</option>
                         <option value="staff">Équipe / Entreprise</option>
                     </select>
-                    ${window.isSuperAdmin && window.isSuperAdmin()
-                        ? `
+                    ${
+                        window.isSuperAdmin && window.isSuperAdmin()
+                            ? `
                     <select id="badge-admin-plan" class="form-input">
                         <option value="standard">Plan Standard</option>
                         <option value="medium">Plan Medium</option>
                         <option value="pro">Plan Pro</option>
                     </select>
                     `
-                        : ""}
+                            : ""
+                    }
                     <button type="button" class="btn-verify" id="badge-admin-apply">Attribuer</button>
                     <button type="button" class="btn-cancel" id="badge-admin-remove">Retirer</button>
+                </div>
+                <div style="margin-top:0.75rem;">
+                    <h4>Gérer la vérification d'une Page Pro</h4>
+                    <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
+                        <input type="text" id="badge-admin-page" class="form-input" placeholder="ID ou slug de la page Pro">
+                        <button type="button" class="btn-verify" id="badge-admin-apply-page">Vérifier Page</button>
+                        <button type="button" class="btn-cancel" id="badge-admin-remove-page">Retirer Vérif.</button>
+                    </div>
                 </div>
                 <div id="badge-admin-suggestions" class="verify-suggestions" style="display:flex; flex-direction:column; gap:0.35rem; margin-top:0.5rem;"></div>
             </div>
@@ -155,15 +237,17 @@ export function initBadgeAdminPage({
                 <h4>Demandes de vérification</h4>
                 <div id="badge-admin-requests" class="verification-requests"></div>
                 <div class="verification-actions" style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                    ${window.isSuperAdmin && window.isSuperAdmin()
-                        ? `
+                    ${
+                        window.isSuperAdmin && window.isSuperAdmin()
+                            ? `
                     <select id="badge-bulk-plan" class="form-input">
                         <option value="standard">Plan Standard</option>
                         <option value="medium">Plan Medium</option>
                         <option value="pro">Plan Pro</option>
                     </select>
                     `
-                        : ""}
+                            : ""
+                    }
                     <button type="button" class="btn-verify" id="badge-approve">Valider sélection</button>
                     <button type="button" class="btn-cancel" id="badge-reject">Refuser sélection</button>
                 </div>
@@ -194,21 +278,23 @@ export function initBadgeAdminPage({
                 b.classList.toggle("is-pending", state);
             });
             if (applyBtn) {
-                applyBtn.textContent = state && !isRemove
-                    ? "En cours d'attribution..."
-                    : defaultApplyLabel;
+                applyBtn.textContent =
+                    state && !isRemove
+                        ? "En cours d'attribution..."
+                        : defaultApplyLabel;
             }
             if (removeBtn) {
-                removeBtn.textContent = state && isRemove
-                    ? "Retrait en cours..."
-                    : defaultRemoveLabel;
+                removeBtn.textContent =
+                    state && isRemove
+                        ? "Retrait en cours..."
+                        : defaultRemoveLabel;
             }
         };
-        const target = document.getElementById("badge-admin-search")?.value || "";
+        const target =
+            document.getElementById("badge-admin-search")?.value || "";
         const type =
             document.getElementById("badge-admin-type")?.value || "creator";
-        const plan =
-            document.getElementById("badge-admin-plan")?.value || null;
+        const plan = document.getElementById("badge-admin-plan")?.value || null;
         if (!target) {
             ToastManager?.error("Champ vide", "Saisir un ID ou un nom.");
             return;
@@ -240,6 +326,64 @@ export function initBadgeAdminPage({
         .getElementById("badge-admin-remove")
         ?.addEventListener("click", () => handleApply(true));
 
+    // Page verification handlers
+    document
+        .getElementById("badge-admin-apply-page")
+        ?.addEventListener("click", async () => {
+            const pid =
+                document.getElementById("badge-admin-page")?.value || "";
+            if (!pid)
+                return ToastManager?.error(
+                    "Champ vide",
+                    "Saisir un ID ou slug de page.",
+                );
+            try {
+                document.getElementById("badge-admin-apply-page").disabled =
+                    true;
+                await window.addVerifiedPageId(pid);
+                await fetchVerifiedBadges();
+                await renderList();
+            } catch (e) {
+                console.error("Erreur add page verified:", e);
+                ToastManager?.error(
+                    "Erreur",
+                    e?.message || "Impossible de vérifier la page.",
+                );
+            } finally {
+                document.getElementById("badge-admin-apply-page").disabled =
+                    false;
+            }
+        });
+
+    document
+        .getElementById("badge-admin-remove-page")
+        ?.addEventListener("click", async () => {
+            const pid =
+                document.getElementById("badge-admin-page")?.value || "";
+            if (!pid)
+                return ToastManager?.error(
+                    "Champ vide",
+                    "Saisir un ID ou slug de page.",
+                );
+            try {
+                document.getElementById("badge-admin-remove-page").disabled =
+                    true;
+                await window.removeVerifiedPageId(pid);
+                await fetchVerifiedBadges();
+                await renderList();
+            } catch (e) {
+                console.error("Erreur remove page verified:", e);
+                ToastManager?.error(
+                    "Erreur",
+                    e?.message ||
+                        "Impossible de retirer la vérification de la page.",
+                );
+            } finally {
+                document.getElementById("badge-admin-remove-page").disabled =
+                    false;
+            }
+        });
+
     const handleBulkAction = async (action) => {
         const checks = Array.from(
             document.querySelectorAll(".badge-request-check:checked"),
@@ -250,7 +394,11 @@ export function initBadgeAdminPage({
             if (action === "approve") {
                 await Promise.all(
                     checks.map((c) =>
-                        addVerifiedUserId(c.dataset.type, c.dataset.userId, plan),
+                        addVerifiedUserId(
+                            c.dataset.type,
+                            c.dataset.userId,
+                            plan,
+                        ),
                     ),
                 );
             }

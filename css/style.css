@@ -14002,6 +14002,53 @@ html.dark-mode .tutorial-text-body {
     border-color: #ffffff;
 }
 
+.pro-locked-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 10, 10, 0.65);
+    backdrop-filter: blur(6px);
+    border-radius: 20px;
+    padding: 1rem;
+    z-index: 2;
+}
+
+/* When overlay is an anchor make sure it fills and is clickable */
+.pro-locked-overlay.pro-locked-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+}
+
+.pro-locked-overlay.pro-locked-link:focus,
+.pro-locked-overlay.pro-locked-link:hover {
+    outline: none;
+    cursor: pointer;
+}
+
+.pro-locked-message {
+    max-width: 100%;
+    text-align: center;
+    color: #ffffff;
+    /* Hide the green CTA bubbles for pro-locked areas; make them non-intrusive */
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    padding: 0.9rem 1.1rem;
+    font-weight: 900;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    border-radius: 999px;
+    text-transform: uppercase;
+}
+
+.pro-versus-panel,
+.pro-match-panel {
+    position: relative;
+}
+
 @media (max-width: 900px) {
     .pro-page-content {
         grid-template-columns: 1fr !important;

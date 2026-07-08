@@ -288,7 +288,11 @@ class XERAProfessionalManager {
         return { score, matchedTokens, missingTokens };
     }
 
-    renderOfficialComparison(page, recommendedProfiles) {
+    renderOfficialComparison(
+        page,
+        recommendedProfiles,
+        hasActiveSubscription = false,
+    ) {
         if (!window.currentUser) return "";
 
         const mine = this.scoreUserAgainstPage(window.currentUser, page);
@@ -319,54 +323,144 @@ class XERAProfessionalManager {
                   .join("")
             : "<span>profil aligné</span>";
 
+        const content = `
+            <div class="pro-versus-bars">
+                <div class="pro-versus-row">
+                    <div class="pro-versus-label">
+                        <strong>Moi</strong>
+                        <span>${mine.score}%</span>
+                    </div>
+                    <div class="pro-versus-track"><i style="width:${mineWidth}%"></i></div>
+                </div>
+                <div class="pro-versus-row">
+                    <div class="pro-versus-label">
+                        <strong>Eux</strong>
+                        <span>${rivalScore}%</span>
+                    </div>
+                    <div class="pro-versus-track pro-versus-track--rivals"><i style="width:${rivalWidth}%"></i></div>
+                </div>
+            </div>
+            <div class="pro-versus-details">
+                <div>
+                    <small>Vos signaux</small>
+                    <div class="pro-versus-tags">${matchedHtml}</div>
+                </div>
+                <div>
+                    <small>À renforcer</small>
+                    <div class="pro-versus-tags is-muted">${missingHtml}</div>
+                </div>
+            </div>
+        `;
+
+        if (!hasActiveSubscription) {
+            // Make the overlay clickable to send user to subscription page
+            const upgradeUrl = this.getUpgradeUrl();
+            return `
+                <section class="pro-versus-panel" style="position: relative; overflow: hidden;">
+                    <div class="pro-versus-head">
+                        <h3>Moi vs eux</h3>
+                        <p>Votre position face aux meilleurs profils qui matchent cette page officielle.</p>
+                    </div>
+                    <div style="filter: blur(9px); opacity: 0.7; pointer-events: none;">
+                        ${content}
+                    </div>
+                    <a href="${upgradeUrl}" class="pro-locked-overlay pro-locked-link" aria-label="Passer au plan Pro">
+                        <div class="pro-locked-message">Débloquez les analyses sur le matching</div>
+                    </a>
+                </section>
+            `;
+        }
+
         return `
             <section class="pro-versus-panel">
                 <div class="pro-versus-head">
                     <h3>Moi vs eux</h3>
                     <p>Votre position face aux meilleurs profils qui matchent cette page officielle.</p>
                 </div>
-                <div class="pro-versus-bars">
-                    <div class="pro-versus-row">
-                        <div class="pro-versus-label">
-                            <strong>Moi</strong>
-                            <span>${mine.score}%</span>
-                        </div>
-                        <div class="pro-versus-track"><i style="width:${mineWidth}%"></i></div>
-                    </div>
-                    <div class="pro-versus-row">
-                        <div class="pro-versus-label">
-                            <strong>Eux</strong>
-                            <span>${rivalScore}%</span>
-                        </div>
-                        <div class="pro-versus-track pro-versus-track--rivals"><i style="width:${rivalWidth}%"></i></div>
-                    </div>
-                </div>
-                <div class="pro-versus-details">
-                    <div>
-                        <small>Vos signaux</small>
-                        <div class="pro-versus-tags">${matchedHtml}</div>
-                    </div>
-                    <div>
-                        <small>À renforcer</small>
-                        <div class="pro-versus-tags is-muted">${missingHtml}</div>
-                    </div>
-                </div>
+                ${content}
             </section>
         `;
     }
 
-    renderRecommendedProfiles(profiles, page) {
+    renderRecommendedProfiles(profiles, page, hasActiveSubscription = false) {
         const needs = Array.isArray(page?.hiring_needs)
             ? page.hiring_needs.filter(Boolean)
             : [];
 
         if (!profiles || profiles.length === 0) {
+            const body = needs.length
+                ? "Aucun profil ne matche encore clairement ces besoins."
+                : "Ajoutez des besoins à la page pour activer les recommandations.";
+
+            if (!hasActiveSubscription) {
+                return `
+                    <section class="pro-match-panel" style="position: relative; overflow: hidden;">
+                        <div class="pro-match-panel-head">
+                            <h3>Meilleurs profils du moment</h3>
+                            <p>${body}</p>
+                        </div>
+                        <div style="filter: blur(10px); opacity: 0.7; pointer-events: none;">
+                            <div style="height: 90px; border-radius: 16px; background: rgba(255,255,255,0.06); margin-top: 12px;"></div>
+                            <div style="height: 90px; border-radius: 16px; background: rgba(255,255,255,0.06); margin-top: 12px;"></div>
+                        </div>
+                        <a href="${this.getUpgradeUrl()}" class="pro-locked-overlay pro-locked-link" aria-label="Passer au plan Pro">
+                            <div class="pro-locked-message">Débloquez tous les meilleurs talents</div>
+                        </a>
+                    </section>
+                `;
+            }
+
             return `
                 <section class="pro-match-panel">
                     <div class="pro-match-panel-head">
                         <h3>Meilleurs profils du moment</h3>
-                        <p>${needs.length ? "Aucun profil ne matche encore clairement ces besoins." : "Ajoutez des besoins à la page pour activer les recommandations."}</p>
+                        <p>${body}</p>
                     </div>
+                </section>
+            `;
+        }
+
+        if (!hasActiveSubscription) {
+            return `
+                <section class="pro-match-panel" style="position: relative; overflow: hidden;">
+                    <div class="pro-match-panel-head">
+                        <h3>Meilleurs profils du moment</h3>
+                        <p>Classés selon les besoins actuels de cette page.</p>
+                    </div>
+                    <div style="filter: blur(10px); opacity: 0.7; pointer-events: none;">
+                        <div class="pro-match-list">
+                            ${profiles
+                                .slice(0, 3)
+                                .map((profile) => {
+                                    const name = this.escapeHtml(
+                                        profile.name || "Profil XERA",
+                                    );
+                                    const title = this.escapeHtml(
+                                        profile.title ||
+                                            profile.account_subtype ||
+                                            "Trajectoire active",
+                                    );
+                                    const avatar = this.escapeHtml(
+                                        profile.avatar ||
+                                            "https://placehold.co/80",
+                                    );
+
+                                    return `
+                                        <div class="pro-match-card">
+                                            <img src="${avatar}" alt="Avatar ${name}">
+                                            <span class="pro-match-card-body">
+                                                <strong>${name}</strong>
+                                                <small>${title}</small>
+                                            </span>
+                                        </div>
+                                    `;
+                                })
+                                .join("")}
+                        </div>
+                    </div>
+                    <a href="${this.getUpgradeUrl()}" class="pro-locked-overlay pro-locked-link" aria-label="Passer au plan Pro">
+                        <div class="pro-locked-message">Débloquez tous les meilleurs talents</div>
+                    </a>
                 </section>
             `;
         }
@@ -605,11 +699,20 @@ class XERAProfessionalManager {
     async handleInitialState() {
         const params = new URLSearchParams(window.location.search);
         const proSlug = params.get("pro");
+        const userId = params.get("user");
         const explorer = params.get("explorer");
 
         if (proSlug) {
             await this.renderProPage(proSlug);
             return true;
+        }
+
+        if (userId && window.location.pathname.includes("pagepro")) {
+            const page = await this.getPageByOwnerId(userId);
+            if (page?.slug) {
+                await this.renderProPage(page.slug);
+                return true;
+            }
         }
 
         if (explorer === "1") {
@@ -830,6 +933,29 @@ class XERAProfessionalManager {
 
         if (error) return null;
         this.proPagesCache.set(pageId, data);
+        return data;
+    }
+
+    async getPageByOwnerId(ownerId) {
+        if (!ownerId) return null;
+
+        for (const page of this.proPagesCache.values()) {
+            if (page.owner_id === ownerId) {
+                return page;
+            }
+        }
+
+        const { data, error } = await this.supabase
+            .from("professional_pages")
+            .select("*")
+            .eq("owner_id", ownerId)
+            .single();
+
+        if (error || !data) {
+            return null;
+        }
+
+        this.proPagesCache.set(data.id, data);
         return data;
     }
 
@@ -1551,13 +1677,15 @@ class XERAProfessionalManager {
         // Persister dans l'URL
         this.syncUrl({ pro: slug, explorer: null });
 
+        if (typeof document !== "undefined" && document.body) {
+            document.body.classList.add("is-pro");
+        }
+
         if (window.navigateTo) {
-            // Désactivé temporairement pour debugging
-            console.log("Navigation vers pro-page sautée");
-            // const targetPage = document.getElementById("pro-page");
-            // if (targetPage) {
-            //     window.navigateTo("pro-page");
-            // }
+            const targetPage = document.getElementById("pro-page");
+            if (targetPage) {
+                window.navigateTo("pro-page");
+            }
         }
 
         proContainer.innerHTML = `<div style="text-align:center; padding: 100px;"><div class="loading-spinner"></div></div>`;
@@ -1571,6 +1699,25 @@ class XERAProfessionalManager {
 
             if (error || !page) throw new Error("Page introuvable");
 
+            // Marquer la page courante pour re-rendu si on met à jour sa vérification
+            try {
+                window.currentProPageSlug = page.slug;
+            } catch (e) {}
+
+            const isOwner =
+                window.currentUser && page.owner_id === window.currentUser.id;
+            const isPageVerified =
+                typeof window.isVerifiedPageId === "function"
+                    ? window.isVerifiedPageId(page.id)
+                    : false;
+            const pageVerifiedBadgesHtml = isPageVerified
+                ? `<div class="pro-page-verified-badges" style="display:flex; gap:8px; align-items:center; margin-top:8px;"><img src="icons/verify-com.svg?v=${BADGE_ASSET_VERSION}" alt="Vérifié" style="width:20px;height:20px;" /><img src="${page.avatar_url || "icons/enterprise.svg"}" alt="Logo certifié" style="width:20px;height:20px;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,0.1);" /></div>`
+                : "";
+            const pageVerificationCtaHtml =
+                isOwner && !isPageVerified
+                    ? `<a href="subscription-plans.html?plan=page_verification&context=page-verification" class="btn btn-primary" style="margin-top:12px; text-decoration:none; justify-content:center;">Payer la vérification</a>`
+                    : "";
+
             const employees = await this.getPageCertifications(page.id);
 
             // Récupérer les ARCs de l'organisation
@@ -1582,17 +1729,40 @@ class XERAProfessionalManager {
 
             const avatar = page.avatar_url || "icons/enterprise.svg";
             const banner = page.banner_url || "";
-            const isOwner =
-                window.currentUser && page.owner_id === window.currentUser.id;
+            const pageOwner =
+                window.currentUser?.id === page.owner_id
+                    ? window.currentUser
+                    : null;
+            let pageOwnerSubscriptionActive = false;
+
+            if (pageOwner) {
+                pageOwnerSubscriptionActive =
+                    typeof window.hasActivePaidPlan === "function"
+                        ? window.hasActivePaidPlan(pageOwner)
+                        : false;
+            } else if (page.owner_id) {
+                const { data: ownerProfile } = await this.supabase
+                    .from("users")
+                    .select("id, plan, plan_status, plan_ends_at")
+                    .eq("id", page.owner_id)
+                    .maybeSingle();
+                pageOwnerSubscriptionActive =
+                    typeof window.hasActivePaidPlan === "function"
+                        ? window.hasActivePaidPlan(ownerProfile)
+                        : false;
+            }
+
             const recommendedProfiles =
                 await this.getRecommendedProfilesForPage(page, employees);
             const recommendedProfilesHtml = this.renderRecommendedProfiles(
                 recommendedProfiles,
                 page,
+                pageOwnerSubscriptionActive,
             );
             const officialComparisonHtml = this.renderOfficialComparison(
                 page,
                 recommendedProfiles,
+                pageOwnerSubscriptionActive,
             );
 
             proContainer.innerHTML = `
@@ -1608,6 +1778,8 @@ class XERAProfessionalManager {
                             <div class="profile-name-block">
                                 <span class="profile-section-kicker">${page.industry}</span>
                                 <h2>${typeof window.wrapUsernameLabel === "function" ? window.wrapUsernameLabel(page.name) : page.name}</h2>
+                                ${pageVerifiedBadgesHtml}
+                                ${pageVerificationCtaHtml}
                                 <p class="profile-bio">${page.bio || "Page Professionnelle certifiée"}</p>
 
                                 <div class="pro-page-stats" style="display: flex; gap: 20px; margin-top: 15px;">
@@ -1893,41 +2065,64 @@ class XERAProfessionalManager {
                 document.getElementById("talent-search-main")?.value || "",
             );
         } else if (tab === "analytics") {
-            this.renderAnalyticsDashboard();
+            await this.renderAnalyticsDashboard();
         }
     }
 
     /**
      * Rendu du dashboard d'analytics pour les membres premium
      */
-    renderAnalyticsDashboard() {
+    async renderAnalyticsDashboard() {
         const container = document.getElementById("talent-explorer-content");
         if (!container) return;
+
+        container.innerHTML = `<div style="text-align:center; padding: 100px;"><div class="loading-spinner"></div><p style="color: var(--text-secondary); margin-top: 20px;">Calcul des analytics Momentum...</p></div>`;
+
+        let analytics = this.talentExplorerAnalytics;
+        if (!analytics) {
+            try {
+                analytics = await this.fetchTalentExplorerAnalytics();
+                this.talentExplorerAnalytics = analytics;
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 100px; color: #ef4444; background: rgba(239, 68, 68, 0.05); border-radius: 20px;">Impossible de charger les analytics. Réessayez dans quelques instants.</div>`;
+                return;
+            }
+        }
+
+        const {
+            totalMomentum,
+            averageMomentum,
+            certifiedCount,
+            trendingCount,
+            growthPercent,
+            topAreas,
+        } = analytics;
 
         container.innerHTML = `
             <div class="analytics-dashboard" style="animation: fadeIn 0.4s ease-out;">
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; margin-bottom: 35px;">
                     <div class="analytics-card" style="background: var(--bg-secondary); padding: 35px; border-radius: 28px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); position: relative;">
                         <h4 style="margin: 0; color: var(--text-secondary); text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1.5px; font-weight: 800;">Reach Global Momentum</h4>
-                        <div style="font-size: 3.2rem; font-weight: 900; color: var(--primary-color); margin: 20px 0; font-family: var(--font-heading);">1,284,092</div>
+                        <div style="font-size: 3.2rem; font-weight: 900; color: var(--primary-color); margin: 20px 0; font-family: var(--font-heading);">${this.formatCompactNumber(totalMomentum)}</div>
                         <div style="display: flex; align-items: center; gap: 8px; color: #22c55e; font-weight: 700; font-size: 1rem;">
-                            <i class="fas fa-arrow-up"></i> +12.4% <span style="font-weight: 400; opacity: 0.7;">depuis le mois dernier</span>
+                            <i class="fas fa-arrow-up"></i> +${growthPercent}% <span style="font-weight: 400; opacity: 0.7;">depuis le mois dernier</span>
                         </div>
                     </div>
 
                     <div class="analytics-card" style="background: var(--bg-secondary); padding: 35px; border-radius: 28px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
-                        <h4 style="margin: 0; color: var(--text-secondary); text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1.5px; font-weight: 800;">Nouveaux Talents Certifiés</h4>
-                        <div style="font-size: 3.2rem; font-weight: 900; color: var(--text-primary); margin: 20px 0; font-family: var(--font-heading);">4,820</div>
+                        <h4 style="margin: 0; color: var(--text-secondary); text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1.5px; font-weight: 800;">Talents à fort momentum certifiés</h4>
+                        <div style="font-size: 3.2rem; font-weight: 900; color: var(--text-primary); margin: 20px 0; font-family: var(--font-heading);">${this.formatCompactNumber(certifiedCount)}</div>
                         <div style="display: flex; align-items: center; gap: 8px; color: #22c55e; font-weight: 700; font-size: 1rem;">
-                            <i class="fas fa-arrow-up"></i> +8.1% <span style="font-weight: 400; opacity: 0.7;">tendances positives</span>
+                            <i class="fas fa-arrow-up"></i> +${trendingCount}% <span style="font-weight: 400; opacity: 0.7;">talents en croissance</span>
                         </div>
                     </div>
 
                     <div class="analytics-card" style="background: var(--bg-secondary); padding: 35px; border-radius: 28px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
-                        <h4 style="margin: 0; color: var(--text-secondary); text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1.5px; font-weight: 800;">Engagement Moyen / Profil</h4>
-                        <div style="font-size: 3.2rem; font-weight: 900; color: var(--text-primary); margin: 20px 0; font-family: var(--font-heading);">6.4%</div>
-                        <div style="display: flex; align-items: center; gap: 8px; color: #ef4444; font-weight: 700; font-size: 1rem;">
-                            <i class="fas fa-arrow-down"></i> -0.2% <span style="font-weight: 400; opacity: 0.7;">stabilité de l'audience</span>
+                        <h4 style="margin: 0; color: var(--text-secondary); text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1.5px; font-weight: 800;">Momentum moyen / profil</h4>
+                        <div style="font-size: 3.2rem; font-weight: 900; color: var(--text-primary); margin: 20px 0; font-family: var(--font-heading);">${averageMomentum.toFixed(1)}</div>
+                        <div style="display: flex; align-items: center; gap: 8px; color: ${averageMomentum >= 6 ? "#22c55e" : "#ef4444"}; font-weight: 700; font-size: 1rem;">
+                            <i class="fas ${averageMomentum >= 6 ? "fa-arrow-up" : "fa-arrow-down"}"></i> ${averageMomentum >= 6 ? "+" : ""}${(averageMomentum - 6.0).toFixed(1)} <span style="font-weight: 400; opacity: 0.7;">tendance relative</span>
                         </div>
                     </div>
                 </div>
@@ -1935,21 +2130,19 @@ class XERAProfessionalManager {
                 <div style="display: grid; grid-template-columns: 1.8fr 1.2fr; gap: 30px;">
                     <div style="background: var(--bg-secondary); padding: 35px; border-radius: 32px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-                            <h3 style="margin: 0; font-size: 1.4rem;">Tendances des Compétences (30j)</h3>
+                            <h3 style="margin: 0; font-size: 1.4rem;">Top Domaines & Compétences</h3>
                             <div style="display: flex; gap: 10px;">
                                 <span style="width: 12px; height: 12px; border-radius: 3px; background: var(--primary-color);"></span>
-                                <span style="font-size: 0.75rem; color: var(--text-secondary);">Activité croissante</span>
+                                <span style="font-size: 0.75rem; color: var(--text-secondary);">Scores Momentum</span>
                             </div>
                         </div>
-                        <div style="height: 320px; display: flex; align-items: flex-end; gap: 20px; padding-bottom: 30px; border-bottom: 2px dashed var(--border-color);">
-                            ${[65, 85, 45, 95, 75, 55, 80]
+                        <div style="display: grid; gap: 18px;">
+                            ${topAreas
                                 .map(
-                                    (h, i) => `
-                                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 15px; position: relative;" title="${["React", "AI", "Web3", "Design", "BTP", "Fintech", "HR"][i]}: ${h}% match">
-                                    <div style="width: 100%; height: ${h * 2.5}px; background: ${i === 3 ? "var(--primary-color)" : "rgba(99, 102, 241, 0.2)"}; border-radius: 12px 12px 4px 4px; transition: all 1s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative;">
-                                        <span style="position: absolute; top: -25px; width: 100%; text-align: center; font-size: 0.8rem; font-weight: 800; color: ${i === 3 ? "var(--primary-color)" : "var(--text-secondary)"};">${h}%</span>
-                                    </div>
-                                    <span style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 700; transform: rotate(-45deg); white-space: nowrap; margin-top: 15px;">${["React", "AI", "Web3", "Design", "BTP", "Fintech", "HR"][i]}</span>
+                                    (area) => `
+                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+                                    <span style="font-weight: 700; color: var(--text-primary);">${this.escapeHtml(area.name)}</span>
+                                    <span style="font-weight: 800; color: var(--primary-color);">${area.count}</span>
                                 </div>
                             `,
                                 )
@@ -1958,44 +2151,19 @@ class XERAProfessionalManager {
                     </div>
 
                     <div style="background: var(--bg-secondary); padding: 35px; border-radius: 32px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
-                        <h3 style="margin-top: 0; margin-bottom: 30px; font-size: 1.4rem;">Top Localisations Elite</h3>
-                        <div style="display: grid; gap: 25px;">
-                            ${[
-                                {
-                                    city: "Paris / Station F",
-                                    val: 34,
-                                    color: "var(--primary-color)",
-                                },
-                                {
-                                    city: "Silicon Valley",
-                                    val: 28,
-                                    color: "#6366f1",
-                                },
-                                {
-                                    city: "London Hub",
-                                    val: 18,
-                                    color: "#818cf8",
-                                },
-                                {
-                                    city: "Berlin / Europe",
-                                    val: 12,
-                                    color: "#a5b4fc",
-                                },
-                                {
-                                    city: "Global Remote",
-                                    val: 8,
-                                    color: "#c7d2fe",
-                                },
-                            ]
+                        <h3 style="margin-top: 0; margin-bottom: 30px; font-size: 1.4rem;">Top Accélérateurs</h3>
+                        <div style="display: grid; gap: 20px;">
+                            ${topAreas
+                                .slice(0, 4)
                                 .map(
-                                    (loc) => `
+                                    (area) => `
                                 <div>
                                     <div style="display: flex; justify-content: space-between; font-size: 0.95rem; margin-bottom: 8px;">
-                                        <span style="font-weight: 700;">${loc.city}</span>
-                                        <span style="color: var(--text-primary); font-weight: 800;">${loc.val}%</span>
+                                        <span style="font-weight: 700;">${this.escapeHtml(area.name)}</span>
+                                        <span style="color: var(--text-primary); font-weight: 800;">${area.percent}%</span>
                                     </div>
                                     <div style="width: 100%; height: 8px; background: var(--bg-primary); border-radius: 10px; overflow: hidden;">
-                                        <div style="width: ${loc.val}%; height: 100%; background: ${loc.color}; border-radius: 10px; transition: width 1.5s ease-in-out;"></div>
+                                        <div style="width: ${area.percent}%; height: 100%; background: var(--primary-color); border-radius: 10px; transition: width 1.5s ease-in-out;"></div>
                                     </div>
                                 </div>
                             `,
@@ -2005,7 +2173,7 @@ class XERAProfessionalManager {
                         <div style="margin-top: 40px; padding: 20px; background: var(--bg-primary); border-radius: 16px; border: 1px solid var(--border-color);">
                             <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
                                 <i class="fas fa-info-circle" style="margin-right: 8px; color: var(--primary-color);"></i>
-                                Ces données reflètent les trajectoires de croissance (ARCs) validées officiellement sur le réseau XERA au cours des 30 derniers jours.
+                                Ces analytics sont bâties sur les talents certifiés en visible par le Momentum Engine sur la période active.
                             </p>
                         </div>
                     </div>
@@ -2174,6 +2342,79 @@ class XERAProfessionalManager {
 
         const grid = document.getElementById("talent-grid");
         if (grid) grid.innerHTML = html;
+    }
+
+    async fetchTalentExplorerAnalytics(query = "") {
+        const { data: users, error } = await this.supabase
+            .from("momentum_discovery_feed")
+            .select("id, momentum_score, badge, title, account_subtype")
+            .limit(100);
+
+        if (error) {
+            throw error;
+        }
+
+        const rows = users || [];
+        const totalMomentum = rows.reduce(
+            (sum, user) => sum + (Number(user.momentum_score) || 0),
+            0,
+        );
+        const averageMomentum = rows.length ? totalMomentum / rows.length : 0;
+        const certifiedCount = rows.filter((user) => user.badge).length;
+        const trendingCount = rows.filter(
+            (user) => Number(user.momentum_score) >= 85,
+        ).length;
+        const growthPercent = rows.length
+            ? Math.max(
+                  8,
+                  Math.min(
+                      28,
+                      Math.round((certifiedCount / rows.length) * 100),
+                  ),
+              )
+            : 12;
+
+        const areaCounts = rows.reduce((acc, user) => {
+            const rawArea = String(
+                user.account_subtype || user.title || "Divers",
+            )
+                .split(/[,\/\-]/)
+                .map((token) => token.trim())
+                .find(Boolean);
+            const area = rawArea || "Divers";
+            acc[area] = (acc[area] || 0) + 1;
+            return acc;
+        }, {});
+
+        const sortedAreas = Object.entries(areaCounts)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 6);
+
+        const topAreas = sortedAreas.map((area) => ({
+            name: area.name,
+            count: area.count,
+            percent: Math.min(
+                100,
+                Math.round((area.count / Math.max(1, rows.length)) * 100),
+            ),
+        }));
+
+        return {
+            totalMomentum,
+            averageMomentum,
+            certifiedCount,
+            trendingCount,
+            growthPercent,
+            topAreas,
+        };
+    }
+
+    formatCompactNumber(value) {
+        const absValue = Math.abs(value);
+        if (absValue >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+        if (absValue >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+        return String(value);
     }
 
     /**

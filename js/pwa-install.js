@@ -171,7 +171,7 @@
         bannerEl.id = "pwa-install-banner";
         bannerEl.setAttribute("role", "status");
         bannerEl.innerHTML = `
-            <div class="pwa-icon">📲</div>
+            <div class="pwa-icon"><i class="fas fa-mobile-alt"></i></div>
             <div class="pwa-copy">
                 <div class="pwa-title">Installer XERA</div>
                 <div class="pwa-desc">${iosMode

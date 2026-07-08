@@ -1216,6 +1216,27 @@ function isProfileOnlyPage() {
     return hasProfilePage() && !hasDiscoverPage();
 }
 
+function isProfileRoute() {
+    try {
+        const pathname = String(window.location.pathname || "").replace(
+            /\/+$|\s+/g,
+            "",
+        );
+        if (
+            pathname === "/profile.html" ||
+            pathname === "/profile" ||
+            pathname === "/pagepro"
+        ) {
+            return true;
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        return params.has("user") || params.has("pro");
+    } catch (error) {
+        return false;
+    }
+}
+
 function normalizeAccountType(value) {
     return String(value || "")
         .trim()
@@ -2146,9 +2167,10 @@ async function initializeApp() {
     if (hydratedDiscover) {
         if (initialProfileId) {
             hydrateProfileContentsFromCache(initialProfileId);
-        } else if (window.currentUserId) {
+        } else if (window.currentUserId && profileOnlyPage) {
             hydrateProfileContentsFromCache(window.currentUserId);
         }
+
         // Render immediately from cache to feel instant on slow networks.
         Promise.resolve().then(async () => {
             try {
@@ -2164,7 +2186,7 @@ async function initializeApp() {
                     if (initialArcId) window.selectedArcId = initialArcId;
                     window.currentProfileViewed = initialProfileId;
                     await renderProfileIntoContainer(initialProfileId);
-                } else if (window.currentUserId) {
+                } else if (profileOnlyPage && window.currentUserId) {
                     await renderProfileIntoContainer(window.currentUserId);
                 }
             } catch (e) {
@@ -2235,6 +2257,8 @@ async function initializeApp() {
             window.currentUserId = user.id;
             window.currentViewerId = user.id;
 
+            const isCurrentRoutePro = isPageProRoute();
+
             if (window.professionalManager) {
                 window.professionalManager.initNavigation();
             }
@@ -2256,7 +2280,7 @@ async function initializeApp() {
                 const notifBtn = document.getElementById("notification-btn");
                 if (notifBtn) notifBtn.style.display = "flex";
             }
-            if (discoverAvailable) {
+            if (discoverAvailable && !isCurrentRoutePro) {
                 navigateTo("discover");
             }
             await Promise.all([
@@ -2342,7 +2366,7 @@ async function initializeApp() {
                         });
                 }, 500);
             }
-        } else if (window.currentUserId) {
+        } else if (profileOnlyPage && window.currentUserId) {
             await renderProfileIntoContainer(window.currentUserId);
         }
         await maybeHandleInitialEmailAction();
@@ -3476,6 +3500,23 @@ async function ensureUserProjectsLoaded(userId) {
 // Charger toutes les données pour un utilisateur connecté
 async function ensureUserProfile(user) {
     return user;
+}
+
+async function isFollowing(followerId, followingId) {
+    if (!window.supabase || !followerId || !followingId) return false;
+    try {
+        const { data, error } = await supabase
+            .from("followers")
+            .select("id")
+            .eq("follower_id", followerId)
+            .eq("following_id", followingId)
+            .limit(1);
+        if (error) throw error;
+        return data && data.length > 0;
+    } catch (e) {
+        console.error("isFollowing check error:", e);
+        return false;
+    }
 }
 
 async function loadAllData() {
@@ -5254,6 +5295,7 @@ const VERIFICATION_ADMIN_IDS = new Set([SUPER_ADMIN_ID]);
 
 let verifiedCreatorUserIds = new Set();
 let verifiedStaffUserIds = new Set();
+let verifiedPageIds = new Set();
 let verificationRequests = [];
 
 function isSuperAdmin() {
@@ -5299,13 +5341,16 @@ async function fetchVerifiedBadges() {
 
         const creators = new Set();
         const staff = new Set();
+        const pages = new Set();
         (data || []).forEach((item) => {
             if (item.type === "staff") staff.add(item.user_id);
             if (item.type === "creator") creators.add(item.user_id);
+            if (item.type === "page") pages.add(item.user_id);
         });
 
         verifiedCreatorUserIds = creators;
         verifiedStaffUserIds = staff;
+        verifiedPageIds = pages;
 
         // Fallback local: le super admin est toujours staff vérifié côté UI
         if (SUPER_ADMIN_ID) {
@@ -5325,6 +5370,7 @@ function getVerifiedBadgeSets() {
     return {
         creators: new Set(verifiedCreatorUserIds || []),
         staff: new Set(verifiedStaffUserIds || []),
+        pages: new Set(verifiedPageIds || []),
     };
 }
 
@@ -15016,14 +15062,15 @@ function isPageProRoute() {
 }
 
 function getProfileRenderContainer() {
+    const profileContainer = document.querySelector(".profile-container");
     const proContainer = document.querySelector(".pro-page-container");
     if (isPageProRoute()) {
-        return proContainer || document.querySelector(".profile-container");
+        return proContainer || profileContainer;
     }
     if (document.getElementById("pro-page")?.classList.contains("active")) {
-        return proContainer || document.querySelector(".profile-container");
+        return proContainer || profileContainer;
     }
-    return document.querySelector(".profile-container") || proContainer;
+    return profileContainer || null;
 }
 
 async function renderProfileIntoContainer(userId) {
@@ -15056,6 +15103,26 @@ async function renderProfileIntoContainer(userId) {
             );
         } catch (e) {
             console.warn("Unable to normalize personal profile route:", e);
+        }
+    }
+
+    const bodyIsPro = isPageProRoute();
+    if (typeof document !== "undefined" && document.body) {
+        document.body.classList.toggle("is-pro", bodyIsPro);
+    }
+
+    const hasLegacyProfileUserId =
+        window.location.pathname.includes("/profile") &&
+        new URLSearchParams(window.location.search).has("user");
+
+    if (
+        (isPageProRoute() || hasLegacyProfileUserId) &&
+        window.professionalManager &&
+        typeof window.professionalManager.handleInitialState === "function"
+    ) {
+        const handled = await window.professionalManager.handleInitialState();
+        if (handled) {
+            return;
         }
     }
 
@@ -20123,6 +20190,80 @@ window.fetchFeedbackInbox = fetchFeedbackInbox;
 window.fetchVerifiedBadges = fetchVerifiedBadges;
 window.fetchVerificationRequests = fetchVerificationRequests;
 window.getVerifiedBadgeSets = getVerifiedBadgeSets;
+window.addVerifiedPageId = async function (pageId) {
+    if (!pageId) return;
+    try {
+        const { error } = await supabase
+            .from("verified_badges")
+            .upsert(
+                { user_id: pageId, type: "page" },
+                { onConflict: "user_id,type" },
+            );
+        if (error) throw error;
+        await fetchVerifiedBadges();
+        if (window.ToastManager)
+            ToastManager.success(
+                "Page vérifiée",
+                "La Page Pro a été vérifiée.",
+            );
+        if (
+            window.currentProPageSlug &&
+            window.professionalManager?.renderProPage
+        ) {
+            window.professionalManager
+                .renderProPage(window.currentProPageSlug)
+                .catch(() => {});
+        }
+    } catch (err) {
+        console.error("addVerifiedPageId failed", err);
+        if (window.ToastManager)
+            ToastManager.error(
+                "Erreur",
+                "Impossible d'appliquer la vérification de la page.",
+            );
+    }
+};
+
+window.removeVerifiedPageId = async function (pageId) {
+    if (!pageId) return;
+    try {
+        const { error } = await supabase
+            .from("verified_badges")
+            .delete()
+            .eq("user_id", pageId)
+            .eq("type", "page");
+        if (error) throw error;
+        await fetchVerifiedBadges();
+        if (window.ToastManager)
+            ToastManager.success(
+                "Page non vérifiée",
+                "La vérification a été retirée.",
+            );
+        if (
+            window.currentProPageSlug &&
+            window.professionalManager?.renderProPage
+        ) {
+            window.professionalManager
+                .renderProPage(window.currentProPageSlug)
+                .catch(() => {});
+        }
+    } catch (err) {
+        console.error("removeVerifiedPageId failed", err);
+        if (window.ToastManager)
+            ToastManager.error(
+                "Erreur",
+                "Impossible de retirer la vérification de la page.",
+            );
+    }
+};
+
+window.isVerifiedPageId = function (pageId) {
+    return !!(
+        verifiedPageIds &&
+        verifiedPageIds.has &&
+        verifiedPageIds.has(pageId)
+    );
+};
 window.banUserByAdmin = banUserByAdmin;
 window.unbanUserByAdmin = unbanUserByAdmin;
 window.banUserFromProfile = banUserFromProfile;
