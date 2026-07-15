@@ -890,6 +890,22 @@ async function handleForgotPassword() {
 }
 
 // Gérer la connexion avec Google
+async function signInWithGoogle() {
+    try {
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: `${window.location.origin}/index.html`
+            }
+        });
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+// Gérer la connexion avec Google
 async function handleGoogleSignIn() {
     try {
         googleSigninBtn.disabled = true;
