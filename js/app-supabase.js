@@ -1497,57 +1497,6 @@ function ensureMonetizationNavButton() {
     return button;
 }
 
-function ensureSuperAdminNavButton() {
-    const navLinks = document.querySelector("nav .nav-links");
-    if (!navLinks) return null;
-
-    let button = document.getElementById("nav-superadmin-btn");
-    if (button) return button;
-
-    button = document.createElement("a");
-    button.id = "nav-superadmin-btn";
-    button.className = "nav-monetization-btn";
-    button.title = "Profil Admin";
-    button.setAttribute("aria-label", "Profil Admin");
-    button.style.cursor = "pointer";
-    button.innerHTML = `
-        <i class="fas fa-user-shield" aria-hidden="true"></i>
-        <span class="nav-monetization-label">Admin</span>
-    `;
-    button.onclick = (e) => {
-        e.preventDefault();
-        // Rediriger vers le profil spécifique du Super Admin
-        const superAdminId = "b0f9f893-1706-4721-899c-d26ad79afc86";
-        const profileUrl = typeof window.buildProfileUrl === "function" 
-            ? window.buildProfileUrl(superAdminId, "personal") 
-            : `profile.html?user=${encodeURIComponent(superAdminId)}`;
-        window.location.href = profileUrl;
-    };
-
-    const navAuth = document.getElementById("nav-auth");
-    if (navAuth?.parentNode === navLinks) {
-        navLinks.insertBefore(button, navAuth);
-    } else {
-        navLinks.appendChild(button);
-    }
-    return button;
-}
-
-function updateSuperAdminNavButton(isLoggedIn) {
-    const button = ensureSuperAdminNavButton();
-    if (!button) return;
-
-    // Si on sait déjà que c'est le super admin, on l'affiche.
-    if (isSuperAdmin()) {
-        button.style.display = "flex";
-        return;
-    }
-
-    // Sinon, on ne cache le bouton que si on est certain que l'utilisateur n'est pas connecté.
-    if (!isLoggedIn && !window.currentUser) {
-        button.style.display = "none";
-    }
-}
 
 async function updateMonetizationNavButton(isLoggedIn) {
     const button = ensureMonetizationNavButton();
@@ -2623,7 +2572,6 @@ function updateNavigation(isLoggedIn) {
     }
 
     updateMonetizationNavButton(isLoggedIn);
-    updateSuperAdminNavButton(isLoggedIn);
 
     if (!isLoggedIn && typeof window.cleanupMessaging === "function") {
         window.cleanupMessaging();
@@ -7584,7 +7532,6 @@ function applyUserUpdateToCache(user) {
     if (window.currentUser && window.currentUser.id === user.id) {
         window.currentUser = { ...window.currentUser, ...sanitized };
         updateMonetizationNavButton(true);
-        updateSuperAdminNavButton(true);
     }
     try {
         if (Array.isArray(allUsers) && allUsers.length > 0) {
