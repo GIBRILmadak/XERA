@@ -1516,9 +1516,12 @@ function ensureSuperAdminNavButton() {
     `;
     button.onclick = (e) => {
         e.preventDefault();
-        if (window.currentUser) {
-            window.handleProfileNavigation();
-        }
+        // Rediriger vers le profil spécifique du Super Admin
+        const superAdminId = "b0f9f893-1706-4721-899c-d26ad79afc86";
+        const profileUrl = typeof window.buildProfileUrl === "function" 
+            ? window.buildProfileUrl(superAdminId, "personal") 
+            : `profile.html?user=${encodeURIComponent(superAdminId)}`;
+        window.location.href = profileUrl;
     };
 
     const navAuth = document.getElementById("nav-auth");
