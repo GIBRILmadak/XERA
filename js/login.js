@@ -297,6 +297,14 @@ function formatAuthError(result) {
         return "Trop de tentatives. Patientez un instant puis réessayez.";
     }
 
+    if (
+        rawMessage === "{}" ||
+        rawMessage === "[object Object]" ||
+        rawMessage === ""
+    ) {
+        return "Une erreur d'inscription est survenue. Vérifiez vos données et réessayez.";
+    }
+
     return rawMessage || "Une opération a échoué. Veuillez réessayer.";
 }
 
@@ -644,6 +652,44 @@ async function handleSubmit(e) {
             const result = await signUp(email, password, username, metadata);
 
             if (result.success) {
+                const user = result.data;
+                if (typeof upsertUserProfile === "function" && user?.id) {
+                    try {
+                        await upsertUserProfile(user.id, {
+                            name:
+                                username ||
+                                user?.user_metadata?.full_name ||
+                                user?.user_metadata?.display_name ||
+                                user?.user_metadata?.username ||
+                                String(user?.email || "").split("@")[0] ||
+                                "Utilisateur",
+                            username:
+                                username ||
+                                user?.user_metadata?.username ||
+                                user?.user_metadata?.display_name ||
+                                String(user?.email || "").split("@")[0] ||
+                                null,
+                            account_type:
+                                user?.user_metadata?.account_type ||
+                                user?.account_type ||
+                                "personal",
+                            account_subtype:
+                                user?.user_metadata?.account_subtype ||
+                                user?.account_subtype ||
+                                "personal",
+                            avatar:
+                                user?.user_metadata?.avatar_url ||
+                                user?.user_metadata?.picture ||
+                                null,
+                        });
+                    } catch (e) {
+                        console.warn(
+                            "upsertUserProfile after signUp failed:",
+                            e,
+                        );
+                    }
+                }
+
                 showPersistentSuccess(
                     "Compte créé ! Un email de confirmation a été envoyé à " +
                         email,
@@ -672,10 +718,46 @@ async function handleSubmit(e) {
             const result = await signIn(email, password);
 
             if (result.success) {
+                const user = result.data;
+                if (typeof upsertUserProfile === "function" && user?.id) {
+                    try {
+                        await upsertUserProfile(user.id, {
+                            name:
+                                user?.user_metadata?.full_name ||
+                                user?.user_metadata?.display_name ||
+                                user?.user_metadata?.username ||
+                                String(user?.email || "").split("@")[0] ||
+                                "Utilisateur",
+                            username:
+                                user?.user_metadata?.username ||
+                                user?.user_metadata?.display_name ||
+                                String(user?.email || "").split("@")[0] ||
+                                null,
+                            account_type:
+                                user?.user_metadata?.account_type ||
+                                user?.account_type ||
+                                "personal",
+                            account_subtype:
+                                user?.user_metadata?.account_subtype ||
+                                user?.account_subtype ||
+                                user?.accountSubtype ||
+                                "personal",
+                            avatar:
+                                user?.user_metadata?.avatar_url ||
+                                user?.user_metadata?.picture ||
+                                null,
+                        });
+                    } catch (e) {
+                        console.warn(
+                            "upsertUserProfile after signIn failed:",
+                            e,
+                        );
+                    }
+                }
+
                 saveRememberMe(email, rememberMe);
                 showSuccess("Connexion réussie ! Redirection...");
 
-                const user = result.data;
                 const accountType =
                     user?.user_metadata?.account_type ||
                     user?.account_type ||

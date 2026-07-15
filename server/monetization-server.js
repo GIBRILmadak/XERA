@@ -6,6 +6,9 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const webpush = require("web-push");
 const crypto = require("crypto");
 const { buildBotPostDraft } = require("./bot-post-generator");
+const oauthHandler = require("./oauth-handler");
+const { startOAuthRefreshScheduler } = require("./oauth-token-manager");
+const { startIngestionWorker } = require("./ingestion-queue");
 const {
     buildDistributedMinuteSlots,
     buildIsoFromMinuteOfDay,
@@ -138,6 +141,10 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Routes OAuth
+app.use("/api/auth", oauthHandler);
+
 const allowedOrigins = APP_BASE_URL.split(",")
     .map((v) => v.trim())
     .filter(Boolean);
@@ -5653,6 +5660,62 @@ app.put("/api/app/profiles/:userId", async (req, res) => {
     }
 });
 
+app.get("/api/feed/:userId", async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        // 1. Récupère le feed (recommandations)
+        const result = await fetchRecommendedUsers({
+            requestingUserId: userId,
+        });
+        if (!result.success) {
+            return res
+                .status(result.status || 500)
+                .json({ error: result.error });
+        }
+
+        const recommendedUsers = result.data;
+        if (!recommendedUsers || recommendedUsers.length === 0)
+            return res.json([]);
+
+        // 2. Hydrate avec les interactions réelles (is_followed, is_encouraged)
+        const creatorIds = recommendedUsers.map((u) => u.id);
+
+        const { data: interactions, error: interactError } = await supabase
+            .from("user_interactions")
+            .select("target_user_id, interaction_type")
+            .eq("viewer_id", userId)
+            .in("target_user_id", creatorIds)
+            .in("interaction_type", ["follow", "encourage"]);
+
+        if (interactError) {
+            console.error("Hydration interactions error:", interactError);
+        }
+
+        // 3. Fusionne les statuts
+        const hydratedUsers = recommendedUsers.map((user) => {
+            const userInteractions =
+                interactions?.filter((i) => i.target_user_id === user.id) || [];
+            return {
+                ...user,
+                is_followed: userInteractions.some(
+                    (i) => i.interaction_type === "follow",
+                ),
+                is_encouraged: userInteractions.some(
+                    (i) => i.interaction_type === "encourage",
+                ),
+            };
+        });
+
+        res.json(hydratedUsers);
+    } catch (err) {
+        console.error("Feed fetch error:", err);
+        res.status(500).json({
+            error: "Erreur serveur lors de la récupération du feed",
+        });
+    }
+});
+
 app.get("/api/app/discover/users", async (req, res) => {
     try {
         // Tente de récupérer l'ID de l'utilisateur connecté (facultatif pour discover)
@@ -5875,6 +5938,39 @@ app.post("/api/notifications/badge-reset", async (req, res) => {
     } catch (err) {
         console.error("badge reset error", err);
         return res.status(500).json({ error: err.message || "failed" });
+    }
+});
+
+// Create notification via server (use server key to bypass RLS if necessary)
+app.post("/api/notifications/create", async (req, res) => {
+    try {
+        const { user_id, type, message, link, actor_id, metadata } =
+            req.body || {};
+        if (!user_id || !type || !message) {
+            return res
+                .status(400)
+                .json({ success: false, error: "Missing parameters" });
+        }
+
+        const created = await createNotificationRecord({
+            userId: user_id,
+            type,
+            message,
+            link,
+            actorId: actor_id,
+            metadata,
+        });
+
+        if (!created) {
+            return res
+                .status(500)
+                .json({ success: false, error: "Insert failed" });
+        }
+
+        return res.json({ success: true, data: created });
+    } catch (err) {
+        console.warn("/api/notifications/create error:", err);
+        return res.status(500).json({ success: false, error: String(err) });
     }
 });
 
@@ -6793,6 +6889,9 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                     last_action_at: nowIso,
                 },
             );
+            // Notifications for bot actions are intentionally disabled.
+            // Real user notifications are created client-side when a user triggers an encouragement.
+
             return rpcData;
         } catch (error) {
             console.warn(
@@ -7047,6 +7146,11 @@ if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {
     console.info(
         "Subscription expiry sweep disabled (SUBSCRIPTION_SWEEP_MS=0).",
     );
+}
+
+if (isDirectRun) {
+    startOAuthRefreshScheduler();
+    startIngestionWorker();
 }
 
 // Démarrer le serveur (local/dev uniquement)

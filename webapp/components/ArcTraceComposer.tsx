@@ -9,6 +9,7 @@ import {
     UIManager,
 } from "react-native";
 import styles from "./ArcTraceComposer.styles";
+import { useUserProjects } from "../hooks/useUserProjects";
 
 type ContentType = "arc" | "trace";
 
@@ -20,6 +21,7 @@ export interface ArcTraceComposerProps {
         text: string;
         tags: string[];
     }) => void;
+    onCreateProject?: () => void;
 }
 
 if (
@@ -33,14 +35,20 @@ export const ArcTraceComposer: React.FC<ArcTraceComposerProps> = ({
     initialType = "arc",
     placeholder = "Quoi de neuf ? Partagez une mise à jour...",
     onSubmit,
+    onCreateProject,
 }) => {
     const [type, setType] = useState<ContentType>(initialType);
     const [text, setText] = useState("");
     const [height, setHeight] = useState(80);
     const [tags, setTags] = useState<string[]>([]);
     const [tagDraft, setTagDraft] = useState("");
+    const { hasProjects } = useUserProjects();
 
     const submit = () => {
+        if (!hasProjects) {
+            onCreateProject && onCreateProject();
+            return;
+        }
         onSubmit && onSubmit({ type, text, tags });
         setText("");
         setTags([]);
@@ -143,7 +151,9 @@ export const ArcTraceComposer: React.FC<ArcTraceComposerProps> = ({
                         onPress={submit}
                     >
                         <Text style={styles.submitText}>
-                            {type === "arc" ? "Créer Arc" : "Publier Trace"}
+                            {!hasProjects 
+                                ? "Créer mon premier projet" 
+                                : type === "arc" ? "Créer Arc" : "Publier Trace"}
                         </Text>
                     </TouchableOpacity>
                 </View>

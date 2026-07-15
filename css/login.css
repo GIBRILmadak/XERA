@@ -6,6 +6,7 @@
     margin: 0;
     padding: 0;
     min-height: 100vh;
+    padding-top: 60px; /* Ajout d'un padding pour éviter que le contenu soit caché par la nav */
     overflow: hidden;
 }
 

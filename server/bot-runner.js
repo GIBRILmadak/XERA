@@ -800,6 +800,9 @@ async function encourageAsBot(bot) {
                 last_action_at: nowIso,
             },
         );
+        // Notifications pour encouragements faits par de vrais utilisateurs
+        // sont gérées côté client. Les bots n'envoient pas de notifications.
+
         console.log(`Bot ${bot.user_id} encouraged content ${target.id}`);
         return rpcData;
     } catch (e) {

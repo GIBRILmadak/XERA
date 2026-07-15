@@ -3279,6 +3279,116 @@ function resolveApiBaseUrl() {
     }
 }
 
+async function fetchOAuthConnectionStatus() {
+    const okOnline = await ensureOnlineOrNotify();
+    if (!okOnline) return null;
+    const sessionCheck = await ensureFreshSupabaseSession();
+    if (!sessionCheck.ok) return null;
+
+    try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error || !data?.session) return null;
+        const response = await fetch(`${resolveApiBaseUrl()}/api/auth/status`, {
+            headers: {
+                Authorization: `Bearer ${data.session.access_token}`,
+                "Content-Type": "application/json",
+            },
+        });
+        if (!response.ok) {
+            return null;
+        }
+        return await response.json();
+    } catch (e) {
+        console.warn("fetchOAuthConnectionStatus error:", e);
+        return null;
+    }
+}
+
+async function refreshOAuthConnectionStatuses(container) {
+    if (!container) return;
+    const result = await fetchOAuthConnectionStatus();
+    const statusElements = container.querySelectorAll(
+        ".external-connection-status",
+    );
+    const defaultStatuses = {
+        github: "Statut : non connecté",
+        figma: "Statut : non connecté",
+        notion: "Statut : non connecté",
+        "google-cloud": "Statut : non connecté",
+    };
+    statusElements.forEach((element) => {
+        const tool = element.dataset.connectionStatus;
+        if (!tool) return;
+        const status =
+            result?.connections?.find((item) => item.tool === tool)?.status ||
+            "non connecté";
+        const label =
+            status === "active"
+                ? "Statut : connecté"
+                : status === "pending"
+                  ? "Statut : en attente"
+                  : "Statut : non connecté";
+        element.textContent = label;
+    });
+    if (!result) {
+        statusElements.forEach((element) => {
+            const tool = element.dataset.connectionStatus;
+            element.textContent =
+                defaultStatuses[tool] || "Statut : non connecté";
+        });
+    }
+}
+
+async function startOAuthConnection(tool) {
+    if (!tool) return;
+    const okOnline = await ensureOnlineOrNotify();
+    if (!okOnline) return;
+    const sessionCheck = await ensureFreshSupabaseSession();
+    if (!sessionCheck.ok) return;
+
+    try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error || !data?.session) {
+            alert("Votre session n'est pas valide. Reconnectez-vous.");
+            return;
+        }
+
+        const response = await fetch(
+            `${resolveApiBaseUrl()}/api/auth/${encodeURIComponent(tool)}/start`,
+            {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${data.session.access_token}`,
+                    "Content-Type": "application/json",
+                },
+            },
+        );
+
+        if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            const message =
+                payload?.error || "Impossible de démarrer la connexion OAuth.";
+            alert(message);
+            return;
+        }
+
+        const payload = await response.json();
+        if (payload?.authUrl) {
+            window.location.href = payload.authUrl;
+            return;
+        }
+
+        alert(
+            "Impossible de récupérer l'URL de connexion. Réessayez plus tard.",
+        );
+    } catch (e) {
+        console.error("startOAuthConnection error:", e);
+        alert(
+            "Erreur lors de la connexion. Vérifiez votre connexion puis réessayez.",
+        );
+    }
+}
+
 function setupPwaSwUpdateReload() {
     try {
         if (!("serviceWorker" in navigator)) return;
@@ -4680,6 +4790,73 @@ function convertSupabaseContent(supabaseContent) {
    SYSTÈME DE FOLLOWERS (SUPABASE)
    ======================================== */
 
+async function followUser(followerId, followingId) {
+    if (!window.supabase || !followerId || !followingId) {
+        return { success: false, error: "Invalid user ids" };
+    }
+
+    try {
+        const { error } = await supabase.from("followers").insert({
+            follower_id: followerId,
+            following_id: followingId,
+            created_at: new Date().toISOString(),
+        });
+
+        if (error) {
+            if (
+                error.code === "23505" ||
+                error.details?.toLowerCase().includes("duplicate") ||
+                error.message?.toLowerCase().includes("duplicate")
+            ) {
+                return { success: true };
+            }
+            console.error("followUser error:", error);
+            return {
+                success: false,
+                error: error.message || "Impossible de suivre cet utilisateur",
+            };
+        }
+
+        return { success: true };
+    } catch (e) {
+        console.error("followUser exception:", e);
+        return {
+            success: false,
+            error: e?.message || "Impossible de suivre cet utilisateur",
+        };
+    }
+}
+
+async function unfollowUser(followerId, followingId) {
+    if (!window.supabase || !followerId || !followingId) {
+        return { success: false, error: "Invalid user ids" };
+    }
+
+    try {
+        const { error } = await supabase
+            .from("followers")
+            .delete()
+            .eq("follower_id", followerId)
+            .eq("following_id", followingId);
+
+        if (error) {
+            console.error("unfollowUser error:", error);
+            return {
+                success: false,
+                error: error.message || "Impossible de se désabonner",
+            };
+        }
+
+        return { success: true };
+    } catch (e) {
+        console.error("unfollowUser exception:", e);
+        return {
+            success: false,
+            error: e?.message || "Impossible de se désabonner",
+        };
+    }
+}
+
 async function toggleFollow(viewerId, targetUserId) {
     if (!window.currentUser) {
         ToastManager.info(
@@ -4985,12 +5162,13 @@ async function fetchContentOwner(contentId) {
         return {
             user_id: cached.userId || cached.user_id,
             title: cached.title,
+            arc_id: cached.arcId || cached.arc_id || null,
         };
     }
     try {
         const { data, error } = await supabase
             .from("content")
-            .select("id, user_id, title")
+            .select("id, user_id, title, arc_id")
             .eq("id", contentId)
             .maybeSingle();
         if (error) throw error;
@@ -5014,66 +5192,40 @@ async function notifyEncouragement(contentId) {
     if (ownerId === currentUser?.id) return;
 
     const actorName = getCurrentUserDisplayName();
-    const link = safeProfileLink(ownerId);
+    const contentTitle = owner.title || "ta mise à jour";
+    const message = `${actorName} a encouragé ${contentTitle}`;
+    const link = `index.html?content=${encodeURIComponent(String(contentId))}`;
 
-    // --- PREDATORY INSTINCT: High-Signal Validation (Style Meta) ---
+    // Send a standard encouragement notification to the content owner
     try {
-        // Vérifier si l'acteur a des ARCs actifs (c'est un "Peer")
-        const { data: actorArcs } = await supabase
-            .from("arcs")
-            .select("title, status")
-            .eq("user_id", currentUser.id);
-
-        const isPeer = actorArcs && actorArcs.length > 0;
-
-        // Vérifier la similarité (High Signal)
-        let isHighSignal = false;
-        if (isPeer && owner.arc_id) {
-            const { data: targetArc } = await supabase
-                .from("arcs")
-                .select("title")
-                .eq("id", owner.arc_id)
-                .single();
-
-            if (targetArc) {
-                const targetTitle = targetArc.title.toLowerCase();
-                isHighSignal = actorArcs.some((a) => {
-                    const myTitle = a.title.toLowerCase();
-                    // Similarité simple par mots-clés (ex: "AI", "Startup", "Dev", "Game")
-                    const keywords = [
-                        "ai",
-                        "startup",
-                        "dev",
-                        "game",
-                        "code",
-                        "design",
-                        "build",
-                    ];
-                    return keywords.some(
-                        (k) => targetTitle.includes(k) && myTitle.includes(k),
-                    );
-                });
-            }
-        }
-
-        let type = "encouragement";
-        let message = `${actorName} t'a encouragé sur "${owner.title || "ta mise à jour"}"`;
-
-        if (isHighSignal) {
-            type = "peer_validation_high";
-            message = `🔥 VALIDATION HAUT-SIGNAL : ${actorName} (expert du domaine) a validé ta progression !`;
-        } else if (isPeer) {
-            type = "peer_validation";
-            message = `🤝 VALIDATION PAIR : ${actorName} (builder actif) a validé ta Trace.`;
-        }
-
-        await createNotification(ownerId, type, message, link);
-    } catch (e) {
-        console.warn("High-Signal Validation error:", e);
-        // Fallback
-        const message = `${actorName} t'a encouragé sur "${owner.title || "ta mise à jour"}"`;
         await createNotification(ownerId, "encouragement", message, link);
+    } catch (e) {
+        console.warn("notifyEncouragement createNotification error", e);
     }
+
+    // Optional: background check for high-signal peers (logging only)
+    (async () => {
+        try {
+            const { data: actorArcs } = await supabase
+                .from("arcs")
+                .select("title, status")
+                .eq("user_id", currentUser.id);
+            const isPeer = actorArcs && actorArcs.length > 0;
+            if (isPeer && owner.arc_id) {
+                const { data: targetArc } = await supabase
+                    .from("arcs")
+                    .select("title")
+                    .eq("id", owner.arc_id)
+                    .maybeSingle();
+                // Log or metric hook could be placed here for analytics
+                if (targetArc) {
+                    // no-op for now
+                }
+            }
+        } catch (err) {
+            // ignore
+        }
+    })();
 }
 
 /* ========================================
@@ -14805,6 +14957,49 @@ ${
     `
         : "";
 
+    // CTA classes for project creation buttons: add subtle animated purple glow
+    const createCtaClass =
+        isOwnProfile && projects.length < 2
+            ? "create-project-cta create-highlight"
+            : "create-project-cta";
+
+    // Small onboarding banner for new users with zero projects
+    const onboardingStyles = `
+<style>
+/* Subtle animated purple glow inspired by Google's micro-interactions */
+.create-project-cta{position:relative}
+.create-highlight{outline: none;}
+.create-highlight::after{
+  content:'';
+  position:absolute;
+  top:-6px; right:-6px; bottom:-6px; left:-6px;
+  border-radius:12px;
+  pointer-events:none;
+  background: linear-gradient(90deg, rgba(148,0,211,0.0), rgba(148,0,211,0.08), rgba(148,0,211,0.0));
+  box-shadow: 0 6px 30px rgba(124,58,237,0.12);
+  animation: subtleSweep 2200ms ease-in-out infinite;
+  opacity:0.95;
+}
+@keyframes subtleSweep{
+  0%{transform:translateX(-12%); opacity:0}
+  20%{opacity:0.28}
+  50%{transform:translateX(12%); opacity:0.6}
+  80%{opacity:0.28}
+  100%{transform:translateX(36%); opacity:0}
+}
+
+/* Banner styling */
+.project-onboarding-banner{display:flex;align-items:center;justify-content:space-between;gap:0.8rem;padding:0.9rem 1rem;border-radius:12px;background:linear-gradient(180deg, rgba(124,58,237,0.06), rgba(124,58,237,0.02));border:1px solid rgba(124,58,237,0.12);}
+.project-onboarding-copy{max-width:68%;}
+.project-onboarding-cta{display:inline-flex;align-items:center;gap:0.5rem;padding:0.55rem 0.9rem;border-radius:999px;background:linear-gradient(90deg,#7c3aed,#6d28d9);color:white;border:none}
+</style>
+`;
+
+    const projectOnboardingBannerHtml =
+        isOwnProfile && projects.length === 0
+            ? `\n${onboardingStyles}<div class="project-onboarding-banner" role="region" aria-label="Créer votre premier projet">\n    <div class="project-onboarding-copy">\n        <strong>Commencez par créer votre premier projet</strong>\n        <div style="color:var(--text-secondary); margin-top:4px;">Transformez vos idées en objectifs publiables — créez un projet pour publier votre première mise à jour.</div>\n    </div>\n    <div style="display:flex;align-items:center;gap:0.6rem;">\n        <button class="project-onboarding-cta ${createCtaClass}" onclick="window.openCreateModal && window.openCreateModal()">\n            <svg width=16 height=16 viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" style=\"margin-right:6px;\"><path d=\"M12 5v14M5 12h14\" stroke=\"currentColor\"></path></svg>\n            Créer un projet\n        </button>\n    </div>\n</div>\n`
+            : "";
+
     const banStateLabel = isUserBanned(user)
         ? `<span style="color:#ef4444; font-weight:600;">Banni (reste ${getBanRemainingLabel(user) || "en cours"})</span>`
         : `<span style="color: var(--text-secondary);">Statut : actif</span>`;
@@ -14879,7 +15074,7 @@ ${
                     <h4 style="margin:0;">Progression hebdomadaire</h4>
                     <p style="margin:0; color: var(--text-secondary); font-size:0.9rem;">Survolez pour voir les mises à jour par jour.</p>
                 </div>
-                <button class="btn-secondary" onclick="window.openCreateModal && window.openCreateModal()" style="padding:0.45rem 0.8rem; border-radius:10px;">Créer un projet</button>
+                <button class="btn-secondary ${createCtaClass}" onclick="window.openCreateModal && window.openCreateModal()" style="padding:0.45rem 0.8rem; border-radius:10px;">Créer un projet</button>
             </div>
             <div style="margin-top:1rem; min-height:220px;">
                 <canvas id="weekly-progress-chart-${userId}" aria-label="Progression hebdomadaire" role="img"></canvas>
@@ -14900,6 +15095,40 @@ ${
     const profileBioHtml = escapeHtml(
         user.bio || "Progression, preuves et projets publics.",
     ).replace(/\n/g, "<br>");
+    const externalConnectionsHtml = isOwnProfile
+        ? `
+<section class="external-connections-hero" style="margin: 1.25rem 0 1.5rem; background: linear-gradient(135deg, rgba(0,255,136,0.12), rgba(96,165,250,0.12)); border: 1px solid var(--border-color); border-radius: 20px; padding: 1.25rem 1.3rem; box-shadow: 0 18px 45px rgba(0,0,0,0.16);">
+    <div style="display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:1rem;">
+        <div style="max-width: 620px;">
+            <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.5rem; color: var(--primary-color); font-weight:700; font-size:0.85rem; letter-spacing:0.14em; text-transform:uppercase;">
+                <img src="icons/tech.svg" alt="" style="width:18px;height:18px;">
+                Connectez vos outils de travail
+            </div>
+            <h3 style="margin:0 0 0.45rem; font-size:1.1rem;">Votre flux de documentation se met à jour automatiquement</h3>
+            <p style="margin:0; color: var(--text-secondary); line-height:1.55;">Reliez GitHub, Figma, Notion et Google Cloud pour transformer votre activité réelle en mises à jour XERA sans effort.</p>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center; justify-content:flex-end;">
+            <button type="button" class="btn btn-secondary" onclick="startOAuthConnection('github')" style="padding:0.6rem 0.9rem; border-radius:999px; display:flex; align-items:center; gap:0.45rem;">
+                <img src="icons/github.svg" alt="" style="width:16px;height:16px;">
+                GitHub
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="startOAuthConnection('figma')" style="padding:0.6rem 0.9rem; border-radius:999px; display:flex; align-items:center; gap:0.45rem;">
+                <img src="icons/figma.svg" alt="" style="width:16px;height:16px;">
+                Figma
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="startOAuthConnection('notion')" style="padding:0.6rem 0.9rem; border-radius:999px; display:flex; align-items:center; gap:0.45rem;">
+                <img src="icons/notion.svg" alt="" style="width:16px;height:16px;">
+                Notion
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="startOAuthConnection('google-cloud')" style="padding:0.6rem 0.9rem; border-radius:999px; display:flex; align-items:center; gap:0.45rem;">
+                <img src="icons/google-cloud.svg" alt="" style="width:16px;height:16px;">
+                Google Cloud
+            </button>
+        </div>
+    </div>
+</section>
+`
+        : "";
     const influenceSectionHtml = `
 <section class="influence-section">
             <h3 class="section-title">Influence & Reach</h3>
@@ -14935,6 +15164,7 @@ ${
     const publicActivityHtml = showPublicActivity
         ? `
 ${trajectoryGuardHtml}
+${externalConnectionsHtml}
 ${projectProgressBoardHtml}
 ${arcsHtml}
 ${collabRequestsHtml}
@@ -14993,7 +15223,7 @@ ${showPublicStats ? influenceSectionHtml : ""}
                             <button class="btn-add" onclick="openCreateMenu('${userId}')" title="Ajouter une mise à jour">
                                 <img src="icons/plus.svg" alt="Ajouter" style="width:18px;height:18px">
                             </button>
-                            <button class="btn-add" onclick="window.openCreateModal ? window.openCreateModal() : console.error('openCreateModal function not found')" title="Démarrer un projet" style="background: var(--text-primary); color: var(--bg-color);">
+                            <button class="btn-add ${createCtaClass}" onclick="window.openCreateModal ? window.openCreateModal() : console.error('openCreateModal function not found')" title="Démarrer un projet" style="background: var(--text-primary); color: var(--bg-color);">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
                             </button>
                             ${shareButtonHtml}
@@ -15004,6 +15234,7 @@ ${showPublicStats ? influenceSectionHtml : ""}
                 </div>
             </div>
 </div>
+${projectOnboardingBannerHtml}
 ${proCertificationCtaHtml}
 ${publicActivityHtml}
 
@@ -17182,6 +17413,12 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
     }
 
     initializeProfileCustomizationControls(container);
+    refreshOAuthConnectionStatuses(container).catch((error) => {
+        console.warn(
+            "Impossible de charger les statuts de connexion OAuth:",
+            error,
+        );
+    });
 
     container.dataset.accountRoleTouched = "0";
     const accountRoleButtons = container.querySelectorAll(".account-role-btn");
@@ -17416,10 +17653,10 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
                 bio: collectedBio,
                 avatar: collectedAvatar,
                 banner: collectedBanner,
-                socialLinks: newSocialLinks,
+                social_links: newSocialLinks,
                 account_type: accountType || "personal",
                 account_subtype: subtypeToSave,
-                profilePreferences,
+                profile_preferences: profilePreferences,
             };
 
             // Debug logging
@@ -20168,6 +20405,8 @@ window.clearPendingCreatePostAfterArc = clearPendingCreatePostAfterArc;
 window.toggleTimelineExpand = toggleTimelineExpand;
 window.openImmersive = openImmersive;
 window.closeImmersive = closeImmersive;
+window.startOAuthConnection = startOAuthConnection;
+window.refreshOAuthConnectionStatuses = refreshOAuthConnectionStatuses;
 window.navigateToUserProfile = navigateToUserProfile;
 window.renderUsernameWithBadge = renderUsernameWithBadge;
 window.renderAmbassadorBadgeById = renderAmbassadorBadgeById;

@@ -86,6 +86,8 @@ class XeraTutorial {
         this.tooltip = null;
         this.initialized = false;
         this.steps = [];
+        this._onResize = null;
+        this._positionTimer = null;
     }
 
     async init() {
@@ -153,7 +155,8 @@ class XeraTutorial {
         this.tooltip.className = "tutorial-tooltip-premium tutorial-v2";
         document.body.appendChild(this.tooltip);
 
-        window.addEventListener("resize", () => this.refreshPosition());
+        this._onResize = () => this.refreshPosition();
+        window.addEventListener("resize", this._onResize);
     }
 
     next() {
@@ -180,9 +183,20 @@ class XeraTutorial {
             targetEl.classList.add("tutorial-highlight-premium");
             targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
 
-            setTimeout(() => {
-                const rect = targetEl.getBoundingClientRect();
-                this.positionTooltip(rect, step.position);
+            // clear any pending position timer
+            if (this._positionTimer) {
+                clearTimeout(this._positionTimer);
+                this._positionTimer = null;
+            }
+            this._positionTimer = setTimeout(() => {
+                // protect against the tooltip being removed while waiting
+                if (!this.tooltip) return;
+                try {
+                    const rect = targetEl.getBoundingClientRect();
+                    this.positionTooltip(rect, step.position);
+                } catch (err) {
+                    console.warn("tutorial positionTooltip error:", err);
+                }
             }, 300);
         } else {
             // Show in center if no element
@@ -277,7 +291,15 @@ class XeraTutorial {
         document
             .querySelectorAll(".tutorial-highlight-premium")
             .forEach((el) => el.classList.remove("tutorial-highlight-premium"));
-        window.removeEventListener("resize", () => this.refreshPosition());
+        // clear pending timers and remove resize listener correctly
+        if (this._positionTimer) {
+            clearTimeout(this._positionTimer);
+            this._positionTimer = null;
+        }
+        if (this._onResize) {
+            window.removeEventListener("resize", this._onResize);
+            this._onResize = null;
+        }
     }
 }
 

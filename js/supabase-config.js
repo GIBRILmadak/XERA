@@ -9,16 +9,26 @@ const SUPABASE_ANON_KEY = "sb_publishable_o7_j9WXXd96YKXa-fmfs1Q_OEwNTh1M";
 if (!window.supabaseClient) {
     try {
         const rememberMeRaw = localStorage.getItem("rize-remember-me");
-        const rememberMe = rememberMeRaw === null ? true : rememberMeRaw === "true";
+        const rememberMe =
+            rememberMeRaw === null ? true : rememberMeRaw === "true";
 
-        if (window.supabase && typeof window.supabase.createClient === 'function') {
-            window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-                auth: {
-                    storage: rememberMe ? window.localStorage : window.sessionStorage,
-                    persistSession: true,
-                    autoRefreshToken: true,
+        if (
+            window.supabase &&
+            typeof window.supabase.createClient === "function"
+        ) {
+            window.supabaseClient = window.supabase.createClient(
+                SUPABASE_URL,
+                SUPABASE_ANON_KEY,
+                {
+                    auth: {
+                        storage: rememberMe
+                            ? window.localStorage
+                            : window.sessionStorage,
+                        persistSession: true,
+                        autoRefreshToken: true,
+                    },
                 },
-            });
+            );
         }
     } catch (error) {
         console.error("Supabase init error:", error);
@@ -27,6 +37,33 @@ if (!window.supabaseClient) {
 
 var supabase = window.supabaseClient;
 
+function buildAuthProfileData(user) {
+    if (!user) return {};
+    const emailPrefix =
+        String(user?.email || "").split("@")[0] || "Utilisateur";
+    const name =
+        user?.user_metadata?.full_name ||
+        user?.user_metadata?.display_name ||
+        user?.user_metadata?.username ||
+        emailPrefix;
+
+    return {
+        name,
+        account_type:
+            user?.user_metadata?.account_type ||
+            user?.account_type ||
+            "personal",
+        account_subtype:
+            user?.user_metadata?.account_subtype ||
+            user?.account_subtype ||
+            "personal",
+        avatar:
+            user?.user_metadata?.avatar_url ||
+            user?.user_metadata?.picture ||
+            null,
+    };
+}
+
 /**
  * AUTHENTIFICATION
  */
@@ -34,12 +71,42 @@ var supabase = window.supabaseClient;
 async function checkAuth() {
     if (!supabase) return null;
     try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const {
+            data: { session },
+            error,
+        } = await supabase.auth.getSession();
         if (error) throw error;
         if (session) {
-            window.currentUser = session.user;
-            window.currentUserId = session.user.id;
-            return session.user;
+            const authUser = session.user;
+            // Try to load canonical profile row from `users` table first
+            try {
+                if (typeof getUserProfile === "function") {
+                    const profileRes = await getUserProfile(authUser.id);
+                    if (profileRes && profileRes.success && profileRes.data) {
+                        window.currentUser = profileRes.data;
+                        window.currentUserId = profileRes.data.id;
+                        return window.currentUser;
+                    }
+                }
+            } catch (fetchErr) {
+                console.warn("checkAuth: getUserProfile failed:", fetchErr);
+            }
+
+            // Fallback to auth session user and ensure a minimal users row exists
+            window.currentUser = authUser;
+            window.currentUserId = authUser.id;
+            try {
+                if (typeof upsertUserProfile === "function") {
+                    const profileData = buildAuthProfileData(authUser);
+                    await upsertUserProfile(authUser.id, profileData);
+                }
+            } catch (syncError) {
+                console.warn(
+                    "checkAuth: could not sync auth user to users table:",
+                    syncError,
+                );
+            }
+            return window.currentUser;
         }
     } catch (e) {
         console.error("checkAuth error:", e);
@@ -51,11 +118,19 @@ async function checkAuth() {
 
 async function signIn(email, password) {
     try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
         if (error) throw error;
         return { success: true, data: data.user };
     } catch (error) {
-        return { success: false, error: error.message, code: error.code, status: error.status };
+        return {
+            success: false,
+            error: error.message,
+            code: error.code,
+            status: error.status,
+        };
     }
 }
 
@@ -67,14 +142,27 @@ async function signUp(email, password, username, metadata = {}) {
             options: {
                 data: {
                     username: username,
-                    ...metadata
-                }
-            }
+                    ...metadata,
+                },
+            },
         });
         if (error) throw error;
         return { success: true, data: data.user };
     } catch (error) {
-        return { success: false, error: error.message, code: error.code };
+        const errorMessage =
+            (error &&
+                typeof error.message === "string" &&
+                error.message.trim()) ||
+            (error && typeof error === "string" && error.trim()) ||
+            JSON.stringify(error) ||
+            "Erreur lors de l'inscription.";
+
+        return {
+            success: false,
+            error: errorMessage,
+            code: error?.code || "",
+            status: error?.status || null,
+        };
     }
 }
 
@@ -95,13 +183,19 @@ async function signOut(clearRememberMe = false) {
 
 function updateSessionStorage(rememberMe) {
     if (!window.supabase) return null;
-    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: {
-            storage: rememberMe ? window.localStorage : window.sessionStorage,
-            persistSession: true,
-            autoRefreshToken: true,
+    window.supabaseClient = window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY,
+        {
+            auth: {
+                storage: rememberMe
+                    ? window.localStorage
+                    : window.sessionStorage,
+                persistSession: true,
+                autoRefreshToken: true,
+            },
         },
-    });
+    );
     supabase = window.supabaseClient;
     window.supabase = supabase;
     return supabase;
@@ -113,11 +207,37 @@ function updateSessionStorage(rememberMe) {
 
 async function upsertUserProfile(userId, profileData) {
     try {
-        const { data, error } = await supabase.from("users").upsert({
-            id: userId,
-            ...profileData,
-            updated_at: new Date().toISOString()
-        }).select().single();
+        const normalizedProfileData = { ...profileData };
+        if (
+            Object.prototype.hasOwnProperty.call(
+                normalizedProfileData,
+                "profilePreferences",
+            )
+        ) {
+            normalizedProfileData.profile_preferences =
+                normalizedProfileData.profilePreferences;
+            delete normalizedProfileData.profilePreferences;
+        }
+        if (
+            Object.prototype.hasOwnProperty.call(
+                normalizedProfileData,
+                "socialLinks",
+            )
+        ) {
+            normalizedProfileData.social_links =
+                normalizedProfileData.socialLinks;
+            delete normalizedProfileData.socialLinks;
+        }
+
+        const { data, error } = await supabase
+            .from("users")
+            .upsert({
+                id: userId,
+                ...normalizedProfileData,
+                updated_at: new Date().toISOString(),
+            })
+            .select()
+            .single();
         if (error) throw error;
         return { success: true, data };
     } catch (error) {
@@ -127,7 +247,11 @@ async function upsertUserProfile(userId, profileData) {
 
 async function getUserProfile(userId) {
     try {
-        const { data, error } = await supabase.from("users").select("*").eq("id", userId).single();
+        const { data, error } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", userId)
+            .single();
         if (error) throw error;
         return { success: true, data };
     } catch (error) {
@@ -137,7 +261,10 @@ async function getUserProfile(userId) {
 
 async function getAllUsers() {
     try {
-        const { data, error } = await supabase.from("users").select("*").order("created_at", { ascending: false });
+        const { data, error } = await supabase
+            .from("users")
+            .select("*")
+            .order("created_at", { ascending: false });
         if (error) throw error;
         return { success: true, data };
     } catch (error) {
@@ -151,7 +278,63 @@ async function getAllUsers() {
 
 async function createContent(contentData) {
     try {
-        const { data, error } = await supabase.from("content").insert(contentData).select().single();
+        const payload = {
+            ...contentData,
+            user_id: contentData.user_id ?? contentData.userId ?? null,
+            day_number: contentData.day_number ?? contentData.dayNumber ?? null,
+            media_url: contentData.media_url ?? contentData.mediaUrl ?? null,
+            media_urls: contentData.media_urls ?? contentData.mediaUrls ?? null,
+            arc_id: contentData.arc_id ?? contentData.arcId ?? null,
+            page_id: contentData.page_id ?? contentData.pageId ?? null,
+        };
+        delete payload.userId;
+        delete payload.dayNumber;
+        delete payload.mediaUrl;
+        delete payload.mediaUrls;
+        delete payload.arcId;
+        delete payload.pageId;
+
+        const { data, error } = await supabase
+            .from("content")
+            .insert(payload)
+            .select()
+            .single();
+        if (error) throw error;
+        return { success: true, data };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+async function updateContent(contentId, contentData) {
+    if (!contentId) {
+        return { success: false, error: "Missing content id for update." };
+    }
+
+    try {
+        const payload = {
+            ...contentData,
+            updated_at: new Date().toISOString(),
+            user_id: contentData.user_id ?? contentData.userId ?? null,
+            day_number: contentData.day_number ?? contentData.dayNumber ?? null,
+            media_url: contentData.media_url ?? contentData.mediaUrl ?? null,
+            media_urls: contentData.media_urls ?? contentData.mediaUrls ?? null,
+            arc_id: contentData.arc_id ?? contentData.arcId ?? null,
+            page_id: contentData.page_id ?? contentData.pageId ?? null,
+        };
+        delete payload.userId;
+        delete payload.dayNumber;
+        delete payload.mediaUrl;
+        delete payload.mediaUrls;
+        delete payload.arcId;
+        delete payload.pageId;
+
+        const { data, error } = await supabase
+            .from("content")
+            .update(payload)
+            .eq("id", contentId)
+            .select()
+            .single();
         if (error) throw error;
         return { success: true, data };
     } catch (error) {
@@ -165,7 +348,10 @@ async function createContent(contentData) {
 
 async function getFollowerCount(userId) {
     try {
-        const { count, error } = await supabase.from("followers").select("*", { count: "exact", head: true }).eq("following_id", userId);
+        const { count, error } = await supabase
+            .from("followers")
+            .select("*", { count: "exact", head: true })
+            .eq("following_id", userId);
         if (error) throw error;
         return count || 0;
     } catch (error) {
@@ -175,7 +361,10 @@ async function getFollowerCount(userId) {
 
 async function getFollowingCount(userId) {
     try {
-        const { count, error } = await supabase.from("followers").select("*", { count: "exact", head: true }).eq("follower_id", userId);
+        const { count, error } = await supabase
+            .from("followers")
+            .select("*", { count: "exact", head: true })
+            .eq("follower_id", userId);
         if (error) throw error;
         return count || 0;
     } catch (error) {
@@ -190,7 +379,10 @@ async function getUserEngagementTotals(userId) {
             .select("views")
             .eq("user_id", userId);
         if (error) throw error;
-        const totalViews = (data || []).reduce((sum, item) => sum + (Number(item.views) || 0), 0);
+        const totalViews = (data || []).reduce(
+            (sum, item) => sum + (Number(item.views) || 0),
+            0,
+        );
         return { totalViews };
     } catch (error) {
         return { totalViews: 0 };
@@ -210,6 +402,39 @@ async function getUserProjects(userId) {
     }
 }
 
+// Récupérer le contenu d'un utilisateur depuis la base (utilisé par app-supabase.js)
+async function getUserContent(userId) {
+    try {
+        const columns = `
+            *,
+            arcs (
+                id,
+                title,
+                status,
+                user_id,
+                stage_level,
+                opportunity_intents
+            ),
+            projects (
+                id,
+                name
+            )
+        `;
+
+        const { data, error } = await supabase
+            .from("content")
+            .select(columns)
+            .eq("user_id", userId)
+            .order("day_number", { ascending: false });
+
+        if (error) throw error;
+        return { success: true, data: data || [] };
+    } catch (error) {
+        console.warn("getUserContent error:", error);
+        return { success: false, error: error?.message || String(error) };
+    }
+}
+
 /**
  * EXPORTS GLOBAUX
  */
@@ -223,6 +448,7 @@ window.upsertUserProfile = upsertUserProfile;
 window.getUserProfile = getUserProfile;
 window.getAllUsers = getAllUsers;
 window.createContent = createContent;
+window.updateContent = updateContent;
 window.getFollowerCount = getFollowerCount;
 window.getFollowingCount = getFollowingCount;
 window.getUserEngagementTotals = getUserEngagementTotals;

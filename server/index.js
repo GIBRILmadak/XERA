@@ -363,6 +363,46 @@ app.post("/api/push/subscribe", async (req, res) => {
     }
 });
 
+// Endpoint pour envoyer un push de test à l'utilisateur authentifié
+app.post("/api/push/test", attachAuthenticatedUser, async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) return res.status(401).json({ error: "Auth required" });
+
+        const { data: subs, error } = await supabase
+            .from("push_subscriptions")
+            .select("endpoint, keys")
+            .eq("user_id", userId);
+
+        if (error) throw error;
+        if (!subs || subs.length === 0)
+            return res.json({ ok: false, message: "No subscriptions" });
+
+        const payload = {
+            title: "Test XERA • Notification",
+            body: "Ceci est un test de notification Push. Si vous le voyez, les push fonctionnent.",
+            icon: `${PRIMARY_ORIGIN.replace(/\/$/, "")}/icons/logo.png`,
+            link: `${PRIMARY_ORIGIN.replace(/\/$/, "")}/index.html`,
+            tag: `xera-test-${Date.now()}`,
+            renotify: false,
+            silent: false,
+        };
+
+        const results = [];
+        for (const sub of subs) {
+            const r = await sendPushToSubscription(sub, payload);
+            results.push(r);
+        }
+
+        return res.json({ ok: true, results });
+    } catch (err) {
+        console.error("push test error", err);
+        return res
+            .status(500)
+            .json({ ok: false, error: err?.message || String(err) });
+    }
+});
+
 // Relais temps-réel : notifications + messages directs
 async function startPushRelay() {
     if (!supportsPush()) return;
@@ -736,7 +776,10 @@ function getUserAccessState(profile, authUser) {
         normalizedTier === "pro" &&
         ["active", "trialing", "premium"].includes(normalizedStatus);
     const isPro = Boolean(
-        profile?.is_pro || isProByRole || isProByTier || normalizedTier === "pro",
+        profile?.is_pro ||
+        isProByRole ||
+        isProByTier ||
+        normalizedTier === "pro",
     );
 
     return {

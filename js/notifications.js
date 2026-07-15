@@ -262,27 +262,45 @@ function handleNewNotification(notification) {
 
 // Afficher un toast de notification
 function showNotificationToast(notification) {
+    if (!notification) return;
+
+    const title = getNotificationTitle(notification);
+    const message = notification.message || "";
+    const type = [
+        "encouragement",
+        "peer_validation",
+        "peer_validation_high",
+        "support",
+        "follow",
+    ].includes(notification.type)
+        ? "success"
+        : "info";
+
+    if (window.ToastManager && typeof window.ToastManager.show === "function") {
+        window.ToastManager.show(title, message, type, 6000);
+        return;
+    }
+
+    // Fallback legacy toast if ToastManager is unavailable
     const toast = document.createElement("div");
-    toast.className = "toast show"; // Utilisation de la classe .toast pour le design
+    toast.className = "toast show";
     toast.innerHTML = `
         <div class="toast-icon">${getNotificationIcon(notification.type)}</div>
         <div class="toast-content">
-            <div class="toast-title">${getNotificationTitle(notification)}</div>
-            <div class="toast-message">${notification.message}</div>
+            <div class="toast-title">${title}</div>
+            <div class="toast-message">${message}</div>
         </div>
         <button class="toast-close"><i class="fas fa-times"></i></button>
     `;
 
     document.body.appendChild(toast);
 
-    // Retirer après 5 secondes
     setTimeout(() => {
         toast.classList.remove("show");
         setTimeout(() => toast.remove(), 300);
     }, 5000);
 
-    // Cliquer pour fermer
-    toast.querySelector('.toast-close').addEventListener("click", (e) => {
+    toast.querySelector(".toast-close").addEventListener("click", (e) => {
         e.stopPropagation();
         toast.classList.remove("show");
         setTimeout(() => toast.remove(), 300);
@@ -930,6 +948,7 @@ function playNotificationSound(type = "default") {
 
 // Créer une notification (fonction utilitaire)
 async function createNotification(userId, type, message, link = null) {
+    // First attempt: client-side insert (fast path)
     try {
         const { data, error } = await supabase
             .from("notifications")
@@ -943,12 +962,37 @@ async function createNotification(userId, type, message, link = null) {
             .select()
             .single();
 
-        if (error) throw error;
+        if (!error) return { success: true, data };
 
-        return { success: true, data: data };
-    } catch (error) {
-        console.error("Erreur création notification:", error);
-        return { success: false, error: error.message };
+        // If error looks like permission / RLS issue, fall through to server fallback
+        console.warn(
+            "Client notification insert error, falling back to server:",
+            error.message || error,
+        );
+    } catch (err) {
+        console.warn(
+            "Client notification insert failed, will fallback to server:",
+            err?.message || err,
+        );
+    }
+
+    // Fallback: ask server to create the notification using server privileges
+    try {
+        const res = await fetch("/api/notifications/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: userId, type, message, link }),
+        });
+        const json = await res.json();
+        if (res.ok && json?.success) return { success: true, data: json.data };
+        console.error("Server fallback notification failed:", json);
+        return {
+            success: false,
+            error: json?.error || "Server fallback failed",
+        };
+    } catch (err) {
+        console.error("Erreur création notification (server fallback):", err);
+        return { success: false, error: err?.message || String(err) };
     }
 }
 
@@ -1088,6 +1132,54 @@ function startNotificationsPollingFallback() {
         });
     }, 12000);
 }
+
+// Demande d'envoi d'un push test depuis le serveur (pour debug/utilisateur)
+async function requestTestPush() {
+    try {
+        const { data: { session } = {} } = await supabase.auth.getSession();
+        const token = session?.access_token || null;
+        if (!token) {
+            ToastManager?.error(
+                "Test push",
+                "Connectez-vous pour tester les notifications.",
+            );
+            return;
+        }
+
+        const resp = await fetch("/api/push/test", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            credentials: "include",
+        });
+
+        if (!resp.ok) {
+            const txt = await resp.text();
+            ToastManager?.error("Test push", `Échec: ${txt}`);
+            return;
+        }
+
+        const json = await resp.json();
+        if (json && json.ok) {
+            ToastManager?.success(
+                "Test push",
+                "Demande envoyée — vérifiez votre appareil.",
+            );
+        } else {
+            ToastManager?.info(
+                "Test push",
+                json.message || "Aucune subscription trouvée.",
+            );
+        }
+    } catch (e) {
+        console.warn("requestTestPush error", e);
+        ToastManager?.error("Test push", "Erreur lors de la demande de test.");
+    }
+}
+
+window.requestTestPush = requestTestPush;
 
 // ---------------------------
 // Helpers de normalisation
