@@ -29,10 +29,10 @@ router.post("/:tool/start", async (req, res) => {
         data: { user },
     } = await supabase.auth.getUser(authHeader?.split(" ")[1]);
 
-    if (!user || user.user_metadata.account_type !== "PERSONAL") {
+    if (!user) {
         return res
-            .status(403)
-            .json({ error: "Accès restreint aux comptes personnels" });
+            .status(401)
+            .json({ error: "Utilisateur non identifié" });
     }
 
     const state = crypto.randomBytes(16).toString("hex");
