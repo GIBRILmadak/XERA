@@ -1,10 +1,9 @@
 async function fetchData(accessToken) {
-    if (!accessToken) {
-        return [];
-    }
+    if (!accessToken) return [];
 
+    // Récupérer les projets récents
     const response = await fetch(
-        "https://cloudresourcemanager.googleapis.com/v1/projects",
+        "https://cloudresourcemanager.googleapis.com/v1/projects?filter=lifecycleState:ACTIVE",
         {
             headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -13,38 +12,33 @@ async function fetchData(accessToken) {
         },
     );
 
-    if (!response.ok) {
-        console.warn(
-            "[Google Cloud Adapter] API response error",
-            response.status,
-        );
-        return [];
-    }
+    if (!response.ok) return [];
 
     const data = await response.json();
-    return Array.isArray(data.projects) ? data.projects : [];
+    return Array.isArray(data.projects) ? data.projects.slice(0, 3) : [];
 }
 
 function normalize(project, userId) {
+    // Génération d'une URL d'image dynamique et unique basée sur l'ID du projet
+    // Utilisation d'un service d'avatars/formes aléatoires pour diversifier le feed
+    const seed = project.projectId;
+    const dynamicMediaUrl = `https://api.dicebear.com/9.x/shapes/svg?seed=${encodeURIComponent(seed)}`;
+
     return {
-        id: project.projectId || `google-cloud-${Date.now()}`,
+        id: project.projectId,
         userId,
         source: "google-cloud",
-        type: "document_update",
+        type: "project_update",
         timestamp: project.createTime || new Date().toISOString(),
-        title: project.projectId || project.name || "Projet Google Cloud",
-        description: project.name
-            ? `Projet GCP : ${project.name}`
-            : "Projet Google Cloud détecté",
+        title: `GCP Project: ${project.name || project.projectId}`,
+        description: `Infrastructure : Projet Google Cloud ${project.projectId} est actif.`,
         content: {
             projectId: project.projectId,
-            projectNumber: project.projectNumber,
-            lifecycleState: project.lifecycleState,
         },
-        previewUrl: null,
-        mediaUrl: null,
+        // Utilisation du visuel dynamique
+        mediaUrl: dynamicMediaUrl,
         metadata: {
-            skills: ["Google Cloud"],
+            skills: ["Google Cloud", "DevOps", "Infrastructure"],
             relevanceScore: 1,
             isPublic: false,
         },

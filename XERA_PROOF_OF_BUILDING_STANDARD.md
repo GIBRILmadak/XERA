@@ -513,4 +513,3 @@ Anyone implementing XERA achieves:
 **Impact:** +40-85% business improvement
 
 🚀 **Let's change the industry standard!**
-top

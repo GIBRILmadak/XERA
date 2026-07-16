@@ -1,5 +1,6 @@
 async function fetchData(accessToken) {
-    const response = await fetch("https://api.figma.com/v1/files?limit=10", {
+    // Récupérer les fichiers récents
+    const response = await fetch("https://api.figma.com/v1/me/files", {
         headers: {
             Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
@@ -9,24 +10,23 @@ async function fetchData(accessToken) {
     return Array.isArray(data.files) ? data.files : [];
 }
 
-function normalize(frame, userId) {
+function normalize(file, userId) {
     return {
-        id: frame.key || `figma-${frame.id}-${Date.now()}`,
+        id: file.key,
         userId,
         source: "figma",
         type: "design_update",
-        timestamp: frame.last_modified || new Date().toISOString(),
-        title: frame.name || "Mise à jour Figma",
-        description: frame.description || `Fichier Figma ${frame.name}`,
+        timestamp: file.updated_at || new Date().toISOString(),
+        title: `Design Update: ${file.name}`,
+        description: `Mise à jour du fichier Figma : ${file.name}.`,
         content: {
-            fileId: frame.key,
-            url: frame.url,
-            thumbnail: frame.thumbnail_url,
+            fileId: file.key,
+            url: `https://www.figma.com/file/${file.key}`,
         },
-        previewUrl: frame.thumbnail_url || null,
-        mediaUrl: frame.thumbnail_url || null,
+        // Figma fournit bien des thumbnails
+        mediaUrl: file.thumbnail_url || null,
         metadata: {
-            skills: ["UI/UX"],
+            skills: ["Figma", "UI/UX"],
             relevanceScore: 1,
             isPublic: false,
         },

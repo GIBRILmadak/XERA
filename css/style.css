@@ -587,6 +587,27 @@ textarea {
     border-top-color: currentColor;
 }
 
+/* --- CODE SNIPPET STYLING --- */
+.card-code-wrap {
+    width: 100%;
+    overflow: hidden;
+    border-radius: 12px;
+    background: #1e1e1e;
+    padding: 1rem;
+    order: -1;
+}
+
+.card-code {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.75rem;
+    color: #d4d4d4;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 150px;
+    overflow: hidden;
+    line-height: 1.4;
+}
+
 /* --- ANNONCES OFFICIELLES --- */
 .announcements {
     display: none;

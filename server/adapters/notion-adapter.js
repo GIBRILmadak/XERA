@@ -1,10 +1,9 @@
 const NOTION_VERSION = "2022-06-28";
 
 async function fetchData(accessToken) {
-    if (!accessToken) {
-        return [];
-    }
+    if (!accessToken) return [];
 
+    // Récupérer les pages récemment éditées
     const response = await fetch("https://api.notion.com/v1/search", {
         method: "POST",
         headers: {
@@ -13,7 +12,7 @@ async function fetchData(accessToken) {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            page_size: 20,
+            page_size: 5,
             sort: {
                 direction: "descending",
                 timestamp: "last_edited_time",
@@ -21,44 +20,33 @@ async function fetchData(accessToken) {
         }),
     });
 
-    if (!response.ok) {
-        console.warn("[Notion Adapter] API response error", response.status);
-        return [];
-    }
+    if (!response.ok) return [];
 
     const data = await response.json();
     return Array.isArray(data.results) ? data.results : [];
 }
 
 function normalize(page, userId, tool = "notion") {
-    const pageId = page.id || `${tool}-${Date.now()}`;
-    const titleProperty = page.properties?.title;
-    const title = Array.isArray(titleProperty?.title)
-        ? titleProperty.title.map((t) => t.plain_text).join("")
-        : page.properties?.name?.title?.[0]?.plain_text || "Page Notion";
+    // Extraction plus robuste du titre
+    const title = page.properties?.title?.title?.[0]?.plain_text || 
+                  page.properties?.Name?.title?.[0]?.plain_text || 
+                  "Note Notion";
 
     return {
-        id: pageId,
+        id: page.id,
         userId,
         source: "notion",
         type: "document_update",
-        timestamp:
-            page.last_edited_time ||
-            page.created_time ||
-            new Date().toISOString(),
-        title: title || "Mise à jour Notion",
-        description: page.url
-            ? `Page Notion : ${page.url}`
-            : "Contenu Notion mis à jour",
+        timestamp: page.last_edited_time,
+        title: `Note Notion : ${title}`,
+        description: `Mise à jour de la note : ${title}.`,
         content: {
-            notionPageId: pageId,
             url: page.url,
-            properties: page.properties,
         },
-        previewUrl: null,
-        mediaUrl: null,
+        // Notion n'a pas de thumbnail direct, on utilise une icône de fallback ou null
+        mediaUrl: page.icon?.type === "external" ? page.icon.external.url : null,
         metadata: {
-            skills: ["Notion"],
+            skills: ["Notion", "Documentation"],
             relevanceScore: 1,
             isPublic: false,
         },
@@ -66,3 +54,4 @@ function normalize(page, userId, tool = "notion") {
 }
 
 module.exports = { fetchData, normalize };
+

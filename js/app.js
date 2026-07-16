@@ -1154,21 +1154,29 @@ function renderUserCard(userId) {
     const momentumHtml = renderMomentumBadge(userId);
     const badgesHtml = renderBadges(userBadges);
 
-    // media preview: video or image when available
+    // media preview: video, image, or code snippet
     let mediaHtml = "";
-    if (latestContent && latestContent.mediaUrl) {
-        if (latestContent.type === "video") {
+    if (latestContent) {
+        if (latestContent.codeSnippet) {
             mediaHtml = `
-                <div class="card-media-wrap">
-                    <video id="video-${userId}" class="card-media" data-src="${latestContent.mediaUrl}" muted playsinline preload="none" tabindex="-1" data-user-id="${userId}" disablePictureInPicture></video>
+                <div class="card-media-wrap card-code-wrap">
+                    <pre class="card-code"><code>${latestContent.codeSnippet}</code></pre>
                 </div>
             `;
-        } else if (latestContent.type === "image") {
-            mediaHtml = `
-                <div class="card-media-wrap">
-                    <img class="card-media" data-src="${latestContent.mediaUrl}" loading="lazy" alt="${latestContent.title || "Preview"}">
-                </div>
-            `;
+        } else if (latestContent.mediaUrl) {
+            if (latestContent.type === "video") {
+                mediaHtml = `
+                    <div class="card-media-wrap">
+                        <video id="video-${userId}" class="card-media" data-src="${latestContent.mediaUrl}" muted playsinline preload="none" tabindex="-1" data-user-id="${userId}" disablePictureInPicture></video>
+                    </div>
+                `;
+            } else if (latestContent.type === "image") {
+                mediaHtml = `
+                    <div class="card-media-wrap">
+                        <img class="card-media" data-src="${latestContent.mediaUrl}" loading="lazy" alt="${latestContent.title || "Preview"}">
+                    </div>
+                `;
+            }
         }
     }
 
