@@ -40,6 +40,7 @@
             discoverTitle: "In motion",
             discoverSub: "Live trajectories, proof first.",
             searchPlaceholder: "Search creators or projects",
+            heroPartners: "Our partners",
         },
         fr: {
             navDiscover: "Découvrir",
@@ -63,6 +64,7 @@
             discoverTitle: "En mouvement",
             discoverSub: "Trajectoires en direct, preuves d'abord.",
             searchPlaceholder: "Recherchez des créateurs ou des projets",
+            heroPartners: "Nos partenaires",
         },
     };
 
