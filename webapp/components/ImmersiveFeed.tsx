@@ -28,8 +28,8 @@ const ImmersiveFeed: React.FC<FeedProps> = ({ userId }) => {
     }, []);
 
     const fetchWorkItems = async () => {
-        // Appel API pour récupérer les items normalisés
-        const response = await fetch(`/api/feed/${userId}`);
+        // Appel API pour récupérer les items normalisés (Evidence of Work)
+        const response = await fetch(`/api/work-items/${userId}`);
         const data = await response.json();
         setItems(data);
     };

@@ -15,6 +15,7 @@ export interface WorkItem {
     // Affichage dans le feed immersif
     previewUrl?: string; // URL de la capture d'écran générée ou du thumbnail
     mediaUrl?: string; // URL du média source (si vidéo/image)
+    codeSnippet?: string; // Fragment de code pour GitHub
 
     // Enrichissement
     metadata: {

@@ -5660,6 +5660,24 @@ app.put("/api/app/profiles/:userId", async (req, res) => {
     }
 });
 
+app.get("/api/work-items/:userId", async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { data, error } = await supabase
+            .from("work_items")
+            .select("*")
+            .eq("userId", userId)
+            .order("timestamp", { ascending: false })
+            .limit(50);
+
+        if (error) throw error;
+        res.json(data || []);
+    } catch (err) {
+        console.error("Error fetching work items:", err);
+        res.status(500).json({ error: "Failed to fetch work items" });
+    }
+});
+
 app.get("/api/feed/:userId", async (req, res) => {
     try {
         const { userId } = req.params;

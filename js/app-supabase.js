@@ -1802,6 +1802,73 @@ async function fetchCollaboratorArcs(userId) {
     }
 }
 
+/**
+ * Récupère les "Evidence of Work" (GitHub, Figma, Notion...) depuis le backend
+ */
+async function fetchWorkItems(userId) {
+    if (!userId) return [];
+    try {
+        const response = await fetch(`/api/work-items/${userId}`);
+        if (!response.ok) return [];
+        return await response.json();
+    } catch (e) {
+        console.warn("Erreur fetchWorkItems:", e);
+        return [];
+    }
+}
+
+function renderWorkItemsHtml(items) {
+    if (!items || items.length === 0) return "";
+
+    const itemsHtml = items.map(item => {
+        const sourceLabel = String(item.source || "outil").toUpperCase();
+        const imageUrl = item.previewUrl || item.mediaUrl;
+
+        let extraContentHtml = "";
+        if (item.source === 'github' && item.codeSnippet) {
+            extraContentHtml = `
+                <div style="background: #1e293b; padding: 10px; border-radius: 8px; margin: 10px 0; border: 1px solid #334155; overflow-x: auto;">
+                    <pre style="margin: 0; color: #94a3b8; font-family: monospace; font-size: 0.75rem; line-height: 1.4;">${escapeHtml(item.codeSnippet)}</pre>
+                </div>
+            `;
+        } else if (imageUrl) {
+            extraContentHtml = `
+                <div style="margin: 12px 0;">
+                    <img src="${imageUrl}" style="width: 100%; height: auto; max-height: 280px; border-radius: 12px; object-fit: cover; border: 1px solid var(--border-color);">
+                </div>
+            `;
+        }
+
+        return `
+            <div class="work-item-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 16px; padding: 1.2rem; margin-bottom: 1rem; transition: transform 0.2s;">
+                <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.8rem;">
+                    <img src="icons/${item.source}.svg" onerror="this.src='icons/tech.svg'" style="width:16px;height:16px;opacity:0.7;">
+                    <span style="font-size:0.7rem; font-weight:700; color: var(--text-secondary); letter-spacing: 0.1em;">${sourceLabel}</span>
+                    <span style="font-size:0.7rem; color: var(--text-muted); margin-left:auto;">${new Date(item.timestamp).toLocaleDateString()}</span>
+                </div>
+                <h4 style="margin: 0 0 0.4rem; font-size: 0.95rem;">${escapeHtml(item.title)}</h4>
+                ${item.description ? `<p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">${escapeHtml(item.description)}</p>` : ""}
+                ${extraContentHtml}
+                <div style="margin-top: 0.8rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    ${(item.metadata?.skills || []).map(skill => `<span style="font-size: 0.65rem; background: rgba(59, 130, 246, 0.1); color: #60a5fa; padding: 2px 8px; border-radius: 4px;">${escapeHtml(skill)}</span>`).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="work-items-section" style="margin: 2rem 0;">
+            <h3 style="margin-bottom: 1.2rem; font-size: 1.1rem; display: flex; align-items: center; gap: 0.6rem;">
+                <img src="icons/tech.svg" style="width:20px;height:20px;">
+                Preuves de travail
+            </h3>
+            <div class="work-items-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+                ${itemsHtml}
+            </div>
+        </div>
+    `;
+}
+
 async function requestArcCollaboration(arcId, ownerId) {
     if (!window.currentUser) {
         if (window.ToastManager) {
@@ -15162,10 +15229,20 @@ ${
             </div>
 </section>
     `;
+    // Récupérer les "Evidence of Work" (Preuves de travail automatiques)
+    let workItemsHtml = "";
+    try {
+        const workItems = await fetchWorkItems(userId);
+        workItemsHtml = renderWorkItemsHtml(workItems);
+    } catch (e) {
+        console.warn("Erreur chargement work items:", e);
+    }
+
     const publicActivityHtml = showPublicActivity
         ? `
 ${trajectoryGuardHtml}
 ${externalConnectionsHtml}
+${workItemsHtml}
 ${projectProgressBoardHtml}
 ${arcsHtml}
 ${collabRequestsHtml}

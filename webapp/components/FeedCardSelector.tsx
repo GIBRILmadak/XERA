@@ -29,6 +29,11 @@ export function GitHubCard({ item }: { item: WorkItem }) {
             <Text style={styles.header}>GITHUB</Text>
             <Text style={styles.title}>{item.title}</Text>
             <Text style={styles.description}>{item.description}</Text>
+            {item.codeSnippet && (
+                <View style={styles.codeContainer}>
+                    <Text style={styles.codeText}>{item.codeSnippet}</Text>
+                </View>
+            )}
             {item.content?.html_url && (
                 <Text style={styles.link}>{item.content.html_url}</Text>
             )}
@@ -41,12 +46,13 @@ export function GitHubCard({ item }: { item: WorkItem }) {
 }
 
 export function FigmaCard({ item }: { item: WorkItem }) {
+    const imageUrl = item.previewUrl || item.mediaUrl;
     return (
         <View style={styles.card}>
             <Text style={styles.header}>FIGMA</Text>
             <Text style={styles.title}>{item.title}</Text>
-            {item.previewUrl && (
-                <Image source={{ uri: item.previewUrl }} style={styles.media} />
+            {imageUrl && (
+                <Image source={{ uri: imageUrl }} style={styles.media} />
             )}
             <Text style={styles.description}>{item.description}</Text>
             <InteractionBar item={item} />
@@ -77,13 +83,14 @@ export function SummaryCard({ item }: { item: WorkItem }) {
 }
 
 export function DefaultCard({ item }: { item: WorkItem }) {
+    const imageUrl = item.previewUrl || item.mediaUrl;
     return (
         <View style={styles.card}>
             <Text style={styles.header}>{item.source.toUpperCase()}</Text>
             <Text style={styles.title}>{item.title}</Text>
             <Text style={styles.description}>{item.description}</Text>
-            {item.previewUrl && (
-                <Image source={{ uri: item.previewUrl }} style={styles.media} />
+            {imageUrl && (
+                <Image source={{ uri: imageUrl }} style={styles.media} />
             )}
             <InteractionBar item={item} />
             <TouchableOpacity style={styles.actionBtn}>
@@ -106,6 +113,19 @@ const styles = StyleSheet.create({
     summaryText: { color: "#e2e8f0", marginTop: 8 },
     link: { color: "#38bdf8", marginTop: 8 },
     media: { width: "100%", height: 300, borderRadius: 10, marginTop: 10 },
+    codeContainer: {
+        backgroundColor: "#1e293b",
+        padding: 10,
+        borderRadius: 8,
+        marginTop: 10,
+        borderWidth: 1,
+        borderColor: "#334155",
+    },
+    codeText: {
+        color: "#94a3b8",
+        fontFamily: "monospace",
+        fontSize: 12,
+    },
     actionBtn: {
         marginTop: 15,
         backgroundColor: "#3b82f6",
