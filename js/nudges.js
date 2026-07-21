@@ -8,21 +8,194 @@ const NUDGE_COOLDOWN_KEY = "xera-nudge-cooldown";
 class XeraNudgeManager {
     constructor() {
         this.container = null;
+        // 3. New Project check (Intelligent Nudge for active users)
+        // 3. New Project check (Intelligent Nudge for active users)
+        const activeArcsCount = await this.fetchActiveArcsCount(userId);
+        if (activeArcsCount === 0 && arcs > 0) {
+            this.showNudge({
+                id: "nudge-new-project",
+                title: "Maintenez le momentum",
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
+        }
     }
 
     init() {
         if (!window.currentUser) return;
         // The check is now explicitly called from app-supabase.js after data load
+        // 3. New Project check (Intelligent Nudge for active users)
+        // 3. New Project check (Intelligent Nudge for active users)
+        const activeArcsCount = await this.fetchActiveArcsCount(userId);
+        if (activeArcsCount === 0 && arcs > 0) {
+            this.showNudge({
+                id: "nudge-new-project",
+                title: "Maintenez le momentum",
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
+        }
     }
 
     async checkActivity() {
         if (!window.currentUser || !window.currentUser.id) {
             console.warn("NudgeManager: Cannot check activity without a logged-in user.");
             return;
+            // 3. New Project check (Intelligent Nudge for active users)
+        // 3. New Project check (Intelligent Nudge for active users)
+        const activeArcsCount = await this.fetchActiveArcsCount(userId);
+        if (activeArcsCount === 0 && arcs > 0) {
+            this.showNudge({
+                id: "nudge-new-project",
+                title: "Maintenez le momentum",
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
         }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
         const userId = window.currentUser.id;
         const contents = window.userContents[userId] || [];
 
+        // 1. Check for Project Creation (Intelligent Nudge)
+        const arcs = await this.fetchUserArcsCount(userId);
+        const workItems = await fetchWorkItems(userId); // Utilise la fonction de app-supabase.js
+
+        if (arcs === 0) {
+            if (workItems.length > 0) {
+                const topTool = workItems[0].source;
+                this.showNudge({
+                    id: "nudge-first-project-from-work",
+                    title: "Donnez du sens à votre travail",
+                    message: `Votre activité sur ${topTool} est détectée. Regroupez ces preuves dans un projet pour rendre votre exécution visible.`,
+                    actionLabel: "Créer un projet",
+                    onAction: () => window.openCreateModal()
+                });
+                return; // One nudge at a time
+            } else {
+                this.showNudge({
+                    id: "nudge-first-project-generic",
+                    title: "Documentez votre effort",
+                    message: "XERA est conçu pour transformer votre progression en preuve. Lancez votre premier ARC pour commencer.",
+                    actionLabel: "Lancer un projet",
+                    onAction: () => window.openCreateModal()
+                });
+                return;
+            }
+        }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+            // 3. New Project check (Intelligent Nudge for active users)
+        // 3. New Project check (Intelligent Nudge for active users)
+        const activeArcsCount = await this.fetchActiveArcsCount(userId);
+        if (activeArcsCount === 0 && arcs > 0) {
+            this.showNudge({
+                id: "nudge-new-project",
+                title: "Maintenez le momentum",
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+        // 2. Inactivity check for existing contents
         if (contents.length === 0) return;
 
         const latest = contents[0];
@@ -33,19 +206,157 @@ class XeraNudgeManager {
         if (diffHours > 72) {
             this.showNudge({
                 id: "inactivity-72h",
-                title: "Trajectoire en pause ? 💎",
-                message: "Ça fait 3 jours ! Ne laisse pas ton effort devenir invisible. Une simple photo suffit pour relancer la machine.",
-                actionLabel: "Poster une Trace",
+                title: "Trajectoire en pause",
+                message: "Trois jours sans mise à jour. Ne laissez pas votre effort devenir invisible. Une simple trace suffit.",
+                actionLabel: "Ajouter une mise à jour",
                 onAction: () => window.openCreateMenu(userId)
             });
         } else if (diffHours > 48) {
             this.showNudge({
                 id: "inactivity-48h",
-                title: "On perd le rythme ? ⚡",
-                message: "Ta trajectoire s'essouffle un peu. Poste une petite mise à jour pour maintenir ton momentum.",
-                actionLabel: "Relancer maintenant",
+                title: "Maintenez le rythme",
+                message: "Votre trajectoire s'essouffle. Publiez une mise à jour pour maintenir votre momentum.",
+                actionLabel: "Publier maintenant",
                 onAction: () => window.openCreateMenu(userId)
             });
+        }
+            // 3. New Project check (Intelligent Nudge for active users)
+        // 3. New Project check (Intelligent Nudge for active users)
+        const activeArcsCount = await this.fetchActiveArcsCount(userId);
+        if (activeArcsCount === 0 && arcs > 0) {
+            this.showNudge({
+                id: "nudge-new-project",
+                title: "Maintenez le momentum",
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+        // 3. New Project check (Intelligent Nudge for active users)
+        // 3. New Project check (Intelligent Nudge for active users)
+        const activeArcsCount = await this.fetchActiveArcsCount(userId);
+        if (activeArcsCount === 0 && arcs > 0) {
+            this.showNudge({
+                id: "nudge-new-project",
+                title: "Maintenez le momentum",
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    async fetchUserArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId);
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
+            // 3. New Project check (Intelligent Nudge for active users)
+        // 3. New Project check (Intelligent Nudge for active users)
+        const activeArcsCount = await this.fetchActiveArcsCount(userId);
+        if (activeArcsCount === 0 && arcs > 0) {
+            this.showNudge({
+                id: "nudge-new-project",
+                title: "Maintenez le momentum",
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+        // 3. New Project check (Intelligent Nudge for active users)
+        // 3. New Project check (Intelligent Nudge for active users)
+        const activeArcsCount = await this.fetchActiveArcsCount(userId);
+        if (activeArcsCount === 0 && arcs > 0) {
+            this.showNudge({
+                id: "nudge-new-project",
+                title: "Maintenez le momentum",
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
         }
     }
 
@@ -54,7 +365,38 @@ class XeraNudgeManager {
         const cooldown = localStorage.getItem(`${NUDGE_COOLDOWN_KEY}-${nudge.id}`);
         if (cooldown && (new Date() - new Date(cooldown)) < 24 * 60 * 60 * 1000) {
             return;
+            // 3. New Project check (Intelligent Nudge for active users)
+        // 3. New Project check (Intelligent Nudge for active users)
+        const activeArcsCount = await this.fetchActiveArcsCount(userId);
+        if (activeArcsCount === 0 && arcs > 0) {
+            this.showNudge({
+                id: "nudge-new-project",
+                title: "Maintenez le momentum",
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
         }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
 
         this.container = document.createElement("div");
         this.container.className = "smart-nudge";
@@ -82,6 +424,37 @@ class XeraNudgeManager {
 
         // Auto-dismiss after 15s
         setTimeout(() => this.dismiss(nudge.id), 15000);
+        // 3. New Project check (Intelligent Nudge for active users)
+        // 3. New Project check (Intelligent Nudge for active users)
+        const activeArcsCount = await this.fetchActiveArcsCount(userId);
+        if (activeArcsCount === 0 && arcs > 0) {
+            this.showNudge({
+                id: "nudge-new-project",
+                title: "Maintenez le momentum",
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
+        }
     }
 
     dismiss(id) {
@@ -89,6 +462,68 @@ class XeraNudgeManager {
             this.container.classList.add("dismiss");
             setTimeout(() => this.container.remove(), 500);
             localStorage.setItem(`${NUDGE_COOLDOWN_KEY}-${id}`, new Date().toISOString());
+            // 3. New Project check (Intelligent Nudge for active users)
+        // 3. New Project check (Intelligent Nudge for active users)
+        const activeArcsCount = await this.fetchActiveArcsCount(userId);
+        if (activeArcsCount === 0 && arcs > 0) {
+            this.showNudge({
+                id: "nudge-new-project",
+                title: "Maintenez le momentum",
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+        // 3. New Project check (Intelligent Nudge for active users)
+        // 3. New Project check (Intelligent Nudge for active users)
+        const activeArcsCount = await this.fetchActiveArcsCount(userId);
+        if (activeArcsCount === 0 && arcs > 0) {
+            this.showNudge({
+                id: "nudge-new-project",
+                title: "Maintenez le momentum",
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
         }
     }
 
@@ -97,12 +532,44 @@ class XeraNudgeManager {
         setTimeout(() => {
             this.showNudge({
                 id: "after-arc-creation",
-                title: "Projet lancé ! 🚀",
-                message: `"${arcTitle}" est prêt. Et si tu postais ta toute première Trace pour marquer le début ?`,
-                actionLabel: "Poster ma 1ère Trace",
+                title: "Projet initialisé",
+                message: `Le projet "${arcTitle}" est créé. Publiez votre première preuve pour marquer ce début.`,
+                actionLabel: "Ajouter une trace",
                 onAction: () => window.openCreateMenu(userId)
             });
         }, 1000);
+    }
+        // 3. New Project check (Intelligent Nudge for active users)
+        // 3. New Project check (Intelligent Nudge for active users)
+        const activeArcsCount = await this.fetchActiveArcsCount(userId);
+        if (activeArcsCount === 0 && arcs > 0) {
+            this.showNudge({
+                id: "nudge-new-project",
+                title: "Maintenez le momentum",
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+                message: "Vos projets précédents sont terminés. C'est le moment idéal pour lancer un nouveau défi et garder votre élan visible.",
+                actionLabel: "Nouveau projet",
+                onAction: () => window.openCreateModal()
+            });
+        }
+    }
+
+    async fetchActiveArcsCount(userId) {
+        try {
+            const { count, error } = await window.supabase
+                .from("arcs")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq("status", "in_progress");
+            if (error) throw error;
+            return count || 0;
+        } catch (e) {
+            return 0;
+        }
     }
 }
 
