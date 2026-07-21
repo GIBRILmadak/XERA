@@ -15127,11 +15127,19 @@ ${
             : "";
 
     const noArcNoticeHtml = !hasArcs
-        ? `
-<div class="no-arc-notice" style="margin: 1.5rem 0; padding: 1rem 1.25rem; border: 1px dashed var(--border-color); border-radius: 12px; color: var(--text-secondary); text-align: center;">
-            L'utilisateur n'a pas encore créé de projet.
+        ? (isOwnProfile
+            ? `
+<div class="no-arc-notice own-nudge" style="margin: 2rem 0; padding: 2.5rem 1.5rem; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-secondary); text-align: center;">
+            <h4 style="margin: 0 0 0.75rem; color: var(--text-primary); font-family: 'Outfit', sans-serif; letter-spacing: -0.01em; font-size: 1.25rem;">Commencez votre trajectoire</h4>
+            <p style="margin: 0 auto 1.5rem; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; max-width: 400px;">Documentez vos efforts réels. Un projet (ARC) permet de regrouper vos preuves de travail et de construire votre réputation par l'exécution.</p>
+            <button class="btn-primary" onclick="window.openCreateModal && window.openCreateModal()" style="padding: 0.8rem 2rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;">Lancer un ARC</button>
 </div>
-    `
+            `
+            : `
+<div class="no-arc-notice" style="margin: 1.5rem 0; padding: 1.5rem; border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-muted); text-align: center; font-size: 0.9rem;">
+            Aucun projet public pour le moment.
+</div>
+            `)
         : "";
 
     const weeklyChartHtml = hasArcs
