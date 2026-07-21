@@ -18,7 +18,7 @@
     function ensureServiceWorker() {
         if (!("serviceWorker" in navigator)) return;
         navigator.serviceWorker
-            .register("/sw.js", { updateViaCache: "none" })
+            .register("/sw.js")
             .catch((err) => console.warn("SW registration failed", err));
     }
 

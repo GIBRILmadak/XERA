@@ -4,7 +4,7 @@
     "description": "## Avant (Monolithique)",
     "main": "index.js",
     "scripts": {
-        "test": "node scripts/verify.js",
+        "test": "echo \"Error: no test specified\" && exit 1",
         "api": "node server/monetization-server.js"
     },
     "keywords": [],

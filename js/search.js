@@ -170,7 +170,7 @@ function displaySearchResults(users, content, proPages, query) {
         content.forEach(item => {
             let authorName = item.users?.name || 'Utilisateur';
             let authorAvatar = item.users?.avatar || 'https://placehold.co/80';
-            let clickAction = `navigateToUserProfile('${escapeHtml(item.user_id)}')`;
+            let clickAction = `navigateToUserProfile('${item.user_id}')`;
 
             if (item.page_id && item.professional_pages) {
                 authorName = item.professional_pages.name;
@@ -184,7 +184,7 @@ function displaySearchResults(users, content, proPages, query) {
                     <img src="${escapeHtml(authorAvatar)}" class="search-result-avatar" alt="${escapeHtml(authorName)}">
                     <div class="search-result-info">
                         <div class="search-result-name">${highlightMatch(title, query)}</div>
-                        <div class="search-result-meta">Par ${escapeHtml(authorName)} • Jour ${escapeHtml(item.day_number || '0')}</div>
+                        <div class="search-result-meta">Par ${authorName} • Jour ${escapeHtml(item.day_number || '0')}</div>
                     </div>
                 </div>
             `;

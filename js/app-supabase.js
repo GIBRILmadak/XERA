@@ -1808,13 +1808,7 @@ async function fetchCollaboratorArcs(userId) {
 async function fetchWorkItems(userId) {
     if (!userId) return [];
     try {
-        const {
-            data: { session },
-        } = await supabase.auth.getSession();
-        if (!session?.access_token) return [];
-        const response = await fetch(`/api/work-items/${userId}`, {
-            headers: { Authorization: `Bearer ${session.access_token}` },
-        });
+        const response = await fetch(`/api/work-items/${userId}`);
         if (!response.ok) return [];
         return await response.json();
     } catch (e) {
