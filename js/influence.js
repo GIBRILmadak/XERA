@@ -10,14 +10,12 @@
         yt: {
             token: "rize_yt_token",
             exp: "rize_yt_exp",
-            refresh: "rize_yt_refresh",
             verifier: "rize_yt_verifier",
             state: "rize_yt_state",
         },
         spotify: {
             token: "rize_sp_token",
             exp: "rize_sp_exp",
-            refresh: "rize_sp_refresh",
             verifier: "rize_sp_verifier",
             state: "rize_sp_state",
         },
@@ -62,13 +60,10 @@
         return { verifier, challenge };
     }
 
-    function saveToken(provider, accessToken, expiresInSec, refreshToken) {
+    function saveToken(provider, accessToken, expiresInSec) {
         const exp = Date.now() + (expiresInSec || 3600) * 1000;
         localStorage.setItem(STORAGE[provider].token, accessToken);
         localStorage.setItem(STORAGE[provider].exp, String(exp));
-        if (refreshToken) {
-            localStorage.setItem(STORAGE[provider].refresh, refreshToken);
-        }
     }
 
     function getToken(provider) {
@@ -79,8 +74,6 @@
     }
 
     function hasStoredCredential(provider) {
-        const refresh = localStorage.getItem(STORAGE[provider].refresh);
-        if (refresh) return true;
         const token = localStorage.getItem(STORAGE[provider].token);
         const exp = parseInt(localStorage.getItem(STORAGE[provider].exp) || "0");
         if (!token) return false;
@@ -90,7 +83,8 @@
     function clearToken(provider) {
         localStorage.removeItem(STORAGE[provider].token);
         localStorage.removeItem(STORAGE[provider].exp);
-        localStorage.removeItem(STORAGE[provider].refresh);
+        localStorage.removeItem("rize_yt_refresh");
+        localStorage.removeItem("rize_sp_refresh");
     }
 
     function storeVerifier(provider, verifier, state) {
@@ -175,7 +169,7 @@
                 });
                 const data = await res.json();
                 if (!res.ok || !data.access_token) throw new Error(data.error || "Token error");
-                saveToken("yt", data.access_token, data.expires_in, data.refresh_token);
+                saveToken("yt", data.access_token, data.expires_in);
             } else if (provider === "spotify") {
                 const body = new URLSearchParams({
                     client_id: SPOTIFY_CLIENT_ID,
@@ -191,7 +185,7 @@
                 });
                 const data = await res.json();
                 if (!res.ok || !data.access_token) throw new Error(data.error || "Token error");
-                saveToken("spotify", data.access_token, data.expires_in, data.refresh_token);
+                saveToken("spotify", data.access_token, data.expires_in);
             }
         } catch (error) {
             console.error("exchangeToken error", error);
@@ -217,46 +211,9 @@
     }
 
     async function refreshToken(provider) {
-        const refresh = localStorage.getItem(STORAGE[provider].refresh);
-        if (!refresh) return null;
-        const redirectUri = getRedirectUri();
-        try {
-            if (provider === "yt") {
-                const body = new URLSearchParams({
-                    client_id: YT_CLIENT_ID,
-                    grant_type: "refresh_token",
-                    refresh_token: refresh,
-                    redirect_uri: redirectUri,
-                });
-                const res = await fetch("https://oauth2.googleapis.com/token", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body,
-                });
-                const data = await res.json();
-                if (!res.ok || !data.access_token) throw new Error(data.error || "Refresh error");
-                saveToken("yt", data.access_token, data.expires_in, data.refresh_token || refresh);
-                return data.access_token;
-            } else if (provider === "spotify") {
-                const body = new URLSearchParams({
-                    client_id: SPOTIFY_CLIENT_ID,
-                    grant_type: "refresh_token",
-                    refresh_token: refresh,
-                });
-                const res = await fetch("https://accounts.spotify.com/api/token", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body,
-                });
-                const data = await res.json();
-                if (!res.ok || !data.access_token) throw new Error(data.error || "Refresh error");
-                saveToken("spotify", data.access_token, data.expires_in, data.refresh_token || refresh);
-                return data.access_token;
-            }
-        } catch (error) {
-            console.error("Refresh token error:", error);
-            clearToken(provider);
-        }
+        // Refresh tokens are deliberately never stored in browser storage.
+        // A user reconnects through the server-side OAuth flow when access expires.
+        clearToken(provider);
         return null;
     }
 

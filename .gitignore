@@ -1,6 +1,8 @@
 node_modules/
+*.backup
 .env
 .env.*
+!.env.example
 .vscode/
 .idea/
 .codex/

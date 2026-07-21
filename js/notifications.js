@@ -978,10 +978,25 @@ async function createNotification(userId, type, message, link = null) {
 
     // Fallback: ask server to create the notification using server privileges
     try {
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+            return { success: false, error: "Authentication required" };
+        }
         const res = await fetch("/api/notifications/create", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_id: userId, type, message, link }),
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                type,
+                message,
+                link,
+                actor_id: session.user?.id || null,
+            }),
         });
         const json = await res.json();
         if (res.ok && json?.success) return { success: true, data: json.data };
@@ -1102,9 +1117,16 @@ async function sendSubscriptionToServer(subscription) {
         } catch (e) {
             timezone = "UTC";
         }
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
         await fetch(PUSH_SUBSCRIBE_URL, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+            },
             body: JSON.stringify({
                 userId: currentUser.id,
                 subscription,

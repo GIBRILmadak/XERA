@@ -1,7 +1,7 @@
 /*
  * XERA Service Worker for Web Push notifications
  */
-const CACHE_NAME = "xera-shell-v6";
+const CACHE_NAME = "xera-shell-v7";
 const PRECACHE_URLS = [
     "/manifest.json",
     "/icons/logo-192x192.png",
@@ -69,7 +69,13 @@ function isCacheableAsset(request) {
 async function networkFirst(request) {
     const cache = await caches.open(CACHE_NAME);
     try {
-        const response = await fetch(request);
+        // Do not let a slow connection keep a navigation blank indefinitely.
+        const response = await Promise.race([
+            fetch(request),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Network timeout")), 4000),
+            ),
+        ]);
         if (response && response.ok) {
             cache.put(request, response.clone());
         }
@@ -87,6 +93,30 @@ async function networkFirst(request) {
     }
 }
 
+async function staleWhileRevalidate(request, event) {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(request);
+    const refresh = fetch(request)
+        .then((response) => {
+            if (response && response.ok) {
+                return cache.put(request, response.clone());
+            }
+        })
+        .catch(() => {
+            // The cached response, when available, is still usable offline.
+        });
+
+    // Serve an already downloaded asset without waiting for the network, then
+    // refresh it for the next navigation.
+    if (cached) {
+        event.waitUntil(refresh);
+        return cached;
+    }
+
+    await refresh;
+    return (await cache.match(request)) || Response.error();
+}
+
 self.addEventListener("fetch", (event) => {
     const request = event.request;
 
@@ -101,8 +131,9 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
-    // Static assets: network-first so updates are visible immediately
-    event.respondWith(networkFirst(request));
+    // Static assets are safe to serve immediately from cache. The background
+    // refresh keeps them current without delaying first paint or interaction.
+    event.respondWith(staleWhileRevalidate(request, event));
 });
 
 self.addEventListener("message", (event) => {
