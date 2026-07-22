@@ -144,7 +144,7 @@
                 <div
                     class="notification-button"
                     id="nav-pro-page"
-                    onclick="window.professionalManager?.navigateToMyPage()"
+                    onclick="window.navigateToProfessionalPage?.()"
                     style="display: none"
                     title="Page Pro"
                 >
@@ -219,6 +219,13 @@
             </div>
         </section>
 
+        <!-- RÉGLAGES DE LA PAGE PROFESSIONNELLE -->
+        <section id="pro-settings-page" class="page">
+            <div class="container pro-settings-page-container">
+                <!-- Réglages de la page pro injectés dynamiquement -->
+            </div>
+        </section>
+
         <!-- MESSAGES -->
         <section id="messages" class="page">
             <div class="container">
@@ -250,7 +257,18 @@
         <script src="js/nudges.js"></script>
         <script src="js/tutorial.js"></script>
         <script src="js/arcs.js"></script>
-        <script src="js/professional-pages.js"></script>
+        <script src="js/professional-pages.js?v=20260722-3"></script>
+        <script
+            src="https://unpkg.com/react@18/umd/react.production.min.js"
+            crossorigin
+            defer
+        ></script>
+        <script
+            src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+            crossorigin
+            defer
+        ></script>
+        <script src="js/pro-settings-component.js?v=20260424-1" defer></script>
         <!-- Script principal avec intégration Supabase -->
         <script src="js/app-supabase.js?v=20260502-3"></script>
 

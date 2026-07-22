@@ -5,6 +5,34 @@
  * Version Onboarding Interactif XXL - Haute Visibilité
  */
 
+if (typeof window !== "undefined") {
+    window.waitForProfessionalManager =
+        window.waitForProfessionalManager ||
+        async function (timeoutMs = 5000) {
+            const start = Date.now();
+            while (
+                !window.professionalManager &&
+                Date.now() - start < timeoutMs
+            ) {
+                await new Promise((r) => setTimeout(r, 50));
+            }
+
+            if (!window.professionalManager) {
+                if (typeof window.showToast === "function") {
+                    window.showToast(
+                        "Chargement de la Page Pro, veuillez patienter...",
+                        "info",
+                    );
+                } else {
+                    console.info("Professional manager not ready yet.");
+                }
+                return null;
+            }
+
+            return window.professionalManager;
+        };
+}
+
 class XERAProfessionalManager {
     constructor(supabase) {
         this.supabase = supabase;
@@ -43,6 +71,10 @@ class XERAProfessionalManager {
                 "org",
                 "pro",
                 "institution",
+                "professional",
+                "recruiter",
+                "investor",
+                "partner",
             ].includes(value),
         );
     }
@@ -545,31 +577,38 @@ class XERAProfessionalManager {
     }
 
     startCreatePage() {
+        console.log("[Pro] startCreatePage called");
         if (!window.currentUser) {
             this.notify("Connectez-vous pour créer une Page Pro.", "info");
             window.location.href = "login.html?redirect=profile.html";
             return;
         }
 
-        // Empêcher la création de doublons ou l'onboarding pour les comptes Pro
-        if (
-            document.querySelector(".tutorial-overlay-premium") ||
-            isProUser(window.currentUser)
-        ) {
+        // Empêcher l'onboarding multiple spécifique
+        if (document.querySelector(".onboarding-xxl-split")) {
+            console.log("[Pro] Onboarding already active, skipping start");
             return;
         }
 
-        this.onboarding = new XERAProfessionalOnboarding(this);
-        this.onboarding.start();
+        console.log("[Pro] Launching XERAProfessionalOnboarding");
+        try {
+            this.onboarding = new XERAProfessionalOnboarding(this);
+            this.onboarding.start();
+        } catch (e) {
+            console.error("[Pro] Error starting onboarding:", e);
+            this.notify("Erreur lors de l'ouverture du formulaire.", "error");
+        }
     }
     /**
      * Initialise la navigation pour afficher le bouton Page Pro si nécessaire
      */
     async initNavigation(retryCount = 0) {
-        // Attendre que l'utilisateur soit chargé
+        // Attendre que l'utilisateur soit chargé (Augmenté à 15s pour correspondre à app-supabase)
         if (!window.currentUser || !window.currentUser.id) {
-            if (retryCount < 20) {
+            if (retryCount < 60) {
                 setTimeout(() => this.initNavigation(retryCount + 1), 250);
+            } else {
+                console.warn("[Pro] Giving up on initNavigation: currentUser not found after 15s");
             }
             return;
         }
@@ -580,13 +619,20 @@ class XERAProfessionalManager {
             window.navigateTo = (pageId, options) => {
                 if (
                     pageId !== "pro-page" &&
+                    pageId !== "pagepro" &&
                     pageId !== "talent-explorer" &&
                     pageId !== "pro-settings"
                 ) {
                     this.syncUrl({ pro: null, explorer: null });
                 }
+
                 if (typeof originalNavigateTo === "function") {
-                    originalNavigateTo(pageId, options);
+                    return originalNavigateTo(pageId, options);
+                }
+
+                // Fallback si le router global est disponible mais n'était pas là au moment du hook
+                if (window.XeraRouter && typeof window.XeraRouter.navigate === "function") {
+                    return window.XeraRouter.navigate(pageId, options);
                 }
             };
             window._proNavigationHooked = true;
@@ -594,6 +640,8 @@ class XERAProfessionalManager {
 
         try {
             // Vérifier les pages possédées par l'utilisateur
+            if (!window.currentUser?.id) return;
+
             const { data: pages, error } = await this.supabase
                 .from("professional_pages")
                 .select("slug")
@@ -602,39 +650,77 @@ class XERAProfessionalManager {
             if (error) throw error;
 
             const hasPage = pages && pages.length > 0;
+            const previousHasPage = window.userHasProPage;
             window.userHasProPage = hasPage;
 
             const navBtn = document.getElementById("nav-pro-page");
             const talentFilterBtn = document.getElementById("filter-talents");
 
+            // Éviter de recréer le bouton si l'état n'a pas changé et qu'il est déjà initialisé
+            if (navBtn && navBtn._proInitDone && hasPage === previousHasPage) {
+                return;
+            }
+
+            // Détection renforcée du statut PRO
+            const isUserPro =
+                (window.isProUser && window.isProUser(window.currentUser)) ||
+                this.isNonPersonalAccount(window.currentUser);
+
+            const userMetadata = window.currentUser?.user_metadata || {};
+            const isProByMetadata =
+                userMetadata.plan === "pro" ||
+                userMetadata.plan === "professional" ||
+                userMetadata.role === "pro" ||
+                userMetadata.role === "professional" ||
+                userMetadata.subscription_tier === "pro" ||
+                userMetadata.subscription_tier === "professional";
+
             if (navBtn) {
-                if (hasPage) {
-                    this.myPageSlug = pages[0].slug;
-                    navBtn.style.display = "flex";
-                    navBtn.title = "Accéder à ma Page Pro";
+                if (hasPage || isUserPro || isProByMetadata) {
+                    if (hasPage) {
+                        this.myPageSlug = pages[0].slug;
+                    }
+
+                    navBtn.style.setProperty("display", "flex", "important");
+                    navBtn.title = hasPage
+                        ? "Accéder à ma Page Pro"
+                        : "Configurer ma Page Pro";
+
+                    // Fallback href pour SEO et robustesse
+                    navBtn.href = this.myPageSlug ? `profile.html?pro=${this.myPageSlug}` : "profile.html";
+
+                    console.log("[Pro] Affichage du bouton Pro activé. Slug:", this.myPageSlug);
                 } else {
                     this.myPageSlug = null;
-                    navBtn.style.display = "none";
+                    // On ne cache que si on est CERTAIN que ce n'est pas un pro
+                    if (!isUserPro && !isProByMetadata) {
+                        navBtn.style.display = "none";
+                    }
                 }
-                // Attacher un gestionnaire fiable utilisant l'instance courante
-                try {
-                    navBtn.onclick = () => this.navigateToMyPage();
-                } catch (e) {
-                    console.warn(
-                        "Impossible d'attacher onclick à nav-pro-page:",
-                        e,
-                    );
-                }
+
+                // Supprimer les anciens listeners pour éviter les doubles appels
+                const newNavBtn = navBtn.cloneNode(true);
+                navBtn.parentNode.replaceChild(newNavBtn, navBtn);
+
+                newNavBtn.onclick = (e) => {
+                    console.log("[Pro] Nav button clicked (via onclick listener)");
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    if (window.navigateToProfessionalPage) {
+                        window.navigateToProfessionalPage();
+                    } else {
+                        this.navigateToMyPage();
+                    }
+                };
+
+                newNavBtn._proInitDone = true;
             }
 
             // Afficher l'onglet Talents si c'est un profil Pro/Institution
             if (talentFilterBtn) {
                 const isPro =
-                    hasPage ||
-                    (window.currentUser &&
-                        ["recruiter", "investor"].includes(
-                            window.currentUser.account_subtype,
-                        ));
+                    hasPage || this.isNonPersonalAccount(window.currentUser);
                 talentFilterBtn.style.display = isPro ? "inline-flex" : "none";
             }
 
@@ -643,12 +729,15 @@ class XERAProfessionalManager {
                 ".settings-badge[title='Page Pro']",
             );
             if (profileBtn) {
-                // NE PAS AFFICHER SI C'EST DEJA PRO
-                const isAlreadyPro =
-                    hasPage || this.isNonPersonalAccount(window.currentUser);
-                profileBtn.style.display = isAlreadyPro ? "none" : "flex";
-                // AJOUT : Attacher l'événement pour démarrer la création
-                profileBtn.onclick = () => this.startCreatePage();
+                // N'afficher que si l'utilisateur n'a pas encore de Page Pro
+                profileBtn.style.display = hasPage ? "none" : "flex";
+
+                profileBtn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log("[Pro] Profile Pro button clicked");
+                    this.startCreatePage();
+                };
             }
 
             console.log("Pro Page Navigation Initialized. Has Page:", hasPage);
@@ -658,7 +747,7 @@ class XERAProfessionalManager {
 
             // Si on a une page pro, empêcher le onboarding intempestif
             if (hasPage) {
-                firstPostOnboardingHandled = true;
+                window.firstPostOnboardingHandled = true;
             }
         } catch (e) {
             console.error("InitNavigation Pro Page failed:", e);
@@ -727,31 +816,43 @@ class XERAProfessionalManager {
      * Ouvre la page pro existante, ou lance la création si aucune page n'existe.
      */
     async navigateToMyPage() {
+        console.log("[Pro] navigateToMyPage called");
+
+        // Notification immédiate pour retour utilisateur
+        if (typeof window.showToast === "function") {
+            window.showToast("Ouverture de l'espace professionnel...", "info");
+        }
+
         // 1. Si on a déjà le slug, on y va direct (Instantané)
         if (this.myPageSlug) {
+            console.log("[Pro] Navigating to existing page:", this.myPageSlug);
             await this.renderProPage(this.myPageSlug);
             return;
         }
 
-        // 2. Si on sait déjà qu'il n'y a pas de page, on lance la création (Instantané)
-        if (window.userHasProPage === false) {
-            this.startCreatePage();
-            return;
-        }
-
-        // 3. Fallback : vérification si on ne sait pas encore
+        // 2. Vérification forcée si on n'a pas de slug
         try {
-            const pages = await this.getMyPages();
-            if (pages && pages.length > 0) {
+            console.log(
+                "[Pro] No slug in cache, checking database for user:",
+                window.currentUser?.id,
+            );
+            const { data: pages, error } = await this.supabase
+                .from("professional_pages")
+                .select("slug")
+                .eq("owner_id", window.currentUser?.id);
+
+            if (!error && pages && pages.length > 0) {
                 this.myPageSlug = pages[0].slug;
                 window.userHasProPage = true;
                 await this.renderProPage(this.myPageSlug);
                 return;
             }
-        } catch (error) {
-            console.error("Erreur vérification Page Pro:", error);
+        } catch (err) {
+            console.warn("[Pro] Background page check failed:", err);
         }
 
+        // 3. Si on arrive ici, c'est qu'il n'y a pas de page -> Onboarding
+        console.log("[Pro] No page found, launching onboarding");
         this.startCreatePage();
     }
 
@@ -1251,28 +1352,58 @@ class XERAProfessionalManager {
     /**
      * Ouvre les réglages de la page (React Component)
      */
-    openPageSettings(pageId) {
-        if (typeof window.mountProSettings !== "function") {
+    async openPageSettings(pageId) {
+        const waitForMount = async () => {
+            const maxAttempts = 25;
+            for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+                if (typeof window.mountProSettings === "function") {
+                    return window.mountProSettings;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 100));
+            }
+            return null;
+        };
+
+        const mount = await waitForMount();
+        if (typeof mount !== "function") {
             alert("Le module de réglages n'est pas encore chargé.");
+            console.warn("mountProSettings non défini après attente.");
             return;
         }
 
-        // Créer l'overlay pour React
+        const pageContainer = document.querySelector(
+            "#pro-settings-page .pro-settings-page-container",
+        );
+        const closeHandler = () => {
+            if (typeof window.navigateTo === "function") {
+                window.navigateTo("pro-page");
+            }
+        };
+
+        if (pageContainer) {
+            mount(pageContainer, pageId, closeHandler, "page");
+            if (typeof window.navigateTo === "function") {
+                window.navigateTo("pro-settings-page");
+            }
+            return;
+        }
+
+        // Fallback : overlay React
         let overlay = document.getElementById("pro-settings-overlay");
         if (!overlay) {
             overlay = document.createElement("div");
             overlay.id = "pro-settings-overlay";
             overlay.className =
-                "fixed inset-0 bg-black/90 z-[12000] flex items-center justify-center p-4 backdrop-blur-sm";
+                "fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 backdrop-blur-sm";
             document.body.appendChild(overlay);
         } else {
             overlay.style.display = "flex";
         }
 
-        // Monter le composant React
-        window.mountProSettings(overlay, pageId, () => {
+        // On s'assure de passer les 4 arguments comme dans le cas pageContainer
+        mount(overlay, pageId, () => {
             overlay.style.display = "none";
-        });
+        }, "overlay");
     }
 
     /**
@@ -1667,25 +1798,56 @@ class XERAProfessionalManager {
      * Rendu complet d'une Page Professionnelle
      */
     async renderProPage(slug) {
+        console.log("[Pro] renderProPage starting for slug:", slug);
+
+        const currentPath = window.location.pathname;
+        const isProfilePage =
+            currentPath.includes("profile.html") ||
+            currentPath.endsWith("/profile") ||
+            currentPath.includes("/pagepro");
+
+        const hasProParam =
+            new URLSearchParams(window.location.search).get("pro") === slug;
+
+        // 1. Navigation / Redirection (Si on n'est pas sur la bonne page ou URL)
+        if (!isProfilePage || !hasProParam) {
+            console.log("[Pro] Redirecting to profile page with slug:", slug);
+            const targetUrl = `profile.html?pro=${slug}`;
+
+            if (window.XeraRouter && typeof window.XeraRouter.navigate === "function") {
+                window.XeraRouter.navigate("pagepro", { query: { pro: slug } });
+            } else if (typeof window.navigateTo === "function") {
+                window.navigateTo("pagepro", { query: { pro: slug } });
+            } else {
+                window.location.href = targetUrl;
+            }
+            return;
+        }
+
+        // 2. On est sur la bonne page, on prépare le rendu local
+        const targetPage = document.getElementById("pro-page");
+        if (targetPage) {
+            const pages = document.querySelectorAll(".page");
+            pages.forEach((p) => p.classList.remove("active"));
+            targetPage.classList.add("active");
+            console.log("[Pro] SPA Active section set to #pro-page");
+        }
+
         let proContainer = document.querySelector(".pro-page-container");
         if (!proContainer) {
-            // Fallback sur le container de profil si pro-page-container n'existe pas
             proContainer = document.querySelector(".profile-container");
         }
-        if (!proContainer) return;
 
-        // Persister dans l'URL
+        if (!proContainer) {
+            console.warn("[Pro] No container found for rendering pro page content");
+            return;
+        }
+
+        // Persister dans l'URL si on reste en mode SPA
         this.syncUrl({ pro: slug, explorer: null });
 
         if (typeof document !== "undefined" && document.body) {
             document.body.classList.add("is-pro");
-        }
-
-        if (window.navigateTo) {
-            const targetPage = document.getElementById("pro-page");
-            if (targetPage) {
-                window.navigateTo("pro-page");
-            }
         }
 
         proContainer.innerHTML = `<div style="text-align:center; padding: 100px;"><div class="loading-spinner"></div></div>`;
@@ -1710,12 +1872,14 @@ class XERAProfessionalManager {
                 typeof window.isVerifiedPageId === "function"
                     ? window.isVerifiedPageId(page.id)
                     : false;
-            const pageVerifiedBadgesHtml = isPageVerified
-                ? `<div class="pro-page-verified-badges" style="display:flex; gap:8px; align-items:center; margin-top:8px;"><img src="icons/verify-com.svg?v=${BADGE_ASSET_VERSION}" alt="Vérifié" style="width:20px;height:20px;" /><img src="${page.avatar_url || "icons/enterprise.svg"}" alt="Logo certifié" style="width:20px;height:20px;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,0.1);" /></div>`
-                : "";
+
+            const pageVerifiedBadgeHtml = isPageVerified
+                ? `<span class="pro-badge-pill">Page Professionnelle</span>`
+                : `<span class="pro-badge-pill" style="background: rgba(255,255,255,0.05); color: var(--text-secondary);">Page Non-Vérifiée</span>`;
+
             const pageVerificationCtaHtml =
                 isOwner && !isPageVerified
-                    ? `<a href="subscription-plans.html?plan=page_verification&context=page-verification" class="btn btn-primary" style="margin-top:12px; text-decoration:none; justify-content:center;">Payer la vérification</a>`
+                    ? `<a href="subscription-plans.html?plan=page_verification&context=page-verification" class="btn-pro-action" style="margin-top:12px; text-decoration:none;">Vérifier la page</a>`
                     : "";
 
             const employees = await this.getPageCertifications(page.id);
@@ -1728,7 +1892,9 @@ class XERAProfessionalManager {
                 .order("created_at", { ascending: false });
 
             const avatar = page.avatar_url || "icons/enterprise.svg";
-            const banner = page.banner_url || "";
+            const banner =
+                page.banner_url ||
+                "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop";
             const pageOwner =
                 window.currentUser?.id === page.owner_id
                     ? window.currentUser
@@ -1765,151 +1931,652 @@ class XERAProfessionalManager {
                 pageOwnerSubscriptionActive,
             );
 
-            proContainer.innerHTML = `
-                <div class="profile-hero profile-hero--glam">
-                    <div class="profile-banner-frame">
-                        ${banner ? `<img src="${banner}" class="profile-banner">` : `<div class="profile-banner profile-banner--empty"></div>`}
-                    </div>
-                    <div class="profile-hero-grid">
-                        <div class="profile-identity-panel">
-                            <div class="profile-avatar-wrapper">
-                                <img src="${avatar}" class="profile-avatar-img" style="border-radius: 12px; border: 3px solid white;">
-                            </div>
-                            <div class="profile-name-block">
-                                <span class="profile-section-kicker">${page.industry}</span>
-                                <h2>${typeof window.wrapUsernameLabel === "function" ? window.wrapUsernameLabel(page.name) : page.name}</h2>
-                                ${pageVerifiedBadgesHtml}
-                                ${pageVerificationCtaHtml}
-                                <p class="profile-bio">${page.bio || "Page Professionnelle certifiée"}</p>
+            // Injection des styles premium spécifiques
+            const proStyleId = "pro-page-premium-styles";
+            let styleElement = document.getElementById(proStyleId);
+            if (!styleElement) {
+                styleElement = document.createElement("style");
+                styleElement.id = proStyleId;
+                document.head.appendChild(styleElement);
+            }
+            styleElement.textContent = `
+                    .pro-page-wrapper {
+                        max-width: 1100px;
+                        width: 100%;
+                        margin: 0 auto;
+                        padding: 0 clamp(0.65rem, 2vw, 0.75rem) 12px;
+                        background: #090909;
+                        color: #fff;
+                        font-family: 'Inter', sans-serif;
+                        box-sizing: border-box;
+                    }
+                    .pro-header-card {
+                        background: #141414;
+                        border-radius: 24px;
+                        overflow: hidden;
+                        border: 1px solid rgba(255,255,255,0.06);
+                        margin-bottom: 18px;
+                        display: grid;
+                    }
+                    .pro-banner-container {
+                        height: clamp(140px, 24vw, 180px);
+                        position: relative;
+                        background: linear-gradient(90deg, #6d28d9 0%, #f59e0b 100%);
+                    }
+                    .pro-banner-img {
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                    }
+                    .pro-edit-banner-btn {
+                        position: absolute;
+                        top: 12px;
+                        right: 12px;
+                        width: 38px;
+                        height: 38px;
+                        background: rgba(0,0,0,0.48);
+                        border: 1px solid rgba(255,255,255,0.22);
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        cursor: pointer;
+                        color: #fff;
+                        transition: all 0.2s;
+                    }
+                    .pro-edit-banner-btn:hover { background: rgba(0,0,0,0.75); transform: scale(1.05); }
 
-                                <div class="pro-page-stats" style="display: flex; gap: 20px; margin-top: 15px;">
-                                    <div><strong>${employees.length}</strong> <span style="color: var(--text-secondary)">Membres certifiés</span></div>
-                                </div>
-                            </div>
-                        </div>
+                    .pro-header-info {
+                        padding: 0 0 18px;
+                        position: relative;
+                        display: grid;
+                        gap: 16px;
+                        justify-items: center;
+                        text-align: center;
+                    }
+                    .pro-avatar-overlap {
+                        width: clamp(100px, 18vw, 120px);
+                        height: clamp(100px, 18vw, 120px);
+                        border-radius: 22px;
+                        border: 4px solid #141414;
+                        background: #141414;
+                        margin: -52px 0 0 24px;
+                        justify-self: start;
+                        position: relative;
+                        z-index: 10;
+                        overflow: hidden;
+                        box-shadow: 0 16px 28px rgba(0,0,0,0.22);
+                    }
+                    .pro-avatar-overlap img { width: 100%; height: 100%; object-fit: cover; }
 
-                        <div class="profile-signal-panel">
-                             <span class="profile-section-kicker">Centres d'intérêts</span>
-                             <div class="hiring-needs-list" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;">
-                                ${page.hiring_needs?.map((need) => `<span class="badge" style="background: rgba(var(--primary-rgb), 0.1); color: var(--primary-color); border: 1px solid var(--primary-color);">${need}</span>`).join("") || "Aucun centre d'intérêt"}
-                             </div>
-                             ${page.website_url ? `<a href="${page.website_url}" target="_blank" class="btn btn-primary" style="margin-top: 15px; width: 100%; text-decoration: none; justify-content: center;">Visiter le site officiel</a>` : ""}
-                             ${
-                                 isOwner
-                                     ? `
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
-                                    <button class="btn btn-secondary" onclick="window.professionalManager.openTeamManagement('${page.id}')" style="justify-content: center; padding: 10px;">Gérer l'équipe</button>
-                                    <button class="btn btn-secondary" onclick="window.professionalManager.openPageSettings('${page.id}')" style="justify-content: center; padding: 10px;">Réglages Page</button>
-                                </div>
-                             `
-                                     : ""
-                             }
-                        </div>
-                    </div>
-                </div>
-
-                <div class="pro-page-content" style="margin-top: 30px; display: grid; grid-template-columns: 1fr 320px; gap: 30px;">
-                    <div class="pro-page-main">
-                        ${
-                            isOwner
-                                ? `
-                            <div class="pro-creation-bar">
-                                <div class="pro-creation-trigger">
-                                    <img src="${avatar}" alt="Logo">
-                                    <button onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">Commencer une actualité officielle...</button>
-                                </div>
-                                <div class="pro-creation-actions">
-                                    <div class="pro-action-item news" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">
-                                        <i class="fas fa-newspaper"></i>
-                                        <span>Actualité</span>
-                                    </div>
-                                    <div class="pro-action-item event" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'event')">
-                                        <i class="fas fa-calendar-alt"></i>
-                                        <span>Événement</span>
-                                    </div>
-                                    <div class="pro-action-item project" onclick="window.professionalManager.openCreateOrgArc('${page.id}')">
-                                        <i class="fas fa-project-diagram"></i>
-                                        <span>Projet</span>
-                                    </div>
-                                </div>
-                            </div>
-                        `
-                                : ""
+                    @media (min-width: 1100px) {
+                        .pro-header-info {
+                            grid-template-columns: auto minmax(0, 1fr);
+                            align-items: start;
+                            gap: 28px;
                         }
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                            <h3 class="section-title" style="margin-bottom: 0;">Projets d'Organisation (ARCs)</h3>
-                            ${isOwner ? `<button class="btn btn-secondary" onclick="window.professionalManager.openCreateOrgArc('${page.id}')" style="border-radius: 99px; padding: 8px 20px;">+ Nouveau Projet</button>` : ""}
+                        .pro-avatar-overlap {
+                            width: clamp(110px, 14vw, 132px);
+                            height: clamp(110px, 14vw, 132px);
+                            margin: -52px 0 0 32px;
+                        }
+                    }
+
+                    .pro-main-details {
+                        margin: 0 auto;
+                        width: 100%;
+                        padding: 0 10px;
+                        text-align: center;
+                    }
+                    .pro-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; justify-content: center; }
+                    .pro-name-row h2 { font-size: clamp(1.7rem, 6vw, 2.4rem); margin: 0; font-weight: 800; letter-spacing: -0.8px; line-height: 1.05; }
+                    .pro-badge-pill {
+                        background: #8b5cf6;
+                        color: #fff;
+                        padding: 6px 14px;
+                        border-radius: 999px;
+                        font-size: 0.78rem;
+                        font-weight: 600;
+                    }
+                    .pro-industry-label { color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; text-align: center; }
+                    .pro-members-count { color: var(--text-secondary); font-size: 0.86rem; margin-top: 8px; text-align: center; }
+
+                    .pro-secondary-details {
+                        text-align: center;
+                        margin-top: 0;
+                        padding: 0 10px;
+                    }
+                    .pro-interests-label { color: var(--text-secondary); font-size: 0.72rem; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; }
+                    .pro-interest-list {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 8px;
+                        justify-content: center;
+                        align-items: center;
+                        margin: 0 auto;
+                        max-width: 100%;
+                    }
+                    .pro-interest-chip {
+                        background: rgba(255,255,255,0.05);
+                        border: 1px solid rgba(255,255,255,0.12);
+                        color: #ccc;
+                        padding: 6px 12px;
+                        border-radius: 999px;
+                        font-size: 0.78rem;
+                        transition: all 0.2s;
+                        white-space: nowrap;
+                        flex-shrink: 0;
+                    }
+                    .pro-interest-chip:hover { background: rgba(255,255,255,0.14); color: #fff; }
+                    .pro-secondary-details > .pro-role-label { margin-top: 12px; color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
+                    .pro-secondary-details > .pro-role-label span { color: #fff; }
+
+                    .pro-actions-row {
+                        display: grid;
+                        grid-template-columns: repeat(3, minmax(0, 1fr));
+                        gap: 10px;
+                        margin: 12px auto 0;
+                        padding: 0 10px 16px;
+                        align-items: stretch;
+                        justify-content: center;
+                    }
+                    .pro-actions-row > * {
+                        width: 100%;
+                        min-width: 0;
+                    }
+                    .btn-pro-primary,
+                    .btn-pro-secondary {
+                        min-height: 48px;
+                        border-radius: 16px;
+                        padding: 14px 16px;
+                        font-weight: 700;
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 8px;
+                        width: 100%;
+                        transition: all 0.2s;
+                        font-size: clamp(0.88rem, 1vw, 0.98rem);
+                        white-space: normal;
+                    }
+                    .btn-pro-primary {
+                        background: #8b5cf6;
+                        color: #fff;
+                        border: none;
+                    }
+                    .btn-pro-primary:hover { background: #7c3aed; transform: translateY(-1px); }
+                    .btn-pro-secondary {
+                        background: rgba(255,255,255,0.03);
+                        color: #fff;
+                        border: 1px solid rgba(255,255,255,0.14);
+                    }
+                    .btn-pro-secondary:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.28); }
+
+                    /* keep default centering (max-width set earlier); prevent horizontal scroll if any */
+                    .pro-page-wrapper { overflow-x: hidden; }
+
+                    .pro-features-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                        gap: 10px;
+                        margin-bottom: 20px;
+                    }
+
+                    .pro-features-grid {
+                        display: grid;
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                        gap: 10px;
+                        margin-bottom: 20px;
+                    }
+                    .pro-features-grid > .feature-card-pro:nth-child(3) {
+                        grid-column: 1 / -1;
+                    }
+                    .feature-card-pro {
+                        background: #141414;
+                        border-radius: 22px;
+                        padding: 14px;
+                        border: 1px solid rgba(255,255,255,0.08);
+                        display: grid;
+                        grid-template-columns: auto 1fr auto;
+                        gap: 12px;
+                        align-items: center;
+                        min-height: 95px;
+                        transition: all 0.25s ease;
+                    }
+                    .feature-card-pro:hover {
+                        background: #181818;
+                        border-color: #8b5cf6;
+                        transform: translateY(-1px);
+                        box-shadow: 0 10px 24px rgba(0,0,0,0.15);
+                    }
+                    .feature-icon-box {
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 14px;
+                        background: rgba(139, 92, 246, 0.14);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: #8b5cf6;
+                        font-size: 1rem;
+                    }
+                    .feature-info {
+                        display: grid;
+                        gap: 6px;
+                    }
+                    .feature-info p {
+                        margin: 0;
+                        font-size: 0.8rem;
+                        color: var(--text-secondary);
+                        line-height: 1.4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        display: -webkit-box;
+                        -webkit-line-clamp: 1;
+                        -webkit-box-orient: vertical;
+                    }
+                    .feature-info h4 { margin: 0; font-size: 0.98rem; font-weight: 700; }
+
+                    .pro-info-carousel {
+                        display: flex;
+                        gap: 10px;
+                        overflow-x: auto;
+                        padding: 16px 0 10px;
+                        margin-bottom: 14px;
+                        scroll-snap-type: x mandatory;
+                        -webkit-overflow-scrolling: touch;
+                    }
+                    .pro-info-carousel > section {
+                        min-width: min(88vw, 280px);
+                        width: min(88vw, 280px);
+                        flex: 0 0 auto;
+                        scroll-snap-align: start;
+                        border-radius: 22px;
+                        border: 1px solid rgba(255,255,255,0.08);
+                        background: #141414;
+                        padding: 16px;
+                        box-sizing: border-box;
+                    }
+                    .pro-info-carousel::-webkit-scrollbar { height: 6px; }
+                    .pro-info-carousel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 999px; }
+                    .pro-info-carousel > section .pro-match-panel-head,
+                    .pro-info-carousel > section .pro-versus-head {
+                        margin-bottom: 10px;
+                    }
+                    .pro-info-carousel > section h3 { font-size: 1rem; margin: 0 0 4px; }
+                    .pro-info-carousel > section p { font-size: 0.82rem; line-height: 1.4; margin: 0; color: var(--text-secondary); }
+                    .pro-info-carousel .pro-match-list,
+                    .pro-info-carousel .pro-versus-details {
+                        margin-top: 10px;
+                    }
+                    .feature-info p { margin: 0; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.45; }
+                    .feature-arrow { color: var(--text-secondary); opacity: 0.8; align-self: center; font-size: 0.9rem; }
+
+                    .pro-content-layout {
+                        display: grid;
+                        grid-template-columns: 1fr;
+                        gap: 16px;
+                    }
+                    .pro-main-col,
+                    .pro-page-sidebar {
+                        width: 100%;
+                    }
+                    .pro-page-sidebar {
+                        display: grid;
+                        gap: 16px;
+                    }
+
+                    .pro-card-premium {
+                        background: #141414;
+                        border-radius: 22px;
+                        padding: 18px;
+                        border: 1px solid rgba(255,255,255,0.08);
+                        margin-bottom: 0;
+                    }
+
+                    .pro-creation-card {
+                        background: #141414;
+                        border-radius: 22px;
+                        padding: 18px;
+                        border: 1px solid rgba(139, 92, 246, 0.16);
+                        margin-bottom: 0;
+                    }
+                    .pro-creation-input-shell {
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                        background: rgba(255,255,255,0.03);
+                        border-radius: 18px;
+                        padding: 12px 14px;
+                        border: 1px solid rgba(255,255,255,0.06);
+                        margin-bottom: 14px;
+                        width: 100%;
+                    }
+                    .pro-creation-input-shell img { width: 38px; height: 38px; border-radius: 14px; }
+                    .pro-creation-input-shell button {
+                        background: none; border: none; color: var(--text-secondary);
+                        font-size: 0.95rem; padding: 10px 0; width: 100%; text-align: left; cursor: pointer;
+                    }
+                    .pro-creation-tabs {
+                        display: grid;
+                        grid-template-columns: repeat(3, minmax(0, 1fr));
+                        gap: 8px;
+                    }
+                    .pro-tab-item {
+                        display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.88rem;
+                        font-weight: 600; color: var(--text-secondary); cursor: pointer; transition: all 0.2s;
+                        padding: 10px 12px; border-radius: 16px; background: rgba(255,255,255,0.05); text-align: center;
+                        min-height: 44px;
+                    }
+                    .pro-tab-item:hover { color: #fff; background: rgba(255,255,255,0.08); }
+                    .pro-tab-item.news i { color: #f59e0b; }
+                    .pro-tab-item.event i { color: #ec4899; }
+                    .pro-tab-item.project i { color: #3b82f6; }
+
+                    @media (max-width: 720px) {
+                        .pro-tab-item {
+                            padding: 12px 0;
+                            gap: 0;
+                            justify-content: center;
+                        }
+                        .pro-tab-item span { display: none; }
+                        .pro-tab-item i { font-size: 1.1rem; }
+                    }
+
+                    .pro-section-header {
+                        display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px;
+                    }
+                    .pro-section-title { font-size: 1.1rem; font-weight: 800; margin: 0; letter-spacing: -0.4px; }
+                    .btn-pill-small {
+                        background: rgba(139, 92, 246, 0.12); color: #c4b5fd; border: none;
+                        padding: 8px 14px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; cursor: pointer;
+                    }
+                    .btn-pill-small:hover { background: #8b5cf6; color: #fff; }
+
+                    .pro-empty-state {
+                        text-align: center; padding: 22px; border: 2px dashed rgba(255,255,255,0.05); border-radius: 20px;
+                        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+                    }
+                    .pro-empty-icon { font-size: 2rem; color: #8b5cf6; margin-bottom: 0; }
+                    .pro-empty-text { color: var(--text-secondary); font-size: 0.92rem; line-height: 1.5; margin: 0; }
+
+                    .arc-card-pro-premium {
+                        background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+                        border-radius: 22px; padding: 18px; transition: all 0.2s; border-left: 4px solid #8b5cf6;
+                    }
+                    .arc-card-pro-premium:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.14); }
+
+                    .sidebar-card-premium {
+                        background: #141414; border-radius: 22px; padding: 18px;
+                        border: 1px solid rgba(255,255,255,0.08); margin-bottom: 0;
+                    }
+                    .matching-indicator {
+                        display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+                        padding: 12px; background: rgba(139, 92, 246, 0.05); border-radius: 14px;
+                        border: 1px solid rgba(139, 92, 246, 0.12);
+                    }
+
+                    @media (max-width: 1024px) {
+                        .pro-page-wrapper { padding: clamp(20px, 4vw, 32px); }
+                        .pro-content-layout { grid-template-columns: 1fr; gap: 32px; }
+                        .pro-features-grid { gap: 18px; }
+                        .pro-header-info { align-items: stretch; }
+                    }
+
+                    @media (max-width: 900px) {
+                        .pro-banner-container { height: 220px; }
+                        .pro-header-info { display: block; padding: 0 24px 32px; text-align: center; }
+                        .pro-avatar-overlap { width: 120px; height: 120px; margin: -60px 0 15px 24px !important; border-width: 3px; justify-self: start; align-self: flex-start; }
+                        .pro-main-details { margin: 0; text-align: center; padding: 0; width: 100%; }
+                        .pro-name-row { justify-content: center; display: flex; width: 100%; }
+                        .pro-interest-list { justify-content: center; display: flex; width: 100%; }
+                        .pro-secondary-details { text-align: center; padding: 0; width: 100%; margin-top: 15px; }
+                        .feature-card-pro { grid-template-columns: 1fr; min-height: auto; }
+                        .feature-arrow { justify-self: start; }
+                        .pro-creation-input-shell { flex-direction: column; align-items: stretch; }
+                    }
+
+                    @media (max-width: 768px) {
+                        .pro-banner-container { height: 180px; }
+                        .pro-header-card { border-radius: 24px; }
+                        .pro-header-info { padding: 0 18px 28px; }
+                        .pro-name-row h2 { font-size: clamp(1.7rem, 5vw, 2rem); }
+                        .btn-pro-primary, .btn-pro-secondary { padding: 14px 18px; }
+                        .pro-section-title { font-size: 1.15rem; }
+                        .pro-creation-tabs { gap: 10px; }
+                        .pro-creation-card { padding: 22px; }
+                        .pro-card-premium { padding: 24px; }
+                    }
+
+                    @media (max-width: 650px) {
+                        #pro-page .container.pro-page-container {
+                            padding-left: 8px !important;
+                            padding-right: 8px !important;
+                            margin-left: 0 !important;
+                            margin-right: 0 !important;
+                            max-width: 100% !important;
+                            width: 100% !important;
+                            box-sizing: border-box !important;
+                        }
+                        .pro-banner-container { height: 160px; }
+                        .pro-avatar-overlap { width: 100px; height: 100px; margin: -50px 0 10px 15px !important; align-self: flex-start; }
+                        .pro-header-info { padding: 0 15px 24px !important; text-align: center !important; display: block !important; }
+                        .pro-page-wrapper { padding-left: 0 !important; padding-right: 0 !important; max-width: 100% !important; margin: 0 !important; width: 100% !important; box-sizing: border-box !important; }
+                        .pro-header-card { border-radius: 0 !important; border-left: none !important; border-right: none !important; width: 100% !important; margin-bottom: 15px !important; }
+                        .pro-main-details { text-align: center !important; width: 100% !important; }
+                        .pro-name-row { justify-content: center !important; display: flex !important; width: 100% !important; }
+                        .pro-actions-row { grid-template-columns: repeat(3, 1fr) !important; gap: 8px !important; padding: 0 15px 20px !important; width: 100% !important; }
+                        .btn-pro-primary, .btn-pro-secondary { padding: 12px 5px !important; min-height: 44px !important; font-size: 0.8rem !important; }
+                        .btn-pro-label-short { display: inline !important; }
+                        .btn-pro-label-long { display: none !important; }
+                        .pro-creation-input-shell { padding: 14px 16px; }
+                        .pro-creation-tabs { gap: 10px; }
+                        .feature-icon-box { width: 44px; height: 44px; }
+                        .feature-card-pro { padding: 20px; }
+                        .pro-card-premium, .sidebar-card-premium, .pro-creation-card { padding: 22px; }
+                    }
+                `;
+
+            try {
+                const floatingCreate = document.getElementById(
+                    "floating-create-container",
+                );
+                if (floatingCreate) floatingCreate.style.display = "none";
+            } catch (e) {
+                // ignore if proContainer not present or DOM restricted
+            }
+
+            proContainer.innerHTML = `
+                <div class="pro-page-wrapper">
+                    <!-- HEADER -->
+                    <div class="pro-header-card">
+                        <div class="pro-banner-container">
+                            ${banner ? `<img src="${banner}" class="pro-banner-img">` : ""}
+                            ${isOwner ? `<div class="pro-edit-banner-btn" onclick="window.professionalManager.openPageSettings('${page.id}')"><i class="fas fa-edit"></i></div>` : ""}
                         </div>
 
-                        <div class="org-arcs-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-bottom: 40px;">
-                            ${
-                                orgArcs && orgArcs.length > 0
-                                    ? orgArcs
-                                          .map(
-                                              (arc) => `
-                                <div class="timeline-card arc-card-pro" onclick="selectArc('${arc.id}', '${page.owner_id}')" style="cursor: pointer; padding: 20px; position: relative; border-left: 5px solid #000;">
-                                    <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 800; color: var(--text-secondary); margin-bottom: 5px;">ARC OFFICIEL</div>
-                                    <h4 style="margin: 0 0 10px 0; font-size: 1.2rem;">${arc.title}</h4>
-                                    <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 15px;">${arc.description || "Aucune description."}</p>
-                                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem;">
-                                        <span class="badge" style="background: #000; color: #fff;">${arc.status === "in_progress" ? "En cours" : "Terminé"}</span>
-                                        <span style="font-weight: 600;">Voir la trajectoire →</span>
+                        <div class="pro-header-info">
+                            <div style="flex: 1;">
+                                <div class="pro-avatar-overlap">
+                                    <img src="${avatar}" alt="Avatar">
+                                </div>
+                                <div class="pro-main-details">
+                                    <div class="pro-industry-label">${page.industry}</div>
+                                    <div class="pro-name-row">
+                                        <h2>${typeof window.wrapUsernameLabel === "function" ? window.wrapUsernameLabel(page.name) : page.name}</h2>
+                                        ${pageVerifiedBadgeHtml}
                                     </div>
+                                    <div class="pro-members-count"><strong>${employees.length}</strong> Membres certifiés</div>
+                                    ${pageVerificationCtaHtml}
                                 </div>
-                            `,
-                                          )
-                                          .join("")
-                                    : "<p style=\"color: var(--text-secondary); font-style: italic; grid-column: 1/-1; text-align: center; padding: 30px; border: 2px dashed #eee; border-radius: 15px;\">L'organisation n'a pas encore de projet public.</p>"
-                            }
+                            </div>
+
+                            <div class="pro-secondary-details">
+                                <div class="pro-interests-label">Centres d'intérêt</div>
+                                <div class="pro-interest-list">
+                                    ${page.hiring_needs?.map((need) => `<span class="pro-interest-chip">${need}</span>`).join("") || `<span class="pro-interest-chip">Aucun</span>`}
+                                </div>
+                                <div class="pro-role-label">Rôle actuel: <span>Page Professionnelle</span></div>
+                            </div>
                         </div>
 
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                            <h3 class="section-title" style="margin-bottom: 0;">Actualités de l'entreprise</h3>
-                            ${isOwner ? `<button class="btn btn-primary" onclick="window.professionalManager.openCompanyPostMenu('${page.id}')" style="border-radius: 99px; padding: 8px 20px;">+ Publier une update</button>` : ""}
-                        </div>
-
-                        <div id="company-updates-container" style="margin-bottom: 40px;">
-                            <div class="loading-spinner"></div>
-                        </div>
-
-                        <h3 class="section-title">À propos</h3>
-                        <div class="timeline-card" style="margin-bottom: 30px; padding: 20px;">
-                            <p style="white-space: pre-wrap; line-height: 1.6; color: var(--text-secondary);">${page.description || "Bienvenue sur notre page professionnelle."}</p>
-                        </div>
-
-                        <h3 class="section-title">Équipe Certifiée</h3>
-                        <div class="employees-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
+                        <div class="pro-actions-row">
+                            ${page.website_url ? `<a href="${page.website_url}" target="_blank" class="btn-pro-primary" style="text-decoration:none;"><i class="fas fa-globe"></i><span class="btn-pro-label-long">Visiter le site officiel</span><span class="btn-pro-label-short">Web</span></a>` : ""}
                             ${
-                                employees.length > 0
-                                    ? employees
-                                          .map(
-                                              (emp) => `
-                                <div class="timeline-card" style="text-align: center; cursor: pointer; padding: 20px;" onclick="navigateToUserProfile('${emp.user_id}')">
-                                    <img src="${emp.user?.avatar || "https://placehold.co/100"}" style="width: 80px; height: 80px; border-radius: 50%; margin-bottom: 12px; object-fit: cover; border: 2px solid var(--border-color);">
-                                    <div style="font-weight: 700; margin-bottom: 4px;">${emp.user?.name}</div>
-                                    <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">${emp.title}</div>
-                                    ${emp.department ? `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px; opacity: 0.8;">${emp.department}</div>` : ""}
-                                </div>
-                            `,
-                                          )
-                                          .join("")
-                                    : '<p style="color: var(--text-secondary); font-style: italic;">Aucun membre certifié pour le moment.</p>'
+                                isOwner
+                                    ? `
+                                <button class="btn-pro-secondary" onclick="window.professionalManager.openTeamManagement('${page.id}')"><i class="fas fa-users-cog"></i><span class="btn-pro-label-long">Gérer l'équipe</span><span class="btn-pro-label-short">Équipe</span></button>
+                                <button class="btn-pro-secondary" onclick="window.professionalManager.openPageSettings('${page.id}')"><i class="fas fa-cog"></i><span class="btn-pro-label-long">Réglages Page</span><span class="btn-pro-label-short">Réglages</span></button>
+                            `
+                                    : ""
                             }
                         </div>
-                    </div>
-
-                        <div class="pro-page-sidebar">
+                        <div class="pro-info-carousel">
                             ${recommendedProfilesHtml}
                             ${officialComparisonHtml}
-                            <h3 class="section-title">Informations</h3>
-                            <div class="timeline-card" style="padding: 20px; display: grid; gap: 15px;">
-                            <div>
-                                <small style="color: var(--text-secondary); text-transform: uppercase; font-weight: 700; font-size: 0.7rem; letter-spacing: 0.5px;">Domaines d'activité</small>
-                                <div style="margin-top: 4px; font-weight: 600;">${page.industry}</div>
+                        </div>
+                    </div>
+
+                    <!-- QUICK ACTIONS -->
+                    <div class="pro-features-grid">
+                        <div class="feature-card-pro" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">
+                            <div class="feature-icon-box"><i class="fas fa-handshake"></i></div>
+                            <div class="feature-info">
+                                <h4>Prêt à collaborer</h4>
+                                <p>Montrez aux recruteurs que vous êtes ouvert aux opportunités.</p>
                             </div>
-                            <div>
-                                <small style="color: var(--text-secondary); text-transform: uppercase; font-weight: 700; font-size: 0.7rem; letter-spacing: 0.5px;">Créée le</small>
-                                <div style="margin-top: 4px; opacity: 0.8;">${new Date(page.created_at).toLocaleDateString()}</div>
+                            <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
+                        </div>
+                        <div class="feature-card-pro" onclick="window.professionalManager.openCompanyPostMenu('${page.id}')">
+                            <div class="feature-icon-box"><i class="fas fa-share-alt"></i></div>
+                            <div class="feature-info">
+                                <h4>Partager des posts</h4>
+                                <p>Partagez vos dernières actualités et restez connecté avec votre réseau.</p>
+                            </div>
+                            <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
+                        </div>
+                        <div class="feature-card-pro" onclick="window.professionalManager.openPageSettings('${page.id}')">
+                            <div class="feature-icon-box"><i class="fas fa-sync"></i></div>
+                            <div class="feature-info">
+                                <h4>Mettre à jour</h4>
+                                <p>Gardez votre profil à jour pour que les recruteurs vous trouvent facilement.</p>
+                            </div>
+                            <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
+                        </div>
+                    </div>
+
+                    <div class="pro-content-layout">
+                        <!-- MAIN CONTENT -->
+                        <div class="pro-main-col">
+                            <!-- CREATION BAR -->
+                            ${
+                                isOwner
+                                    ? `
+                                <div class="pro-creation-card">
+                                    <div class="pro-creation-input-shell">
+                                        <img src="${avatar}" alt="Logo">
+                                        <button onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">Commencer une actualité officielle...</button>
+                                    </div>
+                                    <div class="pro-creation-tabs">
+                                        <div class="pro-tab-item news" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">
+                                            <i class="fas fa-newspaper"></i>
+                                            <span>Actualité</span>
+                                        </div>
+                                        <div class="pro-tab-item event" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'event')">
+                                            <i class="fas fa-calendar-alt"></i>
+                                            <span>Événement</span>
+                                        </div>
+                                        <div class="pro-tab-item project" onclick="window.professionalManager.openCreateOrgArc('${page.id}')">
+                                            <i class="fas fa-project-diagram"></i>
+                                            <span>Projet</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `
+                                    : ""
+                            }
+
+                            <!-- ARCS -->
+                            <div class="pro-section-header">
+                                <h3 class="pro-section-title">Projets d'Organisation (ARCs)</h3>
+                                ${isOwner ? `<button class="btn-pill-small" onclick="window.professionalManager.openCreateOrgArc('${page.id}')">+ Nouveau Projet</button>` : ""}
+                            </div>
+                            <div class="org-arcs-grid" style="display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 40px;">
+                                ${
+                                    orgArcs && orgArcs.length > 0
+                                        ? orgArcs
+                                              .map(
+                                                  (arc) => `
+                                            <div class="arc-card-pro-premium" onclick="selectArc('${arc.id}', '${page.owner_id}')" style="cursor: pointer;">
+                                                <div style="font-size: 0.65rem; text-transform: uppercase; font-weight: 800; color: #8b5cf6; margin-bottom: 5px; letter-spacing: 1px;">ARC OFFICIEL</div>
+                                                <h4 style="margin: 0 0 10px 0; font-size: 1.1rem; font-weight: 700;">${arc.title}</h4>
+                                                <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 15px;">${arc.description || "Aucune description."}</p>
+                                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem;">
+                                                    <span class="badge" style="background: rgba(255,255,255,0.05); color: #fff; padding: 4px 12px; border-radius: 6px;">${arc.status === "in_progress" ? "En cours" : "Terminé"}</span>
+                                                    <span style="font-weight: 700; color: #8b5cf6;">Voir la trajectoire →</span>
+                                                </div>
+                                            </div>
+                                        `,
+                                              )
+                                              .join("")
+                                        : `
+                                        <div class="pro-empty-state">
+                                            <div class="pro-empty-icon"><i class="fas fa-folder-open"></i></div>
+                                            <div class="pro-empty-text">L'organisation n'a pas encore de projet public.<br>Ajoutez votre premier projet pour commencer.</div>
+                                        </div>
+                                        `
+                                }
+                            </div>
+
+                            <!-- UPDATES -->
+                            <div class="pro-section-header">
+                                <h3 class="pro-section-title">Actualités de l'entreprise</h3>
+                                ${isOwner ? `<button class="btn-pill-small" onclick="window.professionalManager.openCompanyPostMenu('${page.id}')">+ Publier une update</button>` : ""}
+                            </div>
+                            <div id="company-updates-container" style="margin-bottom: 40px;">
+                                <div class="loading-spinner"></div>
+                            </div>
+
+                            <!-- ABOUT -->
+                            <h3 class="pro-section-title" style="margin-bottom: 20px;">À propos</h3>
+                            <div class="pro-card-premium" style="margin-bottom: 40px;">
+                                <p style="white-space: pre-wrap; line-height: 1.7; color: var(--text-secondary); font-size: 0.95rem; margin: 0;">${page.description || "Bienvenue sur notre page professionnelle."}</p>
+                            </div>
+
+                            <!-- TEAM -->
+                            <h3 class="pro-section-title" style="margin-bottom: 20px;">Équipe Certifiée</h3>
+                            <div class="employees-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin-bottom: 40px;">
+                                ${
+                                    employees.length > 0
+                                        ? employees
+                                              .map(
+                                                  (emp) => `
+                                            <div class="pro-card-premium" style="text-align: center; cursor: pointer; padding: 25px; transition: all 0.2s;" onclick="navigateToUserProfile('${emp.user_id}')">
+                                                <img src="${emp.user?.avatar || "https://placehold.co/100"}" style="width: 70px; height: 70px; border-radius: 50%; margin-bottom: 15px; object-fit: cover; border: 2px solid rgba(255,255,255,0.05);">
+                                                <div style="font-weight: 700; margin-bottom: 4px; font-size: 0.95rem;">${emp.user?.name}</div>
+                                                <div style="font-size: 0.8rem; color: #8b5cf6; font-weight: 600;">${emp.title}</div>
+                                                ${emp.department ? `<div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 4px; opacity: 0.8;">${emp.department}</div>` : ""}
+                                            </div>
+                                        `,
+                                              )
+                                              .join("")
+                                        : `<p style="color: var(--text-secondary); font-style: italic; font-size: 0.9rem;">Aucun membre certifié pour le moment.</p>`
+                                }
+                            </div>
+                        </div>
+
+                        <!-- SIDEBAR -->
+                        <div class="pro-page-sidebar">
+                            <h3 class="pro-section-title" style="margin-bottom: 16px; font-size: 1.05rem;">Informations</h3>
+                            <div class="sidebar-card-premium">
+                                <div style="margin-bottom: 20px;">
+                                    <small style="color: var(--text-secondary); text-transform: uppercase; font-weight: 700; font-size: 0.65rem; letter-spacing: 1px;">Domaines d'activité</small>
+                                    <div style="margin-top: 8px; font-weight: 600; font-size: 0.9rem; line-height: 1.4;">${page.industry}</div>
+                                </div>
+                                <div>
+                                    <small style="color: var(--text-secondary); text-transform: uppercase; font-weight: 700; font-size: 0.65rem; letter-spacing: 1px;">Créée le</small>
+                                    <div style="margin-top: 8px; font-weight: 600; font-size: 0.9rem;">${new Date(page.created_at).toLocaleDateString()}</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1939,13 +2606,35 @@ class XERAProfessionalManager {
      * Rendu de la page Talent Explorer (Page à part entière)
      */
     async renderTalentExplorer(query = "") {
+        console.log("[Pro] renderTalentExplorer starting...");
+
+        const currentPath = window.location.pathname;
+        const isProfilePage = currentPath.includes("profile.html") || currentPath.includes("/pagepro");
+        const hasExplorerParam = window.location.search.includes("explorer=1");
+
+        // 1. Redirection si pas sur la bonne URL
+        if (!isProfilePage || !hasExplorerParam) {
+            console.log("[Pro] Redirecting to Talent Explorer...");
+            if (window.XeraRouter && typeof window.XeraRouter.navigate === "function") {
+                window.XeraRouter.navigate("pagepro", { query: { explorer: "1" } });
+            } else if (typeof window.navigateTo === "function") {
+                window.navigateTo("pagepro", { query: { explorer: "1" } });
+            } else {
+                window.location.href = "profile.html?explorer=1";
+            }
+            return;
+        }
+
+        // 2. Rendu local
         const container = document.querySelector(".pro-page-container");
         if (!container) return;
 
-        // Persister dans l'URL
-        this.syncUrl({ explorer: "1", pro: null });
+        const targetPage = document.getElementById("pro-page");
+        if (targetPage) {
+            document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+            targetPage.classList.add("active");
+        }
 
-        if (window.navigateTo) window.navigateTo("pro-page");
         container.innerHTML = `<div style="text-align:center; padding: 100px;"><div class="loading-spinner"></div></div>`;
 
         const user = window.currentUser;
@@ -2511,19 +3200,243 @@ class XERAProfessionalOnboarding {
 
     createUI() {
         if (this.overlay) return;
+
+        // Inject custom styles for the new premium design
+        const styleId = "xera-onboarding-custom-styles";
+        if (!document.getElementById(styleId)) {
+            const style = document.createElement("style");
+            style.id = styleId;
+            style.textContent = `
+                .onboarding-xxl-split {
+                    width: min(850px, 95vw) !important;
+                    height: 580px !important;
+                    display: flex !important;
+                    padding: 0 !important;
+                    overflow: hidden !important;
+                    border: none !important;
+                    border-radius: 16px !important;
+                    background: #fff !important;
+                    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.2) !important;
+                    font-family: 'Inter', sans-serif !important;
+                }
+                .onboarding-xxl-split * {
+                    box-sizing: border-box !important;
+                }
+                .onboarding-visual-side {
+                    flex: 1;
+                    background: linear-gradient(135deg, #c4b5fd 0%, #8b5cf6 50%, #5b21b6 100%);
+                    background-size: cover;
+                    background-position: center;
+                    display: flex;
+                    flex-direction: column;
+                    padding: 50px;
+                    color: white;
+                    position: relative;
+                }
+                @media (max-width: 768px) {
+                    .onboarding-xxl-split {
+                        flex-direction: column !important;
+                        height: auto !important;
+                        max-height: 90vh !important;
+                        overflow-y: auto !important;
+                    }
+                    .onboarding-visual-side {
+                        display: none !important;
+                    }
+                    .onboarding-form-side {
+                        padding: 30px 25px !important;
+                    }
+                }
+                .onboarding-visual-logo {
+                    width: 44px;
+                    height: 44px;
+                    background: rgba(255,255,255,0.15);
+                    border: 1px solid rgba(255,255,255,0.3);
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-bottom: auto;
+                }
+                .onboarding-visual-text {
+                    margin-bottom: 40px;
+                }
+                .onboarding-visual-text h2 {
+                    font-size: 28px !important;
+                    font-weight: 800 !important;
+                    margin: 0 !important;
+                    color: white !important;
+                    letter-spacing: -0.5px;
+                    line-height: 1.2 !important;
+                }
+                .onboarding-visual-text p {
+                    font-size: 15px;
+                    opacity: 0.9;
+                    margin-top: 12px;
+                    line-height: 1.4;
+                }
+                .onboarding-form-side {
+                    flex: 1.3;
+                    padding: 50px 60px;
+                    display: flex;
+                    flex-direction: column;
+                    background: #fff;
+                    color: #000;
+                    text-align: left;
+                }
+                .onboarding-form-side h3 {
+                    font-size: 22px !important;
+                    font-weight: 700 !important;
+                    margin: 0 0 8px 0 !important;
+                    color: #000 !important;
+                }
+                .onboarding-form-side .tutorial-text-body {
+                    font-size: 14px !important;
+                    color: #64748b !important;
+                    margin-bottom: 35px !important;
+                    line-height: 1.5 !important;
+                }
+                .onboarding-input-group {
+                    position: relative;
+                    margin-bottom: 20px;
+                }
+                .onboarding-input-group i {
+                    position: absolute;
+                    left: 0;
+                    top: 14px;
+                    color: #94a3b8;
+                    font-size: 14px;
+                }
+                .onboarding-form-side .form-input {
+                    border: none !important;
+                    border-bottom: 1px solid #e2e8f0 !important;
+                    border-radius: 0 !important;
+                    padding: 12px 0 12px 30px !important;
+                    font-size: 15px !important;
+                    font-weight: 500 !important;
+                    background: transparent !important;
+                    color: #000 !important;
+                    transition: border-color 0.2s !important;
+                    box-shadow: none !important;
+                    width: 100% !important;
+                    display: block !important;
+                }
+                .onboarding-form-side .form-input:focus {
+                    border-bottom-color: #8b5cf6 !important;
+                    outline: none !important;
+                }
+                .onboarding-form-side textarea.form-input {
+                    padding-left: 30px !important;
+                }
+                .btn-violet-premium {
+                    background: #8b5cf6 !important;
+                    color: #fff !important;
+                    padding: 14px 40px !important;
+                    border-radius: 30px !important;
+                    font-weight: 600 !important;
+                    font-size: 14px !important;
+                    border: none !important;
+                    cursor: pointer !important;
+                    transition: background 0.2s, transform 0.1s !important;
+                }
+                .btn-violet-premium:hover {
+                    background: #7c3aed !important;
+                }
+                .btn-violet-premium:active {
+                    transform: scale(0.98);
+                }
+                .onboarding-footer-links {
+                    margin-top: auto;
+                    display: flex;
+                    justify-content: center;
+                    font-size: 12px;
+                    color: #94a3b8;
+                }
+                .onboarding-footer-links span {
+                    color: #8b5cf6;
+                    cursor: pointer;
+                    font-weight: 600;
+                    margin-left: 5px;
+                }
+                .onboarding-step-counter-clean {
+                    font-size: 13px;
+                    font-weight: 600;
+                    opacity: 0.7;
+                    letter-spacing: 1px;
+                    text-transform: uppercase;
+                }
+                .onboarding-cancel-clean {
+                    background: none;
+                    border: none;
+                    color: #94a3b8;
+                    font-size: 12px;
+                    cursor: pointer;
+                    margin-bottom: 30px;
+                    padding: 0;
+                    text-decoration: underline;
+                    align-self: flex-start;
+                }
+                .selected-industries-chips {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    margin-top: 15px;
+                }
+                .industry-chip {
+                    background: #f1f5f9 !important;
+                    color: #475569 !important;
+                    padding: 6px 12px !important;
+                    border-radius: 20px !important;
+                    font-size: 12px !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 6px !important;
+                }
+                .industry-chip .remove-industry {
+                    cursor: pointer;
+                    font-weight: bold;
+                }
+                #onboarding-industry-results {
+                    background: white;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+                }
+                .industry-option:hover {
+                    background: #f8fafc;
+                }
+                .custom-file-upload-premium {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px dashed #e2e8f0;
+                    padding: 30px;
+                    border-radius: 12px;
+                    cursor: pointer;
+                    transition: border-color 0.2s;
+                }
+                .custom-file-upload-premium:hover {
+                    border-color: #8b5cf6;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
         this.overlay = document.createElement("div");
         this.overlay.className = "tutorial-overlay-premium";
         this.overlay.style.zIndex = "10000";
         document.body.appendChild(this.overlay);
 
         this.tooltip = document.createElement("div");
-        this.tooltip.className =
-            "tutorial-tooltip-premium tutorial-v2 onboarding-xxl";
+        this.tooltip.className = "onboarding-xxl-split";
         this.tooltip.style.zIndex = "10001";
         this.tooltip.style.top = "50%";
         this.tooltip.style.left = "50%";
         this.tooltip.style.transform = "translate(-50%, -50%)";
         this.tooltip.style.position = "fixed";
+        this.tooltip.style.display = "flex"; // Force display flex
+        this.tooltip.style.pointerEvents = "auto"; // Ensure interaction
         document.body.appendChild(this.tooltip);
     }
 
@@ -2531,75 +3444,76 @@ class XERAProfessionalOnboarding {
         const steps = [
             {
                 title: "Nom de votre Page",
-                desc: "Choisissez un nom qui représente votre marque ou organisation. C'est l'identité de votre entité.",
-                content: `<div class="onboarding-step-content"><input type="text" id="onboarding-name" class="form-input" placeholder="Ex: XERA Corp" value="${this.data.name}"></div>`,
+                desc: "Choisissez un nom qui représente votre marque ou organisation officielle.",
+                icon: "fa-building",
+                content: `<input type="text" id="onboarding-name" class="form-input" placeholder="Ex: XERA Corp" value="${this.data.name}">`,
             },
             {
-                title: "Secteurs d'activité (Max 4)",
-                desc: "Précisez vos domaines. Choisissez jusqu'à 4 secteurs. Cela permet au Momentum Engine de cibler vos intérêts.",
+                title: "Secteurs d'activité",
+                desc: "Précisez vos domaines pour un ciblage optimal (Max 4).",
+                icon: "fa-tags",
                 content: `
-                    <div class="onboarding-step-content">
-                        <div class="industry-search-container" style="position: relative;">
-                            <input type="text" id="onboarding-industry-search" class="form-input" placeholder="Rechercher un secteur..." autocomplete="off">
-                            <div id="onboarding-industry-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 100; max-height: 200px; overflow-y: auto;">
-                                ${this.industriesList.map((ind) => `<div class="industry-option" style="padding: 10px; cursor: pointer;">${ind}</div>`).join("")}
+                    <div class="industry-search-container" style="position: relative;">
+                        <input type="text" id="onboarding-industry-search" class="form-input" placeholder="Rechercher un secteur..." autocomplete="off">
+                        <div id="onboarding-industry-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 100; max-height: 200px; overflow-y: auto;">
+                            ${this.industriesList.map((ind) => `<div class="industry-option" style="padding: 10px; cursor: pointer; font-size: 13px;">${ind}</div>`).join("")}
+                        </div>
+                    </div>
+                    <div id="selected-industries-list" class="selected-industries-chips">
+                        ${this.data.industries
+                            .map(
+                                (ind, idx) => `
+                            <div class="industry-chip">
+                                ${ind}
+                                <span class="remove-industry" data-index="${idx}">×</span>
                             </div>
-                        </div>
-                        <div id="selected-industries-list" class="selected-industries-chips">
-                            ${this.data.industries
-                                .map(
-                                    (ind, idx) => `
-                                <div class="industry-chip">
-                                    ${ind}
-                                    <span class="remove-industry" data-index="${idx}">×</span>
-                                </div>
-                            `,
-                                )
-                                .join("")}
-                        </div>
+                        `,
+                            )
+                            .join("")}
                     </div>
                 `,
             },
             {
                 title: "Mission & Description",
-                desc: "Racontez votre histoire. Une description solide (min 20 car.) donne de la crédibilité à votre organisation.",
-                content: `<div class="onboarding-step-content"><textarea id="onboarding-desc" class="form-input" placeholder="Détaillez vos missions, valeurs et projets..." style="min-height: 140px;">${this.data.description}</textarea></div>`,
+                desc: "Racontez votre histoire et vos objectifs stratégiques.",
+                icon: "fa-align-left",
+                content: `<textarea id="onboarding-desc" class="form-input" placeholder="Détaillez vos missions..." style="min-height: 100px; resize: none;">${this.data.description}</textarea>`,
             },
             {
                 title: "Logo Officiel",
-                desc: "Téléchargez votre logo. C'est l'icône qui s'affichera partout sur XERA pour identifier votre boîte.",
+                desc: "L'identité visuelle qui s'affichera partout sur XERA.",
+                icon: "fa-image",
                 content: `
-                    <div class="onboarding-step-content" style="text-align: center; padding: 20px;">
-                        <label for="onboarding-avatar-file" class="custom-file-upload" style="display: block; margin-bottom: 10px; border: 3px dashed #000; padding: 30px; border-radius: 12px; background: #f9f9f9; color: #000; cursor: pointer;">
-                            ${this.data.avatarUrl ? `<img src="${this.data.avatarUrl}" style="width: 100px; height: 100px; border-radius: 12px; object-fit: cover;">` : "Uploader votre LOGO (Requis)"}
-                        </label>
-                        <input type="file" id="onboarding-avatar-file" accept="image/*" style="display:none">
-                        <div id="avatar-upload-status" style="font-size: 0.9rem; color: #000; font-weight: 700; margin-top: 10px;"></div>
-                    </div>
+                    <label for="onboarding-avatar-file" class="custom-file-upload-premium">
+                        ${this.data.avatarUrl ? `<img src="${this.data.avatarUrl}" style="width: 80px; height: 80px; border-radius: 12px; object-fit: cover;">` : '<i class="fa-solid fa-cloud-arrow-up" style="font-size: 24px; color: #cbd5e1; margin-bottom: 10px; position: static;"></i><span style="font-size: 13px; color: #94a3b8;">Uploader le logo</span>'}
+                    </label>
+                    <input type="file" id="onboarding-avatar-file" accept="image/*" style="display:none">
+                    <div id="avatar-upload-status" style="font-size: 12px; color: #8b5cf6; margin-top: 10px; text-align: center;"></div>
                 `,
             },
             {
-                title: "Bannière (Optionnelle)",
-                desc: "Habillez votre profil avec une image de couverture. Vous pouvez passer cette étape.",
+                title: "Bannière",
+                desc: "Habillez votre profil (optionnel).",
+                icon: "fa-panorama",
                 content: `
-                    <div class="onboarding-step-content" style="text-align: center; padding: 20px;">
-                        <label for="onboarding-banner-file" class="custom-file-upload" style="display: block; margin-bottom: 10px; border: 3px dashed #000; padding: 30px; border-radius: 12px; background: #f9f9f9; color: #000; cursor: pointer;">
-                             ${this.data.bannerUrl ? `<img src="${this.data.bannerUrl}" style="width: 100%; height: 80px; border-radius: 8px; object-fit: cover;">` : "Uploader une BANNIÈRE (Optionnelle)"}
-                        </label>
-                        <input type="file" id="onboarding-banner-file" accept="image/*" style="display:none">
-                        <div id="banner-upload-status" style="font-size: 0.9rem; color: #000; font-weight: 700; margin-top: 10px;"></div>
-                    </div>
+                    <label for="onboarding-banner-file" class="custom-file-upload-premium">
+                         ${this.data.bannerUrl ? `<img src="${this.data.bannerUrl}" style="width: 100%; height: 60px; border-radius: 8px; object-fit: cover;">` : '<i class="fa-solid fa-image" style="font-size: 24px; color: #cbd5e1; margin-bottom: 10px; position: static;"></i><span style="font-size: 13px; color: #94a3b8;">Uploader la bannière</span>'}
+                    </label>
+                    <input type="file" id="onboarding-banner-file" accept="image/*" style="display:none">
+                    <div id="banner-upload-status" style="font-size: 12px; color: #8b5cf6; margin-top: 10px; text-align: center;"></div>
                 `,
             },
             {
                 title: "Centres d'intérêts",
-                desc: "Dites-nous ce qui vous intéresse (compétences, techno, domaines). Le Momentum Engine personnalisera votre feed.",
-                content: `<div class="onboarding-step-content"><input type="text" id="onboarding-interests" class="form-input" placeholder="Ex: React, Intelligence Artificielle, BTP..." value="${this.data.hiringNeeds.join(", ")}"></div>`,
+                desc: "Compétences ou technologies que vous recherchez.",
+                icon: "fa-bolt",
+                content: `<input type="text" id="onboarding-interests" class="form-input" placeholder="Ex: React, AI, Design..." value="${this.data.hiringNeeds.join(", ")}">`,
             },
             {
                 title: "Lien Officiel",
-                desc: "Ajoutez le site web ou un lien social principal. C'est essentiel pour rediriger votre audience.",
-                content: `<div class="onboarding-step-content"><input type="url" id="onboarding-website" class="form-input" placeholder="https://votreorganisation.com" value="${this.data.websiteUrl || ""}"></div>`,
+                desc: "Le point de contact principal pour votre audience.",
+                icon: "fa-link",
+                content: `<input type="url" id="onboarding-website" class="form-input" placeholder="https://votreorganisation.com" value="${this.data.websiteUrl || ""}">`,
             },
         ];
 
@@ -2607,19 +3521,34 @@ class XERAProfessionalOnboarding {
         const isLast = this.currentStep === steps.length - 1;
 
         this.tooltip.innerHTML = `
-            <div class="tutorial-premium-content">
-                <div class="tutorial-premium-header">
-                    <div class="tutorial-premium-step-counter">${this.currentStep + 1}<span>/</span>${steps.length}</div>
-                    <button class="btn-tutorial-skip-premium" id="onboarding-cancel">Annuler</button>
+            <div class="onboarding-visual-side">
+                <div class="onboarding-visual-logo">
+                    <img src="icons/logo.png" style="width: 24px; height: 24px; filter: brightness(0) invert(1);">
                 </div>
-                <h3 style="margin: 0.5rem 0 1rem; font-size: 1.5rem;">${step.title}</h3>
-                <div class="tutorial-text-body" style="margin-bottom: 20px; font-size: 1rem; line-height: 1.4;">${step.desc}</div>
-                <div class="onboarding-step-container" style="margin-bottom: 30px;">
-                    ${step.content}
+                <div class="onboarding-visual-text">
+                    <h2 style="font-family: 'Outfit', sans-serif !important;">XERA Pro Page</h2>
+                    <p>Déployez votre entité professionnelle et commencez à recruter ou à collaborer.</p>
                 </div>
-                <div class="tutorial-premium-actions" style="display: flex; gap: 15px; justify-content: flex-end;">
-                    ${this.currentStep > 0 ? `<button class="btn-tutorial-skip-premium" id="onboarding-prev" style="margin-right: auto;">Retour</button>` : ""}
-                    <button class="btn-tutorial-next-premium" id="onboarding-next">${isLast ? "Activer le Protocole ✨" : "Continuer"}</button>
+                <div class="onboarding-step-counter-clean">
+                    Étape ${this.currentStep + 1} / ${steps.length}
+                </div>
+            </div>
+            <div class="onboarding-form-side">
+                <button class="onboarding-cancel-clean" id="onboarding-cancel">Annuler la configuration</button>
+
+                <h3 style="font-family: 'Outfit', sans-serif !important;">${step.title}</h3>
+                <div class="tutorial-text-body" style="margin-bottom: 25px !important;">${step.desc}</div>
+
+                <div class="onboarding-input-group" style="${this.currentStep === 3 || this.currentStep === 4 ? "display:none" : ""}">
+                    <i class="fa-solid ${step.icon}"></i>
+                    ${this.currentStep === 1 || this.currentStep === 2 ? "" : step.content}
+                </div>
+
+                ${this.currentStep === 1 || this.currentStep === 2 || this.currentStep === 3 || this.currentStep === 4 ? step.content : ""}
+
+                <div style="display: flex; gap: 20px; align-items: center; margin-top: auto; justify-content: flex-end;">
+                    ${this.currentStep > 0 ? `<button id="onboarding-prev" style="background:none; border:none; color:#94a3b8; cursor:pointer; font-weight:600; font-size:13px; padding: 10px;">Retour</button>` : ""}
+                    <button class="btn-violet-premium" id="onboarding-next">${isLast ? "Déployer la Page" : "Étape suivante"}</button>
                 </div>
             </div>
         `;
@@ -2716,14 +3645,14 @@ class XERAProfessionalOnboarding {
                 const file = e.target.files[0];
                 if (!file) return;
                 const status = document.getElementById("avatar-upload-status");
-                status.innerHTML = `<div class="loading-spinner" style="width:20px;height:20px;"></div> Uploading...`;
+                status.innerHTML = `<span style="display:inline-flex;align-items:center;gap:8px;"><span class="loading-spinner" style="width:18px;height:18px;border-width:2px;"></span>Téléversement du logo en cours...</span>`;
                 const res = await window.uploadFile(file, "pro-pages/avatars");
                 if (res.success) {
                     this.data.avatarUrl = res.url;
                     this.showStep();
                 } else {
-                    alert("Upload failed: " + res.error);
-                    status.innerText = "";
+                    alert("Échec du téléversement : " + res.error);
+                    status.innerText = "Échec du téléversement.";
                 }
             };
         }
@@ -2734,14 +3663,14 @@ class XERAProfessionalOnboarding {
                 const file = e.target.files[0];
                 if (!file) return;
                 const status = document.getElementById("banner-upload-status");
-                status.innerHTML = `<div class="loading-spinner" style="width:20px;height:20px;"></div> Uploading...`;
+                status.innerHTML = `<span style="display:inline-flex;align-items:center;gap:8px;"><span class="loading-spinner" style="width:18px;height:18px;border-width:2px;"></span>Téléversement de la bannière en cours...</span>`;
                 const res = await window.uploadFile(file, "pro-pages/banners");
                 if (res.success) {
                     this.data.bannerUrl = res.url;
                     this.showStep();
                 } else {
-                    alert("Upload failed: " + res.error);
-                    status.innerText = "";
+                    alert("Échec du téléversement : " + res.error);
+                    status.innerText = "Échec du téléversement.";
                 }
             };
         }
@@ -2881,7 +3810,7 @@ class XERAProfessionalOnboarding {
         } catch (err) {
             console.error(err);
             alert("Erreur: " + err.message);
-            nextBtn.innerText = "Lancer ma page ✨";
+            nextBtn.innerText = "Déployer la Page";
             nextBtn.disabled = false;
         }
     }
@@ -2896,35 +3825,86 @@ class XERAProfessionalOnboarding {
 
 // Export pour usage global avec initialisation automatique
 if (typeof window !== "undefined") {
+    // 1. Définition immédiate des utilitaires de navigation pour éviter le "?.()" qui ne fait rien
+    window.waitForProfessionalManager = async function (timeoutMs = 5000) {
+        const start = Date.now();
+        while (!window.professionalManager && Date.now() - start < timeoutMs) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        return window.professionalManager;
+    };
+
+    window.navigateToProfessionalPage = async function (event) {
+        console.log("[Pro] Global navigateToProfessionalPage called");
+
+        if (event && typeof event.preventDefault === "function") {
+            event.preventDefault();
+        }
+
+        // Notification immédiate pour retour utilisateur
+        if (typeof window.showToast === "function") {
+            window.showToast("Ouverture de votre espace professionnel...", "info");
+        }
+
+        const manager = window.professionalManager || await window.waitForProfessionalManager(4000);
+
+        if (!manager) {
+            console.error("[Pro] Professional Manager not ready after wait");
+            // Fallback ultime : redirection manuelle si possible
+            const params = new URLSearchParams(window.location.search);
+            const currentSlug = params.get("pro");
+            if (currentSlug) {
+                window.location.href = `profile.html?pro=${currentSlug}`;
+            } else {
+                window.location.href = "profile.html";
+            }
+            return;
+        }
+
+        try {
+            await manager.navigateToMyPage();
+        } catch (err) {
+            console.error("[Pro] Error in navigateToMyPage:", err);
+            // Fallback sur erreur
+            window.location.href = "profile.html";
+        }
+    };
+
+    // 2. Initialisation du manager
     const initManager = () => {
         const client =
             window.supabaseClient ||
             window.supabase ||
             (typeof supabase !== "undefined" ? supabase : null);
-        if (client) {
+
+        if (client && client.auth) {
+            console.log("[Pro] Supabase client found, initializing manager...");
             window.professionalManager = new XERAProfessionalManager(client);
             window.professionalManager.initNavigation().catch(console.warn);
             console.log("XERA Professional Manager initialized.");
+
             // Delegated click handler so the nav button works even if re-rendered
             if (!window._proNavDelegationHooked) {
-                document.addEventListener("click", (ev) => {
-                    const btn = ev.target.closest
-                        ? ev.target.closest("#nav-pro-page")
-                        : null;
-                    if (btn) {
-                        ev.preventDefault();
-                        try {
-                            window.professionalManager?.navigateToMyPage();
-                        } catch (e) {
-                            console.warn("navigateToMyPage failed:", e);
+                document.addEventListener(
+                    "click",
+                    (ev) => {
+                        const btn = ev.target.closest
+                            ? ev.target.closest("#nav-pro-page")
+                            : null;
+                        if (btn) {
+                            console.log("[Pro] Global click intercepted on #nav-pro-page");
+                            window.navigateToProfessionalPage(ev);
                         }
-                    }
-                });
+                    },
+                    true,
+                );
                 window._proNavDelegationHooked = true;
             }
         } else {
-            setTimeout(initManager, 100);
+            // Si pas encore de client, on réessaie (peut arriver si le CDN est lent)
+            setTimeout(initManager, 200);
         }
     };
+
     initManager();
 }

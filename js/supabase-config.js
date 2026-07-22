@@ -453,5 +453,80 @@ window.getFollowerCount = getFollowerCount;
 window.getFollowingCount = getFollowingCount;
 window.getUserEngagementTotals = getUserEngagementTotals;
 window.getUserProjects = getUserProjects;
-window.supabase = supabase;
-window.supabaseClient = supabase;
+
+// Ne pas écraser window.supabase s'il est déjà défini par la lib CDN
+if (supabase) {
+    window.supabase = supabase;
+    window.supabaseClient = supabase;
+}
+
+/**
+ * HELPERS - ACCOUNT TYPES & PLANS
+ */
+
+function normalizeAccountType(value) {
+    return String(value || "")
+        .trim()
+        .toLowerCase();
+}
+
+function isProAccountType(accountType, accountSubtype) {
+    const values = [accountType, accountSubtype]
+        .filter(
+            (value) => value !== undefined && value !== null && value !== "",
+        )
+        .map((value) => normalizeAccountType(value));
+
+    return values.some((value) =>
+        [
+            "community",
+            "enterprise",
+            "company",
+            "pro",
+            "communauté",
+            "entreprise",
+            "institution",
+            "organization",
+            "organisation",
+            "org",
+            "team",
+            "recruiter",
+            "investor",
+            "partner",
+            "professional",
+        ].includes(value),
+    );
+}
+
+function isProUser(user) {
+    if (!user) return false;
+
+    // Debug pour identifier le statut pro
+    const subtype = user.account_subtype || user.user_metadata?.account_subtype;
+    const type = user.account_type || user.user_metadata?.account_type;
+
+    const normalizedPlan = normalizeAccountType(
+        user.plan ||
+            user.subscription_tier ||
+            user.role ||
+            type ||
+            user.user_metadata?.plan ||
+            user.user_metadata?.subscription_tier
+    );
+
+    const isPro = (
+        user.is_pro === true ||
+        user.isPro === true ||
+        normalizedPlan === "pro" ||
+        normalizedPlan === "elite" ||
+        isProAccountType(type, subtype)
+    );
+
+    if (isPro) console.log(`[Auth] User confirmed as PRO (subtype: ${subtype}, plan: ${normalizedPlan})`);
+
+    return isPro;
+}
+
+window.isProUser = isProUser;
+window.isProAccountType = isProAccountType;
+window.normalizeAccountType = normalizeAccountType;

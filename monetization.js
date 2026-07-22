@@ -118,27 +118,33 @@ export function isProAccountType(accountType) {
         "organisation",
         "org",
         "team",
+        "professional",
+        "recruiter",
+        "investor",
+        "partner",
     ].includes(normalized);
 }
 
 export async function buildProfileReturnPath(userId, client) {
     if (!userId) return "/profile";
     let accountType = "personal";
+    let accountSubtype = "personal";
     if (client) {
         try {
             const { data: userProfile } = await client
                 .from("users")
-                .select("account_type, user_metadata")
+                .select("account_type, account_subtype, user_metadata")
                 .eq("id", userId)
                 .maybeSingle();
             if (userProfile) {
                 accountType = userProfile.account_type || userProfile.user_metadata?.account_type;
+                accountSubtype = userProfile.account_subtype || userProfile.user_metadata?.account_subtype;
             }
         } catch (e) {
             console.warn("Failed to fetch user account type for return path:", e);
         }
     }
-    const route = isProAccountType(accountType) ? "/pagepro" : "/profile";
+    const route = isProAccountType(accountType, accountSubtype) ? "/pagepro" : "/profile";
     return `${route}?user=${encodeURIComponent(userId)}`;
 }
 // ...existing code...

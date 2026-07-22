@@ -10651,7 +10651,7 @@ html.light-mode .btn-theme-toggle:hover {
     flex-wrap: wrap;
 }
 
-#settings-modal .settings-header h2 {
+.settings-header h2 {
     margin: 0;
     color: #fff;
     background: none;
@@ -10661,7 +10661,7 @@ html.light-mode .btn-theme-toggle:hover {
     line-height: 1.02;
 }
 
-#settings-modal .settings-header p {
+.settings-header p {
     max-width: 680px;
     margin: 0.7rem 0 0;
     color: rgba(245, 245, 245, 0.68);
@@ -11367,6 +11367,42 @@ html.light-mode .btn-theme-toggle:hover {
     background: #10b981;
     color: #02130d;
     font-weight: 800;
+}
+
+.settings-panel-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.9rem;
+    padding: 0.75rem 1rem 0;
+    flex-wrap: wrap;
+}
+
+.settings-panel-actions .btn-save,
+.settings-panel-actions .btn-cancel {
+    min-width: 170px;
+}
+
+.settings-panel-actions .btn-cancel {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f8fafc;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.settings-panel-actions .btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+#settings-modal .btn-save {
+    min-height: 48px;
+    border-radius: 8px;
+    background: #0ea5e9;
+    color: #fff;
+    border-color: transparent;
+    font-weight: 800;
+}
+
+#settings-modal .btn-save:hover {
+    transform: translateY(-1px);
 }
 
 .settings-danger-zone {
@@ -14142,6 +14178,428 @@ html.dark-mode .tutorial-text-body {
 @media (max-width: 900px) {
     .pro-page-content {
         grid-template-columns: 1fr !important;
+    }
+}
+
+.pro-settings-shell {
+    min-height: calc(100vh - 130px);
+    padding: 1.5rem 0;
+    color: #f8f8f8;
+}
+
+.pro-settings-page-shell {
+    background: #070707;
+}
+
+.pro-settings-overlay-shell {
+    background: #09090b;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
+    max-width: 1120px;
+    width: min(100%, 1120px);
+    max-height: calc(100vh - 40px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: #fff;
+}
+
+.pro-settings-overlay-shell .settings-header {
+    background: #111114;
+    padding: 24px 32px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pro-settings-overlay-shell .settings-workbench {
+    flex: 1;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+}
+
+.pro-settings-overlay-shell .settings-navigation {
+    background: #09090b;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 24px 16px;
+    height: 100%;
+}
+
+.pro-settings-overlay-shell .settings-panel-stack {
+    background: #020617;
+    overflow-y: auto;
+    padding: 32px;
+}
+
+.pro-settings-overlay-shell .settings-panel {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    min-height: auto;
+    display: block;
+}
+
+.pro-settings-overlay-shell .settings-panel-intro {
+    padding: 0 0 24px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 24px;
+}
+
+.pro-settings-overlay-shell .settings-panel-intro p {
+    color: #94a3b8;
+    font-size: 0.95rem;
+}
+
+.pro-settings-overlay-shell .section-block {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.pro-settings-overlay-shell .section-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    margin: 0;
+    color: #fff;
+}
+
+.pro-settings-overlay-shell .section-description {
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.pro-settings-overlay-shell .form-input {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f8fafc;
+}
+
+.pro-settings-overlay-shell .form-input:focus {
+    border-color: #8b5cf6;
+    background: #0f172a;
+}
+
+.pro-settings-overlay-shell .settings-nav-item.active {
+    background: #8b5cf6;
+    color: #fff;
+}
+
+.pro-settings-overlay-shell .settings-nav-item.active .settings-nav-glyph {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.pro-settings-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+}
+
+.pro-settings-header-main {
+    max-width: calc(100% - 100px);
+}
+
+.settings-kicker {
+    display: inline-flex;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-size: 0.75rem;
+    font-weight: 900;
+    color: #a855f7;
+    margin-bottom: 0.5rem;
+}
+
+.settings-title-row h2 {
+    margin: 0 0 0.35rem;
+    font-size: clamp(1.6rem, 2vw, 2.6rem);
+    line-height: 1.05;
+}
+
+.settings-subtitle {
+    display: block;
+    color: #d4d4d8;
+    font-size: 0.96rem;
+    max-width: 680px;
+}
+
+.settings-close-btn {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #fff;
+    background: transparent;
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.pro-settings-grid {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 1.5rem;
+}
+
+.pro-settings-sidebar {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.pro-settings-nav-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.85rem;
+    padding: 1rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.02);
+    color: inherit;
+    text-align: left;
+    align-items: center;
+    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    cursor: pointer;
+}
+
+.pro-settings-nav-item:hover,
+.pro-settings-nav-item.active {
+    border-color: rgba(168, 85, 247, 0.35);
+    background: rgba(168, 85, 247, 0.12);
+    transform: translateX(1px);
+}
+
+.pro-settings-nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.08);
+    font-size: 1.1rem;
+}
+
+.pro-settings-main {
+    min-width: 0;
+}
+
+.pro-settings-form {
+    display: grid;
+    gap: 1.4rem;
+}
+
+.section-block {
+    display: grid;
+    gap: 1rem;
+    padding: 1.3rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.section-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 900;
+}
+
+.section-description {
+    color: #c7c7d4;
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+
+.pro-settings-media-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr 1fr;
+}
+
+.pro-settings-upload-card {
+    display: grid;
+    gap: 0.9rem;
+    padding: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.pro-settings-preview {
+    min-height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 18px;
+    overflow: hidden;
+}
+
+.preview-avatar {
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 18px;
+}
+
+.preview-banner {
+    width: 100%;
+    max-height: 124px;
+    object-fit: cover;
+    border-radius: 16px;
+}
+
+.form-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr 1fr;
+}
+
+.form-group {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.form-group span {
+    color: #e5e7eb;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.form-input {
+    width: 100%;
+    min-height: 46px;
+    padding: 0.95rem 1rem;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f8fafc;
+    font-size: 0.95rem;
+    outline: none;
+}
+
+.form-input::placeholder {
+    color: #9ca3af;
+}
+
+.section-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 1rem 0;
+}
+
+.toggle-grid {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.form-error {
+    color: #f87171;
+    font-size: 0.88rem;
+}
+
+.settings-card {
+    padding: 1rem;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-danger-zone {
+    background: rgba(244, 63, 94, 0.1);
+    border-color: rgba(244, 63, 94, 0.3);
+}
+
+.btn-delete-account {
+    width: 100%;
+    padding: 1rem 1.15rem;
+    border-radius: 16px;
+    border: none;
+    background: #dc2626;
+    color: #fff;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.pro-settings-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: flex-end;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.pro-settings-button {
+    min-height: 50px;
+    border-radius: 18px;
+    padding: 0 1.3rem;
+    border: 1px solid transparent;
+    font-size: 0.95rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.pro-settings-button-primary {
+    background: #8b5cf6;
+    color: #fff;
+    border-color: transparent;
+}
+
+.pro-settings-button-secondary {
+    background: rgba(255, 255, 255, 0.04);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.pro-settings-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.pro-settings-loading {
+    padding: 4rem 1rem;
+    text-align: center;
+    color: #fff;
+}
+
+@media (max-width: 980px) {
+    .pro-settings-grid {
+        grid-template-columns: 1fr;
+    }
+    .pro-settings-sidebar {
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(0, 1fr);
+        overflow-x: auto;
+        padding-bottom: 0.5rem;
+    }
+    .pro-settings-nav-item {
+        grid-template-columns: 1fr;
+    }
+    .pro-settings-main {
+        min-width: auto;
+    }
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+    .pro-settings-media-grid {
+        grid-template-columns: 1fr;
+    }
+    .pro-settings-page-shell {
+        padding: 24px 0;
     }
 }
 

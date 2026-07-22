@@ -18,7 +18,7 @@ window.arcCollaboratorsCache = new Map();
 window.arcCollaboratorsPending = new Set();
 window.pendingLatestPublishedHighlightUserId = null;
 window.pendingCreatePostAfterArc = null;
-let firstPostOnboardingHandled = false;
+window.firstPostOnboardingHandled = false;
 let initialEmailActionHandled = false;
 const CONTENT_PREFETCH_BATCH_SIZE = 10;
 const CONTENT_FETCH_BATCH_SIZE = 50;
@@ -1243,53 +1243,6 @@ function normalizeAccountType(value) {
         .toLowerCase();
 }
 
-function isProAccountType(accountType, accountSubtype) {
-    const values = [accountType, accountSubtype]
-        .filter(
-            (value) => value !== undefined && value !== null && value !== "",
-        )
-        .map((value) => normalizeAccountType(value));
-
-    return values.some((value) =>
-        [
-            "community",
-            "enterprise",
-            "company",
-            "pro",
-            "communauté",
-            "entreprise",
-            "institution",
-            "organization",
-            "organisation",
-            "org",
-            "team",
-        ].includes(value),
-    );
-}
-
-function isProUser(user) {
-    if (!user) return false;
-    const normalizedPlan = normalizeAccountType(
-        user.plan ||
-            user.subscription_tier ||
-            user.role ||
-            user.account_type ||
-            user.user_metadata?.plan ||
-            user.user_metadata?.subscription_tier ||
-            user.user_metadata?.account_type,
-    );
-
-    return (
-        user.is_pro === true ||
-        user.isPro === true ||
-        normalizedPlan === "pro" ||
-        isProAccountType(user.account_type, user.account_subtype)
-    );
-}
-
-// Expose helper globally for legacy (non-module) scripts
-window.isProUser = isProUser;
-
 function buildProfileUrl(userId, accountType, accountSubtype) {
     if (!accountType && userId) {
         const cachedUser = getUser(userId);
@@ -1496,7 +1449,6 @@ function ensureMonetizationNavButton() {
 
     return button;
 }
-
 
 async function updateMonetizationNavButton(isLoggedIn) {
     const button = ensureMonetizationNavButton();
@@ -1820,26 +1772,27 @@ async function fetchWorkItems(userId) {
 function renderWorkItemsHtml(items) {
     if (!items || items.length === 0) return "";
 
-    const itemsHtml = items.map(item => {
-        const sourceLabel = String(item.source || "outil").toUpperCase();
-        const imageUrl = item.previewUrl || item.mediaUrl;
+    const itemsHtml = items
+        .map((item) => {
+            const sourceLabel = String(item.source || "outil").toUpperCase();
+            const imageUrl = item.previewUrl || item.mediaUrl;
 
-        let extraContentHtml = "";
-        if (item.source === 'github' && item.codeSnippet) {
-            extraContentHtml = `
+            let extraContentHtml = "";
+            if (item.source === "github" && item.codeSnippet) {
+                extraContentHtml = `
                 <div style="background: #1e293b; padding: 10px; border-radius: 8px; margin: 10px 0; border: 1px solid #334155; overflow-x: auto;">
                     <pre style="margin: 0; color: #94a3b8; font-family: monospace; font-size: 0.75rem; line-height: 1.4;">${escapeHtml(item.codeSnippet)}</pre>
                 </div>
             `;
-        } else if (imageUrl) {
-            extraContentHtml = `
+            } else if (imageUrl) {
+                extraContentHtml = `
                 <div style="margin: 12px 0;">
                     <img src="${imageUrl}" style="width: 100%; height: auto; max-height: 280px; border-radius: 12px; object-fit: cover; border: 1px solid var(--border-color);">
                 </div>
             `;
-        }
+            }
 
-        return `
+            return `
             <div class="work-item-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 16px; padding: 1.2rem; margin-bottom: 1rem; transition: transform 0.2s;">
                 <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.8rem;">
                     <img src="icons/${item.source}.svg" onerror="this.src='icons/tech.svg'" style="width:16px;height:16px;opacity:0.7;">
@@ -1850,11 +1803,12 @@ function renderWorkItemsHtml(items) {
                 ${item.description ? `<p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">${escapeHtml(item.description)}</p>` : ""}
                 ${extraContentHtml}
                 <div style="margin-top: 0.8rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    ${(item.metadata?.skills || []).map(skill => `<span style="font-size: 0.65rem; background: rgba(59, 130, 246, 0.1); color: #60a5fa; padding: 2px 8px; border-radius: 4px;">${escapeHtml(skill)}</span>`).join('')}
+                    ${(item.metadata?.skills || []).map((skill) => `<span style="font-size: 0.65rem; background: rgba(59, 130, 246, 0.1); color: #60a5fa; padding: 2px 8px; border-radius: 4px;">${escapeHtml(skill)}</span>`).join("")}
                 </div>
             </div>
         `;
-    }).join('');
+        })
+        .join("");
 
     return `
         <div class="work-items-section" style="margin: 2rem 0;">
@@ -2647,6 +2601,17 @@ function updateNavigation(isLoggedIn) {
     // Retirer le bouton réglages de la nav s'il existait
     const navSettings = document.getElementById("nav-settings-btn");
     if (navSettings) navSettings.remove();
+
+    // Gestion de l'affichage Pro/Institution
+    const isPro = window.isProUser && window.isProUser(window.currentUser);
+    const navPro = document.getElementById("nav-pro-page");
+
+    if (isLoggedIn && (isPro || window.userHasProPage)) {
+        if (navPro) {
+            navPro.style.setProperty("display", "flex", "important");
+            console.log("[Auth] Navigation Pro activée (Force Show).");
+        }
+    }
 
     if (isLoggedIn && window.professionalManager) {
         window.professionalManager.initNavigation();
@@ -4514,7 +4479,7 @@ function showMobileArcOnboardingNotification(userId) {
 }
 
 async function maybeStartFirstPostFlow() {
-    if (!window.currentUser || firstPostOnboardingHandled) return;
+    if (!window.currentUser || window.firstPostOnboardingHandled) return;
 
     // Détection plus large de la page Discover
     const isOnDiscover =
@@ -4524,7 +4489,7 @@ async function maybeStartFirstPostFlow() {
         window.location.pathname === "/";
 
     if (!isOnDiscover) return;
-    firstPostOnboardingHandled = true;
+    window.firstPostOnboardingHandled = true;
 
     const userId = window.currentUser.id;
 
@@ -14764,7 +14729,7 @@ async function renderProfileTimeline(userId) {
 ${
     !window.userHasProPage
         ? `
-<button class="badge settings-badge" onclick="window.professionalManager?.navigateToMyPage()" title="Page Pro">
+<button class="badge settings-badge" onclick="window.navigateToProfessionalPage?.()" title="Page Pro">
             <div class="badge-icon"><img src="icons/enterprise.svg" alt="Page Pro" style="width:100%;height:100%;"></div>
             <span>Page Pro</span>
 </button>
@@ -15127,7 +15092,7 @@ ${
             : "";
 
     const noArcNoticeHtml = !hasArcs
-        ? (isOwnProfile
+        ? isOwnProfile
             ? `
 <div class="no-arc-notice own-nudge" style="margin: 2rem 0; padding: 2.5rem 1.5rem; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-secondary); text-align: center;">
             <h4 style="margin: 0 0 0.75rem; color: var(--text-primary); font-family: 'Outfit', sans-serif; letter-spacing: -0.01em; font-size: 1.25rem;">Commencez votre trajectoire</h4>
@@ -15139,7 +15104,7 @@ ${
 <div class="no-arc-notice" style="margin: 1.5rem 0; padding: 1.5rem; border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-muted); text-align: center; font-size: 0.9rem;">
             Aucun projet public pour le moment.
 </div>
-            `)
+            `
         : "";
 
     const weeklyChartHtml = hasArcs
@@ -15366,7 +15331,14 @@ function isPageProRoute() {
                     user?.account_type ||
                     user?.user_metadata?.account_type ||
                     null;
-                if (accountType && isProAccountType(accountType)) {
+                const accountSubtype =
+                    user?.account_subtype ||
+                    user?.user_metadata?.account_subtype ||
+                    null;
+                if (
+                    (accountType || accountSubtype) &&
+                    isProAccountType(accountType, accountSubtype)
+                ) {
                     return true;
                 }
             }
@@ -15397,7 +15369,9 @@ async function renderProfileIntoContainer(userId) {
     const user = getUser(userId);
     const accountType =
         user?.account_type || user?.user_metadata?.account_type || null;
-    const isPro = user ? isProAccountType(accountType) : null;
+    const accountSubtype =
+        user?.account_subtype || user?.user_metadata?.account_subtype || null;
+    const isPro = user ? isProAccountType(accountType, accountSubtype) : null;
 
     const isProRoute = isPageProRoute();
 
@@ -15406,7 +15380,7 @@ async function renderProfileIntoContainer(userId) {
             window.history.replaceState(
                 {},
                 document.title,
-                buildProfileUrl(userId, accountType),
+                buildProfileUrl(userId, accountType, accountSubtype),
             );
         } catch (e) {
             console.warn("Unable to normalize pro profile route:", e);
@@ -15444,7 +15418,14 @@ async function renderProfileIntoContainer(userId) {
     }
 
     if (isPageProRoute() && typeof window.navigateTo === "function") {
-        window.navigateTo("pro-page");
+        const params = new URLSearchParams(window.location.search);
+        const proSlug = params.get("pro");
+        const isProfilePage = window.location.pathname.includes("profile.html") || window.location.pathname.includes("/pagepro");
+
+        // Ne pas rediriger si on est déjà sur la bonne page/route pour éviter les boucles de redirection
+        if (!isProfilePage) {
+            window.navigateTo("pagepro", { query: proSlug ? { pro: proSlug } : {} });
+        }
     }
 
     const profileContainer = getProfileRenderContainer();
@@ -15959,11 +15940,21 @@ async function handleProfileNavigation() {
         window.currentUser.account_type ||
         window.currentUser.user_metadata?.account_type ||
         "personal";
-    const profileRoute = isProAccountType(accountType) ? "pagepro" : "profile";
+    const accountSubtype =
+        window.currentUser.account_subtype ||
+        window.currentUser.user_metadata?.account_subtype ||
+        "personal";
+    const profileRoute = isProAccountType(accountType, accountSubtype)
+        ? "pagepro"
+        : "profile";
     window.currentProfileViewed = targetUserId || null;
 
     if (!document.getElementById("profile")) {
-        window.location.href = buildProfileUrl(targetUserId, accountType);
+        window.location.href = buildProfileUrl(
+            targetUserId,
+            accountType,
+            accountSubtype,
+        );
         return;
     }
 
@@ -16009,10 +16000,20 @@ async function navigateToUserProfile(userId) {
     const user = getUser(userId);
     const accountType =
         user?.account_type || user?.user_metadata?.account_type || "personal";
-    const profileRoute = isProAccountType(accountType) ? "pagepro" : "profile";
+    const accountSubtype =
+        user?.account_subtype ||
+        user?.user_metadata?.account_subtype ||
+        "personal";
+    const profileRoute = isProAccountType(accountType, accountSubtype)
+        ? "pagepro"
+        : "profile";
 
     if (!document.getElementById("profile")) {
-        window.location.href = buildProfileUrl(userId, accountType);
+        window.location.href = buildProfileUrl(
+            userId,
+            accountType,
+            accountSubtype,
+        );
         return;
     }
 

@@ -100,9 +100,9 @@ class NavigationEnhancer {
         // Intercepter les appels à navigateTo pour ajouter des transitions
         const originalNavigateTo = window.navigateTo;
         
-        window.navigateTo = (pageId) => {
+        window.navigateTo = (pageId, options) => {
             const currentPage = document.querySelector('.page.active');
-            const nextPage = document.getElementById(pageId);
+            const nextPage = document.getElementById(pageId) || document.getElementById(pageId === 'pagepro' ? 'pro-page' : pageId);
             
             if (currentPage && nextPage && currentPage !== nextPage) {
                 // Animation de sortie
@@ -112,7 +112,7 @@ class NavigationEnhancer {
                 
                 setTimeout(() => {
                     if (originalNavigateTo) {
-                        originalNavigateTo(pageId);
+                        originalNavigateTo(pageId, options);
                     } else {
                         // Fallback simple
                         currentPage.classList.remove('active');
@@ -132,7 +132,7 @@ class NavigationEnhancer {
             } else {
                 // Pas de transition, utiliser la fonction originale
                 if (originalNavigateTo) {
-                    originalNavigateTo(pageId);
+                    originalNavigateTo(pageId, options);
                 }
             }
         };

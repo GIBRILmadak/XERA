@@ -1,29 +1,44 @@
-/**
- * XERA Professional Page Settings - React Component (Island)
- */
-(function() {
-    const React = window.React;
-
-    function ProSettings({ pageId, onClose, onSaveSuccess }) {
+(function () {
+    function ProSettings({
+        pageId,
+        onClose,
+        onSaveSuccess,
+        viewMode = "overlay",
+    }) {
+        const React = window.React;
+        const el = React.createElement;
         const [pageData, setPageData] = React.useState(null);
         const [loading, setLoading] = React.useState(true);
         const [saving, setSaving] = React.useState(false);
+        const [activeSection, setActiveSection] = React.useState("identity");
+        const [slugError, setSlugError] = React.useState("");
         const [formData, setFormData] = React.useState({
-            name: '',
-            bio: '',
-            description: '',
-            industry: '',
-            website_url: '',
+            name: "",
+            slug: "",
+            bio: "",
+            description: "",
+            industry: "",
+            website_url: "",
+            contact_email: "",
+            contact_phone: "",
+            country: "",
+            city: "",
+            timezone: "",
+            language: "fr",
+            appearance_theme: "classic",
+            privacy_comments: true,
+            privacy_messages: true,
+            allow_recruitment: true,
             social_links: {
-                twitter: '',
-                linkedin: '',
-                github: '',
-                instagram: ''
+                twitter: "",
+                linkedin: "",
+                github: "",
+                instagram: "",
             },
-            hiring_needs: '',
-            talent_interests: '',
-            avatar_url: '',
-            banner_url: ''
+            hiring_needs: "",
+            talent_interests: "",
+            avatar_url: "",
+            banner_url: "",
         });
 
         React.useEffect(() => {
@@ -33,283 +48,829 @@
         async function fetchPageData() {
             try {
                 const { data, error } = await window.supabase
-                    .from('professional_pages')
-                    .select('*')
-                    .eq('id', pageId)
+                    .from("professional_pages")
+                    .select("*")
+                    .eq("id", pageId)
                     .single();
 
                 if (error) throw error;
+
+                const metadata = data.metadata || {};
                 setPageData(data);
                 setFormData({
-                    name: data.name || '',
-                    bio: data.bio || '',
-                    description: data.description || '',
-                    industry: data.industry || '',
-                    website_url: data.website_url || '',
+                    name: data.name || "",
+                    slug: data.slug || "",
+                    bio: data.bio || "",
+                    description: data.description || "",
+                    industry: data.industry || "",
+                    website_url: data.website_url || "",
+                    contact_email: metadata.contact_email || "",
+                    contact_phone: metadata.contact_phone || "",
+                    country: metadata.country || "",
+                    city: metadata.city || "",
+                    timezone: metadata.timezone || "",
+                    language: metadata.language || "fr",
+                    appearance_theme: metadata.appearance_theme || "classic",
+                    privacy_comments: metadata.privacy_comments !== false,
+                    privacy_messages: metadata.privacy_messages !== false,
+                    allow_recruitment: metadata.allow_recruitment !== false,
                     social_links: {
-                        twitter: data.social_links?.twitter || '',
-                        linkedin: data.social_links?.linkedin || '',
-                        github: data.social_links?.github || '',
-                        instagram: data.social_links?.instagram || '',
-                        ...(data.social_links || {})
+                        twitter: data.social_links?.twitter || "",
+                        linkedin: data.social_links?.linkedin || "",
+                        github: data.social_links?.github || "",
+                        instagram: data.social_links?.instagram || "",
+                        ...(data.social_links || {}),
                     },
-                    hiring_needs: (data.hiring_needs || []).join(', '),
-                    talent_interests: (data.talent_interests || []).join(', '),
-                    avatar_url: data.avatar_url || '',
-                    banner_url: data.banner_url || ''
+                    hiring_needs: (data.hiring_needs || []).join(", "),
+                    talent_interests: (data.talent_interests || []).join(", "),
+                    avatar_url: data.avatar_url || "",
+                    banner_url: data.banner_url || "",
                 });
             } catch (err) {
                 console.error("Error fetching pro page:", err);
-                alert("Erreur lors du chargement des données.");
+                window.showToast
+                    ? window.showToast(
+                          "Erreur lors du chargement des réglages.",
+                          "error",
+                      )
+                    : alert("Erreur lors du chargement des réglages.");
             } finally {
                 setLoading(false);
             }
         }
 
         const handleInputChange = (e) => {
-            const { name, value } = e.target;
-            setFormData(prev => ({ ...prev, [name]: value }));
+            const { name, value, type, checked } = e.target;
+            setFormData((prev) => ({
+                ...prev,
+                [name]: type === "checkbox" ? checked : value,
+            }));
+            if (name === "slug") {
+                setSlugError("");
+            }
         };
 
         const handleSocialChange = (e) => {
             const { name, value } = e.target;
-            setFormData(prev => ({
+            setFormData((prev) => ({
                 ...prev,
-                social_links: { ...prev.social_links, [name]: value }
+                social_links: { ...prev.social_links, [name]: value },
             }));
         };
 
         const handleFileUpload = async (e, type) => {
-            const file = e.target.files[0];
+            const file = e.target.files?.[0];
             if (!file) return;
 
-            const path = `pro-pages/${type === 'avatar' ? 'avatars' : 'banners'}`;
+            const path = `pro-pages/${type === "avatar" ? "avatars" : "banners"}`;
             const res = await window.uploadFile(file, path);
 
             if (res.success) {
-                setFormData(prev => ({
+                setFormData((prev) => ({
                     ...prev,
-                    [type === 'avatar' ? 'avatar_url' : 'banner_url']: res.url
+                    [type === "avatar" ? "avatar_url" : "banner_url"]: res.url,
                 }));
             } else {
                 alert("Upload failed: " + res.error);
             }
         };
 
+        const normalizeSlug = (value) =>
+            String(value || "")
+                .trim()
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/\s+/g, "-")
+                .replace(/[^a-z0-9-]/g, "")
+                .replace(/-+/g, "-")
+                .replace(/^-|-$/g, "");
+
         const handleSubmit = async (e) => {
             e.preventDefault();
             setSaving(true);
 
-            const hiringNeedsArr = formData.hiring_needs.split(',').map(s => s.trim()).filter(Boolean);
-            const talentInterestsArr = formData.talent_interests.split(',').map(s => s.trim()).filter(Boolean);
+            const slug = normalizeSlug(formData.slug || formData.name);
+            const hiringNeedsArr = formData.hiring_needs
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean);
+            const talentInterestsArr = formData.talent_interests
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean);
 
             try {
-                const { error } = await window.supabase
-                    .from('professional_pages')
-                    .update({
-                        name: formData.name,
-                        bio: formData.bio,
-                        description: formData.description,
-                        industry: formData.industry,
-                        website_url: formData.website_url,
-                        social_links: formData.social_links,
-                        hiring_needs: hiringNeedsArr,
-                        talent_interests: talentInterestsArr,
-                        avatar_url: formData.avatar_url,
-                        banner_url: formData.banner_url,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', pageId);
+                if (slug && slug !== pageData.slug) {
+                    const { data: existing, error: slugErrorQuery } =
+                        await window.supabase
+                            .from("professional_pages")
+                            .select("id")
+                            .eq("slug", slug)
+                            .neq("id", pageId)
+                            .limit(1);
+
+                    if (slugErrorQuery) throw slugErrorQuery;
+                    if (existing?.length) {
+                        setSlugError(
+                            "Cette URL est déjà utilisée. Choisissez-en une autre.",
+                        );
+                        setSaving(false);
+                        return;
+                    }
+                }
+
+                const payload = {
+                    name: formData.name,
+                    slug,
+                    bio: formData.bio,
+                    description: formData.description,
+                    industry: formData.industry,
+                    website_url: formData.website_url,
+                    social_links: formData.social_links,
+                    hiring_needs: hiringNeedsArr,
+                    talent_interests: talentInterestsArr,
+                    avatar_url: formData.avatar_url,
+                    banner_url: formData.banner_url,
+                    metadata: {
+                        ...(pageData.metadata || {}),
+                        contact_email: formData.contact_email,
+                        contact_phone: formData.contact_phone,
+                        country: formData.country,
+                        city: formData.city,
+                        timezone: formData.timezone,
+                        language: formData.language,
+                        appearance_theme: formData.appearance_theme,
+                        privacy_comments: formData.privacy_comments,
+                        privacy_messages: formData.privacy_messages,
+                        allow_recruitment: formData.allow_recruitment,
+                    },
+                    updated_at: new Date().toISOString(),
+                };
+
+                const { data, error } = await window.supabase
+                    .from("professional_pages")
+                    .update(payload)
+                    .eq("id", pageId)
+                    .select()
+                    .single();
 
                 if (error) throw error;
 
-                window.showToast?.("Réglages mis à jour !");
-                if (onSaveSuccess) onSaveSuccess(formData);
+                window.showToast?.("Réglages Page Pro mis à jour !");
+                if (onSaveSuccess) onSaveSuccess(data);
                 onClose();
             } catch (err) {
-                alert("Erreur lors de la sauvegarde: " + err.message);
+                console.error("Save error:", err);
+                alert("Erreur lors de la sauvegarde: " + (err.message || err));
             } finally {
                 setSaving(false);
             }
         };
 
-        if (loading) return React.createElement('div', { className: 'p-10 text-center text-white' }, 'Chargement...');
+        const handleDeletePage = async () => {
+            if (
+                !confirm(
+                    "Voulez-vous vraiment supprimer cette page professionnelle ? Cette action est irréversible.",
+                )
+            ) {
+                return;
+            }
 
-        return React.createElement('div', {
-            className: 'pro-settings-react bg-white text-black p-8 border-4 border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] max-w-2xl w-full max-h-[90vh] overflow-y-auto'
-        }, [
-            React.createElement('div', { className: 'flex justify-between items-center mb-8' }, [
-                React.createElement('h2', { className: 'text-3xl font-black uppercase italic' }, 'Réglages Page Pro'),
-                React.createElement('button', {
-                    onClick: onClose,
-                    className: 'text-4xl font-bold hover:scale-110 transition-transform'
-                }, '×')
-            ]),
+            setSaving(true);
+            try {
+                const { error } = await window.supabase
+                    .from("professional_pages")
+                    .delete()
+                    .eq("id", pageId);
 
-            React.createElement('form', { onSubmit: handleSubmit, className: 'space-y-6' }, [
-                // Identité visuelle
-                React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 border-b-2 border-gray-100' }, [
-                    React.createElement('div', null, [
-                        React.createElement('label', { className: 'block font-bold mb-2 uppercase text-sm' }, 'Logo'),
-                        React.createElement('div', { className: 'flex items-center gap-4' }, [
-                            React.createElement('img', {
-                                src: formData.avatar_url || 'icons/enterprise.svg',
-                                className: 'w-20 h-20 border-2 border-black object-cover rounded-xl'
+                if (error) throw error;
+
+                window.showToast?.("Page professionnelle supprimée.");
+                onClose();
+                if (typeof window.navigateTo === "function") {
+                    window.navigateTo("pro-page");
+                }
+            } catch (err) {
+                console.error("Delete error:", err);
+                alert(
+                    "Impossible de supprimer la page : " + (err.message || err),
+                );
+            } finally {
+                setSaving(false);
+            }
+        };
+
+        const sections = [
+            {
+                id: "identity",
+                title: "Informations",
+                description: "Nom, slogan, description et URL de page",
+                icon: "🏢",
+            },
+            {
+                id: "branding",
+                title: "Identité visuelle",
+                description: "Logo, bannière et signature visuelle",
+                icon: "🎨",
+            },
+            {
+                id: "presence",
+                title: "Présence en ligne",
+                description: "Site, réseaux et contact",
+                icon: "🌐",
+            },
+            {
+                id: "recruitment",
+                title: "Recrutement",
+                description: "Besoins, talents et marque employeur",
+                icon: "💼",
+            },
+            {
+                id: "security",
+                title: "Sécurité",
+                description: "Suppression et confidentialité",
+                icon: "🛡️",
+            },
+        ];
+
+        const renderSection = () => {
+            const el = window.React.createElement;
+            switch (activeSection) {
+                case "identity":
+                    return el("div", { className: "section-block" }, [
+                        el(
+                            "h3",
+                            { className: "section-title" },
+                            "Informations Générales",
+                        ),
+                        el(
+                            "div",
+                            { className: "section-description" },
+                            "Gérez le nom, le slogan et la présentation de votre organisation.",
+                        ),
+                        el("div", { className: "form-grid" }, [
+                            el("label", { className: "form-group" }, [
+                                el("span", null, "Nom de l'organisation"),
+                                el("input", {
+                                    name: "name",
+                                    value: formData.name,
+                                    onChange: handleInputChange,
+                                    placeholder: "Ex: XERA Corp",
+                                    className: "form-input",
+                                }),
+                            ]),
+                            el("label", { className: "form-group" }, [
+                                el("span", null, "Secteur d'activité"),
+                                el("input", {
+                                    name: "industry",
+                                    value: formData.industry,
+                                    onChange: handleInputChange,
+                                    placeholder: "Ex: Tech, Design, Finance",
+                                    className: "form-input",
+                                }),
+                            ]),
+                            el("label", { className: "form-group" }, [
+                                el("span", null, "Slogan / Titre court"),
+                                el("input", {
+                                    name: "bio",
+                                    value: formData.bio,
+                                    onChange: handleInputChange,
+                                    placeholder: "Ex: Construire le futur du Momentum Engine",
+                                    className: "form-input",
+                                }),
+                            ]),
+                        ]),
+                        el("label", { className: "form-group", style: { marginTop: "20px" } }, [
+                            el("span", null, "Description complète"),
+                            el("textarea", {
+                                name: "description",
+                                value: formData.description,
+                                onChange: handleInputChange,
+                                placeholder: "Détaillez vos missions, votre histoire...",
+                                className: "form-input",
+                                style: { minHeight: "150px", resize: "vertical" },
                             }),
-                            React.createElement('input', {
-                                type: 'file',
-                                accept: 'image/*',
-                                onChange: (e) => handleFileUpload(e, 'avatar'),
-                                className: 'text-xs'
-                            })
-                        ])
-                    ]),
-                    React.createElement('div', null, [
-                        React.createElement('label', { className: 'block font-bold mb-2 uppercase text-sm' }, 'Bannière'),
-                        React.createElement('div', { className: 'flex flex-col gap-2' }, [
-                            formData.banner_url && React.createElement('img', {
-                                src: formData.banner_url,
-                                className: 'w-full h-12 border-2 border-black object-cover rounded-md'
+                        ]),
+                    ]);
+                case "branding":
+                    return el("div", { className: "section-block" }, [
+                        el(
+                            "h3",
+                            { className: "section-title" },
+                            "Identité visuelle",
+                        ),
+                        el(
+                            "div",
+                            { className: "section-description" },
+                            "Changez l’image de marque de votre page.",
+                        ),
+                        el("div", { className: "pro-settings-media-grid" }, [
+                            el(
+                                "div",
+                                { className: "pro-settings-upload-card" },
+                                [
+                                    el("strong", null, "Logo de la Page"),
+                                    el(
+                                        "div",
+                                        { className: "pro-settings-preview" },
+                                        [
+                                            el("img", {
+                                                src:
+                                                    formData.avatar_url ||
+                                                    "icons/enterprise.svg",
+                                                alt: "Logo",
+                                                className: "preview-avatar",
+                                            }),
+                                        ],
+                                    ),
+                                    el("input", {
+                                        type: "file",
+                                        accept: "image/*",
+                                        onChange: (e) =>
+                                            handleFileUpload(e, "avatar"),
+                                    }),
+                                    el(
+                                        "small",
+                                        null,
+                                        "Format carré recommandé.",
+                                    ),
+                                ],
+                            ),
+                            el(
+                                "div",
+                                { className: "pro-settings-upload-card" },
+                                [
+                                    el("strong", null, "Bannière principale"),
+                                    el(
+                                        "div",
+                                        { className: "pro-settings-preview" },
+                                        [
+                                            el("img", {
+                                                src:
+                                                    formData.banner_url ||
+                                                    "icons/enterprise.svg",
+                                                alt: "Bannière",
+                                                className: "preview-banner",
+                                            }),
+                                        ],
+                                    ),
+                                    el("input", {
+                                        type: "file",
+                                        accept: "image/*",
+                                        onChange: (e) =>
+                                            handleFileUpload(e, "banner"),
+                                    }),
+                                    el(
+                                        "small",
+                                        null,
+                                        "Format large 1200x400px recommandé.",
+                                    ),
+                                ],
+                            ),
+                        ]),
+                    ]);
+                case "presence":
+                    return el("div", { className: "section-block" }, [
+                        el(
+                            "h3",
+                            { className: "section-title" },
+                            "Présence en ligne",
+                        ),
+                        el(
+                            "div",
+                            { className: "section-description" },
+                            "Rassemblez les liens et coordonnées clés.",
+                        ),
+                        el("div", { className: "form-grid" }, [
+                            el("label", { className: "form-group" }, [
+                                el("span", null, "Site web officiel"),
+                                el("input", {
+                                    name: "website_url",
+                                    value: formData.website_url,
+                                    onChange: handleInputChange,
+                                    placeholder: "https://votre-site.com",
+                                    className: "form-input",
+                                }),
+                            ]),
+                            el("label", { className: "form-group" }, [
+                                el("span", null, "Email de contact"),
+                                el("input", {
+                                    name: "contact_email",
+                                    type: "email",
+                                    value: formData.contact_email,
+                                    onChange: handleInputChange,
+                                    placeholder: "contact@entreprise.com",
+                                    className: "form-input",
+                                }),
+                            ]),
+                            el("label", { className: "form-group" }, [
+                                el("span", null, "Téléphone"),
+                                el("input", {
+                                    name: "contact_phone",
+                                    value: formData.contact_phone,
+                                    onChange: handleInputChange,
+                                    placeholder: "+33 1 23 45 67 89",
+                                    className: "form-input",
+                                }),
+                            ]),
+                            el("label", { className: "form-group" }, [
+                                el("span", null, "Ville / Pays"),
+                                el("input", {
+                                    name: "city",
+                                    value: formData.city,
+                                    onChange: handleInputChange,
+                                    placeholder: "Paris",
+                                    className: "form-input",
+                                }),
+                            ]),
+                            el("label", { className: "form-group" }, [
+                                el("span", null, "Pays"),
+                                el("input", {
+                                    name: "country",
+                                    value: formData.country,
+                                    onChange: handleInputChange,
+                                    placeholder: "France",
+                                    className: "form-input",
+                                }),
+                            ]),
+                            el("label", { className: "form-group" }, [
+                                el("span", null, "Fuseau horaire"),
+                                el("input", {
+                                    name: "timezone",
+                                    value: formData.timezone,
+                                    onChange: handleInputChange,
+                                    placeholder: "Europe/Paris",
+                                    className: "form-input",
+                                }),
+                            ]),
+                            el("label", { className: "form-group" }, [
+                                el("span", null, "Langue"),
+                                el("input", {
+                                    name: "language",
+                                    value: formData.language,
+                                    onChange: handleInputChange,
+                                    placeholder: "fr",
+                                    className: "form-input",
+                                }),
+                            ]),
+                        ]),
+                        el("div", { className: "section-divider" }),
+                        el(
+                            "div",
+                            { className: "form-grid" },
+                            ["twitter", "linkedin", "github", "instagram"].map(
+                                (key) =>
+                                    el(
+                                        "label",
+                                        { key, className: "form-group" },
+                                        [
+                                            el(
+                                                "span",
+                                                null,
+                                                key === "twitter"
+                                                    ? "X / Twitter"
+                                                    : key
+                                                          .charAt(0)
+                                                          .toUpperCase() +
+                                                          key.slice(1),
+                                            ),
+                                            el("input", {
+                                                name: key,
+                                                value:
+                                                    formData.social_links[
+                                                        key
+                                                    ] || "",
+                                                onChange: handleSocialChange,
+                                                placeholder:
+                                                    key === "linkedin"
+                                                        ? "linkedin.com/in/..."
+                                                        : key === "github"
+                                                          ? "github.com/..."
+                                                          : "@nom",
+                                                className: "form-input",
+                                            }),
+                                        ],
+                                    ),
+                            ),
+                        ),
+                    ]);
+                case "recruitment":
+                    return el("div", { className: "section-block" }, [
+                        el("h3", { className: "section-title" }, "Recrutement"),
+                        el(
+                            "div",
+                            { className: "section-description" },
+                            "Affichez vos besoins actuels et vos centres d’intérêt.",
+                        ),
+                        el("label", { className: "form-group" }, [
+                            el("span", null, "URL de la page professionnelle"),
+                            el("input", {
+                                name: "slug",
+                                value: formData.slug,
+                                onChange: handleInputChange,
+                                placeholder: "nom-de-page",
+                                className: "form-input",
                             }),
-                            React.createElement('input', {
-                                type: 'file',
-                                accept: 'image/*',
-                                onChange: (e) => handleFileUpload(e, 'banner'),
-                                className: 'text-xs'
-                            })
-                        ])
-                    ])
-                ]),
+                            slugError &&
+                                el(
+                                    "small",
+                                    { className: "form-error" },
+                                    slugError,
+                                ),
+                        ]),
+                        el("label", { className: "form-group" }, [
+                            el("span", null, "Description courte / slogan"),
+                            el("input", {
+                                name: "bio",
+                                value: formData.bio,
+                                onChange: handleInputChange,
+                                className: "form-input",
+                            }),
+                        ]),
+                        el("label", { className: "form-group" }, [
+                            el("span", null, "Besoins actuels"),
+                            el("input", {
+                                name: "hiring_needs",
+                                value: formData.hiring_needs,
+                                onChange: handleInputChange,
+                                placeholder: "Design, Growth, Backend",
+                                className: "form-input",
+                            }),
+                        ]),
+                        el("label", { className: "form-group" }, [
+                            el("span", null, "Centres d'intérêt"),
+                            el("input", {
+                                name: "talent_interests",
+                                value: formData.talent_interests,
+                                onChange: handleInputChange,
+                                placeholder: "IA, Product, Blockchain",
+                                className: "form-input",
+                            }),
+                        ]),
+                        el(
+                            "div",
+                            { className: "toggle-grid" },
+                            [
+                                "allow_recruitment",
+                                "privacy_comments",
+                                "privacy_messages",
+                            ].map((name) =>
+                                el(
+                                    "label",
+                                    { key: name, className: "toggle-row" },
+                                    [
+                                        el(
+                                            "span",
+                                            null,
+                                            name === "allow_recruitment"
+                                                ? "Ouvert aux recrutements"
+                                                : name === "privacy_comments"
+                                                  ? "Autoriser les commentaires"
+                                                  : "Autoriser les messages privés",
+                                        ),
+                                        el("input", {
+                                            type: "checkbox",
+                                            name,
+                                            checked: Boolean(formData[name]),
+                                            onChange: handleInputChange,
+                                        }),
+                                    ],
+                                ),
+                            ),
+                        ),
+                    ]);
+                case "security":
+                    return el("div", { className: "section-block" }, [
+                        el(
+                            "h3",
+                            { className: "section-title" },
+                            "Sécurité et suppression",
+                        ),
+                        el(
+                            "div",
+                            { className: "section-description" },
+                            "Gestion des accès, confidentialité et suppression de la page.",
+                        ),
+                        el(
+                            "div",
+                            { className: "settings-card settings-danger-zone" },
+                            [
+                                el("div", null, [
+                                    el(
+                                        "strong",
+                                        null,
+                                        "Supprimer la page professionnelle",
+                                    ),
+                                    el(
+                                        "p",
+                                        null,
+                                        "Cette action est irréversible et supprimera toutes les certifications liées.",
+                                    ),
+                                ]),
+                                el(
+                                    "button",
+                                    {
+                                        type: "button",
+                                        className: "btn-delete-account",
+                                        onClick: handleDeletePage,
+                                        disabled: saving,
+                                    },
+                                    "Supprimer la page",
+                                ),
+                            ],
+                        ),
+                    ]);
+                default:
+                    return el("div", null, "Section introuvable.");
+            }
+        };
 
-                // Infos de base
-                React.createElement('div', { className: 'space-y-4' }, [
-                    React.createElement('div', null, [
-                        React.createElement('label', { className: 'block font-bold mb-1 uppercase text-xs' }, 'Nom de l\'organisation'),
-                        React.createElement('input', {
-                            type: 'text',
-                            name: 'name',
-                            value: formData.name,
-                            onChange: handleInputChange,
-                            className: 'w-full p-3 border-2 border-black font-bold focus:bg-yellow-50 outline-none',
-                            required: true
-                        })
-                    ]),
-                    React.createElement('div', null, [
-                        React.createElement('label', { className: 'block font-bold mb-1 uppercase text-xs' }, 'Slogan / Bio courte'),
-                        React.createElement('input', {
-                            type: 'text',
-                            name: 'bio',
-                            value: formData.bio,
-                            onChange: handleInputChange,
-                            className: 'w-full p-3 border-2 border-black font-medium focus:bg-yellow-50 outline-none',
-                            placeholder: 'Ex: Façonner le futur de l\'IA'
-                        })
-                    ]),
-                    React.createElement('div', null, [
-                        React.createElement('label', { className: 'block font-bold mb-1 uppercase text-xs' }, 'Description détaillée'),
-                        React.createElement('textarea', {
-                            name: 'description',
-                            value: formData.description,
-                            onChange: handleInputChange,
-                            className: 'w-full p-3 border-2 border-black font-medium focus:bg-yellow-50 outline-none min-h-[100px]',
-                            placeholder: 'Racontez votre histoire...'
-                        })
-                    ])
-                ]),
+        if (!el) {
+            return null;
+        }
 
-                // Momentum Signals
-                React.createElement('div', { className: 'bg-yellow-50 p-6 space-y-4 border-2 border-black' }, [
-                    React.createElement('h3', { className: 'font-black uppercase text-sm mb-4 border-b-2 border-black pb-2' }, 'Signaux Momentum Engine'),
-                    React.createElement('div', null, [
-                        React.createElement('label', { className: 'block font-bold mb-1 text-xs' }, 'Besoins Actuels (Recrutement/Collab)'),
-                        React.createElement('input', {
-                            type: 'text',
-                            name: 'hiring_needs',
-                            value: formData.hiring_needs,
-                            onChange: handleInputChange,
-                            className: 'w-full p-2 border-2 border-black text-sm',
-                            placeholder: 'React, Design, Product Manager...'
-                        })
-                    ]),
-                    React.createElement('div', null, [
-                        React.createElement('label', { className: 'block font-bold mb-1 text-xs' }, 'Centres d\'intérêts (Tags Talent)'),
-                        React.createElement('input', {
-                            type: 'text',
-                            name: 'talent_interests',
-                            value: formData.talent_interests,
-                            onChange: handleInputChange,
-                            className: 'w-full p-2 border-2 border-black text-sm',
-                            placeholder: 'AI, Web3, GreenTech...'
-                        })
-                    ])
-                ]),
+        if (loading) {
+            return el(
+                "div",
+                { className: "pro-settings-loading" },
+                "Chargement des réglages de la page professionnelle…",
+            );
+        }
 
-                // Liens & Réseaux
-                React.createElement('div', { className: 'bg-gray-50 p-6 space-y-4 border-2 border-black' }, [
-                    React.createElement('h3', { className: 'font-black uppercase text-sm mb-4 border-b-2 border-black pb-2' }, 'Présence en ligne'),
-                    React.createElement('div', null, [
-                        React.createElement('label', { className: 'block font-bold mb-1 text-xs' }, 'Site Web Officiel'),
-                        React.createElement('input', {
-                            type: 'url',
-                            name: 'website_url',
-                            value: formData.website_url,
-                            onChange: handleInputChange,
-                            className: 'w-full p-2 border-2 border-black text-sm',
-                            placeholder: 'https://votre-site.com'
-                        })
+        return el(
+            "div",
+            {
+                className: `settings-shell-redesign ${
+                    viewMode === "page"
+                        ? "pro-settings-page-shell"
+                        : "pro-settings-overlay-shell"
+                }`,
+            },
+            [
+                el("div", { className: "settings-header" }, [
+                    el("div", { className: "settings-header-main" }, [
+                        el(
+                            "p",
+                            { className: "settings-kicker" },
+                            "Réglages Pro",
+                        ),
+                        el("div", { className: "settings-title-row" }, [
+                            el(
+                                "h2",
+                                null,
+                                "Réglages de la Page Professionnelle",
+                            ),
+                            el(
+                                "span",
+                                { className: "settings-subtitle" },
+                                "Personnalisez votre page et optimisez votre présence professionnelle.",
+                            ),
+                        ]),
                     ]),
-                    React.createElement('div', { className: 'grid grid-cols-2 gap-4' }, [
-                        ['twitter', 'X (Twitter)'],
-                        ['linkedin', 'LinkedIn'],
-                        ['github', 'GitHub'],
-                        ['instagram', 'Instagram']
-                    ].map(([key, label]) => (
-                        React.createElement('div', { key }, [
-                            React.createElement('label', { className: 'block font-bold mb-1 text-xs' }, label),
-                            React.createElement('input', {
-                                type: 'text',
-                                name: key,
-                                value: formData.social_links?.[key] || '',
-                                onChange: handleSocialChange,
-                                className: 'w-full p-2 border-2 border-black text-sm',
-                                placeholder: '@username'
-                            })
-                        ])
-                    )))
+                    el(
+                        "button",
+                        {
+                            type: "button",
+                            onClick: onClose,
+                            className: "settings-close-btn",
+                            "aria-label": "Fermer",
+                        },
+                        "×",
+                    ),
                 ]),
-
-                // Actions
-                React.createElement('div', { className: 'flex gap-4 pt-6' }, [
-                    React.createElement('button', {
-                        type: 'button',
-                        onClick: onClose,
-                        className: 'flex-1 p-4 border-4 border-black font-black uppercase hover:bg-gray-100 transition-colors'
-                    }, 'Annuler'),
-                    React.createElement('button', {
-                        type: 'submit',
-                        disabled: saving,
-                        className: `flex-1 p-4 border-4 border-black bg-black text-white font-black uppercase hover:bg-gray-800 transition-colors ${saving ? 'opacity-50' : ''}`
-                    }, saving ? 'Sauvegarde...' : 'Enregistrer les modifications ✨')
-                ])
-            ])
-        ]);
+                el("div", { className: "settings-workbench" }, [
+                    el(
+                        "nav",
+                        { className: "settings-navigation" },
+                        sections.map((item) =>
+                            el(
+                                "button",
+                                {
+                                    key: item.id,
+                                    type: "button",
+                                    className: `settings-nav-item ${
+                                        activeSection === item.id
+                                            ? "active"
+                                            : ""
+                                    } ${item.id === "security" ? "settings-nav-danger" : ""}`,
+                                    onClick: () => setActiveSection(item.id),
+                                },
+                                el(
+                                    "span",
+                                    { className: "settings-nav-glyph" },
+                                    item.icon,
+                                ),
+                                el("div", null, [
+                                    el("strong", null, item.title),
+                                    el("small", null, item.description),
+                                ]),
+                            ),
+                        ),
+                    ),
+                    el(
+                        "div",
+                        { className: "settings-panel-stack" },
+                        el("div", { className: "settings-panel active" }, [
+                            el("div", { className: "settings-panel-intro" }, [
+                                el(
+                                    "p",
+                                    null,
+                                    sections.find(
+                                        (section) =>
+                                            section.id === activeSection,
+                                    )?.description ||
+                                        "Mettez à jour les détails de votre page professionnelle.",
+                                ),
+                            ]),
+                            el(
+                                "form",
+                                {
+                                    className: "settings-card-grid",
+                                    onSubmit: handleSubmit,
+                                },
+                                [
+                                    renderSection(),
+                                    el(
+                                        "div",
+                                        { className: "settings-panel-actions" },
+                                        [
+                                            el(
+                                                "button",
+                                                {
+                                                    type: "button",
+                                                    className: "btn-cancel",
+                                                    onClick: onClose,
+                                                    disabled: saving,
+                                                },
+                                                viewMode === "page"
+                                                    ? "Retour à la page Pro"
+                                                    : "Annuler",
+                                            ),
+                                            el(
+                                                "button",
+                                                {
+                                                    type: "submit",
+                                                    className: "btn-save",
+                                                    disabled: saving,
+                                                },
+                                                saving
+                                                    ? "Enregistrement..."
+                                                    : "Enregistrer les modifications",
+                                            ),
+                                        ],
+                                    ),
+                                ],
+                            ),
+                        ]),
+                    ),
+                ]),
+            ],
+        );
     }
 
-    // Export function to mount the component
-    window.mountProSettings = function(containerEl, pageId, onClose) {
-        const root = window.ReactDOM.createRoot(containerEl);
-        root.render(React.createElement(ProSettings, {
-            pageId,
-            onClose: () => {
-                root.unmount();
-                onClose();
-            },
-            onSaveSuccess: (updatedData) => {
-                // Rafraîchir le profil entreprise
-                if (window.professionalManager) {
-                    window.professionalManager.renderProPage(updatedData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''));
-                }
-            }
-        }));
+    window.mountProSettings = function (
+        containerEl,
+        pageId,
+        onClose,
+        viewMode = "overlay",
+    ) {
+        const React = window.React;
+        const ReactDOM = window.ReactDOM;
+
+        if (!containerEl) return;
+        if (!ReactDOM || !React) {
+            console.error(
+                "React n’est pas disponible pour monter les réglages.",
+            );
+            return;
+        }
+
+        if (containerEl._proSettingsRoot) {
+            containerEl._proSettingsRoot.unmount();
+        }
+
+        const root = ReactDOM.createRoot(containerEl);
+        containerEl._proSettingsRoot = root;
+        root.render(
+            React.createElement(ProSettings, {
+                pageId,
+                viewMode,
+                onClose: () => {
+                    root.unmount();
+                    if (typeof onClose === "function") {
+                        onClose();
+                    }
+                },
+                onSaveSuccess: (updatedPage) => {
+                    if (window.professionalManager && updatedPage?.slug) {
+                        window.professionalManager.renderProPage(
+                            updatedPage.slug,
+                        );
+                    }
+                },
+            }),
+        );
     };
+
 })();

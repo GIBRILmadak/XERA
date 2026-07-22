@@ -317,6 +317,10 @@
                 "organisation",
                 "org",
                 "team",
+                "professional",
+                "recruiter",
+                "investor",
+                "partner",
             ].includes(value),
         );
     }
