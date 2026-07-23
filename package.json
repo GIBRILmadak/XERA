@@ -5,7 +5,9 @@
     "main": "index.js",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
-        "api": "node server/monetization-server.js"
+        "api": "node server/monetization-server.js",
+        "start": "node server/optimized-server.js",
+        "dev": "node server/optimized-server.js"
     },
     "keywords": [],
     "author": "",
