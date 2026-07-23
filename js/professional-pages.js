@@ -1209,8 +1209,8 @@ class XERAProfessionalManager {
                     <div class="form-group" style="margin-bottom: 20px;">
                         <label style="display: block; font-weight: 700; margin-bottom: 10px;">Rechercher un utilisateur (Nom)</label>
                         <div style="position: relative;">
-                            <input type="text" id="user-search-input" class="form-input" placeholder="Commencez à taper un nom..." autocomplete="off" style="width: 100%;">
-                            <div id="user-search-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 100; background: #fff; border: 2px solid #000; max-height: 200px; overflow-y: auto;"></div>
+                            <input type="text" id="user-search-input" class="form-input" placeholder="Commencez à taper un nom..." autocomplete="off" style="width: 100%; background-color: #fff !important; color: #000 !important;">
+                            <div id="user-search-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 100; background: #fff; border: 2px solid #000; max-height: 200px; overflow-y: auto; color: #000;"></div>
                         </div>
                     </div>
 
@@ -1222,17 +1222,17 @@ class XERAProfessionalManager {
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
                             <div class="form-group">
                                 <label style="display: block; font-weight: 700; margin-bottom: 5px;">Type</label>
-                                <select id="cert-type" class="form-input" style="width: 100%;">
-                                    <option value="employee">Employé</option>
-                                    <option value="student">Étudiant</option>
-                                    <option value="partner">Partenaire</option>
-                                    <option value="alumni">Ancien</option>
-                                    <option value="contractor">Prestataire</option>
+                                <select id="cert-type" class="form-input" style="width: 100%; background-color: #fff !important; color: #000 !important;">
+                                    <option value="employee" style="background: #fff; color: #000;">Employé</option>
+                                    <option value="student" style="background: #fff; color: #000;">Étudiant</option>
+                                    <option value="partner" style="background: #fff; color: #000;">Partenaire</option>
+                                    <option value="alumni" style="background: #fff; color: #000;">Ancien</option>
+                                    <option value="contractor" style="background: #fff; color: #000;">Prestataire</option>
                                 </select>
                             </div>
                             <div class="form-group">
                                 <label style="display: block; font-weight: 700; margin-bottom: 5px;">Titre / Poste</label>
-                                <input type="text" id="cert-title" class="form-input" placeholder="Ex: Lead Developer" style="width: 100%;">
+                                <input type="text" id="cert-title" class="form-input" placeholder="Ex: Lead Developer" style="width: 100%; background-color: #fff !important; color: #000 !important;">
                             </div>
                         </div>
                         <button id="submit-cert-btn" class="btn btn-primary" style="width: 100%; justify-content: center; height: 50px; font-size: 1.1rem;">Certifier cet utilisateur</button>
@@ -1272,7 +1272,7 @@ class XERAProfessionalManager {
                 results.innerHTML = data
                     .map(
                         (u) => `
-                    <div class="user-option" data-id="${u.id}" data-name="${u.name}" data-avatar="${u.avatar || ""}" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px;">
+                    <div class="user-option" data-id="${u.id}" data-name="${u.name}" data-avatar="${u.avatar || ""}" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px; color: #000;">
                         <img src="${u.avatar || "https://placehold.co/30"}" style="width: 30px; height: 30px; border-radius: 50%;">
                         <span>${u.name}</span>
                     </div>

@@ -11,6 +11,8 @@
         const [loading, setLoading] = React.useState(true);
         const [saving, setSaving] = React.useState(false);
         const [activeSection, setActiveSection] = React.useState("identity");
+        const [mobileSectionOpen, setMobileSectionOpen] =
+            React.useState(false);
         const [slugError, setSlugError] = React.useState("");
         const [formData, setFormData] = React.useState({
             name: "",
@@ -294,6 +296,24 @@
             },
         ];
 
+        const activeSectionMeta =
+            sections.find((section) => section.id === activeSection) ||
+            sections[0];
+
+        const panelStackRef = React.useRef(null);
+
+        React.useEffect(() => {
+            if (!mobileSectionOpen || !panelStackRef.current) return;
+            panelStackRef.current.scrollTo({ top: 0, behavior: "smooth" });
+        }, [activeSection, mobileSectionOpen]);
+
+        const openSettingsSection = (sectionId, event) => {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            setActiveSection(sectionId);
+            setMobileSectionOpen(true);
+        };
+
         const renderSection = () => {
             const el = window.React.createElement;
             switch (activeSection) {
@@ -367,7 +387,7 @@
                         ),
                         el("div", { className: "pro-settings-media-grid" }, [
                             el(
-                                "div",
+                                "label",
                                 { className: "pro-settings-upload-card" },
                                 [
                                     el("strong", null, "Logo de la Page"),
@@ -387,9 +407,18 @@
                                     el("input", {
                                         type: "file",
                                         accept: "image/*",
+                                        className: "pro-settings-file-input",
                                         onChange: (e) =>
                                             handleFileUpload(e, "avatar"),
                                     }),
+                                    el(
+                                        "span",
+                                        {
+                                            className:
+                                                "pro-settings-upload-button",
+                                        },
+                                        "Changer le logo",
+                                    ),
                                     el(
                                         "small",
                                         null,
@@ -398,7 +427,7 @@
                                 ],
                             ),
                             el(
-                                "div",
+                                "label",
                                 { className: "pro-settings-upload-card" },
                                 [
                                     el("strong", null, "Bannière principale"),
@@ -418,9 +447,18 @@
                                     el("input", {
                                         type: "file",
                                         accept: "image/*",
+                                        className: "pro-settings-file-input",
                                         onChange: (e) =>
                                             handleFileUpload(e, "banner"),
                                     }),
+                                    el(
+                                        "span",
+                                        {
+                                            className:
+                                                "pro-settings-upload-button",
+                                        },
+                                        "Changer la bannière",
+                                    ),
                                     el(
                                         "small",
                                         null,
@@ -739,7 +777,20 @@
                         "×",
                     ),
                 ]),
-                el("div", { className: "settings-workbench" }, [
+                el(
+                    "div",
+                    {
+                        className: `settings-workbench ${
+                            mobileSectionOpen
+                                ? "settings-mobile-section-open"
+                                : ""
+                        }`,
+                    },
+                    [
+                    el("div", { className: "settings-mobile-list-header" }, [
+                        el("span", null, "Sections"),
+                        el("strong", null, "Choisissez un réglage à modifier"),
+                    ]),
                     el(
                         "nav",
                         { className: "settings-navigation" },
@@ -754,7 +805,16 @@
                                             ? "active"
                                             : ""
                                     } ${item.id === "security" ? "settings-nav-danger" : ""}`,
-                                    onClick: () => setActiveSection(item.id),
+                                    onClick: (event) =>
+                                        openSettingsSection(item.id, event),
+                                    "aria-expanded":
+                                        activeSection === item.id &&
+                                        mobileSectionOpen,
+                                    "aria-current":
+                                        activeSection === item.id
+                                            ? "page"
+                                            : undefined,
+                                    "data-settings-section": item.id,
                                 },
                                 el(
                                     "span",
@@ -770,16 +830,34 @@
                     ),
                     el(
                         "div",
-                        { className: "settings-panel-stack" },
+                        {
+                            className: "settings-panel-stack",
+                            ref: panelStackRef,
+                        },
+                        [
+                        el("div", { className: "settings-mobile-panel-topbar" }, [
+                            el(
+                                "button",
+                                {
+                                    type: "button",
+                                    className: "settings-mobile-back-btn",
+                                    onClick: () => setMobileSectionOpen(false),
+                                    "aria-label": "Retour aux sections",
+                                },
+                                "‹",
+                            ),
+                            el(
+                                "div",
+                                { className: "settings-mobile-panel-title" },
+                                activeSectionMeta.title,
+                            ),
+                        ]),
                         el("div", { className: "settings-panel active" }, [
                             el("div", { className: "settings-panel-intro" }, [
                                 el(
                                     "p",
                                     null,
-                                    sections.find(
-                                        (section) =>
-                                            section.id === activeSection,
-                                    )?.description ||
+                                    activeSectionMeta?.description ||
                                         "Mettez à jour les détails de votre page professionnelle.",
                                 ),
                             ]),
@@ -823,8 +901,10 @@
                                 ],
                             ),
                         ]),
+                        ],
                     ),
-                ]),
+                    ],
+                ),
             ],
         );
     }
