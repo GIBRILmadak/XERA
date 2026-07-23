@@ -15944,7 +15944,8 @@ async function handleProfileNavigation() {
         window.currentUser.account_subtype ||
         window.currentUser.user_metadata?.account_subtype ||
         "personal";
-    const profileRoute = isProAccountType(accountType, accountSubtype)
+    const isSuperAdmin = !!window.currentUser && window.currentUser.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
+    const profileRoute = (isProAccountType(accountType, accountSubtype) && !isSuperAdmin)
         ? "pagepro"
         : "profile";
     window.currentProfileViewed = targetUserId || null;
@@ -16004,7 +16005,8 @@ async function navigateToUserProfile(userId) {
         user?.account_subtype ||
         user?.user_metadata?.account_subtype ||
         "personal";
-    const profileRoute = isProAccountType(accountType, accountSubtype)
+    const isSuperAdmin = !!window.currentUser && window.currentUser.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
+    const profileRoute = (isProAccountType(accountType, accountSubtype) && !isSuperAdmin)
         ? "pagepro"
         : "profile";
 

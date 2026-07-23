@@ -662,7 +662,9 @@ class XERAProfessionalManager {
             }
 
             // Détection renforcée du statut PRO
+            const isSuperAdmin = window.currentUser?.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
             const isUserPro =
+                isSuperAdmin ||
                 (window.isProUser && window.isProUser(window.currentUser)) ||
                 this.isNonPersonalAccount(window.currentUser);
 
@@ -729,8 +731,9 @@ class XERAProfessionalManager {
                 ".settings-badge[title='Page Pro']",
             );
             if (profileBtn) {
-                // N'afficher que si l'utilisateur n'a pas encore de Page Pro
-                profileBtn.style.display = hasPage ? "none" : "flex";
+                // N'afficher que si l'utilisateur est un compte pro/entreprise (ou Super Admin) ET n'a pas encore de Page Pro
+                const isNonPersonal = this.isNonPersonalAccount(window.currentUser);
+                profileBtn.style.display = (hasPage || (!isNonPersonal && !isSuperAdmin)) ? "none" : "flex";
 
                 profileBtn.onclick = (e) => {
                     e.preventDefault();
