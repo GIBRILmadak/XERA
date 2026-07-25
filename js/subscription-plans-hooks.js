@@ -207,7 +207,9 @@
             params.set("user_id", user.id);
             params.set("access_token", accessToken);
             params.set("method", "card"); // Default payment method
-            params.set("currency", "USD"); // Default currency
+            // K-Pay Mobile Money charges in the operator currency. The server
+            // converts the displayed USD plan price to CDF before initiation.
+            params.set("currency", "CDF");
 
             let returnPath = "creator-dashboard.html";
             if (window.XeraRouter?.buildHtmlUrl) {

@@ -319,7 +319,7 @@
                 const fields = {
                     plan: "elite",
                     billing_cycle: cycle === "annual" ? "annual" : "monthly",
-                    currency: "USD",
+                    currency: "CDF",
                     method: "card",
                     user_id: user.id,
                     access_token: session.access_token,
@@ -336,5 +336,6 @@
                 form.submit();
             }
         </script>
+        <script src="js/ui-motion.js" defer></script>
     </body>
 </html>

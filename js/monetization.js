@@ -1356,7 +1356,9 @@ async function redirectToSupportCheckout({
         params.set("user_id", user.id);
         params.set("access_token", accessToken);
         params.set("method", "card");
-        params.set("currency", "USD");
+        // The support amount is selected in USD, then converted server-side
+        // to CDF for the K-Pay Mobile Money gateway.
+        params.set("currency", "CDF");
 
         // Submit a real navigation so the API's K-Pay 302 is followed directly.
         // fetch() may otherwise fail when it follows K-Pay's cross-origin URL.

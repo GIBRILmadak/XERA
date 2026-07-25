@@ -5462,6 +5462,9 @@ async function toggleCourage(contentId, btnElement) {
 
         const content = findContentById(contentId);
         updateImmersivePrefs(content, "like");
+        if (window.XeraUIMotion && typeof window.XeraUIMotion.playCourageFeedback === "function") {
+            window.XeraUIMotion.playCourageFeedback(allCourageButtons, btnElement);
+        }
         // Notifier l'auteur de la mise à jour (sauf auto-encouragement)
         notifyEncouragement(contentId)
             .then(() => {
