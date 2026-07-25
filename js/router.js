@@ -89,7 +89,6 @@
         "credits.html": "/credits",
         "stream.html": "/stream",
         "subscription-plans.html": "/subscription-plans",
-        "subscription-payment.html": "/subscription-payment",
         "verification.html": "/verification",
         "404.html": "/404",
     };
@@ -114,7 +113,6 @@
         credits: "/credits",
         stream: "/stream",
         subscriptionPlans: "/subscription-plans",
-        subscriptionPayment: "/subscription-payment",
         verification: "/verification",
         notFound: "/404",
     };
@@ -134,7 +132,6 @@
         credits: "credits",
         stream: "stream",
         subscriptionplans: "subscriptionPlans",
-        subscriptionpayment: "subscriptionPayment",
         verification: "verification",
         notfound: "notFound",
         404: "notFound",

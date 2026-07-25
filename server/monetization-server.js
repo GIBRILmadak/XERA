@@ -970,6 +970,7 @@ async function createPendingSubscriptionPayment({
     return {
         id: data.id,
         checkoutRefId,
+        metadata: data.metadata || metadata,
         createdAt: data.created_at,
     };
 }
@@ -1040,6 +1041,7 @@ async function createPendingSupportPayment({
     return {
         id: data.id,
         checkoutRefId,
+        metadata: data.metadata || metadata,
         createdAt: data.created_at,
     };
 }
@@ -1069,6 +1071,62 @@ async function initiateKPayPayment(amount, externalId, description, returnUrl) {
     }
 
     return await response.json();
+}
+
+async function storeKPayPaymentReference(pendingPayment, kpayPayment) {
+    if (!pendingPayment?.id || !kpayPayment?.id) {
+        throw new Error("Référence KPay manquante après l'initialisation.");
+    }
+    const metadata = {
+        ...(pendingPayment.metadata || {}),
+        kpay_payment_id: String(kpayPayment.id),
+        kpay_reference: kpayPayment.reference || null,
+        kpay_initialized_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+        .from("transactions")
+        .update({ metadata })
+        .eq("id", pendingPayment.id);
+    if (error) throw error;
+    pendingPayment.metadata = metadata;
+}
+
+function safeEqualHex(left, right) {
+    const a = String(left || "").trim();
+    const b = String(right || "").trim();
+    if (!a || !b || a.length !== b.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+}
+
+function verifyKPayGatewayReturn(params) {
+    const status = String(params?.status || "").trim().toUpperCase();
+    const reference = String(params?.reference || "").trim();
+    const externalId = String(params?.externalId || params?.external_id || "").trim();
+    const timestamp = Number(params?.ts);
+    const signature = String(params?.sig || "").trim();
+    if (!status || !reference || !externalId || !Number.isFinite(timestamp)) return false;
+    if (Math.abs(Date.now() - timestamp) > 10 * 60 * 1000) return false;
+    const expected = crypto
+        .createHmac("sha256", KPAY_SECRET_KEY)
+        .update(`${status}|${reference}|${externalId}|${timestamp}`)
+        .digest("hex");
+    return safeEqualHex(signature, expected);
+}
+
+async function fetchKPayPaymentStatus(paymentId) {
+    const response = await fetch(
+        `https://admin.kpay.site/api/v1/payments/${encodeURIComponent(paymentId)}`,
+        {
+            headers: {
+                "X-API-Key": KPAY_PUBLIC_KEY,
+                "X-Secret-Key": KPAY_SECRET_KEY,
+            },
+        },
+    );
+    if (!response.ok) {
+        throw new Error(`Vérification KPay impossible: ${response.statusText}`);
+    }
+    return response.json();
 }
 
 async function authenticateRequest(req) {
@@ -3895,6 +3953,8 @@ async function handleKPaySubscriptionCheckout(req, res) {
             callbackUrl,
         );
 
+        await storeKPayPaymentReference(pendingPayment, kpayRes);
+
         if (!kpayRes.gatewayUrl) {
             throw new Error("KPay n'a pas retourné d'URL de paiement.");
         }
@@ -4087,6 +4147,8 @@ async function handleKPaySupportCheckout(req, res) {
             callbackUrl,
         );
 
+        await storeKPayPaymentReference(pendingPayment, kpayRes);
+
         if (!kpayRes.gatewayUrl) {
             throw new Error("KPay n'a pas retourné d'URL de paiement.");
         }
@@ -4108,7 +4170,6 @@ app.post(
 async function handleKPayCallback(req, res) {
     try {
         const params = { ...req.query, ...req.body };
-        const status = params.status ?? params.statusCode ?? "";
         const description = params.description || "";
         const transactionRefId =
             params.transactionRefId || params.transaction_ref_id;
@@ -4118,6 +4179,9 @@ async function handleKPayCallback(req, res) {
         const payload = verifySignedState(state);
         if (!payload) {
             return res.status(400).send("Callback invalide");
+        }
+        if (!verifyKPayGatewayReturn(params)) {
+            return res.status(400).send("Signature de retour KPay invalide");
         }
 
         const pendingTransactionId = String(
@@ -4145,15 +4209,42 @@ async function handleKPayCallback(req, res) {
             typeof callbackTransaction.metadata === "object"
                 ? callbackTransaction.metadata
                 : {};
+        const expectedExternalId = String(
+            callbackMetadata.checkout_ref_id || "",
+        );
+        const returnedExternalId = String(
+            params.externalId || params.external_id || "",
+        );
+        if (!expectedExternalId || returnedExternalId !== expectedExternalId) {
+            return res.status(400).send("Référence KPay non concordante");
+        }
+
+        const kpayPaymentId = callbackMetadata.kpay_payment_id;
+        if (!kpayPaymentId) {
+            return res.status(409).send(
+                "Paiement KPay en attente de vérification. Contactez le support si nécessaire.",
+            );
+        }
+        const kpayPayment = await fetchKPayPaymentStatus(kpayPaymentId);
+        const kpayStatus = String(kpayPayment?.status || "").toUpperCase();
+        const expectedAmount = Number(
+            callbackMetadata.checkout_amount ?? callbackTransaction.amount_gross,
+        );
+        if (
+            String(kpayPayment?.externalId || "") !== expectedExternalId ||
+            !Number.isFinite(Number(kpayPayment?.amount)) ||
+            Number(kpayPayment.amount) !== expectedAmount
+        ) {
+            return res.status(400).send("Montant ou référence KPay non concordant");
+        }
         const paymentKind = String(
             payload.k ||
                 payload.payment_kind ||
                 callbackTransaction.type ||
                 "subscription",
         ).toLowerCase();
-        const isSuccess =
-            String(status) === "202" ||
-            String(status).toLowerCase() === "success";
+        const isSuccess = kpayStatus === "COMPLETED";
+        const isTerminalFailure = ["FAILED", "CANCELLED"].includes(kpayStatus);
 
         if (isSuccess) {
             if (paymentKind === "support") {
@@ -4198,13 +4289,13 @@ async function handleKPayCallback(req, res) {
                     confirmationSource: "kpay_callback",
                 });
             }
-        } else {
+        } else if (isTerminalFailure) {
             await failPendingTransaction({
                 pendingTransactionId: callbackTransaction.id,
                 transactionRefId,
                 operatorRefId,
                 reason:
-                    description || String(status || "Paiement non confirme"),
+                    description || `Paiement KPay ${kpayStatus.toLowerCase()}`,
                 confirmationSource: "kpay_callback",
             });
         }
@@ -4236,6 +4327,18 @@ async function handleKPayCallback(req, res) {
             paymentKind === "support"
                 ? "Retour a la page precedente"
                 : "Retour au profil";
+        const pendingDescription =
+            "Votre paiement est encore en cours de confirmation par KPay. Aucun avantage n'est activé tant que le statut n'est pas COMPLETED.";
+        const displayTitle = isSuccess
+            ? successTitle
+            : isTerminalFailure
+              ? "Paiement non confirmé"
+              : "Paiement en cours";
+        const displayDescription = isSuccess
+            ? description || successDescription
+            : isTerminalFailure
+              ? description || failureDescription
+              : pendingDescription;
         const autoRedirectDelayMs = isSuccess ? 1400 : 2200;
 
         setResponseHeader(res, "Content-Type", "text/html");
@@ -4256,8 +4359,8 @@ async function handleKPayCallback(req, res) {
       </head>
       <body>
         <div class="card">
-          <div class="status">${isSuccess ? successTitle : "Paiement non confirmé"}</div>
-          <div class="desc">${description || (isSuccess ? successDescription : failureDescription)}</div>
+          <div class="status">${displayTitle}</div>
+          <div class="desc">${displayDescription}</div>
           <a href="${escapeHtmlAttr(returnHref)}">${returnLabel}</a>
         </div>
         <script>

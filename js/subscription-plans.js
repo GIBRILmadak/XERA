@@ -261,39 +261,15 @@
                 },
             );
 
-            // Met à jour les href de secours vers KPay pour refléter le cycle de facturation
+            // Keep the active cycle on every card. The click handler below reads
+            // this live value, so a toggle change is never lost before checkout.
             root?.querySelectorAll(".plan-detail-card").forEach((cardEl) => {
                 const planId =
                     cardEl.getAttribute("data-plan-id") ||
                     getPlanIdFromCard(cardEl);
                 if (!planId) return;
 
-                const actionEl = cardEl.querySelector(".btn-subscribe");
-                if (!actionEl) return;
-
-                // Only update anchors (fallback). If element is an <a>, set correct href.
-                try {
-                    if (
-                        actionEl.tagName &&
-                        actionEl.tagName.toLowerCase() === "a"
-                    ) {
-                        const url = new URL(
-                            actionEl.href,
-                            window.location.origin,
-                        );
-                        url.pathname = "/api/kpay/checkout";
-                        url.searchParams.set("plan", planId);
-                        url.searchParams.set("billing", billingCycle);
-                        actionEl.href = url.toString();
-                    }
-                } catch (e) {
-                    // Fallback string construction
-                    actionEl.href =
-                        "/api/kpay/checkout?plan=" +
-                        encodeURIComponent(planId) +
-                        "&billing=" +
-                        encodeURIComponent(billingCycle);
-                }
+                cardEl.dataset.billingCycle = billingCycle;
             });
         }
 
@@ -457,7 +433,7 @@
                     return false;
                 }
 
-                Hooks.navigateToSubscriptionPayment(
+                await Hooks.navigateToSubscriptionPayment(
                     selectedPlanId,
                     billingCycle,
                 );
@@ -483,7 +459,7 @@
                 }
 
                 selectedPlanId = normalizedPlanId;
-                Hooks.navigateToSubscriptionPayment(
+                await Hooks.navigateToSubscriptionPayment(
                     normalizedPlanId,
                     billingCycle,
                 );
@@ -529,7 +505,17 @@
             root.addEventListener("click", (event) => {
                 if (event.target?.classList?.contains("modal")) {
                     controller.closeConfirmModal();
+                    return;
                 }
+
+                const card = event.target?.closest?.(".plan-detail-card");
+                if (!card || !root.contains(card)) return;
+                if (event.target?.closest?.("a, input, select, textarea")) {
+                    return;
+                }
+
+                const planId = getPlanIdFromCard(card);
+                if (planId) controller.selectSubscription(planId);
             });
         }
 
@@ -801,6 +787,20 @@
                 {
                     className: `plan-detail-card ${plan.cardClassName}`,
                     "data-plan-id": plan.id,
+                    "data-billing-cycle": props.billingCycle,
+                    role: isCurrent ? undefined : "button",
+                    tabIndex: isCurrent ? undefined : 0,
+                    onClick: isCurrent
+                        ? undefined
+                        : () => props.onSelectPlan(plan.id),
+                    onKeyDown: isCurrent
+                        ? undefined
+                        : (event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  props.onSelectPlan(plan.id);
+                              }
+                          },
                 },
                 plan.badgeLabel
                     ? e(
@@ -880,7 +880,10 @@
                         className: buttonClassName,
                         "data-plan": plan.id,
                         disabled: isCurrent,
-                        onClick: () => props.onSelectPlan(plan.id),
+                        onClick: (event) => {
+                            event.stopPropagation();
+                            props.onSelectPlan(plan.id);
+                        },
                     },
                     isCurrent
                         ? [

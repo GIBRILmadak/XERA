@@ -99,14 +99,17 @@ Variables d'environnement à ajouter:
 KPAY_PUBLIC_KEY=your_public_key
 KPAY_SECRET_KEY=your_secret_key
 KPAY_CALLBACK_SECRET=your_callback_secret
-KPAY_USE_CALLBACK=0
+KPAY_USE_CALLBACK=1
+APP_BASE_URL=https://your-production-domain.example
+CALLBACK_BASE_URL=https://your-production-domain.example
 # Optionnel en local: 0 pour désactiver le sweep d'expiration des abonnements
 SUBSCRIPTION_SWEEP_MS=0
 ```
 
 Notes:
-- `KPAY_USE_CALLBACK=0` desactive l'envoi du `callbackUrl` a KPay.
-- Passe a `1` uniquement quand tu as une URL HTTPS publique et stable pour `/api/kpay/callback`.
+- Sur Vercel, définissez ces variables dans les environnements Production et Preview. Avec `KPAY_USE_CALLBACK=1`, KPay appelle `https://votre-domaine/api/kpay/callback/...` après le paiement.
+- La confirmation automatique ne crédite un abonnement qu'après vérification de la signature KPay et lecture du statut `COMPLETED` auprès de KPay. Un retour `PENDING`, `FAILED` ou `CANCELLED` n’active aucun avantage.
+- `KPAY_USE_CALLBACK=0` désactive l'envoi du `callbackUrl` à KPay ; ne l’utilisez que si la confirmation manuelle dans l’administration est souhaitée.
 - Avec `KPAY_USE_CALLBACK=0`, les tentatives de paiement sont enregistrees en attente puis confirmees depuis `admin.html` apres verification de l'encaissement sur le compte KPay.
 - Pour activer le portefeuille createur et les retraits Mobile Money, execute aussi `sql/monetization-wallet.sql` dans Supabase SQL Editor.
 - Pour forcer la regle `video > 60 sec` dans les vues monetisees et recalculer les payouts video ouverts, execute aussi `sql/monetization-video-eligibility-fix.sql`.

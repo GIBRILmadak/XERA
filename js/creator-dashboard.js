@@ -1442,13 +1442,18 @@ function closeUpgradeModal() {
 // Sélection d'un plan
 async function selectPlan(planId) {
     try {
+        if (window.XeraAppServices?.subscriptions?.navigateToCheckout) {
+            await window.XeraAppServices.subscriptions.navigateToCheckout(planId, "monthly");
+            return;
+        }
+
         if (window.XeraRouter?.navigate) {
-            window.XeraRouter.navigate("subscriptionPayment", {
+            window.XeraRouter.navigate("subscriptionPlans", {
                 query: { plan: planId, billing: "monthly" },
             });
         } else {
             const url = new URL(
-                "subscription-payment.html",
+                "subscription-plans.html",
                 window.location.href,
             );
             url.searchParams.set("plan", planId);
@@ -1567,7 +1572,7 @@ async function processSupport() {
                 '<i class="fas fa-spinner fa-spin"></i> Envoi...';
         }
 
-        const result = redirectToSupportCheckout({
+        const result = await redirectToSupportCheckout({
             creatorId: selectedCreatorId,
             amount,
             description: "Soutien depuis le dashboard",

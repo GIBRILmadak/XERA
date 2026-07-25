@@ -1943,6 +1943,12 @@ class XERAProfessionalManager {
                 document.head.appendChild(styleElement);
             }
             styleElement.textContent = `
+                    #pro-page { padding-top: 76px !important; }
+                    #pro-page .pro-page-container,
+                    #pro-page .profile-container { padding-top: 0 !important; }
+
+                    nav { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important; }
+
                     .pro-page-wrapper {
                         max-width: 1100px;
                         width: 100%;
@@ -2327,6 +2333,7 @@ class XERAProfessionalManager {
                     }
 
                     @media (max-width: 900px) {
+                        #pro-page { padding-top: 68px !important; }
                         .pro-banner-container { height: 220px; }
                         .pro-header-info { display: block; padding: 0 24px 32px; text-align: center; }
                         .pro-avatar-overlap { width: 120px; height: 120px; margin: -60px 0 15px 24px !important; border-width: 3px; justify-self: start; align-self: flex-start; }
@@ -2341,7 +2348,7 @@ class XERAProfessionalManager {
 
                     @media (max-width: 768px) {
                         .pro-banner-container { height: 180px; }
-                        .pro-header-card { border-radius: 24px; }
+                        .pro-header-card { border-radius: 0 0 24px 24px; }
                         .pro-header-info { padding: 0 18px 28px; }
                         .pro-name-row h2 { font-size: clamp(1.7rem, 5vw, 2rem); }
                         .btn-pro-primary, .btn-pro-secondary { padding: 14px 18px; }
@@ -2352,7 +2359,9 @@ class XERAProfessionalManager {
                     }
 
                     @media (max-width: 650px) {
+                        #pro-page { padding-top: 68px !important; }
                         #pro-page .container.pro-page-container {
+                            padding-top: 0 !important;
                             padding-left: 8px !important;
                             padding-right: 8px !important;
                             margin-left: 0 !important;
@@ -2587,6 +2596,38 @@ class XERAProfessionalManager {
             `;
 
             await this.loadCompanyUpdates(page.id);
+
+            // Gestion de la navigation intelligente (Sticky auto-hide/show)
+            if (!window._proNavScrollHandler) {
+                let lastScrollY = window.pageYOffset;
+                window._proNavScrollHandler = () => {
+                    const nav = document.querySelector('nav');
+                    if (!nav) return;
+
+                    // On ne s'active que si on est sur une page pro
+                    const isProActive = document.body.classList.contains('is-pro') &&
+                                      document.getElementById('pro-page')?.classList.contains('active');
+
+                    if (!isProActive) {
+                        nav.style.transform = 'translateY(0)';
+                        return;
+                    }
+
+                    const currentScrollY = window.pageYOffset;
+                    // Seuil de déclenchement pour éviter les micro-scrolls
+                    if (Math.abs(currentScrollY - lastScrollY) < 10) return;
+
+                    if (currentScrollY > lastScrollY && currentScrollY > 100) {
+                        // On descend (Swipe UP) : on cache la navigation (montant vers le haut)
+                        nav.style.transform = 'translateY(-100%)';
+                    } else {
+                        // On remonte (Swipe DOWN) : on montre la navigation (descendant vers le bas)
+                        nav.style.transform = 'translateY(0)';
+                    }
+                    lastScrollY = currentScrollY;
+                };
+                window.addEventListener('scroll', window._proNavScrollHandler, { passive: true });
+            }
         } catch (err) {
             proContainer.innerHTML = `
                 <div class="empty-state">

@@ -1285,38 +1285,9 @@ function buildSupportReturnPath(sourceElement = null) {
     return `${url.pathname}${url.search}${url.hash}`;
 }
 
-function buildSupportPaymentPageUrl({
-    creatorId,
-    creatorName = "",
-    amount,
-    description = "",
-    returnPath = "",
-}) {
-    const normalizedAmount = Number.parseInt(String(amount), 10);
-    const query = {
-        kind: "support",
-        creator: creatorId,
-        amount: normalizedAmount,
-        creator_name: String(creatorName || "").trim(),
-        description: String(description || "")
-            .trim()
-            .slice(0, 160),
-        return_path: String(returnPath || "").trim(),
-    };
+let supportCheckoutInProgress = false;
 
-    if (window.XeraRouter?.buildHtmlUrl) {
-        return window.XeraRouter.buildHtmlUrl("subscriptionPayment", { query });
-    }
-
-    const url = new URL("subscription-payment.html", window.location.href);
-    Object.entries(query).forEach(([key, value]) => {
-        if (value === null || value === undefined || value === "") return;
-        url.searchParams.set(key, String(value));
-    });
-    return url.toString();
-}
-
-function redirectToSupportCheckout({
+async function redirectToSupportCheckout({
     creatorId,
     creatorName = "",
     amount,
@@ -1324,6 +1295,9 @@ function redirectToSupportCheckout({
     returnPath = "",
     sourceElement = null,
 }) {
+    if (supportCheckoutInProgress) {
+        return { success: false, error: "Le paiement est déjà en cours d'initialisation." };
+    }
     const normalizedAmount = Number.parseFloat(amount);
 
     if (!creatorId) {
@@ -1348,16 +1322,68 @@ function redirectToSupportCheckout({
         };
     }
 
-    const destination = buildSupportPaymentPageUrl({
-        creatorId,
-        creatorName,
-        amount: normalizedAmount,
-        description,
-        returnPath: returnPath || buildSupportReturnPath(sourceElement),
-    });
+    supportCheckoutInProgress = true;
 
-    window.location.assign(destination);
-    return { success: true, url: destination };
+    // Direct Checkout Bypass for Support/Tipping
+    try {
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+        const user = session?.user;
+        const accessToken = session?.access_token;
+
+        if (!user || !accessToken) {
+            window.location.href = "login.html?redirect=" + encodeURIComponent(window.location.href);
+            return { success: false, error: "Non connecté" };
+        }
+
+        if (typeof window.showToast === "function") {
+            window.showToast("Initialisation du soutien sécurisé...", "info");
+        }
+
+        const apiBase =
+            typeof window.resolveApiBase === "function"
+                ? window.resolveApiBase()
+                : window.location.origin;
+        const checkoutUrl = `${apiBase}/api/kpay/support-checkout`;
+
+        const params = new URLSearchParams();
+        params.set("kind", "support");
+        params.set("to_user_id", creatorId);
+        params.set("amount_usd", String(normalizedAmount));
+        params.set("description", description || `Soutien pour ${creatorName || "ce créateur"}`);
+        params.set("return_path", returnPath || buildSupportReturnPath(sourceElement));
+        params.set("user_id", user.id);
+        params.set("access_token", accessToken);
+        params.set("method", "card");
+        params.set("currency", "USD");
+
+        // Submit a real navigation so the API's K-Pay 302 is followed directly.
+        // fetch() may otherwise fail when it follows K-Pay's cross-origin URL.
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = checkoutUrl;
+        form.style.display = "none";
+        params.forEach((value, name) => {
+            const input = document.createElement("input");
+            input.type = "hidden";
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
+        });
+        document.body.appendChild(form);
+        form.submit();
+        return { success: true };
+    } catch (error) {
+        supportCheckoutInProgress = false;
+        console.error("[Monetization] Direct support checkout error:", error);
+
+        // Final fallback: show error
+        if (typeof window.showToast === "function") {
+            window.showToast("Erreur lors de l'initialisation du paiement.", "error");
+        }
+        return { success: false, error: error.message };
+    }
 }
 
 /* ========================================

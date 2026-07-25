@@ -315,7 +315,7 @@ async function processGlobalSupport() {
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi...';
         }
 
-        const result = redirectToSupportCheckout({
+        const result = await redirectToSupportCheckout({
             creatorId,
             creatorName: globalSupportState.creatorName,
             amount,

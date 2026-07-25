@@ -24,6 +24,7 @@
     });
 
     let notificationSequence = 0;
+    let checkoutInProgress = false;
 
     function createInitialState() {
         return {
@@ -167,20 +168,88 @@
         window.location.href = "creator-dashboard.html";
     }
 
-    function navigateToSubscriptionPayment(planId, billingCycle) {
+    async function navigateToSubscriptionPayment(planId, billingCycle) {
+        if (checkoutInProgress) return;
+        checkoutInProgress = true;
         const normalizedPlanId = Data.normalizePlanId(planId);
         const normalizedBillingCycle = Data.normalizeBillingCycle(billingCycle);
-        if (Services.subscriptions?.navigateToCheckout) {
-            Services.subscriptions.navigateToCheckout(
-                normalizedPlanId,
-                normalizedBillingCycle,
-            );
+
+        // Bypass intermediate confirmation page and go directly to K-Pay checkout
+        try {
+            const user = await Services.auth.getSessionUser();
+            const accessToken = await Services.auth.getAccessToken();
+
+            if (!user || !accessToken) {
+                const loginUrl = new URL("login.html", window.location.origin);
+                loginUrl.searchParams.set("redirect", "subscription-plans.html");
+                window.location.href = loginUrl.toString();
+                return;
+            }
+
+            // Optional: Notify user that checkout is starting
+            if (typeof window.showToast === "function") {
+                window.showToast(
+                    "Initialisation du paiement sécurisé...",
+                    "info",
+                );
+            }
+
+            const apiBase =
+                typeof window.resolveApiBase === "function"
+                    ? window.resolveApiBase()
+                    : window.location.origin;
+            const checkoutUrl = `${apiBase}/api/kpay/checkout`;
+
+            const params = new URLSearchParams();
+            params.set("kind", "subscription");
+            params.set("plan", normalizedPlanId);
+            params.set("billing_cycle", normalizedBillingCycle);
+            params.set("user_id", user.id);
+            params.set("access_token", accessToken);
+            params.set("method", "card"); // Default payment method
+            params.set("currency", "USD"); // Default currency
+
+            let returnPath = "creator-dashboard.html";
+            if (window.XeraRouter?.buildHtmlUrl) {
+                returnPath =
+                    window.XeraRouter.buildHtmlUrl("creatorDashboard") ||
+                    returnPath;
+            }
+            params.set("return_path", returnPath);
+
+            // A browser navigation preserves K-Pay's 302 redirect. Using fetch here
+            // can turn the cross-origin gateway redirect into a CORS failure.
+            const form = document.createElement("form");
+            form.method = "POST";
+            form.action = checkoutUrl;
+            form.style.display = "none";
+            params.forEach((value, name) => {
+                const input = document.createElement("input");
+                input.type = "hidden";
+                input.name = name;
+                input.value = value;
+                form.appendChild(input);
+            });
+            document.body.appendChild(form);
+            form.submit();
             return;
+        } catch (error) {
+            checkoutInProgress = false;
+            console.error("[Subscription] Direct checkout error:", error);
+
+            // Final fallback: use bridge
+            if (Services.subscriptions?.navigateToCheckout) {
+                await Services.subscriptions.navigateToCheckout(
+                    normalizedPlanId,
+                    normalizedBillingCycle,
+                );
+                return;
+            }
+
+            if (typeof window.showToast === "function") {
+                window.showToast("Erreur lors de l'initialisation du paiement sécurisé.", "error");
+            }
         }
-        const url = new URL("/api/kpay/checkout", window.location.origin);
-        url.searchParams.set("plan", normalizedPlanId);
-        url.searchParams.set("billing", normalizedBillingCycle);
-        window.location.href = url.toString();
     }
 
     function readPaymentReturnParams() {
@@ -439,7 +508,10 @@
                 payload: normalizedPlanId,
             });
 
-            navigateToSubscriptionPayment(normalizedPlanId, state.billingCycle);
+            await navigateToSubscriptionPayment(
+                normalizedPlanId,
+                state.billingCycle,
+            );
             return true;
         }
 
@@ -448,7 +520,7 @@
                 return false;
             }
 
-            navigateToSubscriptionPayment(
+            await navigateToSubscriptionPayment(
                 state.selectedPlanId,
                 state.billingCycle,
             );

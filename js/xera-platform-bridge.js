@@ -168,13 +168,14 @@
     }
 
     function buildSubscriptionCheckoutUrl(planId, billingCycle) {
-        const url = new URL("subscription-payment.html", window.location.href);
+        const url = new URL("/api/kpay/checkout", window.location.origin);
         if (planId) {
             url.searchParams.set("plan", String(planId).toLowerCase());
         }
         if (billingCycle) {
             url.searchParams.set("billing", String(billingCycle).toLowerCase());
         }
+        url.searchParams.set("direct", "1");
         return url.toString();
     }
 
@@ -433,21 +434,54 @@
 
                 return latestState;
             },
-            navigateToCheckout(planId, billingCycle) {
-                const router = getRouter();
-                if (router?.navigate) {
-                    router.navigate("subscriptionPayment", {
-                        query: {
-                            plan: String(planId || "").toLowerCase(),
-                            billing: String(billingCycle || "").toLowerCase(),
-                        },
-                    });
-                    return true;
+            async navigateToCheckout(planId, billingCycle) {
+                try {
+                    const accessToken = await getSessionAccessToken();
+                    const client = getSupabaseClient();
+                    const {
+                        data: { user } = {},
+                    } = client?.auth ? await client.auth.getUser() : {};
+
+                    if (user && accessToken) {
+                        const checkoutUrl = "/api/kpay/checkout";
+                        const params = new URLSearchParams();
+                        params.set("kind", "subscription");
+                        params.set(
+                            "plan",
+                            String(planId || "standard").toLowerCase(),
+                        );
+                        params.set(
+                            "billing_cycle",
+                            String(billingCycle || "monthly").toLowerCase(),
+                        );
+                        params.set("user_id", user.id);
+                        params.set("access_token", accessToken);
+                        params.set("method", "card");
+                        params.set("currency", "USD");
+
+                        const response = await fetch(checkoutUrl, {
+                            method: "POST",
+                            headers: {
+                                Accept: "application/json",
+                                "Content-Type":
+                                    "application/x-www-form-urlencoded;charset=UTF-8",
+                            },
+                            body: params.toString(),
+                            credentials: "same-origin",
+                        });
+
+                        if (response.status === 302 || response.redirected) {
+                            window.location.href = response.url;
+                            return true;
+                        }
+                    }
+                } catch (e) {
+                    console.warn("[Bridge] Direct checkout failed:", e);
                 }
 
-                return getAdapter().navigation.goToUrl(
-                    buildSubscriptionCheckoutUrl(planId, billingCycle),
-                );
+                // Final fallback if direct post fails
+                window.location.href = buildSubscriptionCheckoutUrl(planId, billingCycle);
+                return true;
             },
         };
     }

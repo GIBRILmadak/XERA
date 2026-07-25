@@ -1,10 +1,13 @@
-Rize Backend (paiements désactivés)
+Backend XERA
 
 Setup
 
 - Copier .env.example en .env
 - Renseigner SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY
 - Ajuster APP_BASE_URL (domaines front autorisés)
+- Sur Vercel, renseigner aussi `CALLBACK_BASE_URL=https://votre-domaine`,
+  `KPAY_PUBLIC_KEY`, `KPAY_SECRET_KEY`, `KPAY_CALLBACK_SECRET` et
+  `KPAY_USE_CALLBACK=1` dans Production (et Preview si vous y testez les paiements).
 
 Run
 
@@ -13,7 +16,9 @@ Run
 
 Endpoints actifs
 
-- GET /api/health : indique que les paiements sont désactivés
+- POST /api/kpay/checkout : initialise un abonnement K-Pay et redirige vers la passerelle
+- POST /api/kpay/support-checkout : initialise un don K-Pay et redirige vers la passerelle
+- GET|POST /api/kpay/callback/:state : confirme le paiement K-Pay
 - POST /api/users/upsert : crée/met à jour un utilisateur (id, email)
 - POST /api/push/subscribe : enregistre un abonnement Web Push
     - body minimal: `{ userId, subscription }`

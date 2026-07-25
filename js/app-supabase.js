@@ -1273,6 +1273,21 @@ function buildProfileUrl(userId, accountType, accountSubtype) {
     return `${base}?user=${encodeURIComponent(userId)}`;
 }
 
+// A super-admin may own a Page Pro while retaining an independent personal
+// profile. This route intentionally bypasses account-type inference.
+function navigateToPersonalProfile() {
+    const userId = window.currentUserId || window.currentUser?.id;
+    if (!userId) {
+        window.location.href = "login.html";
+        return;
+    }
+
+    const query = new URLSearchParams({ user: String(userId), view: "personal" });
+    window.location.href = `profile.html?${query.toString()}`;
+}
+
+window.navigateToPersonalProfile = navigateToPersonalProfile;
+
 function buildProfileShareUrl(userId) {
     const user = getUser(userId);
     const accountType =

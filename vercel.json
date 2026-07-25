@@ -23,10 +23,6 @@
             "source": "/subscription-plans",
             "destination": "/subscription-plans.html"
         },
-        {
-            "source": "/subscription-payment",
-            "destination": "/subscription-payment.html"
-        },
         { "source": "/verification", "destination": "/verification.html" },
         { "source": "/404", "destination": "/404.html" }
     ],
@@ -34,6 +30,10 @@
         {
             "path": "/api/cron/send-reminders",
             "schedule": "0 10 * * *"
+        },
+        {
+            "path": "/api/cron/sweep-subscriptions",
+            "schedule": "5 0 * * *"
         }
     ]
 }

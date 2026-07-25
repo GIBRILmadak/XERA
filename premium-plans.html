@@ -142,7 +142,13 @@
 
             <div class="premium-grid">
                 <!-- Mensuel -->
-                <div class="premium-card">
+                <div
+                    class="premium-card"
+                    role="button"
+                    tabindex="0"
+                    onclick="subscribeElite('monthly')"
+                    onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); subscribeElite('monthly'); }"
+                >
                     <h3>Plan Mensuel</h3>
                     <div class="price">40 USD <span>/ mois</span></div>
                     <p>Accès complet sans engagement à long terme.</p>
@@ -167,8 +173,9 @@
                             24/7
                         </li>
                     </ul>
-                    <a
+                    <button
                         class="btn btn-primary"
+                        type="button"
                         style="
                             width: 100%;
                             justify-content: center;
@@ -177,14 +184,19 @@
                             align-items: center;
                             justify-content: center;
                         "
-                        href="/api/kpay/checkout?plan=elite&billing=monthly"
-                        onclick="subscribeElite('monthly')"
-                        >CHOISIR LE MENSUEL</a
+                        onclick="event.stopPropagation(); subscribeElite('monthly')"
+                        >CHOISIR LE MENSUEL</button
                     >
                 </div>
 
                 <!-- Annuel -->
-                <div class="premium-card featured">
+                <div
+                    class="premium-card featured"
+                    role="button"
+                    tabindex="0"
+                    onclick="subscribeElite('annual')"
+                    onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); subscribeElite('annual'); }"
+                >
                     <div class="discount-badge">-20% D'ÉCONOMIE</div>
                     <h3>Plan Annuel</h3>
                     <div class="price">384 USD <span>/ an</span></div>
@@ -210,8 +222,9 @@
                             nouveaux talents
                         </li>
                     </ul>
-                    <a
+                    <button
                         class="btn btn-primary"
+                        type="button"
                         style="
                             width: 100%;
                             justify-content: center;
@@ -220,9 +233,8 @@
                             align-items: center;
                             justify-content: center;
                         "
-                        href="/api/kpay/checkout?plan=elite&billing=annual"
-                        onclick="subscribeElite('annual')"
-                        >CHOISIR L'ANNUEL (ÉLITE)</a
+                        onclick="event.stopPropagation(); subscribeElite('annual')"
+                        >CHOISIR L'ANNUEL (ÉLITE)</button
                     >
                 </div>
             </div>
@@ -269,12 +281,18 @@
         <script src="js/router.js"></script>
         <script src="js/supabase-config.js"></script>
         <script>
+            let eliteCheckoutInProgress = false;
+
             async function subscribeElite(cycle) {
+                if (eliteCheckoutInProgress) return;
+                eliteCheckoutInProgress = true;
                 const {
-                    data: { user },
-                } = await supabase.auth.getUser();
+                    data: { session },
+                } = await supabase.auth.getSession();
+                const user = session?.user;
 
                 if (!user) {
+                    eliteCheckoutInProgress = false;
                     const redirectUrl =
                         window.location.pathname + window.location.search;
                     if (window.XeraRouter?.navigate) {
@@ -289,30 +307,33 @@
                     return;
                 }
 
-                // Paramètres pour la redirection vers la page de paiement
-                const query = {
-                    kind: "subscription",
+                const apiBase =
+                    typeof window.resolveApiBase === "function"
+                        ? window.resolveApiBase()
+                        : window.location.origin;
+                const form = document.createElement("form");
+                form.method = "POST";
+                form.action = `${apiBase}/api/kpay/checkout`;
+                form.style.display = "none";
+
+                const fields = {
                     plan: "elite",
-                    billing: cycle,
-                    return_path: "profile.html?status=success&plan=elite",
+                    billing_cycle: cycle === "annual" ? "annual" : "monthly",
+                    currency: "USD",
+                    method: "card",
+                    user_id: user.id,
+                    access_token: session.access_token,
+                    return_path: "creator-dashboard.html",
                 };
-
-                // Construction de l'URL de redirection
-                let destination = "subscription-payment.html";
-                if (window.XeraRouter?.buildHtmlUrl) {
-                    destination = window.XeraRouter.buildHtmlUrl(
-                        "subscriptionPayment",
-                        { query },
-                    );
-                } else {
-                    const searchParams = new URLSearchParams(query);
-                    destination += "?" + searchParams.toString();
-                }
-
-                console.log(
-                    `Redirection vers le paiement Elite ${cycle} : ${destination}`,
-                );
-                window.location.href = destination;
+                Object.entries(fields).forEach(([name, value]) => {
+                    const input = document.createElement("input");
+                    input.type = "hidden";
+                    input.name = name;
+                    input.value = value;
+                    form.appendChild(input);
+                });
+                document.body.appendChild(form);
+                form.submit();
             }
         </script>
     </body>
