@@ -116,51 +116,111 @@ async function checkAuth() {
     return null;
 }
 
+const normalizeEmail = (value) =>
+    String(value || "").trim().toLowerCase();
+
+const isValidEmail = (email) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+const passwordPolicyOk = (password) =>
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(password);
+
 async function signIn(email, password) {
+    const safeEmail = normalizeEmail(email);
+
+    if (!isValidEmail(safeEmail)) {
+        return { success: false, error: "Adresse email invalide." };
+    }
+
+    if (!password || password.length < 8) {
+        return { success: false, error: "Mot de passe invalide." };
+    }
+
     try {
         const { data, error } = await supabase.auth.signInWithPassword({
-            email,
+            email: safeEmail,
             password,
         });
-        if (error) throw error;
-        return { success: true, data: data.user };
+
+        if (error) {
+            return {
+                success: false,
+                error: "Email ou mot de passe incorrect, ou compte non confirmé.",
+                code: error.code,
+                status: error.status,
+            };
+        }
+
+        return {
+            success: true,
+            data: data.user,
+            session: data.session,
+        };
     } catch (error) {
         return {
             success: false,
-            error: error.message,
-            code: error.code,
-            status: error.status,
+            error: "Erreur de connexion.",
+            code: error?.code || "UNKNOWN",
+            status: error?.status || null,
         };
     }
 }
 
 async function signUp(email, password, username, metadata = {}) {
+    const safeEmail = normalizeEmail(email);
+    const safeUsername = String(username || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "-");
+
+    if (!isValidEmail(safeEmail)) {
+        return { success: false, error: "Adresse email invalide." };
+    }
+
+    if (!safeUsername || safeUsername.length < 3) {
+        return { success: false, error: "Nom d'utilisateur invalide." };
+    }
+
+    if (!passwordPolicyOk(password)) {
+        return {
+            success: false,
+            error:
+                "Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule et un chiffre.",
+        };
+    }
+
     try {
         const { data, error } = await supabase.auth.signUp({
-            email,
+            email: safeEmail,
             password,
             options: {
                 data: {
-                    username: username,
+                    username: safeUsername,
                     ...metadata,
                 },
+                emailRedirectTo: `${window.location.origin}/login.html`,
             },
         });
-        if (error) throw error;
-        return { success: true, data: data.user };
-    } catch (error) {
-        const errorMessage =
-            (error &&
-                typeof error.message === "string" &&
-                error.message.trim()) ||
-            (error && typeof error === "string" && error.trim()) ||
-            JSON.stringify(error) ||
-            "Erreur lors de l'inscription.";
+
+        if (error) {
+            return {
+                success: false,
+                error: "Impossible de créer le compte.",
+                code: error.code,
+                status: error.status,
+            };
+        }
 
         return {
+            success: true,
+            data: data.user,
+            session: data.session,
+        };
+    } catch (error) {
+        return {
             success: false,
-            error: errorMessage,
-            code: error?.code || "",
+            error: "Erreur lors de l'inscription.",
+            code: error?.code || "UNKNOWN",
             status: error?.status || null,
         };
     }
