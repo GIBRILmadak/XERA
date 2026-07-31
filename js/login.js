@@ -199,24 +199,41 @@ async function checkExistingSession() {
 }
 
 // Afficher un message d'erreur
-function showError(message) {
-    errorMessage.textContent = message;
-    errorMessage.style.display = "block";
-    successMessage.style.display = "none";
+function setFormFeedbackState(type, message) {
+    if (!errorMessage || !successMessage) return;
 
-    setTimeout(() => {
-        errorMessage.style.display = "none";
+    if (type === "error") {
+        errorMessage.textContent = message;
+        errorMessage.style.display = "block";
+        successMessage.style.display = "none";
+        return;
+    }
+
+    successMessage.textContent = message;
+    successMessage.style.display = "block";
+    errorMessage.style.display = "none";
+}
+
+function showError(message) {
+    setFormFeedbackState("error", message);
+
+    window.clearTimeout(showError._timeoutId);
+    showError._timeoutId = window.setTimeout(() => {
+        if (errorMessage) {
+            errorMessage.style.display = "none";
+        }
     }, 5000);
 }
 
 // Afficher un message de succès
 function showSuccess(message) {
-    successMessage.textContent = message;
-    successMessage.style.display = "block";
-    errorMessage.style.display = "none";
+    setFormFeedbackState("success", message);
 
-    setTimeout(() => {
-        successMessage.style.display = "none";
+    window.clearTimeout(showSuccess._timeoutId);
+    showSuccess._timeoutId = window.setTimeout(() => {
+        if (successMessage) {
+            successMessage.style.display = "none";
+        }
     }, 5000);
 }
 
@@ -565,12 +582,20 @@ if (step2BackBtn) {
     step2BackBtn.onclick = () => showSignupStep(1);
 }
 
+function setSubmitLoading(isLoading) {
+    if (!submitBtn || !btnText || !btnLoader) return;
+
+    submitBtn.disabled = isLoading;
+    btnText.style.display = isLoading ? "none" : "block";
+    btnLoader.style.display = isLoading ? "block" : "none";
+}
+
 // Gérer la soumission du formulaire
 async function handleSubmit(e) {
     e.preventDefault();
 
     // Récupération des valeurs
-    const email = emailInput.value.trim();
+    const email = emailInput.value.trim().toLowerCase();
     const password = passwordInput.value;
     const username = usernameInput ? usernameInput.value.trim() : "";
     const confirmPassword = confirmPasswordInput
@@ -583,13 +608,20 @@ async function handleSubmit(e) {
         return;
     }
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showError("Adresse email invalide.");
+        return;
+    }
+
     if (isSignUpMode) {
         if (!username) {
             showError("Veuillez entrer un nom d'utilisateur.");
             return;
         }
-        if (password.length < 6) {
-            showError("Le mot de passe doit contenir au moins 6 caractères.");
+        if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(password)) {
+            showError(
+                "Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule et un chiffre.",
+            );
             return;
         }
         if (password !== confirmPassword) {
@@ -599,9 +631,7 @@ async function handleSubmit(e) {
     }
 
     // UI Loading state
-    submitBtn.disabled = true;
-    if (btnText) btnText.style.display = "none";
-    if (btnLoader) btnLoader.style.display = "block";
+    setSubmitLoading(true);
 
     try {
         if (isSignUpMode) {
@@ -834,9 +864,7 @@ async function handleSubmit(e) {
         console.error("Erreur handleSubmit:", error);
         showError(error.message || "Une erreur imprévue est survenue.");
     } finally {
-        submitBtn.disabled = false;
-        if (btnText) btnText.style.display = "block";
-        if (btnLoader) btnLoader.style.display = "none";
+        setSubmitLoading(false);
     }
 }
 
@@ -863,10 +891,15 @@ function resetPasswordVisibility() {
 
 // Gérer le reset de mot de passe
 async function handleForgotPassword() {
-    const email = emailInput.value.trim();
+    const email = emailInput.value.trim().toLowerCase();
 
     if (!email) {
         showError("Veuillez entrer votre adresse email.");
+        return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showError("Adresse email invalide.");
         return;
     }
 

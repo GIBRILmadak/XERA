@@ -13,6 +13,19 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
+function getBearerToken(req) {
+    const authHeader = req.headers.authorization || "";
+    const [scheme, token] = authHeader.split(" ");
+    if (scheme === "Bearer" && token) {
+        return token;
+    }
+    return null;
+}
+
+function getSafeRedirectBase() {
+    return String(process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+}
+
 // POST /api/auth/:tool/start
 router.post("/:tool/start", async (req, res) => {
     const { tool } = req.params;
@@ -22,51 +35,72 @@ router.post("/:tool/start", async (req, res) => {
         return res.status(400).json({ error: "Outil non supporté" });
     }
 
-    // Vérifier le type de compte (doit être PERSONAL)
-    // (Note: l'authentification de l'utilisateur doit être faite en amont)
-    const authHeader = req.headers.authorization;
-    const {
-        data: { user },
-    } = await supabase.auth.getUser(authHeader?.split(" ")[1]);
-
-    if (!user) {
-        return res
-            .status(401)
-            .json({ error: "Utilisateur non identifié" });
-    }
-
-    const state = crypto.randomBytes(16).toString("hex");
-    // Sauvegarder le state pour vérification au callback
-    await supabase
-        .from("oauth_states")
-        .insert({ user_id: user.id, state, tool });
-
-    const redirectUri = `${process.env.APP_BASE_URL}/api/auth/${tool}/callback`;
-    const authUrl = `${config.authUrl}?client_id=${encodeURIComponent(config.clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(config.scope)}&state=${encodeURIComponent(state)}&response_type=code`;
-    res.json({ authUrl });
-});
-
-router.get("/status", async (req, res) => {
-    const authHeader = req.headers.authorization;
-    const {
-        data: { user },
-    } = await supabase.auth.getUser(authHeader?.split(" ")[1]);
-    if (!user) {
+    const token = getBearerToken(req);
+    if (!token) {
         return res.status(401).json({ error: "Utilisateur non identifié" });
     }
 
-    const { data, error } = await supabase
-        .from("user_oauth_tokens")
-        .select("tool,status,expires_at,updated_at")
-        .eq("user_id", user.id);
+    try {
+        const {
+            data: { user },
+            error,
+        } = await supabase.auth.getUser(token);
 
-    if (error) {
-        return res
-            .status(500)
-            .json({ error: "Impossible de lire le statut de connexion" });
+        if (error || !user) {
+            return res.status(401).json({ error: "Utilisateur non identifié" });
+        }
+
+        const state = crypto.randomBytes(16).toString("hex");
+        const { error: stateError } = await supabase
+            .from("oauth_states")
+            .insert({ user_id: user.id, state, tool });
+
+        if (stateError) {
+            console.error("[OAuth] state insert error:", stateError);
+            return res.status(500).json({ error: "Impossible de démarrer la connexion OAuth" });
+        }
+
+        const redirectUri = `${getSafeRedirectBase()}/api/auth/${tool}/callback`;
+        const authUrl = `${config.authUrl}?client_id=${encodeURIComponent(config.clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(config.scope)}&state=${encodeURIComponent(state)}&response_type=code`;
+        return res.json({ authUrl });
+    } catch (error) {
+        console.error("[OAuth] start error:", error);
+        return res.status(500).json({ error: "Impossible de démarrer la connexion OAuth" });
+    }
+});
+
+router.get("/status", async (req, res) => {
+    const token = getBearerToken(req);
+    if (!token) {
+        return res.status(401).json({ error: "Utilisateur non identifié" });
     }
 
-    return res.json({ connections: data || [] });
+    try {
+        const {
+            data: { user },
+            error,
+        } = await supabase.auth.getUser(token);
+
+        if (error || !user) {
+            return res.status(401).json({ error: "Utilisateur non identifié" });
+        }
+
+        const { data, error: statusError } = await supabase
+            .from("user_oauth_tokens")
+            .select("tool,status,expires_at,updated_at")
+            .eq("user_id", user.id);
+
+        if (statusError) {
+            return res
+                .status(500)
+                .json({ error: "Impossible de lire le statut de connexion" });
+        }
+
+        return res.json({ connections: data || [] });
+    } catch (error) {
+        console.error("[OAuth] status error:", error);
+        return res.status(500).json({ error: "Impossible de lire le statut de connexion" });
+    }
 });
 
 // GET /api/auth/:tool/callback
@@ -79,69 +113,98 @@ router.get("/:tool/callback", async (req, res) => {
         return res.status(400).json({ error: "Paramètres invalides" });
     }
 
-    // 1. Vérifier le state
-    const { data: storedState } = await supabase
-        .from("oauth_states")
-        .select("user_id")
-        .eq("state", state)
-        .eq("tool", tool)
-        .single();
+    try {
+        const { data: storedState, error: stateError } = await supabase
+            .from("oauth_states")
+            .select("user_id")
+            .eq("state", state)
+            .eq("tool", tool)
+            .maybeSingle();
 
-    if (!storedState) {
-        return res.status(400).json({ error: "State invalide" });
+        if (stateError || !storedState) {
+            return res.status(400).json({ error: "State invalide" });
+        }
+
+        const redirectUri = `${getSafeRedirectBase()}/api/auth/${tool}/callback`;
+        const tokenParams = new URLSearchParams({
+            client_id: config.clientId,
+            client_secret: config.clientSecret,
+            code,
+            grant_type: "authorization_code",
+            redirect_uri: redirectUri,
+        });
+
+        const tokenResponse = await fetch(config.tokenUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                Accept: "application/json",
+            },
+            body: tokenParams.toString(),
+        });
+
+        if (!tokenResponse.ok) {
+            console.error("[OAuth] token exchange failed:", tokenResponse.status);
+            return res.status(502).json({ error: "Impossible de récupérer le token OAuth" });
+        }
+
+        const tokenData = await tokenResponse.json();
+        if (!tokenData.access_token) {
+            console.error("[OAuth] Échec échange token:", tokenData);
+            return res
+                .status(500)
+                .json({ error: "Impossible de récupérer le token OAuth" });
+        }
+
+        const { error: tokenUpsertError } = await supabase
+            .from("user_oauth_tokens")
+            .upsert(
+                {
+                    user_id: storedState.user_id,
+                    tool,
+                    access_token_encrypted: encryptToken(tokenData.access_token),
+                    refresh_token_encrypted: tokenData.refresh_token
+                        ? encryptToken(tokenData.refresh_token)
+                        : null,
+                    expires_at: tokenData.expires_in
+                        ? new Date(
+                              Date.now() + Number(tokenData.expires_in) * 1000,
+                          ).toISOString()
+                        : null,
+                    status: "active",
+                    updated_at: new Date().toISOString(),
+                },
+                { onConflict: "user_id,tool" },
+            );
+
+        if (tokenUpsertError) {
+            console.error("[OAuth] token save error:", tokenUpsertError);
+            return res.status(500).json({ error: "Impossible de sauvegarder le token OAuth" });
+        }
+
+        const { error: clearStateError } = await supabase
+            .from("oauth_states")
+            .delete()
+            .eq("state", state)
+            .eq("tool", tool);
+
+        if (clearStateError) {
+            console.warn("[OAuth] state cleanup warning:", clearStateError);
+        }
+
+        try {
+            await enqueueIngestion(storedState.user_id, tool, {
+                source: "oauth_connect",
+            });
+        } catch (ingestionError) {
+            console.warn("[OAuth] ingestion enqueue warning:", ingestionError);
+        }
+
+        return res.redirect(`${getSafeRedirectBase()}/profile?connection=success`);
+    } catch (error) {
+        console.error("[OAuth] callback error:", error);
+        return res.status(500).json({ error: "Erreur pendant le callback OAuth" });
     }
-
-    // 2. Échanger le code contre un token
-    const redirectUri = `${process.env.APP_BASE_URL}/api/auth/${tool}/callback`;
-    const tokenParams = new URLSearchParams({
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        code,
-        grant_type: "authorization_code",
-        redirect_uri: redirectUri,
-    });
-
-    const tokenResponse = await fetch(config.tokenUrl, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            Accept: "application/json",
-        },
-        body: tokenParams.toString(),
-    });
-    const tokenData = await tokenResponse.json();
-
-    if (!tokenData.access_token) {
-        console.error("[OAuth] Échec échange token:", tokenData);
-        return res
-            .status(500)
-            .json({ error: "Impossible de récupérer le token OAuth" });
-    }
-
-    // 3. Sauvegarder le token chiffré
-    await supabase.from("user_oauth_tokens").insert({
-        user_id: storedState.user_id,
-        tool,
-        access_token_encrypted: encryptToken(tokenData.access_token),
-        refresh_token_encrypted: tokenData.refresh_token
-            ? encryptToken(tokenData.refresh_token)
-            : null,
-        expires_at: tokenData.expires_in
-            ? new Date(
-                  Date.now() + Number(tokenData.expires_in) * 1000,
-              ).toISOString()
-            : null,
-        status: "active",
-        inserted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-    });
-
-    // 4. Enqueue l'ingestion, ne pas bloquer le callback OAuth
-    await enqueueIngestion(storedState.user_id, tool, {
-        source: "oauth_connect",
-    });
-
-    res.redirect(`${process.env.APP_BASE_URL}/profile?connection=success`);
 });
 
 module.exports = router;

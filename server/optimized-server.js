@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const webpush = require('web-push');
+const oauthHandler = require('./oauth-handler');
 
 dotenv.config();
 
@@ -43,6 +44,8 @@ if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const app = express();
+
+app.use('/api/auth', oauthHandler);
 
 // Middleware optimisé
 app.use(express.json({ limit: '10mb' }));
