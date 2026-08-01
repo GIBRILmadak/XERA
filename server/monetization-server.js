@@ -1052,6 +1052,15 @@ async function createPendingSupportPayment({
 }
 
 async function initiateKPayPayment(amount, externalId, description, returnUrl) {
+    const requestBody = {
+        amount,
+        externalId,
+        description,
+        returnUrl,
+        cancelUrl: returnUrl,
+        mode: "GATEWAY",
+    };
+
     const response = await fetch(
         "https://admin.kpay.site/api/v1/payments/init",
         {
@@ -1061,18 +1070,17 @@ async function initiateKPayPayment(amount, externalId, description, returnUrl) {
                 "X-Secret-Key": KPAY_SECRET_KEY,
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-                amount,
-                externalId,
-                description,
-                returnUrl,
-                // Mode GATEWAY pour la redirection
-            }),
+            body: JSON.stringify(requestBody),
         },
     );
 
     if (!response.ok) {
-        throw new Error(`KPay API error: ${response.statusText}`);
+        const errorText = await response.text().catch(() => "");
+        throw new Error(
+            `KPay API error: ${response.status} ${response.statusText} ${
+                errorText ? `- ${errorText}` : ""
+            }`,
+        );
     }
 
     return await response.json();

@@ -899,6 +899,10 @@
         }
 
         function PlansGrid(props) {
+            const visiblePlanIds = Array.isArray(props.planIds)
+                ? props.planIds
+                : Data.PLAN_IDS;
+
             return e(
                 "div",
                 {
@@ -909,7 +913,7 @@
                     {
                         className: "plans-grid",
                     },
-                    (props.planIds || Data.PLAN_IDS).map((planId) =>
+                    visiblePlanIds.map((planId) =>
                         e(PlanCard, {
                             key: planId,
                             billingCycle: props.billingCycle,
@@ -1084,24 +1088,30 @@
 
             const urlContext = getUrlContext();
             const initialSelected = readInitialSelectedPlan();
+            const isPageUser = isPageAccount(state.currentUser);
 
             // Determine which plans should be visible for this user/context
             let visiblePlanIds = Array.from(Data.PLAN_IDS || []);
 
-            // Hide page-specific verification plan for personal accounts by default
-            if (!isPageAccount(state.currentUser)) {
+            // For personal accounts, keep all non-page-verification plans visible.
+            if (!isPageUser) {
                 visiblePlanIds = visiblePlanIds.filter(
                     (id) => id !== "page_verification",
                 );
             }
 
-            // If opened from a Page context or directly requested, show only page_verification for page accounts
+            // For page-pro accounts, show only the verification card.
+            if (isPageUser) {
+                visiblePlanIds = ["page_verification"];
+            }
+
+            // Keep the page-verification context behavior aligned with the same rule.
             if (
                 (urlContext === "page-verification" ||
                     initialSelected === "page_verification") &&
-                isPageAccount(state.currentUser)
+                !isPageUser
             ) {
-                visiblePlanIds = ["page_verification"];
+                visiblePlanIds = [];
             }
 
             ReactInner.useEffect(() => {
