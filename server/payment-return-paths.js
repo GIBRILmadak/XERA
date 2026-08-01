@@ -22,7 +22,11 @@ function normalizeBrowserRoutePath(pathname) {
     return htmlRouteMap[cleanPath] || cleanPath;
 }
 
-function normalizeReturnPathForBrowser(value, fallbackPath = "/", baseOrigin = "http://localhost:3000") {
+function normalizeReturnPathForBrowser(
+    value,
+    fallbackPath = "/",
+    baseOrigin = "http://localhost:3000",
+) {
     const fallback = String(fallbackPath || "/").trim() || "/";
     const raw = String(value || "").trim();
     if (!raw) return fallback;

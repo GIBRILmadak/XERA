@@ -9,9 +9,7 @@ const { buildBotPostDraft } = require("./bot-post-generator");
 const oauthHandler = require("./oauth-handler");
 const { startOAuthRefreshScheduler } = require("./oauth-token-manager");
 const { startIngestionWorker } = require("./ingestion-queue");
-const {
-    normalizeReturnPathForBrowser,
-} = require("./payment-return-paths");
+const { normalizeReturnPathForBrowser } = require("./payment-return-paths");
 const {
     buildDistributedMinuteSlots,
     buildIsoFromMinuteOfDay,
@@ -1102,16 +1100,24 @@ function safeEqualHex(left, right) {
     const a = String(left || "").trim();
     const b = String(right || "").trim();
     if (!a || !b || a.length !== b.length) return false;
-    return crypto.timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+    return crypto.timingSafeEqual(
+        Buffer.from(a, "utf8"),
+        Buffer.from(b, "utf8"),
+    );
 }
 
 function verifyKPayGatewayReturn(params) {
-    const status = String(params?.status || "").trim().toUpperCase();
+    const status = String(params?.status || "")
+        .trim()
+        .toUpperCase();
     const reference = String(params?.reference || "").trim();
-    const externalId = String(params?.externalId || params?.external_id || "").trim();
+    const externalId = String(
+        params?.externalId || params?.external_id || "",
+    ).trim();
     const timestamp = Number(params?.ts);
     const signature = String(params?.sig || "").trim();
-    if (!status || !reference || !externalId || !Number.isFinite(timestamp)) return false;
+    if (!status || !reference || !externalId || !Number.isFinite(timestamp))
+        return false;
     if (Math.abs(Date.now() - timestamp) > 10 * 60 * 1000) return false;
     const expected = crypto
         .createHmac("sha256", KPAY_SECRET_KEY)
@@ -4228,21 +4234,26 @@ async function handleKPayCallback(req, res) {
 
         const kpayPaymentId = callbackMetadata.kpay_payment_id;
         if (!kpayPaymentId) {
-            return res.status(409).send(
-                "Paiement KPay en attente de vérification. Contactez le support si nécessaire.",
-            );
+            return res
+                .status(409)
+                .send(
+                    "Paiement KPay en attente de vérification. Contactez le support si nécessaire.",
+                );
         }
         const kpayPayment = await fetchKPayPaymentStatus(kpayPaymentId);
         const kpayStatus = String(kpayPayment?.status || "").toUpperCase();
         const expectedAmount = Number(
-            callbackMetadata.checkout_amount ?? callbackTransaction.amount_gross,
+            callbackMetadata.checkout_amount ??
+                callbackTransaction.amount_gross,
         );
         if (
             String(kpayPayment?.externalId || "") !== expectedExternalId ||
             !Number.isFinite(Number(kpayPayment?.amount)) ||
             Number(kpayPayment.amount) !== expectedAmount
         ) {
-            return res.status(400).send("Montant ou référence KPay non concordant");
+            return res
+                .status(400)
+                .send("Montant ou référence KPay non concordant");
         }
         const paymentKind = String(
             payload.k ||
