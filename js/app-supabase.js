@@ -32,7 +32,7 @@ const INITIAL_AUTH_TIMEOUT_MS = 15000;
 const SLOW_CONNECTION_NOTICE_MS = 20000;
 const DISCOVER_DATA_RETRY_MS = 25000;
 const SLOW_CONNECTION_MESSAGE =
-    "Votre connexion semble lente ou instable. Le contenu continue de charger.";
+    "Votre connexion semble lente ou instable. tentative de reconnexion...";
 window.initialDataLoadInProgress = false;
 window.initialDataSlow = false;
 window.initialDataSlowMessage = "";
@@ -1282,7 +1282,10 @@ function navigateToPersonalProfile() {
         return;
     }
 
-    const query = new URLSearchParams({ user: String(userId), view: "personal" });
+    const query = new URLSearchParams({
+        user: String(userId),
+        view: "personal",
+    });
     window.location.href = `profile.html?${query.toString()}`;
 }
 
@@ -5462,8 +5465,14 @@ async function toggleCourage(contentId, btnElement) {
 
         const content = findContentById(contentId);
         updateImmersivePrefs(content, "like");
-        if (window.XeraUIMotion && typeof window.XeraUIMotion.playCourageFeedback === "function") {
-            window.XeraUIMotion.playCourageFeedback(allCourageButtons, btnElement);
+        if (
+            window.XeraUIMotion &&
+            typeof window.XeraUIMotion.playCourageFeedback === "function"
+        ) {
+            window.XeraUIMotion.playCourageFeedback(
+                allCourageButtons,
+                btnElement,
+            );
         }
         // Notifier l'auteur de la mise à jour (sauf auto-encouragement)
         notifyEncouragement(contentId)
@@ -15438,11 +15447,15 @@ async function renderProfileIntoContainer(userId) {
     if (isPageProRoute() && typeof window.navigateTo === "function") {
         const params = new URLSearchParams(window.location.search);
         const proSlug = params.get("pro");
-        const isProfilePage = window.location.pathname.includes("profile.html") || window.location.pathname.includes("/pagepro");
+        const isProfilePage =
+            window.location.pathname.includes("profile.html") ||
+            window.location.pathname.includes("/pagepro");
 
         // Ne pas rediriger si on est déjà sur la bonne page/route pour éviter les boucles de redirection
         if (!isProfilePage) {
-            window.navigateTo("pagepro", { query: proSlug ? { pro: proSlug } : {} });
+            window.navigateTo("pagepro", {
+                query: proSlug ? { pro: proSlug } : {},
+            });
         }
     }
 
@@ -15962,10 +15975,13 @@ async function handleProfileNavigation() {
         window.currentUser.account_subtype ||
         window.currentUser.user_metadata?.account_subtype ||
         "personal";
-    const isSuperAdmin = !!window.currentUser && window.currentUser.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
-    const profileRoute = (isProAccountType(accountType, accountSubtype) && !isSuperAdmin)
-        ? "pagepro"
-        : "profile";
+    const isSuperAdmin =
+        !!window.currentUser &&
+        window.currentUser.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
+    const profileRoute =
+        isProAccountType(accountType, accountSubtype) && !isSuperAdmin
+            ? "pagepro"
+            : "profile";
     window.currentProfileViewed = targetUserId || null;
 
     if (!document.getElementById("profile")) {
@@ -16023,10 +16039,13 @@ async function navigateToUserProfile(userId) {
         user?.account_subtype ||
         user?.user_metadata?.account_subtype ||
         "personal";
-    const isSuperAdmin = !!window.currentUser && window.currentUser.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
-    const profileRoute = (isProAccountType(accountType, accountSubtype) && !isSuperAdmin)
-        ? "pagepro"
-        : "profile";
+    const isSuperAdmin =
+        !!window.currentUser &&
+        window.currentUser.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
+    const profileRoute =
+        isProAccountType(accountType, accountSubtype) && !isSuperAdmin
+            ? "pagepro"
+            : "profile";
 
     if (!document.getElementById("profile")) {
         window.location.href = buildProfileUrl(
