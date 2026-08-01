@@ -88,6 +88,8 @@ class XeraTutorial {
         this.steps = [];
         this._onResize = null;
         this._positionTimer = null;
+        this.currentTargetEl = null;
+        this.isActive = false;
     }
 
     async init() {
@@ -141,22 +143,34 @@ class XeraTutorial {
 
     start() {
         this.currentStepIndex = -1;
+        this.isActive = true;
         this.createOverlay();
         this.next();
     }
 
     createOverlay() {
-        if (this.overlay) return;
-        this.overlay = document.createElement("div");
-        this.overlay.className = "tutorial-overlay-premium";
-        document.body.appendChild(this.overlay);
+        if (!this.overlay) {
+            this.overlay = document.createElement("div");
+            this.overlay.className = "tutorial-overlay-premium";
+            this.overlay.style.display = "block";
+            this.overlay.style.pointerEvents = "none";
+            document.body.appendChild(this.overlay);
+        }
 
-        this.tooltip = document.createElement("div");
-        this.tooltip.className = "tutorial-tooltip-premium tutorial-v2";
-        document.body.appendChild(this.tooltip);
+        if (!this.tooltip) {
+            this.tooltip = document.createElement("div");
+            this.tooltip.className = "tutorial-tooltip-premium tutorial-v2";
+            this.tooltip.style.display = "block";
+            this.tooltip.style.opacity = "1";
+            this.tooltip.style.visibility = "visible";
+            this.tooltip.style.pointerEvents = "auto";
+            document.body.appendChild(this.tooltip);
+        }
 
-        this._onResize = () => this.refreshPosition();
-        window.addEventListener("resize", this._onResize);
+        if (!this._onResize) {
+            this._onResize = () => this.refreshPosition();
+            window.addEventListener("resize", this._onResize);
+        }
     }
 
     next() {
@@ -171,9 +185,16 @@ class XeraTutorial {
     }
 
     showStep(step) {
+        this.createOverlay();
+
+        if (this.currentTargetEl) {
+            this.currentTargetEl.classList.remove("tutorial-highlight-premium");
+        }
+
         const targetEl = step.element
             ? document.querySelector(step.element)
             : null;
+        this.currentTargetEl = targetEl;
 
         document
             .querySelectorAll(".tutorial-highlight-premium")
@@ -181,16 +202,21 @@ class XeraTutorial {
 
         if (targetEl && targetEl.offsetParent !== null) {
             targetEl.classList.add("tutorial-highlight-premium");
-            targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+            try {
+                targetEl.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                });
+            } catch (err) {
+                console.warn("tutorial scrollIntoView error:", err);
+            }
 
-            // clear any pending position timer
             if (this._positionTimer) {
                 clearTimeout(this._positionTimer);
                 this._positionTimer = null;
             }
             this._positionTimer = setTimeout(() => {
-                // protect against the tooltip being removed while waiting
-                if (!this.tooltip) return;
+                if (!this.tooltip || !this.isActive) return;
                 try {
                     const rect = targetEl.getBoundingClientRect();
                     this.positionTooltip(rect, step.position);
@@ -199,7 +225,6 @@ class XeraTutorial {
                 }
             }, 300);
         } else {
-            // Show in center if no element
             this.tooltip.style.top = "50%";
             this.tooltip.style.left = "50%";
             this.tooltip.style.transform = "translate(-50%, -50%)";
@@ -227,9 +252,16 @@ class XeraTutorial {
             </div>
         `;
 
+        this.tooltip.style.display = "block";
+        this.tooltip.style.opacity = "1";
+        this.tooltip.style.visibility = "visible";
+        this.tooltip.style.pointerEvents = "auto";
+
         this.tooltip.querySelector(".btn-tutorial-next-premium").onclick =
             () => {
+                if (!this.isActive) return;
                 if (step.isCTA) {
+                    this.complete();
                     window.location.href = "login.html";
                 } else {
                     this.next();
@@ -240,7 +272,7 @@ class XeraTutorial {
     }
 
     refreshPosition() {
-        if (this.currentStepIndex < 0) return;
+        if (!this.isActive || this.currentStepIndex < 0) return;
         const step = this.steps[this.currentStepIndex];
         const targetEl = step.element
             ? document.querySelector(step.element)
@@ -280,18 +312,32 @@ class XeraTutorial {
     }
 
     complete() {
+        if (!this.isActive) return;
+        this.isActive = false;
+
         const key = window.currentUser
             ? XERA_TUTORIAL_KEY
             : XERA_GUEST_TUTORIAL_KEY;
         localStorage.setItem(key, "true");
-        if (this.overlay) this.overlay.remove();
-        if (this.tooltip) this.tooltip.remove();
-        this.overlay = null;
-        this.tooltip = null;
+
+        if (this.currentTargetEl) {
+            this.currentTargetEl.classList.remove("tutorial-highlight-premium");
+            this.currentTargetEl = null;
+        }
+
         document
             .querySelectorAll(".tutorial-highlight-premium")
             .forEach((el) => el.classList.remove("tutorial-highlight-premium"));
-        // clear pending timers and remove resize listener correctly
+
+        if (this.overlay) {
+            this.overlay.remove();
+            this.overlay = null;
+        }
+        if (this.tooltip) {
+            this.tooltip.remove();
+            this.tooltip = null;
+        }
+
         if (this._positionTimer) {
             clearTimeout(this._positionTimer);
             this._positionTimer = null;

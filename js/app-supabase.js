@@ -38,6 +38,7 @@ window.initialDataSlow = false;
 window.initialDataSlowMessage = "";
 let discoverDataRetryTimer = null;
 let discoverDataRetryInFlight = false;
+let firstProjectFeedPopupShown = false;
 
 function withTimeout(promise, timeoutMs, label = "Operation") {
     let timeoutId;
@@ -3447,7 +3448,12 @@ function setupPwaSwUpdateReload() {
             try {
                 if (window.__xeraSwReloading) return;
                 window.__xeraSwReloading = true;
-                setTimeout(() => window.location.reload(), 150);
+                if (window.confirm) {
+                    // Éviter le rechargement automatique involontaire sur les pages de l'app.
+                    console.info(
+                        "Service worker mis à jour ; recharge manuelle requise si nécessaire.",
+                    );
+                }
             } catch (e) {
                 /* ignore */
             }
@@ -5521,6 +5527,85 @@ function getCurrentUserProfile() {
         null
     );
 }
+
+function isProfileIdentityComplete(user = null) {
+    const profile =
+        user || getCurrentUserProfile() || window.currentUser || null;
+    if (!profile) return false;
+
+    const name = String(profile.name || profile.full_name || "").trim();
+    const avatar = String(profile.avatar || profile.avatar_url || "").trim();
+
+    return Boolean(name || avatar);
+}
+
+function shouldShowProfileCompletionReminder(user = null) {
+    if (!window.currentUser || !window.currentUser.id) return false;
+    if (window.currentUser?.is_pro || window.currentUser?.isPro) {
+        return false;
+    }
+    return !isProfileIdentityComplete(user || getCurrentUserProfile());
+}
+
+function syncProfileCompletionReminders() {
+    const currentUserId =
+        window.currentUser?.id || window.currentUserId || null;
+    if (!currentUserId) return;
+
+    document
+        .querySelectorAll(
+            ".nav-profile-reminder-dot, .settings-reminder-dot, .profile-identity-reminder-dot",
+        )
+        .forEach((dot) => dot.remove());
+
+    const shouldShow = shouldShowProfileCompletionReminder();
+
+    const profileButton = document.getElementById("nav-profile");
+    if (profileButton) {
+        if (shouldShow) {
+            const dot = document.createElement("span");
+            dot.className = "nav-profile-reminder-dot";
+            dot.setAttribute("aria-hidden", "true");
+            profileButton.appendChild(dot);
+        }
+    }
+
+    const settingsButton = document.querySelector(
+        '.settings-badge[title="Réglages"], .settings-badge[title="Settings"], .settings-badge[onclick*="openSettings"]',
+    );
+    if (settingsButton) {
+        if (shouldShow) {
+            const dot = document.createElement("span");
+            dot.className = "settings-reminder-dot";
+            dot.setAttribute("aria-hidden", "true");
+            settingsButton.appendChild(dot);
+        }
+    }
+
+    const identityNavItem = document.querySelector(
+        '.settings-nav-item[data-settings-target="identity"] .settings-nav-glyph',
+    );
+    if (identityNavItem) {
+        const existing = identityNavItem.querySelector(
+            ".profile-identity-reminder-dot",
+        );
+        if (shouldShow) {
+            if (!existing) {
+                const dot = document.createElement("span");
+                dot.className = "profile-identity-reminder-dot";
+                dot.setAttribute("aria-hidden", "true");
+                identityNavItem.appendChild(dot);
+            }
+        } else if (existing) {
+            existing.remove();
+        }
+    }
+}
+
+window.syncProfileCompletionReminders = syncProfileCompletionReminders;
+window.shouldShowProfileCompletionReminder =
+    shouldShowProfileCompletionReminder;
+window.isProfileIdentityComplete = isProfileIdentityComplete;
 
 function isUserBanned(userProfile) {
     if (!userProfile || !userProfile.banned_until) return false;
@@ -11584,6 +11669,41 @@ function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
  * Charge et affiche les prochains éléments du feed de manière progressive
  * Ajoute 20 éléments et les charge un par un
  */
+function showFirstProjectFeedPopup() {
+    if (document.getElementById("first-project-feed-popup")) return;
+
+    const popup = document.createElement("div");
+    popup.id = "first-project-feed-popup";
+    popup.className = "first-project-feed-popup";
+    popup.innerHTML = `
+        <div class="first-project-feed-popup__content">
+            <button class="first-project-feed-popup__close" type="button" aria-label="Fermer">×</button>
+            <h3>Créer votre premier projet</h3>
+            <p>Votre parcours mérite d’être montré. Lancez votre premier projet pour donner de la visibilité à votre progression.</p>
+            <div class="first-project-feed-popup__actions">
+                <button class="first-project-feed-popup__cta" type="button">Créer mon projet</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(popup);
+
+    popup
+        .querySelector(".first-project-feed-popup__close")
+        .addEventListener("click", () => {
+            popup.remove();
+        });
+
+    popup
+        .querySelector(".first-project-feed-popup__cta")
+        .addEventListener("click", () => {
+            popup.remove();
+            if (typeof window.openCreateModal === "function") {
+                window.openCreateModal();
+            }
+        });
+}
+
 function loadNextDiscoverPage() {
     if (discoverPaginationState.isLoading || !discoverPaginationState.hasMore)
         return;
@@ -11680,6 +11800,19 @@ async function renderDiscoverGrid() {
     const renderSequence = ++discoverRenderSequence;
     const grid = document.querySelector(".discover-grid");
     if (!grid) return;
+
+    const currentUserId = currentUser?.id || "guest";
+    const discoverRenderKey = `${window.location.pathname || ""}|${window.location.search || ""}|${window.discoverFilter || "all"}|${currentUserId}`;
+    const now = Date.now();
+    if (
+        window.__discoverRenderGuardKey === discoverRenderKey &&
+        window.__discoverRenderGuardAt &&
+        now - window.__discoverRenderGuardAt < 1200
+    ) {
+        return;
+    }
+    window.__discoverRenderGuardKey = discoverRenderKey;
+    window.__discoverRenderGuardAt = now;
     const waitMessage = document.querySelector(".wait");
     const allowReactDiscoverGrid = window.__enableReactDiscoverGrid === true;
 
@@ -11837,6 +11970,36 @@ async function renderDiscoverGrid() {
             isPreferred: Boolean(item.__discoverPreferred),
         });
     };
+
+    if (currentUser && !firstProjectFeedPopupShown) {
+        try {
+            const isPersonalAccount =
+                !currentUser?.is_pro &&
+                !currentUser?.isPro &&
+                !currentUser?.role?.includes("pro");
+            if (isPersonalAccount) {
+                const hasProjects = await withTimeout(
+                    (async () => {
+                        const { count, error } = await supabase
+                            .from("arcs")
+                            .select("id", { count: "exact", head: true })
+                            .eq("user_id", currentUser.id);
+                        if (error) throw error;
+                        return (count || 0) > 0;
+                    })(),
+                    5000,
+                    "Check user projects for feed popup",
+                );
+
+                if (!hasProjects) {
+                    showFirstProjectFeedPopup();
+                    firstProjectFeedPopupShown = true;
+                }
+            }
+        } catch (error) {
+            console.warn("Feed popup project check failed:", error);
+        }
+    }
 
     const renderedItems = [];
     let filteredMixedItems = mixedItems.filter((item) =>
@@ -15390,8 +15553,27 @@ function getProfileRenderContainer() {
 }
 
 async function renderProfileIntoContainer(userId) {
+    if (!userId) return;
+
     const previousViewedId = window.currentProfileViewed;
+    const sameProfileRenderKey = `${window.location.pathname || ""}|${window.location.search || ""}|${userId}`;
+    if (window.__profileRenderInFlightKey === sameProfileRenderKey) {
+        return;
+    }
+    if (
+        window.__lastProfileRenderKey === sameProfileRenderKey &&
+        window.__lastProfileRenderAt
+    ) {
+        const elapsed = Date.now() - window.__lastProfileRenderAt;
+        if (elapsed < 1500) {
+            return;
+        }
+    }
+
     window.currentProfileViewed = userId;
+    window.__profileRenderInFlightKey = sameProfileRenderKey;
+    window.__lastProfileRenderKey = sameProfileRenderKey;
+    window.__lastProfileRenderAt = Date.now();
 
     const user = getUser(userId);
     const accountType =
@@ -15460,7 +15642,16 @@ async function renderProfileIntoContainer(userId) {
     }
 
     const profileContainer = getProfileRenderContainer();
-    if (!profileContainer) return;
+    if (!profileContainer) {
+        window.__profileRenderInFlightKey = null;
+        return;
+    }
+
+    try {
+        syncProfileCompletionReminders();
+    } catch (e) {
+        console.warn("Unable to sync profile completion reminders:", e);
+    }
 
     const finalizeProfileRender = () => {
         try {
@@ -15520,6 +15711,12 @@ async function renderProfileIntoContainer(userId) {
                 .catch((e) => console.warn("Analytics load failed:", e));
         }
 
+        try {
+            syncProfileCompletionReminders();
+        } catch (e) {
+            console.warn("Unable to sync profile completion reminders:", e);
+        }
+
         maybeShowAmbassadorWelcome(userId);
         maybeApplyLatestPublishedPostHighlight(userId);
 
@@ -15560,6 +15757,10 @@ async function renderProfileIntoContainer(userId) {
                 <p>${error?.message || "Une erreur est survenue pendant le rendu."}</p>
             </div>
 `;
+    } finally {
+        if (window.__profileRenderInFlightKey === sameProfileRenderKey) {
+            window.__profileRenderInFlightKey = null;
+        }
     }
 }
 
@@ -17546,6 +17747,30 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
         );
     });
 
+    const refreshReminderStateFromSettings = () => {
+        try {
+            syncProfileCompletionReminders();
+        } catch (error) {
+            console.warn("Unable to refresh reminder state:", error);
+        }
+    };
+
+    document
+        .getElementById("setting-name")
+        ?.addEventListener("input", refreshReminderStateFromSettings);
+    document
+        .getElementById("setting-title")
+        ?.addEventListener("input", refreshReminderStateFromSettings);
+    document
+        .getElementById("setting-bio")
+        ?.addEventListener("input", refreshReminderStateFromSettings);
+    document
+        .getElementById("setting-avatar")
+        ?.addEventListener("input", refreshReminderStateFromSettings);
+    document
+        .getElementById("setting-banner")
+        ?.addEventListener("input", refreshReminderStateFromSettings);
+
     container.dataset.accountRoleTouched = "0";
     const accountRoleButtons = container.querySelectorAll(".account-role-btn");
     accountRoleButtons.forEach((btn) => {
@@ -17910,6 +18135,15 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
                     /* ignore */
                 }
 
+                try {
+                    syncProfileCompletionReminders();
+                } catch (e) {
+                    console.warn(
+                        "Unable to sync reminders after profile save:",
+                        e,
+                    );
+                }
+
                 // Also refresh derived discover cache if used
                 try {
                     if (typeof persistDiscoverCache === "function") {
@@ -18069,6 +18303,14 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
                 if (result.success) {
                     document.getElementById("setting-avatar").value =
                         result.url;
+                    try {
+                        syncProfileCompletionReminders();
+                    } catch (error) {
+                        console.warn(
+                            "Unable to sync reminders after avatar upload:",
+                            error,
+                        );
+                    }
                 } else {
                     alert("Erreur upload: " + result.error);
                 }
@@ -18109,6 +18351,14 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
                 if (result.success) {
                     document.getElementById("setting-banner").value =
                         result.url;
+                    try {
+                        syncProfileCompletionReminders();
+                    } catch (error) {
+                        console.warn(
+                            "Unable to sync reminders after banner upload:",
+                            error,
+                        );
+                    }
                 } else {
                     alert("Erreur upload: " + result.error);
                 }

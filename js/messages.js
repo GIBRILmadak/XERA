@@ -2633,6 +2633,19 @@
 
     async function openMessagesWithUser(targetUserId) {
         if (!targetUserId) return;
+
+        const messageRouteKey = `${targetUserId}|${window.location.pathname || ""}|${window.location.search || ""}`;
+        const now = Date.now();
+        if (
+            window.__messagesOpenGuardKey === messageRouteKey &&
+            window.__messagesOpenGuardAt &&
+            now - window.__messagesOpenGuardAt < 1200
+        ) {
+            return;
+        }
+        window.__messagesOpenGuardKey = messageRouteKey;
+        window.__messagesOpenGuardAt = now;
+
         if (!isLoggedIn()) {
             window.location.href = "login.html";
             return;
@@ -2732,6 +2745,18 @@
 
     async function initializeMessaging() {
         const currentUserId = getCurrentUserId();
+        const messagingInitKey = `${currentUserId || "guest"}|${window.location.pathname || ""}|${window.location.search || ""}`;
+        const now = Date.now();
+        if (
+            window.__messagingInitGuardKey === messagingInitKey &&
+            window.__messagingInitGuardAt &&
+            now - window.__messagingInitGuardAt < 1200
+        ) {
+            return;
+        }
+        window.__messagingInitGuardKey = messagingInitKey;
+        window.__messagingInitGuardAt = now;
+
         if (!currentUserId || !window.supabase) {
             cleanupMessaging();
             return;

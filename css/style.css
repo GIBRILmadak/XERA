@@ -6482,6 +6482,11 @@ html.light-mode .profile-signal-panel {
     right: 4px;
 }
 
+.settings-panel[data-settings-section="identity"] .accordion-header,
+.settings-panel[data-settings-section="identity"] {
+    position: relative;
+}
+
 #nav-profile,
 .profile-name-block {
     position: relative;
@@ -8651,6 +8656,141 @@ html.light-mode .btn-theme-toggle:hover {
 
     nav .logo {
         display: none !important;
+    }
+}
+
+/* --- DÉFILEMENT DES LOGOS PARTENAIRES --- */
+.partners-marquee {
+    width: 100%;
+    overflow: hidden;
+    position: relative;
+    mask-image: linear-gradient(90deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
+}
+
+.partners-track {
+    display: flex;
+    align-items: center;
+    gap: 2.25rem;
+    width: max-content;
+    will-change: transform;
+    animation: partners-scroll 24s linear infinite;
+}
+
+.partners-track:hover {
+    animation-play-state: paused;
+}
+
+.partner-logo-link {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.partner-logo-link img {
+    max-width: none;
+}
+
+@keyframes partners-scroll {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(-50%);
+    }
+}
+
+@media (min-width: 768px) {
+    .partners-track {
+        gap: 3rem;
+    }
+}
+
+/* --- POPUP PREMIER PROJET DANS LE FEED --- */
+.first-project-feed-popup {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 12000;
+    max-width: min(92vw, 360px);
+    pointer-events: auto;
+}
+
+.first-project-feed-popup__content {
+    position: relative;
+    background: rgba(255, 255, 255, 0.95);
+    color: #111827;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 20px;
+    padding: 1rem 1rem 1rem 1rem;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.16);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
+
+html.dark-mode .first-project-feed-popup__content {
+    background: rgba(17, 24, 39, 0.95);
+    color: #f9fafb;
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.first-project-feed-popup__close {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: 1.1rem;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.first-project-feed-popup__icon {
+    font-size: 1.6rem;
+    margin-bottom: 0.4rem;
+}
+
+.first-project-feed-popup__content h3 {
+    margin: 0 0 0.4rem;
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.first-project-feed-popup__content p {
+    margin: 0 0 0.8rem;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    opacity: 0.85;
+}
+
+.first-project-feed-popup__actions {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.first-project-feed-popup__cta {
+    border: none;
+    background: #111827;
+    color: #fff;
+    padding: 0.7rem 0.95rem;
+    border-radius: 999px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+html.dark-mode .first-project-feed-popup__cta {
+    background: #fff;
+    color: #111827;
+}
+
+@media (max-width: 640px) {
+    .first-project-feed-popup {
+        right: 0.75rem;
+        left: 0.75rem;
+        bottom: 0.75rem;
+        max-width: none;
     }
 }
 

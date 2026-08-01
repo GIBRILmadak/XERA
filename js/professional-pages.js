@@ -608,7 +608,9 @@ class XERAProfessionalManager {
             if (retryCount < 60) {
                 setTimeout(() => this.initNavigation(retryCount + 1), 250);
             } else {
-                console.warn("[Pro] Giving up on initNavigation: currentUser not found after 15s");
+                console.warn(
+                    "[Pro] Giving up on initNavigation: currentUser not found after 15s",
+                );
             }
             return;
         }
@@ -631,7 +633,10 @@ class XERAProfessionalManager {
                 }
 
                 // Fallback si le router global est disponible mais n'était pas là au moment du hook
-                if (window.XeraRouter && typeof window.XeraRouter.navigate === "function") {
+                if (
+                    window.XeraRouter &&
+                    typeof window.XeraRouter.navigate === "function"
+                ) {
                     return window.XeraRouter.navigate(pageId, options);
                 }
             };
@@ -662,7 +667,9 @@ class XERAProfessionalManager {
             }
 
             // Détection renforcée du statut PRO
-            const isSuperAdmin = window.currentUser?.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
+            const isSuperAdmin =
+                window.currentUser?.id ===
+                "b0f9f893-1706-4721-899c-d26ad79afc86";
             const isUserPro =
                 isSuperAdmin ||
                 (window.isProUser && window.isProUser(window.currentUser)) ||
@@ -689,9 +696,14 @@ class XERAProfessionalManager {
                         : "Configurer ma Page Pro";
 
                     // Fallback href pour SEO et robustesse
-                    navBtn.href = this.myPageSlug ? `profile.html?pro=${this.myPageSlug}` : "profile.html";
+                    navBtn.href = this.myPageSlug
+                        ? `profile.html?pro=${this.myPageSlug}`
+                        : "profile.html";
 
-                    console.log("[Pro] Affichage du bouton Pro activé. Slug:", this.myPageSlug);
+                    console.log(
+                        "[Pro] Affichage du bouton Pro activé. Slug:",
+                        this.myPageSlug,
+                    );
                 } else {
                     this.myPageSlug = null;
                     // On ne cache que si on est CERTAIN que ce n'est pas un pro
@@ -705,7 +717,9 @@ class XERAProfessionalManager {
                 navBtn.parentNode.replaceChild(newNavBtn, navBtn);
 
                 newNavBtn.onclick = (e) => {
-                    console.log("[Pro] Nav button clicked (via onclick listener)");
+                    console.log(
+                        "[Pro] Nav button clicked (via onclick listener)",
+                    );
                     e.preventDefault();
                     e.stopPropagation();
 
@@ -732,8 +746,13 @@ class XERAProfessionalManager {
             );
             if (profileBtn) {
                 // N'afficher que si l'utilisateur est un compte pro/entreprise (ou Super Admin) ET n'a pas encore de Page Pro
-                const isNonPersonal = this.isNonPersonalAccount(window.currentUser);
-                profileBtn.style.display = (hasPage || (!isNonPersonal && !isSuperAdmin)) ? "none" : "flex";
+                const isNonPersonal = this.isNonPersonalAccount(
+                    window.currentUser,
+                );
+                profileBtn.style.display =
+                    hasPage || (!isNonPersonal && !isSuperAdmin)
+                        ? "none"
+                        : "flex";
 
                 profileBtn.onclick = (e) => {
                     e.preventDefault();
@@ -1404,9 +1423,14 @@ class XERAProfessionalManager {
         }
 
         // On s'assure de passer les 4 arguments comme dans le cas pageContainer
-        mount(overlay, pageId, () => {
-            overlay.style.display = "none";
-        }, "overlay");
+        mount(
+            overlay,
+            pageId,
+            () => {
+                overlay.style.display = "none";
+            },
+            "overlay",
+        );
     }
 
     /**
@@ -1803,6 +1827,18 @@ class XERAProfessionalManager {
     async renderProPage(slug) {
         console.log("[Pro] renderProPage starting for slug:", slug);
 
+        const routeKey = `${window.location.pathname || ""}|${window.location.search || ""}|${slug || ""}`;
+        const now = Date.now();
+        if (
+            window.__proPageRenderGuardKey === routeKey &&
+            window.__proPageRenderGuardAt &&
+            now - window.__proPageRenderGuardAt < 1200
+        ) {
+            return;
+        }
+        window.__proPageRenderGuardKey = routeKey;
+        window.__proPageRenderGuardAt = now;
+
         const currentPath = window.location.pathname;
         const isProfilePage =
             currentPath.includes("profile.html") ||
@@ -1817,7 +1853,10 @@ class XERAProfessionalManager {
             console.log("[Pro] Redirecting to profile page with slug:", slug);
             const targetUrl = `profile.html?pro=${slug}`;
 
-            if (window.XeraRouter && typeof window.XeraRouter.navigate === "function") {
+            if (
+                window.XeraRouter &&
+                typeof window.XeraRouter.navigate === "function"
+            ) {
                 window.XeraRouter.navigate("pagepro", { query: { pro: slug } });
             } else if (typeof window.navigateTo === "function") {
                 window.navigateTo("pagepro", { query: { pro: slug } });
@@ -1842,7 +1881,9 @@ class XERAProfessionalManager {
         }
 
         if (!proContainer) {
-            console.warn("[Pro] No container found for rendering pro page content");
+            console.warn(
+                "[Pro] No container found for rendering pro page content",
+            );
             return;
         }
 
@@ -2601,15 +2642,18 @@ class XERAProfessionalManager {
             if (!window._proNavScrollHandler) {
                 let lastScrollY = window.pageYOffset;
                 window._proNavScrollHandler = () => {
-                    const nav = document.querySelector('nav');
+                    const nav = document.querySelector("nav");
                     if (!nav) return;
 
                     // On ne s'active que si on est sur une page pro
-                    const isProActive = document.body.classList.contains('is-pro') &&
-                                      document.getElementById('pro-page')?.classList.contains('active');
+                    const isProActive =
+                        document.body.classList.contains("is-pro") &&
+                        document
+                            .getElementById("pro-page")
+                            ?.classList.contains("active");
 
                     if (!isProActive) {
-                        nav.style.transform = 'translateY(0)';
+                        nav.style.transform = "translateY(0)";
                         return;
                     }
 
@@ -2619,14 +2663,16 @@ class XERAProfessionalManager {
 
                     if (currentScrollY > lastScrollY && currentScrollY > 100) {
                         // On descend (Swipe UP) : on cache la navigation (montant vers le haut)
-                        nav.style.transform = 'translateY(-100%)';
+                        nav.style.transform = "translateY(-100%)";
                     } else {
                         // On remonte (Swipe DOWN) : on montre la navigation (descendant vers le bas)
-                        nav.style.transform = 'translateY(0)';
+                        nav.style.transform = "translateY(0)";
                     }
                     lastScrollY = currentScrollY;
                 };
-                window.addEventListener('scroll', window._proNavScrollHandler, { passive: true });
+                window.addEventListener("scroll", window._proNavScrollHandler, {
+                    passive: true,
+                });
             }
         } catch (err) {
             proContainer.innerHTML = `
@@ -2653,14 +2699,21 @@ class XERAProfessionalManager {
         console.log("[Pro] renderTalentExplorer starting...");
 
         const currentPath = window.location.pathname;
-        const isProfilePage = currentPath.includes("profile.html") || currentPath.includes("/pagepro");
+        const isProfilePage =
+            currentPath.includes("profile.html") ||
+            currentPath.includes("/pagepro");
         const hasExplorerParam = window.location.search.includes("explorer=1");
 
         // 1. Redirection si pas sur la bonne URL
         if (!isProfilePage || !hasExplorerParam) {
             console.log("[Pro] Redirecting to Talent Explorer...");
-            if (window.XeraRouter && typeof window.XeraRouter.navigate === "function") {
-                window.XeraRouter.navigate("pagepro", { query: { explorer: "1" } });
+            if (
+                window.XeraRouter &&
+                typeof window.XeraRouter.navigate === "function"
+            ) {
+                window.XeraRouter.navigate("pagepro", {
+                    query: { explorer: "1" },
+                });
             } else if (typeof window.navigateTo === "function") {
                 window.navigateTo("pagepro", { query: { explorer: "1" } });
             } else {
@@ -2675,7 +2728,9 @@ class XERAProfessionalManager {
 
         const targetPage = document.getElementById("pro-page");
         if (targetPage) {
-            document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+            document
+                .querySelectorAll(".page")
+                .forEach((p) => p.classList.remove("active"));
             targetPage.classList.add("active");
         }
 
@@ -3887,10 +3942,15 @@ if (typeof window !== "undefined") {
 
         // Notification immédiate pour retour utilisateur
         if (typeof window.showToast === "function") {
-            window.showToast("Ouverture de votre espace professionnel...", "info");
+            window.showToast(
+                "Ouverture de votre espace professionnel...",
+                "info",
+            );
         }
 
-        const manager = window.professionalManager || await window.waitForProfessionalManager(4000);
+        const manager =
+            window.professionalManager ||
+            (await window.waitForProfessionalManager(4000));
 
         if (!manager) {
             console.error("[Pro] Professional Manager not ready after wait");
@@ -3936,7 +3996,9 @@ if (typeof window !== "undefined") {
                             ? ev.target.closest("#nav-pro-page")
                             : null;
                         if (btn) {
-                            console.log("[Pro] Global click intercepted on #nav-pro-page");
+                            console.log(
+                                "[Pro] Global click intercepted on #nav-pro-page",
+                            );
                             window.navigateToProfessionalPage(ev);
                         }
                     },
