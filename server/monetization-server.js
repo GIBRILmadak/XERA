@@ -10,6 +10,9 @@ const oauthHandler = require("./oauth-handler");
 const { startOAuthRefreshScheduler } = require("./oauth-token-manager");
 const { startIngestionWorker } = require("./ingestion-queue");
 const {
+    normalizeReturnPathForBrowser,
+} = require("./payment-return-paths");
+const {
     buildDistributedMinuteSlots,
     buildIsoFromMinuteOfDay,
     getBotDailyEncourageTarget,
@@ -545,7 +548,11 @@ function sanitizeReturnPath(value, fallbackPath = "/") {
         if (url.origin !== baseUrl.origin) {
             return fallback;
         }
-        return `${url.pathname}${url.search}${url.hash}`;
+        return normalizeReturnPathForBrowser(
+            `${url.pathname}${url.search}${url.hash}`,
+            fallback,
+            baseUrl.toString(),
+        );
     } catch (error) {
         return fallback;
     }
@@ -4320,9 +4327,14 @@ async function handleKPayCallback(req, res) {
                       callbackTransaction.to_user_id ||
                           callbackTransaction.from_user_id,
                   );
-        const returnHref = String(returnPath || "").startsWith("http")
-            ? String(returnPath)
-            : `${PRIMARY_ORIGIN}/${String(returnPath || "/").replace(/^\//, "")}`;
+        const normalizedReturnPath = normalizeReturnPathForBrowser(
+            returnPath,
+            "/",
+            PRIMARY_ORIGIN,
+        );
+        const returnHref = String(normalizedReturnPath || "").startsWith("http")
+            ? String(normalizedReturnPath)
+            : `${PRIMARY_ORIGIN}/${String(normalizedReturnPath || "/").replace(/^\//, "")}`;
         const returnLabel =
             paymentKind === "support"
                 ? "Retour a la page precedente"
