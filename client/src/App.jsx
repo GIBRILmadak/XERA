@@ -24,17 +24,33 @@ export default function App() {
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<Home />} />
+          <Route path="/index.html" element={<Home />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/login.html" element={<Login />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/profile.html" element={<Profile />} />
           <Route path="/pagepro" element={<Profile />} />
+          <Route path="/pagepro.html" element={<Profile />} />
           <Route path="/stream" element={<LegacyPage src="/stream.html" />} />
+          <Route path="/stream.html" element={<LegacyPage src="/stream.html" />} />
           <Route path="/subscription-plans" element={<LegacyPage src="/subscription-plans.html" />} />
+          <Route path="/subscription-plans.html" element={<LegacyPage src="/subscription-plans.html" />} />
           <Route path="/verification" element={<LegacyPage src="/verification.html" />} />
+          <Route path="/verification.html" element={<LegacyPage src="/verification.html" />} />
           <Route path="/credits" element={<LegacyPage src="/credits.html" />} />
+          <Route path="/credits.html" element={<LegacyPage src="/credits.html" />} />
 
           {/* Protected routes */}
           <Route
             path="/creator-dashboard"
+            element={
+              <ProtectedRoute>
+                <CreatorDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/creator-dashboard.html"
             element={
               <ProtectedRoute>
                 <CreatorDashboard />
@@ -50,7 +66,23 @@ export default function App() {
             }
           />
           <Route
+            path="/admin.html"
+            element={
+              <ProtectedRoute>
+                <LegacyPage src="/admin.html" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/analytics"
+            element={
+              <ProtectedRoute>
+                <LegacyPage src="/analytics.html" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/analytics.html"
             element={
               <ProtectedRoute>
                 <LegacyPage src="/analytics.html" />
@@ -66,7 +98,23 @@ export default function App() {
             }
           />
           <Route
+            path="/create-stream.html"
+            element={
+              <ProtectedRoute>
+                <LegacyPage src="/create-stream.html" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/badges-admin"
+            element={
+              <ProtectedRoute>
+                <LegacyPage src="/badges-admin.html" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/badges-admin.html"
             element={
               <ProtectedRoute>
                 <LegacyPage src="/badges-admin.html" />
