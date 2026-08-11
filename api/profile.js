@@ -51,7 +51,7 @@ module.exports = async (req, res) => {
     }
 
     try {
-        const filePath = path.join(process.cwd(), 'profile.html');
+        const filePath = path.join(process.cwd(), 'client', 'dist', 'index.html');
         let html = fs.readFileSync(filePath, 'utf8');
 
         // Fonction de remplacement robuste (multi-ligne)
@@ -91,7 +91,7 @@ module.exports = async (req, res) => {
         res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
         return res.status(200).send(html);
     } catch (error) {
-        const fallbackPath = path.join(process.cwd(), 'profile.html');
+        const fallbackPath = path.join(process.cwd(), 'client', 'dist', 'index.html');
         return res.status(200).send(fs.readFileSync(fallbackPath, 'utf8'));
     }
 };

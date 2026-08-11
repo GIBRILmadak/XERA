@@ -1,6 +1,11 @@
 {
     "$schema": "https://openapi.vercel.sh/vercel.json",
     "outputDirectory": "client/dist",
+    "functions": {
+        "api/*.js": {
+            "includeFiles": "client/dist/**"
+        }
+    },
     "rewrites": [
         { "source": "/sitemap.xml", "destination": "/api/sitemap" },
         { "source": "/api/:path*", "destination": "/api/router?path=:path*" },
