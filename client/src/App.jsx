@@ -9,7 +9,13 @@ import Profile from './pages/Profile';
 import CreatorDashboard from './pages/CreatorDashboard';
 import NotFound from './pages/NotFound';
 
-// Global CSS (original stylesheets loaded from public/ at runtime via index.html <link> tags)
+// Global CSS
+import '../public/css/style.css';
+import '../public/css/search-notification.css';
+import '../public/css/login.css';
+import '../public/css/arcs.css';
+import '../public/css/monetization.css';
+import '../public/css/streaming-analytics.css';
 
 export default function App() {
   return (

@@ -14044,10 +14044,6 @@ html.dark-mode .tutorial-text-body {
     background: rgba(192, 132, 252, 0.2);
 }
 
-    background: rgba(255, 255, 255, 0.055);
-    border-color: rgba(255, 255, 255, 0.16);
-}
-
 .hiring-needs-list .badge {
     padding: 0.4rem 0.8rem;
     font-weight: 700;
