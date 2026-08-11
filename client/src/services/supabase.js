@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ssbuagqwjptyhavinkxg.supabase.co";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_o7_j9WXXd96YKXa-fmfs1Q_OEwNTh1M";
+
 
 const rememberMeRaw = localStorage.getItem("rize-remember-me");
 const rememberMe = rememberMeRaw === null ? true : rememberMeRaw === "true";
