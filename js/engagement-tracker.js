@@ -1,5 +1,5 @@
 /**
- * XERA ENGAGEMENT TRACKER - CLIENT SIDE
+ * XERA1 ENGAGEMENT TRACKER - CLIENT SIDE
  *
  * Collecte les interactions utilisateurs et les envoie à l'API
  * À intégrer dans le feed immersif et autres pages

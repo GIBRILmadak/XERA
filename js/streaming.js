@@ -831,7 +831,7 @@ if (!window.__streamingLoaded) {
     }
 
     function getLiveStudioStorageKey(streamId = currentStream?.id) {
-        return streamId ? `xera-live-studio:${streamId}` : "";
+        return streamId ? `xera1-live-studio:${streamId}` : "";
     }
 
     function saveLiveStudioState(streamId = currentStream?.id) {
@@ -1020,7 +1020,7 @@ if (!window.__streamingLoaded) {
             LIVE_PREVIEW_FILTERS[filterId] || LIVE_PREVIEW_FILTERS.none;
         video.style.filter = getActivePreviewFilterCss();
         document.body.style.setProperty(
-            "--xera-live-filter-accent",
+            "--xera1-live-filter-accent",
             filter.accent || "#38bdf8",
         );
         syncAudiencePreviewMonitors();

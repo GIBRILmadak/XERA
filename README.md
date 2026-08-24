@@ -1,7 +1,7 @@
 # XΞRA
 
 <div align="center">
-  <img src="./icons/logo.png" alt="XERA Logo" width="180" />
+  <img src="./icons/logo.png" alt="XERA1 Logo" width="180" />
 
 ### Transform ideas into results.
 
@@ -190,7 +190,7 @@ Because the internet already has enough clowns.
 # Project Structure
 
 ```bash
-XERA/
+XERA1/
 ├── icons/                      # Logos, SVGs and visual assets
 ├── js/                         # Frontend application logic
 │   ├── app.js

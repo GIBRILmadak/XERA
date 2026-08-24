@@ -1,11 +1,11 @@
 (function () {
     function ensureShell() {
-        if (document.getElementById("xera-premium-shell")) {
-            return document.getElementById("xera-premium-shell");
+        if (document.getElementById("xera1-premium-shell")) {
+            return document.getElementById("xera1-premium-shell");
         }
 
         const shell = document.createElement("div");
-        shell.id = "xera-premium-shell";
+        shell.id = "xera1-premium-shell";
         shell.setAttribute("aria-live", "polite");
         document.body.appendChild(shell);
         return shell;
@@ -15,10 +15,10 @@
         const container =
             document.getElementById("toast-container") || ensureShell();
         const toast = document.createElement("div");
-        toast.className = `xera-toast xera-toast--${type}`;
+        toast.className = `xera1-toast xera1-toast--${type}`;
         toast.innerHTML = `
-            <div class="xera-toast__title">${type === "success" ? "Success" : type === "error" ? "Notice" : "Update"}</div>
-            <div class="xera-toast__message">${message}</div>
+            <div class="xera1-toast__title">${type === "success" ? "Success" : type === "error" ? "Notice" : "Update"}</div>
+            <div class="xera1-toast__message">${message}</div>
         `;
         container.appendChild(toast);
         requestAnimationFrame(() => toast.classList.add("is-visible"));
@@ -29,11 +29,11 @@
     }
 
     function createSkeleton(target) {
-        if (!target || target.querySelector(".xera-skeleton")) return;
+        if (!target || target.querySelector(".xera1-skeleton")) return;
         const skeleton = document.createElement("div");
-        skeleton.className = "xera-skeleton";
+        skeleton.className = "xera1-skeleton";
         skeleton.innerHTML =
-            '<div class="xera-skeleton__line"></div><div class="xera-skeleton__line short"></div>';
+            '<div class="xera1-skeleton__line"></div><div class="xera1-skeleton__line short"></div>';
         target.appendChild(skeleton);
     }
 
@@ -85,7 +85,7 @@
             }
 
             createToast("Pro access activated successfully.", "success");
-            window.dispatchEvent(new CustomEvent("xera:pro-upgraded"));
+            window.dispatchEvent(new CustomEvent("xera1:pro-upgraded"));
             return true;
         } catch (error) {
             createToast(
@@ -97,18 +97,18 @@
     }
 
     function showUpgradeModal() {
-        const existing = document.getElementById("xera-upgrade-modal");
+        const existing = document.getElementById("xera1-upgrade-modal");
         if (existing) {
             existing.remove();
         }
 
         const modal = document.createElement("div");
-        modal.id = "xera-upgrade-modal";
-        modal.className = "xera-upgrade-modal";
+        modal.id = "xera1-upgrade-modal";
+        modal.className = "xera1-upgrade-modal";
         modal.innerHTML = `
-            <div class="xera-upgrade-modal__backdrop" data-close="true"></div>
-            <div class="xera-upgrade-modal__panel" role="dialog" aria-modal="true">
-                <div class="xera-upgrade-modal__badge">XERA1 Pro</div>
+            <div class="xera1-upgrade-modal__backdrop" data-close="true"></div>
+            <div class="xera1-upgrade-modal__panel" role="dialog" aria-modal="true">
+                <div class="xera1-upgrade-modal__badge">XERA1 Pro</div>
                 <h2>Move faster with XERA1 Pro</h2>
                 <p>Unlock premium insights, priority visibility and advanced tools for serious builders.</p>
                 <ul>
@@ -142,7 +142,7 @@
         if (!shouldGate) return;
 
         const badge = document.createElement("span");
-        badge.className = "xera-pro-lock";
+        badge.className = "xera1-pro-lock";
         badge.innerHTML = "🔒 Pro";
         target.appendChild(badge);
         target.style.position = "relative";

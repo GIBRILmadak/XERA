@@ -1,6 +1,6 @@
 // `isProUser` is provided globally by app-supabase.js (window.isProUser)
 /**
- * XERA PROFESSIONAL PAGES & CERTIFICATIONS
+ * XERA1 PROFESSIONAL PAGES & CERTIFICATIONS
  * Gère la création de pages entreprises et la certification des talents
  * Version Onboarding Interactif XXL - Haute Visibilité
  */
@@ -3301,7 +3301,7 @@ class XERAProfessionalOnboarding {
         if (this.overlay) return;
 
         // Inject custom styles for the new premium design
-        const styleId = "xera-onboarding-custom-styles";
+        const styleId = "xera1-onboarding-custom-styles";
         if (!document.getElementById(styleId)) {
             const style = document.createElement("style");
             style.id = styleId;
@@ -3985,7 +3985,7 @@ if (typeof window !== "undefined") {
             console.log("[Pro] Supabase client found, initializing manager...");
             window.professionalManager = new XERAProfessionalManager(client);
             window.professionalManager.initNavigation().catch(console.warn);
-            console.log("XERA Professional Manager initialized.");
+            console.log("XERA1 Professional Manager initialized.");
 
             // Delegated click handler so the nav button works even if re-rendered
             if (!window._proNavDelegationHooked) {

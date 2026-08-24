@@ -1,5 +1,5 @@
 /* ========================================
-   AMÉLIORATIONS UX - XERA
+   AMÉLIORATIONS UX - XERA1
    Indicateurs de chargement, persistance, animations
    ======================================== */
 

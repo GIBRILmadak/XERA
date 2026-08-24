@@ -1,0 +1,169 @@
+---
+title: "Tableau de bord créateur : suivez vos gains et statistiques XERA1"
+sidebarTitle: "Tableau de bord"
+description: "Suivez vos gains, soldes, statistiques vidéo et transactions dans le tableau de bord créateur XERA1 : votre centre de commande financier pour gérer la monétisation."
+---
+
+Le tableau de bord créateur est votre centre de commande financier sur XERA1. Il rassemble en un seul endroit tous les chiffres qui comptent pour vos revenus : votre solde de portefeuille en direct, les pourboires entrants, les revenus vidéo et l'historique complet des transactions avec les détails des commissions. Accédez-y à tout moment depuis le menu de votre profil sous **Monétisation → Tableau de bord créateur**.
+
+## Aperçu du portefeuille
+
+Le haut du tableau de bord affiche quatre cartes de portefeuille qui vous donnent un aperçu instantané de l'état de vos fonds.
+
+<CardGroup cols={2}>
+  <Card title="Disponible pour retrait" icon="circle-dollar-to-slot">
+    Le montant que vous pouvez demander à retirer **maintenant**. Seuls les gains crédités qui n'ont pas encore été retirés sont affichés ici. Le montant minimum de retrait est de **\$5,00**.
+  </Card>
+
+  <Card title="Gains en attente" icon="clock">
+    Les revenus qui ont été gagnés mais pas encore libérés sur votre solde disponible. Cela inclut les pourboires et les paiements vidéo encore en cours de traitement par la plateforme.
+  </Card>
+
+  <Card title="Retraits en attente / En traitement" icon="arrows-rotate">
+    La valeur totale des demandes de retrait que vous avez soumises et qui sont actuellement en statut **En attente** ou **En traitement**. Ces fonds sont réservés et ne sont pas disponibles pour un nouveau retrait.
+  </Card>
+
+  <Card title="Total versé" icon="money-bill-transfer">
+    Le montant cumulé qui a été envoyé avec succès sur votre compte Mobile Money pour l'ensemble des retraits complétés.
+  </Card>
+</CardGroup>
+
+<Note>
+  Seul votre **solde disponible** peut être retiré. Les gains en attente n'ont pas encore été validés et n'apparaîtront comme retirables qu'une fois libérés.
+</Note>
+
+## Aperçu des revenus
+
+La section Aperçu des revenus affiche votre total de gains ventilé par source. Utilisez les boutons de filtre par période pour affiner la vue.
+
+**Options de filtre :** Tout · 30 jours · 7 jours · Aujourd'hui
+
+| Indicateur | Description |
+| --- | --- |
+| **Pourboires reçus** | Total net crédité de toutes les transactions de pourboires de supporters sur la période sélectionnée |
+| **Revenus vidéo** | Gains nets RPM provenant des vues éligibles sur la période sélectionnée |
+| **Total** | Montant net combiné pour les deux types de revenus |
+
+Chaque carte affiche également le nombre de transactions ou de vues éligibles pour la période sélectionnée, afin que vous puissiez corréler vos gains avec votre activité.
+
+## Statistiques vidéo
+
+<Info>
+  La section Statistiques vidéo n'est visible que sur les comptes avec un plan **Pro**. Passez à Pro pour débloquer la monétisation vidéo et cette section du tableau de bord.
+</Info>
+
+Les créateurs Pro voient une grille de statistiques dédiée qui détaille en profondeur les performances vidéo.
+
+| Statistique | Ce qu'elle mesure |
+| --- | --- |
+| **Vues totales** | Toutes les vues enregistrées sur votre contenu vidéo |
+| **Vues éligibles (\>60 s)** | Vues comptabilisées uniquement sur les vidéos de plus de 60 secondes : les seules qui génèrent des revenus |
+| **Nombre de vidéos monétisées** | Nombre de vos vidéos actuellement éligibles à la monétisation RPM |
+| **Revenus estimés** | Gains projetés calculés à \$0,40 par 1 000 vues éligibles |
+
+<Warning>
+  Seules les vidéos **de plus de 60 secondes** sont éligibles au comptage de revenus. Les vues sur les vidéos plus courtes sont suivies dans les vues totales mais sont exclues des vues éligibles et ne contribuent pas à vos gains estimés.
+</Warning>
+
+## Tableau des transactions
+
+Le tableau des transactions est un journal complet et paginé de chaque événement de crédit sur votre compte. Chaque ligne montre le détail financier complet d'une transaction.
+
+| Colonne | Description |
+| --- | --- |
+| **Date** | Horodatage de la transaction |
+| **Type** | `Tip` ou `Video Revenue` |
+| **Montant brut** | Le montant complet avant la commission de XERA1 |
+| **Commission (20 %)** | Les frais de plateforme déduits automatiquement |
+| **Net reçu** | Le montant crédité sur votre portefeuille après commission |
+| **Statut** | État actuel de la transaction (`Completed`, `Pending`, etc.) |
+
+**Filtrer par type :** Tout · Pourboires · Revenus vidéo
+
+Utilisez le filtre par type pour isoler les revenus des pourboires des crédits RPM vidéo lors de l'examen de votre mix de gains.
+
+## Carte de statut de monétisation
+
+La carte de statut en haut du tableau de bord indique si la monétisation est actuellement **active** sur votre compte ou **verrouillée**, et si elle est verrouillée, elle explique exactement pourquoi.
+
+<Tabs>
+  <Tab title="Active">
+    Votre compte remplit toutes les conditions. Les pourboires sont activés sur votre profil et (pour Pro) la monétisation vidéo comptabilise les vues éligibles. Aucune action requise.
+  </Tab>
+  <Tab title="Verrouillée — Plan requis">
+    Votre plan actuel est Gratuit ou Standard. Passez à Medium ou Pro pour débloquer la monétisation. La carte inclut un lien direct vers la page des Abonnements.
+  </Tab>
+  <Tab title="Verrouillée — Abonnés requis">
+    Vous êtes sur Medium ou Pro, mais votre nombre d'abonnés n'a pas encore atteint **1 000**. La carte affiche votre nombre actuel et le nombre d'abonnés supplémentaires nécessaires. La monétisation s'active automatiquement une fois le seuil dépassé.
+  </Tab>
+</Tabs>
+
+## Référence API
+
+Les points de terminaison suivants alimentent le tableau de bord créateur. Utilisez-les si vous intégrez l'API de XERA1 ou construisez par-dessus la plateforme.
+
+<AccordionGroup>
+  <Accordion title="GET /api/creator-revenue/:userId">
+    Retourne l'historique complet des revenus et le résumé du portefeuille pour l'utilisateur spécifié.
+
+    ```bash
+    GET /api/creator-revenue/:userId
+    Authorization: Bearer <session_token>
+    ```
+
+    **Paramètres de chemin :**
+
+    <ParamField path="userId" type="string" required>
+      L'UUID du créateur dont vous souhaitez récupérer les données de revenus. Doit correspondre à la session authentifiée.
+    </ParamField>
+
+    **Champs de réponse :**
+
+    <ResponseField name="available_balance" type="number">
+      Montant actuellement disponible pour retrait en USD.
+    </ResponseField>
+
+    <ResponseField name="pending_incoming" type="number">
+      Gains pas encore libérés sur le solde disponible.
+    </ResponseField>
+
+    <ResponseField name="pending_withdrawals" type="number">
+      Somme des demandes de retrait en statut En attente ou En traitement.
+    </ResponseField>
+
+    <ResponseField name="paid_out_total" type="number">
+      Total cumulé de tous les retraits complétés.
+    </ResponseField>
+
+    <ResponseField name="transactions" type="array">
+      Tableau d'objets transaction avec les champs `date`, `type`, `gross`, `commission`, `net` et `status`.
+    </ResponseField>
+  </Accordion>
+
+  <Accordion title="GET /api/monetization/overview">
+    Retourne un résumé combiné du portefeuille du créateur, des paramètres de méthode de versement et de l'historique récent des transactions.
+
+    ```bash
+    GET /api/monetization/overview
+    Authorization: Bearer <session_token>
+    ```
+
+    **Champs de réponse :**
+
+    <ResponseField name="wallet" type="object">
+      Objet portefeuille contenant `available_balance`, `pending_incoming`, `pending_withdrawals` et `paid_out_total`.
+    </ResponseField>
+
+    <ResponseField name="payout_method" type="object">
+      Détails du compte Mobile Money enregistré (fournisseur, nom du compte, numéro, code pays) ou `null` si non configuré.
+    </ResponseField>
+
+    <ResponseField name="recent_transactions" type="array">
+      10 dernières transactions pour tous les types de revenus.
+    </ResponseField>
+
+    <ResponseField name="monetization_active" type="boolean">
+      Indique si le compte a actuellement la monétisation activée.
+    </ResponseField>
+  </Accordion>
+</AccordionGroup>

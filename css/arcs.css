@@ -539,33 +539,33 @@
 }
 
 /* --- WITNESS LOOP / PROOF CARDS --- */
-.xera-growth-seed,
-.xera-growth-panel {
+.xera1-growth-seed,
+.xera1-growth-panel {
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: rgba(255, 255, 255, 0.045);
     border-radius: 12px;
 }
 
-.xera-growth-seed {
+.xera1-growth-seed {
     padding: 0.85rem 1rem;
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
 }
 
-.xera-growth-seed strong,
-.xera-growth-panel h3 {
+.xera1-growth-seed strong,
+.xera1-growth-panel h3 {
     color: var(--text-primary);
 }
 
-.xera-growth-seed span,
-.xera-growth-panel p {
+.xera1-growth-seed span,
+.xera1-growth-panel p {
     color: var(--text-secondary);
     font-size: 0.88rem;
     line-height: 1.45;
 }
 
-.xera-growth-panel {
+.xera1-growth-panel {
     margin-bottom: 2rem;
     padding: 1rem;
     display: flex;
@@ -574,27 +574,27 @@
     gap: 1rem;
 }
 
-.xera-growth-panel h3 {
+.xera1-growth-panel h3 {
     font-size: 1rem;
     margin: 0 0 0.25rem;
 }
 
-.xera-growth-panel p {
+.xera1-growth-panel p {
     margin: 0;
 }
 
-.xera-growth-action-grid {
+.xera1-growth-action-grid {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 0.5rem;
 }
 
-.xera-growth-action-grid .btn {
+.xera1-growth-action-grid .btn {
     min-height: 38px;
 }
 
-.xera-growth-modal {
+.xera1-growth-modal {
     position: fixed;
     inset: 0;
     z-index: 5000;
@@ -605,7 +605,7 @@
     padding: 1rem;
 }
 
-.xera-growth-dialog {
+.xera1-growth-dialog {
     width: min(520px, 100%);
     max-height: min(760px, 92vh);
     overflow: auto;
@@ -617,7 +617,7 @@
     box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
 }
 
-.xera-growth-close {
+.xera1-growth-close {
     position: absolute;
     top: 0.75rem;
     right: 0.75rem;
@@ -631,7 +631,7 @@
     font-size: 1.2rem;
 }
 
-.xera-growth-kicker {
+.xera1-growth-kicker {
     color: var(--text-secondary);
     text-transform: uppercase;
     font-size: 0.72rem;
@@ -639,7 +639,7 @@
     margin-bottom: 0.75rem;
 }
 
-.xera-proof-card {
+.xera1-proof-card {
     overflow: hidden;
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -650,7 +650,7 @@
     padding: 1rem;
 }
 
-.xera-proof-media {
+.xera1-proof-media {
     height: 190px;
     border-radius: 10px;
     background-size: cover;
@@ -658,8 +658,8 @@
     margin-bottom: 1rem;
 }
 
-.xera-proof-topline,
-.xera-proof-footer {
+.xera1-proof-topline,
+.xera1-proof-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -668,7 +668,7 @@
     font-size: 0.82rem;
 }
 
-.xera-proof-card h3 {
+.xera1-proof-card h3 {
     font-family: var(--font-heading);
     font-size: 1.45rem;
     margin: 0.75rem 0 0.5rem;
@@ -677,25 +677,25 @@
     overflow-wrap: anywhere;
 }
 
-.xera-proof-card p {
+.xera1-proof-card p {
     color: rgba(255, 255, 255, 0.82);
     line-height: 1.5;
 }
 
-.xera-proof-footer {
+.xera1-proof-footer {
     margin-top: 1rem;
     padding-top: 0.8rem;
     border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.xera-growth-actions {
+.xera1-growth-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-top: 1rem;
 }
 
-.xera-proof-nudge {
+.xera1-proof-nudge {
     position: fixed;
     left: 1rem;
     right: 1rem;
@@ -715,22 +715,22 @@
     backdrop-filter: blur(14px);
 }
 
-.xera-proof-nudge div {
+.xera1-proof-nudge div {
     flex: 1;
     min-width: 0;
 }
 
-.xera-proof-nudge strong,
-.xera-proof-nudge span {
+.xera1-proof-nudge strong,
+.xera1-proof-nudge span {
     display: block;
 }
 
-.xera-proof-nudge span {
+.xera1-proof-nudge span {
     color: var(--text-secondary);
     font-size: 0.84rem;
 }
 
-.xera-proof-nudge button {
+.xera1-proof-nudge button {
     border: none;
     border-radius: 10px;
     padding: 0.55rem 0.75rem;
@@ -740,25 +740,25 @@
     cursor: pointer;
 }
 
-.xera-proof-nudge button.ghost {
+.xera1-proof-nudge button.ghost {
     background: rgba(255, 255, 255, 0.08);
     color: var(--text-primary);
 }
 
 @media (max-width: 720px) {
-    .xera-growth-panel,
-    .xera-proof-nudge {
+    .xera1-growth-panel,
+    .xera1-proof-nudge {
         align-items: stretch;
         flex-direction: column;
     }
 
-    .xera-growth-action-grid,
-    .xera-growth-actions {
+    .xera1-growth-action-grid,
+    .xera1-growth-actions {
         justify-content: stretch;
     }
 
-    .xera-growth-action-grid .btn,
-    .xera-growth-actions .btn {
+    .xera1-growth-action-grid .btn,
+    .xera1-growth-actions .btn {
         flex: 1 1 44%;
     }
 }

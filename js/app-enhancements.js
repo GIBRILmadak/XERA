@@ -1,5 +1,5 @@
 /* ========================================
-   AMÉLIORATIONS GLOBALES APP - XERA
+   AMÉLIORATIONS GLOBALES APP - XERA1
    Navigation fluide, feedbacks visuels, interactions
    ======================================== */
 

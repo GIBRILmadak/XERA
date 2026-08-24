@@ -166,7 +166,7 @@ function formatAnalyticsShareLabel(state) {
     const namePart = state.userName ? ` · ${state.userName}` : "";
     return monthLabel
         ? `Analytics ${monthLabel}${namePart}`
-        : `Analytics XERA${namePart}`;
+        : `Analytics XERA1${namePart}`;
 }
 
 function buildSocialShareUrls({ url, text }) {

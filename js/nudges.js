@@ -1,9 +1,9 @@
 /**
- * XERA Smart Nudge System
+ * XERA1 Smart Nudge System
  * Intelligent prompts to encourage user activity and retention.
  */
 
-const NUDGE_COOLDOWN_KEY = "xera-nudge-cooldown";
+const NUDGE_COOLDOWN_KEY = "xera1-nudge-cooldown";
 
 class XeraNudgeManager {
     constructor() {

@@ -1,4 +1,4 @@
-// PWA install helper: shows a pinned mini-banner on mobile to install XERA as a PWA.
+// PWA install helper: shows a pinned mini-banner on mobile to install XERA1 as a PWA.
 // Keeps footprint tiny and avoids interfering with existing flows.
 (function () {
     const DISMISS_KEY = "xera_pwa_install_dismissed_ts";

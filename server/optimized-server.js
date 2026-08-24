@@ -285,7 +285,7 @@ function buildReturnReminderPayload(userId, slot) {
         body,
         icon,
         link: `${PRIMARY_ORIGIN.replace(/\/$/, "")}${buildProfileRoute(userId)}`,
-        tag: `xera-return-reminder-${slot.slotKey}`,
+        tag: `xera1-return-reminder-${slot.slotKey}`,
         renotify: false,
         silent: false,
     };
@@ -581,7 +581,7 @@ app.post("/api/push/test", attachAuthenticatedUser, async (req, res) => {
             body: "Ceci est un test de notification Push. Si vous le voyez, les push fonctionnent.",
             icon: `${PRIMARY_ORIGIN.replace(/\/$/, "")}/icons/logo.png`,
             link: `${PRIMARY_ORIGIN.replace(/\/$/, "")}/index.html`,
-            tag: `xera-test-${Date.now()}`,
+            tag: `xera1-test-${Date.now()}`,
             renotify: false,
             silent: false,
         };
@@ -858,7 +858,7 @@ app.listen(PORT, () => {
         `╔════════════════════════════════════════════════════════════╗`,
     );
     console.log(
-        `║          XERA OPTIMIZED SERVER - PRODUCTION READY          ║`,
+        `║          XERA1 OPTIMIZED SERVER - PRODUCTION READY          ║`,
     );
     console.log(
         `╠════════════════════════════════════════════════════════════╣`,

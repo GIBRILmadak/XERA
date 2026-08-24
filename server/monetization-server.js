@@ -1821,15 +1821,15 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage) {
 
     if (isMissingRelationError(error) || isMissingColumnError(error)) {
         category = "schema_missing";
-        setResponseHeader(res, "X-Xera-Error-Category", category);
-        setResponseHeader(res, "X-Xera-Error-Code", sourceCode);
+        setResponseHeader(res, "X-Xera1-Error-Category", category);
+        setResponseHeader(res, "X-Xera1-Error-Code", sourceCode);
         return res.status(503).send(getWalletSchemaErrorMessage());
     }
 
     if (isForeignKeyViolation(error)) {
         category = "foreign_key_violation";
-        setResponseHeader(res, "X-Xera-Error-Category", category);
-        setResponseHeader(res, "X-Xera-Error-Code", sourceCode);
+        setResponseHeader(res, "X-Xera1-Error-Category", category);
+        setResponseHeader(res, "X-Xera1-Error-Code", sourceCode);
         return res
             .status(409)
             .send(
@@ -1839,8 +1839,8 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage) {
 
     if (isNotNullViolation(error)) {
         category = "not_null_violation";
-        setResponseHeader(res, "X-Xera-Error-Category", category);
-        setResponseHeader(res, "X-Xera-Error-Code", sourceCode);
+        setResponseHeader(res, "X-Xera1-Error-Category", category);
+        setResponseHeader(res, "X-Xera1-Error-Code", sourceCode);
         return res
             .status(409)
             .send(
@@ -1851,8 +1851,8 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage) {
             );
     }
 
-    setResponseHeader(res, "X-Xera-Error-Category", category);
-    setResponseHeader(res, "X-Xera-Error-Code", sourceCode);
+    setResponseHeader(res, "X-Xera1-Error-Category", category);
+    setResponseHeader(res, "X-Xera1-Error-Code", sourceCode);
 
     if (String(process.env.NODE_ENV || "").toLowerCase() !== "production") {
         return res
@@ -2558,7 +2558,7 @@ function buildNotificationPushPayload(notification) {
         body: notification?.message || "",
         icon,
         link,
-        tag: notification?.id || `support-${notification?.user_id || "xera"}`,
+        tag: notification?.id || `support-${notification?.user_id || "xera1"}`,
         renotify: false,
         silent: false,
     };
@@ -3139,7 +3139,7 @@ function buildReminderEmailLayout({
           <!-- Header -->
           <tr>
             <td style="padding:40px 40px 24px 40px;text-align:left;">
-              <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA1" style="width:56px;height:56px;border-radius:14px;display:block;" />
+              <img src="https://xera1.xyz/icons/logo.png" alt="XERA1" style="width:56px;height:56px;border-radius:14px;display:block;" />
             </td>
           </tr>
 
@@ -5894,7 +5894,7 @@ app.get("/api/app/discover/users", async (req, res) => {
             success: true,
             data: recommendedResult.data,
             cached: recommendedResult.cached === true,
-            algorithm: "xera-v2-composite", // Identifie l'algo utilisé
+            algorithm: "xera1-v2-composite", // Identifie l'algo utilisé
         });
     } catch (error) {
         console.error("App discover users error:", error);

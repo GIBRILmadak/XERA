@@ -1,5 +1,5 @@
 /* ========================================
-   CREATE STREAM - XERA
+   CREATE STREAM - XERA1
    Gestion complète de la création de live stream
    ======================================== */
 

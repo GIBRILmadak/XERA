@@ -1,0 +1,117 @@
+{
+  "projectType": "saas",
+  "projectName": "XERA1",
+  "projectDescription": "A SocialTech platform for builders that turns goals, daily progress logs, and execution history into a public proof-of-work trajectory.",
+  "theme": "willow",
+  "primaryColor": "#ffffff",
+  "lightColor": "#050505",
+  "darkColor": "#bd5be0",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "account-setup"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/arcs",
+              "concepts/traces",
+              "concepts/trajectory"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/feed",
+              "features/live-streaming",
+              "features/messaging",
+              "features/notifications",
+              "features/search"
+            ]
+          },
+          {
+            "group": "Monetization",
+            "pages": [
+              "monetization/overview",
+              "monetization/subscription-plans",
+              "monetization/creator-dashboard",
+              "monetization/payouts"
+            ]
+          },
+          {
+            "group": "For Recruiters",
+            "pages": [
+              "recruiters/elite-access",
+              "recruiters/talent-search"
+            ]
+          },
+          {
+            "group": "Help",
+            "pages": [
+              "help/faq",
+              "help/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview",
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/interactions",
+              "api/feed",
+              "api/content-metrics",
+              "api/monetization"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "ARC System — structured project and goal management with milestones and progression history",
+    "Trace Logging — daily proof-of-work updates with text, images, videos, and metrics",
+    "Trajectory Dashboard — visual timeline of consistency, momentum, and ARC growth",
+    "Recommendation Feed — intelligent algorithm (65% verified builders, 35% organic discovery) scoring by engagement, creator quality, freshness, retention, and virality",
+    "Live Streaming — real-time video broadcasts with live chat and viewer tips",
+    "Creator Monetization — support tips and video RPM ($0.40/1,000 views) with 80% net revenue share",
+    "Subscription Plans — Standard ($2.50/mo), Medium ($6.00/mo), Pro ($10.00/mo) with progressive feature unlocks",
+    "Elite Recruiter Access — monthly ($40) and annual ($384) plans to search certified builder profiles",
+    "Mobile Money Payouts — Airtel Money, Orange Money, M-Pesa, Afrimoney withdrawal support",
+    "Professional Pages — dedicated business/recruiter page for Pro accounts",
+    "Messaging & Notifications — real-time direct messages and push notifications",
+    "PWA Support — installable progressive web app with offline capabilities",
+    "Internationalization — French and English language support"
+  ],
+  "publicApiSurface": [
+    "POST /api/app/interaction/track — record a user interaction (view, like, share, comment, bookmark, follow)",
+    "POST /api/app/feed/impression — record a creator feed impression with position and recommendation score",
+    "POST /api/app/content-metrics/update — update engagement metrics for a content item",
+    "POST /api/kpay/checkout — initiate a subscription or support payment via KPay",
+    "GET|POST /api/kpay/callback — KPay webhook callback handler",
+    "GET /api/creator-revenue/:userId — fetch a creator's earnings summary",
+    "GET /api/monetization/overview — creator wallet summary, payout method, and recent history",
+    "POST /api/monetization/payout-settings — save or update Mobile Money withdrawal account",
+    "POST /api/monetization/withdrawals — create a withdrawal request",
+    "GET /api/admin/withdrawal-requests — list pending withdrawal requests (admin)",
+    "POST /api/admin/withdrawal-requests/status — update withdrawal request status (admin)",
+    "GET /api/app/discover/users — fetch ranked discovery feed using the XERA1 v2 composite recommendation algorithm"
+  ]
+}

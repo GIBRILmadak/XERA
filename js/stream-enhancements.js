@@ -1,5 +1,5 @@
 /* ========================================
-   AMÉLIORATIONS STREAM - XERA
+   AMÉLIORATIONS STREAM - XERA1
    Chat amélioré, actions interactives, plein écran
    ======================================== */
 

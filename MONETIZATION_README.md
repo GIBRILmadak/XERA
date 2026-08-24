@@ -124,7 +124,7 @@ Notes:
 
 ## Notes d'implémentation
 
-- Commission XERA fixée à 20% sur toutes les transactions
+- Commission XERA1 fixée à 20% sur toutes les transactions
 - Calcul automatique via triggers SQL
 - RLS activé sur toutes les tables sensibles
 - Notifications push pour nouveaux soutiens

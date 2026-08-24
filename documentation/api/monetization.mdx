@@ -1,0 +1,433 @@
+---
+title: "API Monétisation : endpoints de revenus, portefeuille et retraits"
+sidebarTitle: "Monétisation"
+description: "Récupérez les gains des créateurs, consultez les soldes de portefeuille, configurez les comptes de versement Mobile Money et demandez des retraits via l'API de monétisation XERA1."
+---
+
+L'API de monétisation XERA1 vous permet de récupérer les gains des créateurs, de configurer les méthodes de versement et de demander des retraits de manière programmatique. Toutes les valeurs monétaires sont libellées en USD. XERA1 conserve une commission de plateforme de 20% sur chaque transaction, et les créateurs reçoivent 80% net : les chiffres retournés par ces endpoints reflètent toujours la part nette du créateur sauf indication explicite contraire.
+
+<Note>
+  Tous les endpoints de cette page nécessitent une authentification. Passez votre jeton de session en tant que jeton Bearer dans chaque requête :
+
+  ```text
+  Authorization: Bearer <session_token>
+  ```
+</Note>
+
+---
+
+## GET /api/creator-revenue/:userId
+
+Récupérez un résumé de tous les gains d'un créateur spécifique. Utilisez ceci pour construire des tableaux de bord de revenus ou pour afficher les statistiques de vie sur le profil d'un créateur.
+
+```text
+GET https://xera1.xyz/api/creator-revenue/{userId}
+```
+
+**Paramètres de chemin**
+
+<ParamField path="userId" type="string (UUID)" required>
+  L'UUID du créateur dont vous souhaitez récupérer les revenus.
+</ParamField>
+
+**Paramètres de requête**
+
+<ParamField query="period" type="string">
+  Filtrer les résultats par fenêtre temporelle. Valeurs acceptées : `today`, `7` (7 derniers jours), `30` (30 derniers jours), `all` (par défaut).
+</ParamField>
+
+**Champs de réponse**
+
+<ResponseField name="success" type="boolean">
+  `true` lorsque les données ont été récupérées avec succès.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Résumé des revenus pour le créateur et la période spécifiés.
+
+  <Expandable title="champs data">
+    <ResponseField name="totalGross" type="number">
+      Le total des revenus bruts reçus avant déduction de la commission XERA1.
+    </ResponseField>
+
+    <ResponseField name="totalNet" type="number">
+      Le total des revenus nets après la commission de 20% de XERA1. C'est le montant que le créateur gagne réellement.
+    </ResponseField>
+
+    <ResponseField name="totalCommission" type="number">
+      Le montant total de la commission de plateforme conservée par XERA1.
+    </ResponseField>
+
+    <ResponseField name="supportRevenue" type="number">
+      Gains nets des pourboires des spectateurs ("Soutenir") reçus pendant la période sélectionnée.
+    </ResponseField>
+
+    <ResponseField name="videoRevenue" type="number">
+      Gains nets de la monétisation vidéo (\$0.40 par 1 000 vues qualifiées) pendant la période sélectionnée. Seules les vidéos de plus de 60 secondes génèrent des revenus.
+    </ResponseField>
+
+    <ResponseField name="transactionCount" type="number">
+      Nombre total de transactions réussies pendant la période sélectionnée.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<CodeGroup>
+
+```javascript JavaScript
+const userId = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+
+const response = await fetch(
+  `https://xera1.xyz/api/creator-revenue/${userId}?period=30`,
+  {
+    headers: {
+      "Authorization": "Bearer <session_token>",
+    },
+  }
+);
+
+const result = await response.json();
+console.log(result.data);
+```
+
+```bash cURL
+curl "https://xera1.xyz/api/creator-revenue/a1b2c3d4-e5f6-7890-abcd-ef1234567890?period=30" \
+  -H "Authorization: Bearer <session_token>"
+```
+
+</CodeGroup>
+
+```json Exemple de réponse
+{
+  "success": true,
+  "data": {
+    "totalGross": 125.00,
+    "totalNet": 100.00,
+    "totalCommission": 25.00,
+    "supportRevenue": 64.00,
+    "videoRevenue": 36.00,
+    "transactionCount": 18
+  }
+}
+```
+
+---
+
+## GET /api/monetization/overview
+
+Récupérez un résumé complet du portefeuille pour le créateur authentifié : soldes, retraits en attente et complétés, configuration de la méthode de versement et transactions récentes.
+
+```text
+GET https://xera1.xyz/api/monetization/overview
+```
+
+**Champs de réponse**
+
+<ResponseField name="success" type="boolean">
+  `true` lorsque l'aperçu du portefeuille a été chargé avec succès.
+</ResponseField>
+
+<ResponseField name="wallet" type="object">
+  L'état actuel du portefeuille du créateur.
+
+  <Expandable title="champs wallet">
+    <ResponseField name="available_balance" type="number">
+      Le montant en USD disponible pour retrait immédiat.
+    </ResponseField>
+
+    <ResponseField name="pending_incoming" type="number">
+      Revenus qui ont été gagnés mais pas encore intégrés au solde disponible.
+    </ResponseField>
+
+    <ResponseField name="pending_withdrawals" type="number">
+      Total USD actuellement bloqué dans des demandes de retrait en cours de traitement.
+    </ResponseField>
+
+    <ResponseField name="paid_withdrawals" type="number">
+      Total USD qui a déjà été versé avec succès par le passé.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="payoutSettings" type="object">
+  Le compte de versement Mobile Money enregistré du créateur, si un a été configuré.
+
+  <Expandable title="champs payoutSettings">
+    <ResponseField name="provider" type="string">
+      Le fournisseur Mobile Money (par exemple, `airtel_money`, `orange_money`).
+    </ResponseField>
+
+    <ResponseField name="walletNumber" type="string">
+      Le numéro de téléphone enregistré pour le compte Mobile Money.
+    </ResponseField>
+
+    <ResponseField name="accountName" type="string">
+      Le nom du titulaire du compte Mobile Money.
+    </ResponseField>
+
+    <ResponseField name="country" type="string">
+      Le code pays ISO pour le compte de versement (par exemple, `CD`).
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="withdrawals" type="array">
+  Demandes de retrait récentes avec leur statut actuel.
+</ResponseField>
+
+<CodeGroup>
+
+```javascript JavaScript
+const response = await fetch("https://xera1.xyz/api/monetization/overview", {
+  headers: {
+    "Authorization": "Bearer <session_token>",
+  },
+});
+
+const result = await response.json();
+console.log(result.wallet);
+```
+
+```bash cURL
+curl https://xera1.xyz/api/monetization/overview \
+  -H "Authorization: Bearer <session_token>"
+```
+
+</CodeGroup>
+
+```json Exemple de réponse
+{
+  "success": true,
+  "wallet": {
+    "available_balance": 42.50,
+    "pending_incoming": 8.00,
+    "pending_withdrawals": 0.00,
+    "paid_withdrawals": 120.00
+  },
+  "payoutSettings": {
+    "provider": "orange_money",
+    "walletNumber": "+243812345678",
+    "accountName": "Amara Diallo",
+    "country": "CD"
+  },
+  "withdrawals": []
+}
+```
+
+---
+
+## POST /api/monetization/payout-settings
+
+Enregistrez ou mettez à jour votre compte Mobile Money afin que XERA1 sache où envoyer les versements. Vous devez configurer un compte de versement avant de pouvoir soumettre une demande de retrait.
+
+```text
+POST https://xera1.xyz/api/monetization/payout-settings
+```
+
+**Corps de la requête**
+
+<ParamField body="provider" type="string" required>
+  Votre fournisseur Mobile Money. Doit être l'un des suivants : `airtel_money`, `orange_money`, `mpesa`, `afrimoney`, `other`.
+</ParamField>
+
+<ParamField body="account_holder_name" type="string" required>
+  Le nom complet enregistré sur le compte Mobile Money. Maximum 80 caractères.
+</ParamField>
+
+<ParamField body="phone_number" type="string" required>
+  Le numéro de téléphone du compte Mobile Money au format international : `+CCXXXXXXXXXX` (indicatif pays suivi du numéro local, sans espaces).
+</ParamField>
+
+<ParamField body="country_code" type="string">
+  Code pays ISO 3166-1 alpha-2. Par défaut `CD` (République démocratique du Congo) si omis.
+</ParamField>
+
+<ParamField body="note" type="string">
+  Une note optionnelle à attacher à ce compte de versement pour votre propre référence. Maximum 280 caractères.
+</ParamField>
+
+**Champs de réponse**
+
+<ResponseField name="success" type="boolean">
+  `true` lorsque les paramètres de versement ont été enregistrés ou mis à jour avec succès.
+</ResponseField>
+
+<ResponseField name="payoutSettings" type="object">
+  L'enregistrement des paramètres de versement sauvegardés.
+</ResponseField>
+
+<CodeGroup>
+
+```javascript JavaScript
+const response = await fetch(
+  "https://xera1.xyz/api/monetization/payout-settings",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <session_token>",
+    },
+    body: JSON.stringify({
+      provider: "orange_money",
+      account_holder_name: "Amara Diallo",
+      phone_number: "+243812345678",
+      country_code: "CD",
+    }),
+  }
+);
+
+const result = await response.json();
+console.log(result.payoutSettings);
+```
+
+```bash cURL
+curl -X POST https://xera1.xyz/api/monetization/payout-settings \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <session_token>" \
+  -d '{
+    "provider": "orange_money",
+    "account_holder_name": "Amara Diallo",
+    "phone_number": "+243812345678",
+    "country_code": "CD"
+  }'
+```
+
+</CodeGroup>
+
+```json Exemple de réponse
+{
+  "success": true,
+  "payoutSettings": {
+    "id": "b9a8c7d6-e5f4-3210-abcd-ef0987654321",
+    "provider": "orange_money",
+    "accountName": "Amara Diallo",
+    "walletNumber": "+243812345678",
+    "country": "CD",
+    "status": "active"
+  }
+}
+```
+
+---
+
+## POST /api/monetization/withdrawals
+
+Soumettez une demande de retrait pour transférer des fonds de votre portefeuille XERA1 vers votre compte Mobile Money enregistré. Vous devez disposer d'un compte de versement configuré et d'un solde disponible suffisant avant d'appeler cet endpoint.
+
+```text
+POST https://xera1.xyz/api/monetization/withdrawals
+```
+
+**Corps de la requête**
+
+<ParamField body="amount" type="number" required>
+  Le montant en USD que vous souhaitez retirer. Valeur minimum : `5.00`. Le montant ne peut pas dépasser votre `available_balance` actuel.
+</ParamField>
+
+**Champs de réponse**
+
+<ResponseField name="success" type="boolean">
+  `true` lorsque la demande de retrait a été créée avec succès.
+</ResponseField>
+
+<ResponseField name="withdrawal" type="object">
+  La nouvelle demande de retrait créée.
+
+  <Expandable title="champs withdrawal">
+    <ResponseField name="id" type="string (UUID)">
+      L'identifiant unique de la demande de retrait.
+    </ResponseField>
+
+    <ResponseField name="amount_usd" type="number">
+      Le montant demandé pour le retrait en USD.
+    </ResponseField>
+
+    <ResponseField name="status" type="string">
+      Toujours `"pending"` immédiatement après la création. Le statut passe à `processing`, `paid` ou `rejected` au fur et à mesure de l'examen de la demande.
+    </ResponseField>
+
+    <ResponseField name="provider" type="string">
+      Le fournisseur Mobile Money vers lequel les fonds seront envoyés.
+    </ResponseField>
+
+    <ResponseField name="requested_at" type="string (ISO 8601)">
+      L'horodatage de la soumission de la demande de retrait.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<CodeGroup>
+
+```javascript JavaScript
+const response = await fetch("https://xera1.xyz/api/monetization/withdrawals", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer <session_token>",
+  },
+  body: JSON.stringify({
+    amount: 25.00,
+  }),
+});
+
+const result = await response.json();
+console.log(result.withdrawal);
+```
+
+```bash cURL
+curl -X POST https://xera1.xyz/api/monetization/withdrawals \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <session_token>" \
+  -d '{ "amount": 25.00 }'
+```
+
+</CodeGroup>
+
+```json Exemple de réponse
+{
+  "success": true,
+  "withdrawal": {
+    "id": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+    "amount_usd": 25.00,
+    "status": "pending",
+    "provider": "orange_money",
+    "requested_at": "2025-01-15T14:22:00.000Z"
+  }
+}
+```
+
+**Réponses d'erreur**
+
+| Statut | Message d'erreur | Cause |
+| --- | --- | --- |
+| `400` | `"Le retrait minimum est de 5 USD."` | Le `amount` demandé est inférieur au minimum de 5,00 USD. |
+| `400` | `"Solde disponible insuffisant pour ce retrait."` | Le montant demandé dépasse votre `available_balance` actuel. |
+| `400` | `"Enregistrez d'abord votre compte Mobile Money."` | Aucun compte de versement n'a encore été enregistré. Appelez `POST /api/monetization/payout-settings` d'abord. |
+| `401` | `"Non authentifié"` | L'en-tête `Authorization` est manquant, expiré ou invalide. |
+
+<Warning>
+  Les demandes de retrait sont traitées **manuellement** par l'équipe XERA1. Le traitement prend généralement **2 à 5 jours ouvrables** après soumission. Vous recevrez une notification lorsque votre demande passe à `processing` et à nouveau lorsqu'elle est marquée `paid`. Ne soumettez pas de demandes en double pour le même montant tant qu'une est encore en attente.
+</Warning>
+
+---
+
+## Notes
+
+<Note>
+  Tous les montants dans l'API de monétisation sont en **USD**.
+</Note>
+
+<Accordion title="Commission et structure de versement">
+  XERA1 conserve **20%** de chaque transaction comme commission de plateforme. Les créateurs reçoivent les **80% nets** restants. Cette répartition s'applique aux pourboires directs (Soutenir) et aux revenus vidéo RPM.
+
+  - **Taux de monétisation vidéo :** \$0.40 par 1 000 vues qualifiées (plan Pro uniquement)
+  - **Vues qualifiées :** comptées uniquement pour les vidéos de plus de 60 secondes
+  - **Retrait minimum :** \$5.00
+  - **Méthodes de versement :** Airtel Money, Orange Money, M-Pesa, Afrimoney ou Autre Mobile Money
+</Accordion>
+
+<Accordion title="Prérequis d'abonnement pour la monétisation">
+  - **Standard (\$2.50/mois) :** badge vérifié uniquement, pas de fonctionnalités de monétisation
+  - **Medium (\$6.00/mois) :** badge vérifié \+ capacité à recevoir des pourboires ; nécessite 1 000 abonnés
+  - **Pro (\$10.00/mois) :** toutes les fonctionnalités Medium \+ monétisation vidéo et tableau de bord avancé ; nécessite 1 000 abonnés
+</Accordion>

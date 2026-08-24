@@ -4,12 +4,12 @@
 
 let notificationChannel = null;
 let notifications = [];
-const NOTIF_PERMISSION_KEY = "xera-notif-permission-requested";
+const NOTIF_PERMISSION_KEY = "xera1-notif-permission-requested";
 const PUSH_SUBSCRIBE_URL = "/api/push/subscribe";
 const VAPID_PUBLIC_KEY =
     (typeof window !== "undefined" && window.VAPID_PUBLIC_KEY) ||
     "BKWmLmM6lYCuTb/YPmxIdeWJvMNjI1QDi0Kc36PiTKmEfybk4wky7VxsM6H/lK3dUXl1WQNXAB1zCbiTNGckdhM=";
-const RETURN_REMINDER_SLOTS_KEY = "xera-return-reminder-slots";
+const RETURN_REMINDER_SLOTS_KEY = "xera1-return-reminder-slots";
 const RETURN_REMINDER_HOURS = [10, 18];
 const RETURN_REMINDER_WINDOW_MINUTES = 15;
 const notifUserCache = new Map();
@@ -621,7 +621,7 @@ function getNextReminderDate(fromDate = new Date()) {
     return candidates[0] || null;
 }
 
-// Rappel quotidien pour revenir sur XERA (Géré côté serveur via Push pour plus de fiabilité)
+// Rappel quotidien pour revenir sur XERA1 (Géré côté serveur via Push pour plus de fiabilité)
 function scheduleReturnReminder() {
     // Cette fonction locale est conservée uniquement pour les rappels immédiats si l'onglet est ouvert,
     // mais le vrai travail est maintenant fait par le serveur via Web Push (background).
@@ -648,7 +648,7 @@ async function showReturnReminderNotification(reminderDate = new Date()) {
         title,
         body,
         icon: "icons/logo.png",
-        tag: `xera-return-reminder-${String(hour).padStart(2, "0")}`,
+        tag: `xera1-return-reminder-${String(hour).padStart(2, "0")}`,
         link,
         renotify: false,
         silent: false,

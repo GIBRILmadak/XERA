@@ -1,7 +1,7 @@
 /*
- * XERA Service Worker for Web Push notifications
+ * XERA1 Service Worker for Web Push notifications
  */
-const CACHE_NAME = "xera-shell-v6";
+const CACHE_NAME = "xera1-shell-v6";
 const PRECACHE_URLS = [
     "/manifest.json",
     "/icons/logo-192x192.png",
@@ -31,7 +31,7 @@ self.addEventListener("activate", (event) => {
             await Promise.all(
                 keys
                     .filter(
-                        (k) => k.startsWith("xera-shell-") && k !== CACHE_NAME,
+                        (k) => k.startsWith("xera1-shell-") && k !== CACHE_NAME,
                     )
                     .map((k) => caches.delete(k)),
             );
@@ -117,10 +117,10 @@ self.addEventListener("push", (event) => {
     try {
         payload = event.data.json();
     } catch (e) {
-        payload = { title: "XERA", body: event.data.text() };
+        payload = { title: "XERA1", body: event.data.text() };
     }
 
-    const title = payload.title || "XERA";
+    const title = payload.title || "XERA1";
     const body = payload.body || "";
     const icon = payload.icon || "/icons/logo-192x192.png";
     const badge = payload.badge || icon;

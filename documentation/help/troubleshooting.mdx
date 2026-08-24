@@ -1,0 +1,203 @@
+---
+title: "Dépannage XERA1 : résoudre les problèmes de connexion, de fil et de versement"
+sidebarTitle: "Dépannage"
+description: "Corrections étape par étape pour les problèmes XERA1 les plus courants : problèmes de connexion, contenu de fil manquant, échecs de versement, erreurs de diffusion en direct, et plus encore."
+---
+
+Si quelque chose ne fonctionne pas comme prévu sur XERA1, ce guide couvre les problèmes les plus courants et la façon la plus rapide de les résoudre. Suivez les étapes correspondant à votre problème spécifique et, si le problème persiste, la section support en bas explique comment contacter l'équipe.
+
+## Connexion et accès au compte
+
+<AccordionGroup>
+  <Accordion title="Impossible de se connecter">
+    Si vous ne pouvez pas vous connecter à votre compte, suivez ces étapes dans l'ordre :
+
+    1. **Vérifiez vos identifiants** : confirmez que vous utilisez la bonne adresse e-mail et le bon mot de passe. Les mots de passe sont sensibles à la casse.
+    2. **Réinitialisez votre mot de passe** : sur la page de connexion, cliquez sur **Mot de passe oublié ?** et suivez les instructions envoyées par e-mail. Vérifiez votre dossier spam si le message n'arrive pas dans les minutes qui suivent.
+    3. **Effacez le cache et les cookies du navigateur** : des données de session obsolètes peuvent bloquer les nouvelles connexions. Dans les paramètres de votre navigateur, effacez les cookies et les données en cache pour `xera1.xyz`, puis réessayez.
+    4. **Essayez un autre navigateur ou appareil** : si le problème est spécifique à un navigateur, cela le confirmera. Chrome et Edge sont recommandés pour la meilleure expérience XERA1.
+
+    <Tip>
+      Si vous vous êtes inscrit avec Google ou GitHub, assurez-vous de cliquer sur **Continuer avec Google** ou **Continuer avec GitHub** sur la page de connexion plutôt que de saisir un mot de passe : ces comptes n'ont pas de mot de passe XERA1 séparé.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="Compte non vérifié">
+    Après l'inscription par e-mail, XERA1 envoie un lien de vérification à l'adresse que vous avez fournie. Si votre compte n'est pas vérifié :
+
+    1. **Vérifiez votre dossier spam ou courrier indésirable** : les e-mails de vérification sont parfois filtrés par les fournisseurs de messagerie.
+    2. **Recherchez l'expéditeur** : cherchez un e-mail de `hello@xera1.xyz` ou `team@xera1.xyz`.
+    3. **Demandez un nouveau lien** : sur l'écran de connexion, cliquez sur **Renvoyer l'e-mail de vérification** et saisissez votre adresse. Un nouveau lien sera envoyé immédiatement.
+    4. **Assurez-vous que le lien n'a pas expiré** : les liens de vérification sont limités dans le temps. Si le vôtre a expiré, demandez simplement un nouveau.
+  </Accordion>
+
+  <Accordion title="Déconnexion inattendue">
+    XERA1 utilise une authentification basée sur les sessions, et les sessions expirent après une période d'inactivité pour sécuriser votre compte. Si vous avez été déconnecté sans prévenir :
+
+    1. **Reconnectez-vous** : allez sur [xera1.xyz](https://xera1.xyz) et connectez-vous avec vos identifiants.
+    2. **Activez "Se souvenir de moi"** : cochez l'option **Se souvenir de moi** sur l'écran de connexion pour prolonger la persistance de la session entre les redémarrages du navigateur.
+    3. **Évitez d'utiliser le mode privé / navigation incognito comme navigateur principal** : ces modes suppriment les cookies de session quand la fenêtre se ferme, provoquant des déconnexions automatiques.
+  </Accordion>
+</AccordionGroup>
+
+## Fil et découverte
+
+<AccordionGroup>
+  <Accordion title="Mes Traces n'apparaissent pas dans le fil">
+    Si vos Traces n'apparaissent pas dans le fil de découverte, vérifiez les points suivants :
+
+    1. **Les nouveaux comptes nécessitent une période d'indexation** : si votre compte a moins de 24 heures, laissez l'algorithme le temps d'établir un score de base pour votre profil.
+    2. **Confirmez que votre profil est public** : allez dans **Paramètres → Confidentialité** et assurez-vous que la visibilité de votre profil est réglée sur **Public**. Les profils privés n'apparaissent dans aucun fil.
+    3. **Publiez au moins 3 Traces** : l'algorithme a besoin de suffisamment de contenu pour calculer un score significatif avant de faire remonter votre profil aux autres utilisateurs.
+    4. **Vérifiez la visibilité de l'ARC** : si l'ARC lié à vos Traces est réglé sur Privé, ces Traces n'apparaîtront pas dans les fils publics quels que soient les paramètres de votre profil.
+  </Accordion>
+
+  <Accordion title="Le fil montre les mêmes créateurs en boucle">
+    L'algorithme de recommandation apprend de votre historique d'engagement. S'il semble répétitif :
+
+    1. **Interagissez avec du nouveau contenu** : aimez, commentez ou regardez des Traces de builders avec lesquels vous n'avez pas encore interagi. L'algorithme interprète cela comme un signal pour élargir vos recommandations.
+    2. **Suivez des builders plus diversifiés** : suivez des builders dans des domaines différents ou à différentes étapes de leurs projets pour élargir le pool de diversité dans votre fil.
+    3. **Soyez patient** : les données d'affinité d'engagement s'accumulent au fil du temps. Le fil devient sensiblement plus varié après une ou deux semaines d'utilisation régulière.
+  </Accordion>
+
+  <Accordion title="Le score de recommandation semble faible">
+    Votre score composite est calculé à partir de cinq signaux. Voici comment faire évoluer chacun dans la bonne direction :
+
+    | Signal | Comment l'améliorer |
+    | --- | --- |
+    | **Engagement (40 %)** | Publiez du contenu qui génère des vues, des achèvements et des pourboires |
+    | **Qualité du créateur (30 %)** | Faites croître vos abonnés, obtenez la vérification, passez à un plan supérieur |
+    | **Fraîcheur (15 %)** | Publiez des Traces régulièrement, même des courtes comptent |
+    | **Rétention (10 %)** | Créez des Traces vidéo que les spectateurs regardent jusqu'au bout |
+    | **Viralité (5 %)** | Produisez des jalons partageables et des mises à jour de projet notables |
+
+    L'achèvement des jalons d'ARC tend à générer des pics d'engagement qui augmentent significativement votre score en peu de temps.
+  </Accordion>
+</AccordionGroup>
+
+## Monétisation et versements
+
+<AccordionGroup>
+  <Accordion title="La monétisation est verrouillée">
+    La monétisation nécessite les deux conditions suivantes simultanément :
+
+    - **1 000 abonnés ou plus** sur votre profil XERA1
+    - **Un abonnement Medium (**$$6.00/mois) ou Pro ($$**10.00/mois) actif**
+
+    Vérifiez votre nombre d'abonnés actuel dans l'en-tête de votre profil et votre statut d'abonnement dans **Paramètres → Abonnement**. Si vous remplissez les deux conditions et que la monétisation est toujours verrouillée, déconnectez-vous et reconnectez-vous pour rafraîchir votre session, puis vérifiez à nouveau.
+  </Accordion>
+
+  <Accordion title="Retrait rejeté">
+    Un retrait rejeté est presque toujours causé par l'un de ces problèmes : corrigez le problème concerné et soumettez à nouveau :
+
+    1. **Format de numéro de téléphone incorrect** : votre numéro Mobile Money doit être saisi au format international, par exemple `+243810000000`. Allez dans **Tableau de bord créateur → Paramètres de versement**, corrigez le numéro, enregistrez, puis soumettez à nouveau.
+    2. **Solde insuffisant** : confirmez que votre solde disponible est d'au moins **5,00 \$**. Votre solde peut être tombé en dessous du minimum entre la soumission et le traitement si des gains étaient encore en cours de validation.
+    3. **Compte Mobile Money inactif** : vérifiez auprès de votre opérateur mobile que le numéro de téléphone est actif et capable de recevoir des transferts.
+  </Accordion>
+
+  <Accordion title="Les revenus vidéo ne s'accumulent pas">
+    Les gains vidéo ne s'accumulent que pour les vidéos de **plus de 60 secondes** qui ont été traitées par la plateforme. Si une vidéo ne génère pas de revenus :
+
+    1. **Vérifiez la durée de la vidéo** : les vidéos de 60 secondes ou moins ne sont pas éligibles à la monétisation par vue, quelle que soit la nombre de vues.
+    2. **Attendez 24 heures** : les données de vues vidéo passent par un pipeline de traitement avant d'être créditées. Les revenus d'une vidéo nouvellement téléchargée peuvent ne pas apparaître immédiatement dans votre tableau de bord.
+    3. **Confirmez que le plan Pro est actif** : la monétisation vidéo (0,40 \$ par 1 000 vues) est exclusive au niveau Pro. Si vous êtes sur Medium, les revenus par pourboires sont disponibles mais pas les revenus par vue vidéo.
+  </Accordion>
+
+  <Accordion title="Pourboire non reçu">
+    Les pourboires envoyés par les supporters (ou via les actions "Soutenir" en diffusion en direct) ne sont pas crédités instantanément. Ils passent par une courte période de détention avant d'apparaître comme solde disponible dans votre Tableau de bord créateur. Si un pourboire a été envoyé mais que vous ne le voyez pas encore :
+
+    1. **Attendez la validation** : consultez votre tableau de bord à nouveau après un court délai ; le pourboire devrait apparaître une fois la fenêtre de détention close.
+    2. **Vérifiez votre historique de transactions** : allez dans **Tableau de bord créateur → Transactions** pour voir si le pourboire est listé comme _En attente_ ou _Crédité_.
+    3. **Confirmez que la monétisation est active** : si la monétisation était désactivée au moment où le pourboire a été envoyé, la transaction peut ne pas avoir été traitée.
+  </Accordion>
+</AccordionGroup>
+
+## Diffusion en direct
+
+<AccordionGroup>
+  <Accordion title="Le stream ne démarre pas">
+    Si votre diffusion en direct échoue à se lancer, suivez ces étapes :
+
+    1. **Vérifiez les permissions du navigateur** : cliquez sur l'icône de cadenas dans la barre d'adresse de votre navigateur et assurez-vous que la **Caméra** et le **Microphone** sont réglés sur **Autoriser** pour `xera1.xyz`.
+    2. **Utilisez Chrome ou Edge** : ces navigateurs offrent la meilleure compatibilité WebRTC pour les diffusions en direct XERA1. Firefox et Safari peuvent avoir des limitations.
+    3. **Fermez les autres applications utilisant votre caméra** : les outils de visioconférence, autres onglets de navigateur ou applications caméra peuvent bloquer l'accès. Fermez-les et actualisez la page.
+    4. **Redémarrez votre navigateur** : si les permissions ont été modifiées récemment, un redémarrage complet du navigateur est parfois nécessaire pour que le changement prenne effet.
+  </Accordion>
+
+  <Accordion title="Les spectateurs n'entendent pas l'audio">
+    L'audio est coupé par défaut quand un spectateur rejoint une diffusion pour se conformer aux politiques de lecture automatique des navigateurs. Les spectateurs doivent :
+
+    1. **Cliquer sur le bouton de réactivation du son** : intitulé **"Activer le son"** dans les contrôles du lecteur de diffusion.
+    2. **Vérifier le volume système** : confirmez que l'appareil n'est pas coupé au niveau du système d'exploitation et que l'onglet du navigateur n'est pas coupé (clic droit sur l'onglet pour vérifier).
+    3. **Actualiser la page de diffusion** : si la piste audio a été interrompue, une actualisation rétablit la connexion.
+
+    En tant que diffuseur, si votre propre audio n'est pas capté : confirmez que votre microphone est sélectionné comme périphérique d'entrée correct dans les paramètres audio de votre système d'exploitation et qu'il n'est pas physiquement coupé.
+  </Accordion>
+
+  <Accordion title="Le chat ne se charge pas">
+    Si le panneau de chat en direct est vide ou ne se met pas à jour :
+
+    1. **Actualisez la page de diffusion** : un simple rechargement rétablit la connexion de chat en temps réel dans la plupart des cas.
+    2. **Vérifiez votre connexion internet** : le chat en temps réel nécessite une connexion stable. Passez à un autre réseau ou désactivez un VPN si vous en utilisez un.
+    3. **Désactivez les extensions de navigateur** : les bloqueurs de publicité ou extensions de confidentialité peuvent interférer avec les connexions WebSocket. Essayez la diffusion dans une fenêtre privée/incognito pour tester.
+  </Accordion>
+</AccordionGroup>
+
+## Abonnements et paiements
+
+<AccordionGroup>
+  <Accordion title="Paiement échoué">
+    Si votre paiement d'abonnement n'a pas abouti :
+
+    1. **Vérifiez votre solde KPay** : assurez-vous que votre compte KPay dispose de fonds suffisants pour couvrir le montant de l'abonnement.
+    2. **Vérifiez vos coordonnées de paiement** : si vous payez par carte, confirmez que le numéro de carte, la date d'expiration et le CVV sont tous corrects.
+    3. **Essayez un autre moyen de paiement** : KPay prend en charge plusieurs sources de financement. Passez à une autre méthode et réessayez.
+    4. **Contactez le support KPay** : si votre compte est restreint ou si votre paiement est refusé par les filtres anti-fraude de KPay, contactez directement KPay pour lever le blocage.
+  </Accordion>
+
+  <Accordion title="L'abonnement ne s'active pas après paiement">
+    La confirmation du paiement et l'activation de l'abonnement peuvent prendre quelques minutes pendant que votre paiement est vérifié.
+
+    1. **Attendez jusqu'à 10 minutes** : dans la plupart des cas, l'abonnement s'active automatiquement une fois votre paiement confirmé comme terminé.
+    2. **Actualisez la page** : après avoir attendu, rechargez **Paramètres → Abonnement** pour voir le statut de plan mis à jour.
+    3. **Déconnectez-vous et reconnectez-vous** : cela force un rafraîchissement de session qui récupère vos dernières données de plan.
+    4. **Contactez le support** : si plus de 10 minutes se sont écoulées et que votre plan apparaît toujours inactif, contactez-nous via la messagerie intégrée avec votre numéro de référence de paiement pour que l'équipe puisse confirmer l'activation manuellement.
+  </Accordion>
+
+  <Accordion title="Les avantages du plan mis à niveau ne s'affichent pas">
+    Après une mise à niveau de plan réussie, certains avantages (panneaux de tableau de bord avancés, bascules de monétisation, badge vérifié) sont liés à votre session active. S'ils ne sont pas visibles :
+
+    1. **Déconnectez-vous et reconnectez-vous** : c'est la correction la plus rapide. Votre session doit se rafraîchir pour récupérer les nouvelles permissions de plan.
+    2. **Effacez le cache de votre navigateur** : les pages en cache peuvent afficher une interface obsolète. Effacez le cache pour `xera1.xyz` et rechargez.
+    3. **Vérifiez le statut de votre plan** : allez dans **Paramètres → Abonnement** et confirmez que le plan apparaît comme **Actif**, et non _En attente_ ou _En retard_.
+  </Accordion>
+</AccordionGroup>
+
+## PWA et navigateur
+
+<AccordionGroup>
+  <Accordion title="Le mode hors ligne ne fonctionne pas">
+    Le PWA de XERA1 inclut un service worker qui met en cache les ressources clés pour l'accès hors ligne. Si le mode hors ligne ne fonctionne pas :
+
+    1. **Installez correctement le PWA** : le support hors ligne ne fonctionne qu'après avoir installé XERA1 en utilisant l'invite **"Ajouter à l'écran d'accueil"** ou **"Installer l'application"** du navigateur. Simplement visiter le site dans un onglet de navigateur n'active pas la capacité hors ligne complète.
+    2. **Chargez l'application en ligne d'abord** : le service worker a besoin d'au moins une session en ligne réussie pour mettre en cache les ressources avant que le mode hors ligne soit disponible.
+    3. **Notez les limitations de fonctionnalités** : publier de nouvelles Traces, charger du contenu de fil frais et le chat en temps réel nécessitent tous une connexion internet active. Le mode hors ligne couvre uniquement les pages mises en cache et le contenu précédemment chargé.
+  </Accordion>
+
+  <Accordion title="Les notifications push n'arrivent pas">
+    Si vous ne recevez pas les notifications push de XERA1 sur votre appareil :
+
+    1. **Vérifiez les permissions de notification du navigateur** : dans les paramètres de votre navigateur, naviguez vers **Paramètres du site → Notifications** et confirmez que les notifications pour `xera1.xyz` sont réglées sur **Autoriser**, et non _Bloquer_ ou _Demander_.
+    2. **Vérifiez les permissions au niveau du système d'exploitation** : sur mobile et desktop, votre système d'exploitation contrôle également la livraison des notifications. Allez dans les paramètres de notification de votre appareil et assurez-vous que votre application navigateur est autorisée à afficher des notifications.
+    3. **Réabonnez-vous dans XERA1** : allez dans **Paramètres → Notifications** dans XERA1 et désactivez puis réactivez les notifications push. Cela réenregistre l'abonnement de votre navigateur.
+    4. **Vérifiez Ne pas déranger** : les notifications sont silencées quand le mode Ne pas déranger ou mode Concentration est actif sur votre appareil.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Besoin d'aide supplémentaire ?
+
+<Note>
+  Si vous avez suivi les étapes pertinentes ci-dessus et que le problème n'est toujours pas résolu, l'équipe de support de XERA1 est là pour vous aider. Contactez-nous via la **messagerie intégrée** (appuyez sur l'icône d'aide dans la barre de navigation) ou visitez le **canal de support** dans la communauté XERA1. Incluez une brève description du problème, les étapes que vous avez déjà essayées et tout message d'erreur que vous voyez : cela aide l'équipe à vous donner une réponse plus rapide et plus précise.
+</Note>

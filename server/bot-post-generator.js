@@ -928,7 +928,7 @@ function toHashInt(seed, max) {
     if (!Number.isFinite(max) || max <= 0) return 0;
     const hex = crypto
         .createHash("sha1")
-        .update(String(seed || "xera"))
+        .update(String(seed || "xera1"))
         .digest("hex")
         .slice(0, 8);
     return parseInt(hex, 16) % max;

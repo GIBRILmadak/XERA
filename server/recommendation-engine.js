@@ -1,5 +1,5 @@
 /**
- * XERA RECOMMENDATION ENGINE - Proof of Building
+ * XERA1 RECOMMENDATION ENGINE - Proof of Building
  *
  * Algorithme de recommandation sophistiqué (niveau TikTok/YouTube/Instagram)
  * Objectif: Retenir les utilisateurs avec le meilleur contenu

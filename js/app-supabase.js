@@ -751,7 +751,7 @@ function renderFriendsOnXeraWidget(userId) {
                 : "";
 
         return `
-            <div class="friends-on-xera-widget">
+            <div class="friends-on-xera1-widget">
                 <span class="friends-label">Tes potes sur XERA1 👋</span>
                 <div class="friends-avatars">
                     ${friendAvatars}
@@ -2428,7 +2428,7 @@ async function initializeApp() {
                 }
                 // Vérifier si le tutoriel est déjà terminé avant de lancer
                 const isTutorialCompleted =
-                    localStorage.getItem("xera-tutorial-completed") === "true";
+                    localStorage.getItem("xera1-tutorial-completed") === "true";
                 if (window.XeraTutorial && !isTutorialCompleted) {
                     // Ne pas lancer le tutoriel pour les comptes Pro
                     try {
@@ -2660,7 +2660,7 @@ function applyProHeroVisibility() {
         window.isProUser(window.currentUser),
     );
 
-    document.body.classList.toggle("xera-pro-account", isPro);
+    document.body.classList.toggle("xera1-pro-account", isPro);
 
     const hero = document.getElementById("hero");
     if (hero) {
@@ -3271,10 +3271,10 @@ function snapshotUserContents() {
     return snapshot;
 }
 
-const XERA_CACHE_USERS_KEY = "xera:cache:users";
-const XERA_CACHE_DISCOVER_LATEST_KEY = "xera:cache:discover:latest";
-const XERA_CACHE_DISCOVER_TS_KEY = "xera:cache:discover:ts";
-const XERA_CACHE_PROFILE_CONTENT_PREFIX = "xera:cache:profile:contents:";
+const XERA_CACHE_USERS_KEY = "xera1:cache:users";
+const XERA_CACHE_DISCOVER_LATEST_KEY = "xera1:cache:discover:latest";
+const XERA_CACHE_DISCOVER_TS_KEY = "xera1:cache:discover:ts";
+const XERA_CACHE_PROFILE_CONTENT_PREFIX = "xera1:cache:profile:contents:";
 
 async function ensureOnlineOrNotify() {
     try {
@@ -4162,8 +4162,8 @@ function clearPendingCreatePostAfterArc() {
     window.pendingCreatePostAfterArc = null;
 }
 
-const XERA_CREATE_PREFS_KEY_PREFIX = "xera:create:prefs:";
-const XERA_CREATE_METRICS_KEY_PREFIX = "xera:create:metrics:";
+const XERA_CREATE_PREFS_KEY_PREFIX = "xera1:create:prefs:";
+const XERA_CREATE_METRICS_KEY_PREFIX = "xera1:create:metrics:";
 const XERA_CREATE_METRIC_HISTORY_LIMIT = 8;
 const XERA_CREATE_TAG_LIMIT = 6;
 const XERA_CREATE_TITLE_LIMIT = 4;
@@ -4645,7 +4645,7 @@ function timeAgo(date) {
 function loadCarouselImagesForIndex(carousel, index, slideCount) {
     if (!carousel) return;
 
-    const slides = carousel.querySelectorAll(".xera-carousel-slide img");
+    const slides = carousel.querySelectorAll(".xera1-carousel-slide img");
     if (slides.length === 0) return;
 
     // Charger l'image courante en priorité, puis les images adjacentes
@@ -4680,14 +4680,14 @@ function initXeraCarousels(root = document) {
         // Charger les images de manière séquentielle
         sequentiallyLoadCarouselImages(carousel);
 
-        const track = carousel.querySelector(".xera-carousel-track");
+        const track = carousel.querySelector(".xera1-carousel-track");
         if (!track) return;
-        const dots = Array.from(carousel.querySelectorAll(".xera-dot"));
+        const dots = Array.from(carousel.querySelectorAll(".xera1-dot"));
         const slideCount = Math.max(dots.length, track.children.length || 0);
         const countCurrent = carousel.querySelector("[data-carousel-current]");
         const countTotal = carousel.querySelector("[data-carousel-total]");
-        const prevBtn = carousel.querySelector(".xera-carousel-arrow--prev");
-        const nextBtn = carousel.querySelector(".xera-carousel-arrow--next");
+        const prevBtn = carousel.querySelector(".xera1-carousel-arrow--prev");
+        const nextBtn = carousel.querySelector(".xera1-carousel-arrow--next");
 
         if (countTotal) countTotal.textContent = String(slideCount || 0);
 
@@ -4859,27 +4859,27 @@ function renderC2PABadgeHtml(placement = "feed-card", content = null) {
 }
 
 function ensureC2PAModal() {
-    let modal = document.getElementById("xera-c2pa-modal");
+    let modal = document.getElementById("xera1-c2pa-modal");
     if (modal) return modal;
 
     const html = `
-        <div id="xera-c2pa-modal" class="xera-c2pa-modal" aria-hidden="true" role="dialog" aria-modal="true">
-            <div class="xera-c2pa-modal__backdrop" data-close-c2pa-modal="1"></div>
-            <div class="xera-c2pa-modal__card" role="document">
-                <div class="xera-c2pa-modal__header">
+        <div id="xera1-c2pa-modal" class="xera1-c2pa-modal" aria-hidden="true" role="dialog" aria-modal="true">
+            <div class="xera1-c2pa-modal__backdrop" data-close-c2pa-modal="1"></div>
+            <div class="xera1-c2pa-modal__card" role="document">
+                <div class="xera1-c2pa-modal__header">
                     <div>
-                        <div class="xera-c2pa-modal__eyebrow">Content Credentials</div>
+                        <div class="xera1-c2pa-modal__eyebrow">Content Credentials</div>
                         <h3>Source & historique du média</h3>
                     </div>
-                    <button type="button" class="xera-c2pa-modal__close" aria-label="Fermer" data-close-c2pa-modal="1">×</button>
+                    <button type="button" class="xera1-c2pa-modal__close" aria-label="Fermer" data-close-c2pa-modal="1">×</button>
                 </div>
-                <div id="xera-c2pa-modal__body" class="xera-c2pa-modal__body"></div>
+                <div id="xera1-c2pa-modal__body" class="xera1-c2pa-modal__body"></div>
             </div>
         </div>
     `;
 
     document.body.insertAdjacentHTML("beforeend", html);
-    modal = document.getElementById("xera-c2pa-modal");
+    modal = document.getElementById("xera1-c2pa-modal");
     modal.addEventListener("click", (event) => {
         if (event.target && event.target.dataset.closeC2paModal === "1") {
             modal.classList.remove("is-open");
@@ -4888,7 +4888,7 @@ function ensureC2PAModal() {
     });
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
-            const active = document.getElementById("xera-c2pa-modal");
+            const active = document.getElementById("xera1-c2pa-modal");
             if (active && active.classList.contains("is-open")) {
                 active.classList.remove("is-open");
                 active.setAttribute("aria-hidden", "true");
@@ -4900,7 +4900,7 @@ function ensureC2PAModal() {
 
 window.openC2PAModal = function (payload) {
     const modal = ensureC2PAModal();
-    const body = document.getElementById("xera-c2pa-modal__body");
+    const body = document.getElementById("xera1-c2pa-modal__body");
     const state =
         payload && typeof payload === "object"
             ? payload
@@ -4919,18 +4919,18 @@ window.openC2PAModal = function (payload) {
             : "<li>Aucune action C2PA détectée.</li>";
 
     body.innerHTML = `
-        <div class="xera-c2pa-modal__content">
-            <div class="xera-c2pa-modal__summary">
-                <span class="xera-c2pa-modal__pill">AI detected</span>
-                <span class="xera-c2pa-modal__value">${state.isAI ? "Confirmé" : "Non confirmé"}</span>
+        <div class="xera1-c2pa-modal__content">
+            <div class="xera1-c2pa-modal__summary">
+                <span class="xera1-c2pa-modal__pill">AI detected</span>
+                <span class="xera1-c2pa-modal__value">${state.isAI ? "Confirmé" : "Non confirmé"}</span>
             </div>
-            <dl class="xera-c2pa-modal__list">
+            <dl class="xera1-c2pa-modal__list">
                 <div><dt>Émetteur</dt><dd>${escapeHtml(provenance.issuer || "Non disponible")}</dd></div>
                 <div><dt>Outil / API</dt><dd>${escapeHtml(provenance.tool || provenance.api || source.claimGenerator || "Non disponible")}</dd></div>
                 <div><dt>Date</dt><dd>${escapeHtml(provenance.createdAt || "Non disponible")}</dd></div>
                 <div><dt>Modèle</dt><dd>${escapeHtml(provenance.model || "Non disponible")}</dd></div>
             </dl>
-            <div class="xera-c2pa-modal__history">
+            <div class="xera1-c2pa-modal__history">
                 <h4>Historique</h4>
                 <ul>${history}</ul>
             </div>
@@ -4942,7 +4942,7 @@ window.openC2PAModal = function (payload) {
 };
 
 window.closeC2PAModal = function () {
-    const modal = document.getElementById("xera-c2pa-modal");
+    const modal = document.getElementById("xera1-c2pa-modal");
     if (!modal) return;
     modal.classList.remove("is-open");
     modal.setAttribute("aria-hidden", "true");
@@ -4950,10 +4950,10 @@ window.closeC2PAModal = function () {
 
 if (
     typeof document !== "undefined" &&
-    !document.getElementById("xera-c2pa-styles")
+    !document.getElementById("xera1-c2pa-styles")
 ) {
     const c2paStyles = document.createElement("style");
-    c2paStyles.id = "xera-c2pa-styles";
+    c2paStyles.id = "xera1-c2pa-styles";
     c2paStyles.textContent = `
         .c2pa-badge {
             position: absolute;
@@ -4978,19 +4978,19 @@ if (
         .c2pa-badge--feed { right: 10px; bottom: 10px; }
         .c2pa-badge--immersive { top: 12px; right: 12px; }
         .c2pa-badge--profile { top: 12px; right: 12px; }
-        .xera-c2pa-modal {
+        .xera1-c2pa-modal {
             position: fixed;
             inset: 0;
             display: none;
             z-index: 9999;
         }
-        .xera-c2pa-modal.is-open { display: block; }
-        .xera-c2pa-modal__backdrop {
+        .xera1-c2pa-modal.is-open { display: block; }
+        .xera1-c2pa-modal__backdrop {
             position: absolute;
             inset: 0;
             background: rgba(15, 23, 42, 0.7);
         }
-        .xera-c2pa-modal__card {
+        .xera1-c2pa-modal__card {
             position: relative;
             width: min(440px, calc(100vw - 28px));
             margin: 10vh auto;
@@ -5001,25 +5001,25 @@ if (
             color: #f8fafc;
             padding: 1.1rem 1.15rem 1.2rem;
         }
-        .xera-c2pa-modal__header {
+        .xera1-c2pa-modal__header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 1rem;
             margin-bottom: 0.75rem;
         }
-        .xera-c2pa-modal__eyebrow {
+        .xera1-c2pa-modal__eyebrow {
             font-size: 0.68rem;
             letter-spacing: 0.1em;
             text-transform: uppercase;
             color: #94a3b8;
             margin-bottom: 0.2rem;
         }
-        .xera-c2pa-modal__header h3 {
+        .xera1-c2pa-modal__header h3 {
             margin: 0;
             font-size: 1.05rem;
         }
-        .xera-c2pa-modal__close {
+        .xera1-c2pa-modal__close {
             width: 2rem;
             height: 2rem;
             border-radius: 999px;
@@ -5029,7 +5029,7 @@ if (
             font-size: 1.25rem;
             cursor: pointer;
         }
-        .xera-c2pa-modal__summary {
+        .xera1-c2pa-modal__summary {
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -5040,50 +5040,50 @@ if (
             border-radius: 12px;
             margin-bottom: 0.75rem;
         }
-        .xera-c2pa-modal__pill {
+        .xera1-c2pa-modal__pill {
             font-size: 0.62rem;
             letter-spacing: 0.08em;
             text-transform: uppercase;
             color: #93c5fd;
         }
-        .xera-c2pa-modal__value {
+        .xera1-c2pa-modal__value {
             color: #e2e8f0;
             font-weight: 700;
         }
-        .xera-c2pa-modal__list {
+        .xera1-c2pa-modal__list {
             display: grid;
             gap: 0.7rem;
             margin: 0;
         }
-        .xera-c2pa-modal__list div {
+        .xera1-c2pa-modal__list div {
             display: grid;
             gap: 0.2rem;
         }
-        .xera-c2pa-modal__list dt {
+        .xera1-c2pa-modal__list dt {
             color: #94a3b8;
             font-size: 0.66rem;
             letter-spacing: 0.08em;
             text-transform: uppercase;
         }
-        .xera-c2pa-modal__list dd {
+        .xera1-c2pa-modal__list dd {
             margin: 0;
             color: #e2e8f0;
             line-height: 1.5;
         }
-        .xera-c2pa-modal__history {
+        .xera1-c2pa-modal__history {
             margin-top: 1rem;
         }
-        .xera-c2pa-modal__history h4 {
+        .xera1-c2pa-modal__history h4 {
             margin: 0 0 0.5rem;
             color: #f8fafc;
             font-size: 0.92rem;
         }
-        .xera-c2pa-modal__history ul {
+        .xera1-c2pa-modal__history ul {
             margin: 0;
             padding-left: 1.1rem;
             color: #cbd5e1;
         }
-        .xera-c2pa-modal__history li {
+        .xera1-c2pa-modal__history li {
             margin-bottom: 0.35rem;
         }
     `;
@@ -7438,7 +7438,7 @@ function isGifUrl(value) {
     return lower.includes(".gif");
 }
 
-const GIF_SNAPSHOT_CACHE_KEY = "xera:gif:snapshots";
+const GIF_SNAPSHOT_CACHE_KEY = "xera1:gif:snapshots";
 const GIF_SNAPSHOT_CACHE_MAX = 50;
 const gifSnapshotCache = new Map();
 const gifSnapshotInFlight = new Set();
@@ -7576,7 +7576,7 @@ function sanitizeUserMedia(user) {
 }
 
 const PROFILE_THEME_PRESETS = {
-    xera: {
+    xera1: {
         label: "XERA1",
         accent: "#10b981",
         secondary: "#f59e0b",
@@ -7605,7 +7605,7 @@ const PROFILE_THEME_PRESETS = {
 
 const DEFAULT_PROFILE_PREFERENCES = {
     appearance: {
-        theme: "xera",
+        theme: "xera1",
         accent: "#10b981",
         secondary: "#f59e0b",
         layout: "balanced",
@@ -7648,7 +7648,7 @@ function normalizeProfilePreferences(rawPreferences) {
     const theme = PROFILE_THEME_PRESETS[rawAppearance.theme]
         ? rawAppearance.theme
         : DEFAULT_PROFILE_PREFERENCES.appearance.theme;
-    const preset = PROFILE_THEME_PRESETS[theme] || PROFILE_THEME_PRESETS.xera;
+    const preset = PROFILE_THEME_PRESETS[theme] || PROFILE_THEME_PRESETS.xera1;
     const layout = ["balanced", "showcase", "compact"].includes(
         rawAppearance.layout,
     )
@@ -10791,7 +10791,7 @@ async function handleDiscoverQuickAction(contentId, action, userId = null) {
             if (navigator.share) {
                 await navigator.share({
                     title,
-                    text: `Découvre cette trajectoire sur XERA: ${title}`,
+                    text: `Découvre cette trajectoire sur XERA1: ${title}`,
                     url,
                 });
                 return;
@@ -11033,21 +11033,21 @@ function renderUserCard(
                 const slides = mediaList
                     .map(
                         (url, index) =>
-                            `<div class="xera-carousel-slide"><img class="card-media" ${index === 0 ? `src="${url}"` : `data-src="${url}"`} alt="${latestContent.title || "Preview"}" loading="lazy" decoding="async" data-content-id="${latestContent.contentId}"></div>`,
+                            `<div class="xera1-carousel-slide"><img class="card-media" ${index === 0 ? `src="${url}"` : `data-src="${url}"`} alt="${latestContent.title || "Preview"}" loading="lazy" decoding="async" data-content-id="${latestContent.contentId}"></div>`,
                     )
                     .join("");
-                const dots = `<div class="xera-carousel-dots">${mediaList
+                const dots = `<div class="xera1-carousel-dots">${mediaList
                     .map(
                         (_, i) =>
-                            `<span class="xera-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
+                            `<span class="xera1-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
                     )
                     .join("")}</div>`;
                 mediaHtml = `
                     <div class="card-media-wrap card-media-wrap--editorial has-multi-media">
-                        <div class="xera-carousel" data-carousel>
-                            <div class="xera-carousel-track">${slides}</div>
-                            <button type="button" class="xera-carousel-arrow xera-carousel-arrow--prev" aria-label="Image précédente">&lsaquo;</button>
-                            <button type="button" class="xera-carousel-arrow xera-carousel-arrow--next" aria-label="Image suivante">&rsaquo;</button>
+                        <div class="xera1-carousel" data-carousel>
+                            <div class="xera1-carousel-track">${slides}</div>
+                            <button type="button" class="xera1-carousel-arrow xera1-carousel-arrow--prev" aria-label="Image précédente">&lsaquo;</button>
+                            <button type="button" class="xera1-carousel-arrow xera1-carousel-arrow--next" aria-label="Image suivante">&rsaquo;</button>
                             <div class="card-media-count" aria-label="${mediaList.length} images dans ce post">
                                 <span data-carousel-current>1</span>/<span data-carousel-total>${mediaList.length}</span>
                             </div>
@@ -13608,23 +13608,23 @@ async function renderImmersiveFeed(contents) {
                         const slides = mediaList
                             .map(
                                 (u, index) =>
-                                    `<div class="xera-carousel-slide"><img ${index === 0 ? `src="${u}"` : `data-src="${u}"`} class="immersive-image" alt="${content.title || "Media"}" loading="lazy" decoding="async"></div>`,
+                                    `<div class="xera1-carousel-slide"><img ${index === 0 ? `src="${u}"` : `data-src="${u}"`} class="immersive-image" alt="${content.title || "Media"}" loading="lazy" decoding="async"></div>`,
                             )
                             .join("");
-                        const dots = `<div class="xera-carousel-dots">${mediaList
+                        const dots = `<div class="xera1-carousel-dots">${mediaList
                             .map(
                                 (_, i) =>
-                                    `<span class="xera-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
+                                    `<span class="xera1-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
                             )
                             .join("")}</div>`;
                         mediaHtml = `
                             <div class="immersive-image-wrap" style="position: relative;">
                                 ${c2paBadgeImmersive}
-                                <div class="xera-carousel xera-carousel--immersive" data-carousel>
-                                    <div class="xera-carousel-track">${slides}</div>
-                                    <button type="button" class="xera-carousel-arrow xera-carousel-arrow--prev" aria-label="Image précédente">&lsaquo;</button>
-                                    <button type="button" class="xera-carousel-arrow xera-carousel-arrow--next" aria-label="Image suivante">&rsaquo;</button>
-                                    <div class="xera-carousel-counter" aria-label="Collection de ${mediaList.length} images">
+                                <div class="xera1-carousel xera1-carousel--immersive" data-carousel>
+                                    <div class="xera1-carousel-track">${slides}</div>
+                                    <button type="button" class="xera1-carousel-arrow xera1-carousel-arrow--prev" aria-label="Image précédente">&lsaquo;</button>
+                                    <button type="button" class="xera1-carousel-arrow xera1-carousel-arrow--next" aria-label="Image suivante">&rsaquo;</button>
+                                    <div class="xera1-carousel-counter" aria-label="Collection de ${mediaList.length} images">
                                         Collection <span data-carousel-current>1</span>/<span data-carousel-total>${mediaList.length}</span>
                                     </div>
                                     ${dots}
@@ -14453,7 +14453,7 @@ function setupImmersiveFullscreenToggle(root = document) {
             wrap.addEventListener("click", (event) => {
                 if (
                     event.target.closest(
-                        "button, a, input, textarea, select, [contenteditable='true'], .post-info, .xera-carousel-arrow, .xera-carousel-dots, .support-overlay, .arc-collab-avatars",
+                        "button, a, input, textarea, select, [contenteditable='true'], .post-info, .xera1-carousel-arrow, .xera1-carousel-dots, .support-overlay, .arc-collab-avatars",
                     )
                 ) {
                     return;
@@ -14622,7 +14622,7 @@ function setupImmersiveSnapNav() {
 
     const isInteractiveTarget = (target) =>
         !!target?.closest(
-            "input, textarea, select, button, a, [contenteditable='true'], .xera-carousel, .xera-carousel-track, .xera-carousel-arrow",
+            "input, textarea, select, button, a, [contenteditable='true'], .xera1-carousel, .xera1-carousel-track, .xera1-carousel-arrow",
         );
 
     const getPosts = () =>
@@ -17812,14 +17812,14 @@ async function openSettings(userId) {
 
                             <div class="form-group">
                                 <label>Webhook Endpoint (Simulé)</label>
-                                <input type="text" class="form-input" value="https://xera.tech/api/hook/v1/publish" readonly>
+                                <input type="text" class="form-input" value="https://xera1.tech/api/hook/v1/publish" readonly>
                             </div>
 
                             <div class="form-group">
                                 <label>Exemple cURL</label>
                                 <pre style="background:rgba(0,0,0,0.5); padding:1rem; border-radius:10px; font-size:0.8rem; overflow-x:auto; color:var(--accent-color);">
-curl -X POST https://xera.tech/api/hook/v1/publish \\
-  -H "X-XERA-KEY: [VOTRE_CLE]" \\
+curl -X POST https://xera1.tech/api/hook/v1/publish \\
+  -H "X-XERA1-KEY: [VOTRE_CLE]" \\
   -d '{"title": "Git Commit: Merge UI", "day": 12, "arc_id": "..."}'
                                 </pre>
                             </div>
@@ -19995,10 +19995,10 @@ async function openCreateMenu(
 	                            <div id="create-media-loader" style="display: none; margin-bottom: 1rem;">
 	                                <div style="display: inline-block; width: 24px; height: 24px; border: 2px solid var(--accent-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
 	                                <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Upload en cours...</p>
-	                                <div class="xera-upload-progress">
-	                                    <div id="create-media-progress-bar" class="xera-upload-progress-bar is-indeterminate"></div>
+	                                <div class="xera1-upload-progress">
+	                                    <div id="create-media-progress-bar" class="xera1-upload-progress-bar is-indeterminate"></div>
 	                                </div>
-	                                <div id="create-media-progress-label" class="xera-upload-progress-label"></div>
+	                                <div id="create-media-progress-label" class="xera1-upload-progress-label"></div>
 	                            </div>
 	                            <div id="create-media-placeholder">
 	                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-secondary); margin-bottom: 0.5rem;">
@@ -20139,21 +20139,21 @@ async function openCreateMenu(
         const slides = clean
             .map(
                 (u) =>
-                    `<div class="xera-carousel-slide"><img src="${u}" alt="Media" loading="lazy" decoding="async"></div>`,
+                    `<div class="xera1-carousel-slide"><img src="${u}" alt="Media" loading="lazy" decoding="async"></div>`,
             )
             .join("");
         const dots =
             clean.length > 1
-                ? `<div class="xera-carousel-dots">${clean
+                ? `<div class="xera1-carousel-dots">${clean
                       .map(
                           (_, i) =>
-                              `<span class="xera-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
+                              `<span class="xera1-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
                       )
                       .join("")}</div>`
                 : "";
         previewContainer.innerHTML = buildMediaPreviewShell(`
-            <div class="xera-carousel" data-carousel>
-                <div class="xera-carousel-track">${slides}</div>
+            <div class="xera1-carousel" data-carousel>
+                <div class="xera1-carousel-track">${slides}</div>
                 ${dots}
             </div>
 `);
@@ -21814,7 +21814,7 @@ function sequentiallyLoadCarouselImages(carouselElement) {
  * Charge les images des carousels visibles dans le DOM
  */
 function loadAllCarouselImagesSequentially() {
-    const carousels = document.querySelectorAll(".xera-carousel");
+    const carousels = document.querySelectorAll(".xera1-carousel");
     carousels.forEach((carousel) => sequentiallyLoadCarouselImages(carousel));
 }
 

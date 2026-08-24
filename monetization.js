@@ -951,7 +951,7 @@ export async function confirmSupportPayment({
                 description:
                     description ||
                     pendingPayment?.description ||
-                    "Soutien XERA",
+                    "Soutien XERA1",
                 metadata: mergedMetadata,
             })
             .eq("id", pendingTransactionId);
@@ -966,7 +966,7 @@ export async function confirmSupportPayment({
                 amount_gross: supportAmountUsd,
                 currency: "USD",
                 status: "succeeded",
-                description: description || "Soutien XERA",
+                description: description || "Soutien XERA1",
                 metadata: mergedMetadata,
             })
             .select("id")
@@ -1356,7 +1356,7 @@ export function buildNotificationPushPayload(notification) {
         stream: "Live en cours",
     };
 
-    const title = typeTitleMap[notification?.type] || "Notification XERA";
+    const title = typeTitleMap[notification?.type] || "Notification XERA1";
     const icon = `${PRIMARY_ORIGIN.replace(/\/$/, "")}/icons/logo.png`;
     const rawLink = String(notification?.link || "").trim();
     const link = rawLink
@@ -1370,7 +1370,7 @@ export function buildNotificationPushPayload(notification) {
         body: notification?.message || "",
         icon,
         link,
-        tag: notification?.id || `support-${notification?.user_id || "xera"}`,
+        tag: notification?.id || `support-${notification?.user_id || "xera1"}`,
         renotify: false,
         silent: false,
     };

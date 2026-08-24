@@ -30,7 +30,7 @@ const ARC_OPPORTUNITY_LABELS = {
 
 let hookInterval;
 
-const XERA_INSPIRED_ARC_KEY = "xera-inspired-arc-seed";
+const XERA_INSPIRED_ARC_KEY = "xera1-inspired-arc-seed";
 
 function xeraEscapeHtml(value) {
     return String(value ?? "")
@@ -67,7 +67,7 @@ function xeraIsOptionalGrowthSchemaError(error) {
     );
 }
 
-function xeraMakeToken(prefix = "xera") {
+function xeraMakeToken(prefix = "xera1") {
     return `${prefix}_${Date.now().toString(36)}_${Math.random()
         .toString(36)
         .slice(2, 10)}`;
@@ -90,7 +90,7 @@ async function xeraSafeInsert(table, payload, options = {}) {
     } catch (error) {
         if (xeraIsOptionalGrowthSchemaError(error)) {
             console.warn(
-                `[XERA growth] Optional table not ready: ${table}`,
+                `[XERA1 growth] Optional table not ready: ${table}`,
                 error,
             );
             return { data: null, skipped: true, error };
@@ -111,7 +111,7 @@ async function xeraTrackGrowthEvent(eventType, payload = {}) {
             metadata: payload.metadata || {},
         });
     } catch (error) {
-        console.warn("[XERA growth] Event tracking failed:", error);
+        console.warn("[XERA1 growth] Event tracking failed:", error);
     }
 }
 
@@ -380,7 +380,7 @@ function renderArcCreationForm(arcToEdit = null) {
 
                 ${
                     inspiredSeed
-                        ? `<div class="xera-growth-seed">
+                        ? `<div class="xera1-growth-seed">
                             <strong>ARC inspiré</strong>
                             <span>Cette base vient d'une trajectoire existante. Ajustez-la pour construire votre version.</span>
                         </div>`
@@ -433,10 +433,10 @@ function renderArcCreationForm(arcToEdit = null) {
                             <div id="arc-cover-loader" class="upload-status" style="display: none;">
                                 <div class="loading-spinner"></div>
                                 <p>Upload en cours...</p>
-                                <div class="xera-upload-progress">
-                                    <div id="arc-cover-progress-bar" class="xera-upload-progress-bar is-indeterminate"></div>
+                                <div class="xera1-upload-progress">
+                                    <div id="arc-cover-progress-bar" class="xera1-upload-progress-bar is-indeterminate"></div>
                                 </div>
-                                <div id="arc-cover-progress-label" class="xera-upload-progress-label"></div>
+                                <div id="arc-cover-progress-label" class="xera1-upload-progress-label"></div>
                             </div>
                             <div id="arc-cover-placeholder" class="upload-placeholder" style="${isEdit && arcToEdit.media_url ? "display: none;" : ""}">
                                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -1453,7 +1453,7 @@ async function ensureProofCard(arc, content = null) {
         return data || { slug, ...payload };
     } catch (error) {
         if (xeraIsOptionalGrowthSchemaError(error)) {
-            console.warn("[XERA growth] proof_cards not ready:", error);
+            console.warn("[XERA1 growth] proof_cards not ready:", error);
             return { slug, ...payload };
         }
         throw error;
@@ -1479,7 +1479,7 @@ async function incrementProofCardShare(arcId, contentId) {
             .eq("id", data.id);
     } catch (error) {
         if (!xeraIsOptionalGrowthSchemaError(error)) {
-            console.warn("[XERA growth] share counter failed:", error);
+            console.warn("[XERA1 growth] share counter failed:", error);
         }
     }
 }
@@ -1494,19 +1494,19 @@ function renderProofCardMarkup(arc, content) {
     const author = arc.users?.name || "Builder XERA1";
     const mediaUrl = content?.media_url || arc.media_url;
     const mediaHtml = mediaUrl
-        ? `<div class="xera-proof-media" style="background-image:url('${xeraEscapeHtml(mediaUrl)}')"></div>`
+        ? `<div class="xera1-proof-media" style="background-image:url('${xeraEscapeHtml(mediaUrl)}')"></div>`
         : "";
 
     return `
-        <div class="xera-proof-card">
+        <div class="xera1-proof-card">
             ${mediaHtml}
-            <div class="xera-proof-topline">
+            <div class="xera1-proof-topline">
                 <span>${xeraEscapeHtml(dayLabel)}</span>
                 <span>${progress}%</span>
             </div>
             <h3>${xeraEscapeHtml(xeraGetContentTitle(content) || arc.title)}</h3>
             <p>${xeraEscapeHtml(description).slice(0, 260)}</p>
-            <div class="xera-proof-footer">
+            <div class="xera1-proof-footer">
                 <strong>${xeraEscapeHtml(arc.title || "ARC")}</strong>
                 <span>par ${xeraEscapeHtml(author)}</span>
             </div>
@@ -1526,21 +1526,21 @@ async function openProofCardModal(arcId, contentId = null) {
             ? `'${xeraGetContentId(content)}'`
             : "null";
         const modal = document.createElement("div");
-        modal.id = "xera-growth-modal";
-        modal.className = "xera-growth-modal";
+        modal.id = "xera1-growth-modal";
+        modal.className = "xera1-growth-modal";
         modal.innerHTML = `
-            <div class="xera-growth-dialog">
-                <button type="button" class="xera-growth-close" onclick="closeProofCardModal()">×</button>
-                <div class="xera-growth-kicker">Carte de preuve</div>
+            <div class="xera1-growth-dialog">
+                <button type="button" class="xera1-growth-close" onclick="closeProofCardModal()">×</button>
+                <div class="xera1-growth-kicker">Carte de preuve</div>
                 ${renderProofCardMarkup(arc, content)}
-                <div class="xera-growth-actions">
+                <div class="xera1-growth-actions">
                     <button type="button" class="btn btn-primary" onclick="shareProofCard('${arc.id}', ${safeContentArg})">Partager</button>
                     <button type="button" class="btn btn-ghost" onclick="requestArcWitness('${arc.id}', ${safeContentArg})">Demander un regard</button>
                     <button type="button" class="btn btn-ghost" onclick="shareWeeklyTrajectoryRecap('${arc.id}')">Récap semaine</button>
                 </div>
             </div>
         `;
-        document.getElementById("xera-growth-modal")?.remove();
+        document.getElementById("xera1-growth-modal")?.remove();
         document.body.appendChild(modal);
         await xeraTrackGrowthEvent("proof_card_opened", {
             targetUserId: arc.user_id,
@@ -1558,7 +1558,7 @@ async function openProofCardModal(arcId, contentId = null) {
 }
 
 function closeProofCardModal() {
-    document.getElementById("xera-growth-modal")?.remove();
+    document.getElementById("xera1-growth-modal")?.remove();
 }
 
 async function shareProofCard(arcId, contentId = null) {
@@ -1571,8 +1571,8 @@ async function shareProofCard(arcId, contentId = null) {
         await ensureProofCard(arc, content);
         const url = xeraBuildArcShareUrl(arc, content, { proof: "1" });
         const title = content
-            ? `${xeraGetContentTitle(content)} | XERA`
-            : `${arc.title} | XERA`;
+            ? `${xeraGetContentTitle(content)} | XERA1`
+            : `${arc.title} | XERA1`;
         const text = content
             ? `Preuve de progression: ${xeraGetContentTitle(content)}`
             : `Trajectoire en cours: ${arc.title}`;
@@ -1654,7 +1654,7 @@ async function requestArcWitness(arcId, contentId = null) {
             metadata: { witness: witness.trim() },
         });
         await xeraSharePayload({
-            title: `${arc.title} | XERA`,
+            title: `${arc.title} | XERA1`,
             text: `Regarde ce jalon et dis-moi si la progression est réelle: ${content ? xeraGetContentTitle(content) : arc.title}`,
             url,
         });
@@ -1797,7 +1797,7 @@ async function openArcCoBuilderRole(arcId) {
             metadata: { role: role.trim() },
         });
         await xeraSharePayload({
-            title: `${arc.title} | XERA`,
+            title: `${arc.title} | XERA1`,
             text: `Rôle ouvert sur cet ARC: ${role.trim()}`,
             url: xeraBuildArcShareUrl(arc, null, { role: role.trim() }),
         });
@@ -1845,7 +1845,7 @@ async function shareWeeklyTrajectoryRecap(arcId) {
             metadata: { traceCount: traces.length },
         });
         await xeraSharePayload({
-            title: `Récap XERA: ${arc.title}`,
+            title: `Récap XERA1: ${arc.title}`,
             text: `Progression de la semaine:\n${recap}`,
             url: xeraBuildArcShareUrl(arc, traces[0] || null, {
                 recap: "week",
@@ -1931,7 +1931,7 @@ async function recordArcInspiration(
             metadata: { newArcId },
         });
     } catch (error) {
-        console.warn("[XERA growth] recordArcInspiration failed:", error);
+        console.warn("[XERA1 growth] recordArcInspiration failed:", error);
     }
 }
 
@@ -1942,12 +1942,12 @@ function renderArcGrowthPanel(arc, isOwner, content = []) {
 
     if (isOwner) {
         return `
-            <div class="xera-growth-panel">
+            <div class="xera1-growth-panel">
                 <div>
                     <h3>Preuve sociale</h3>
                     <p>Transformez une progression réelle en validation, retour ou collaboration.</p>
                 </div>
-                <div class="xera-growth-action-grid">
+                <div class="xera1-growth-action-grid">
                     <button type="button" class="btn btn-primary" onclick="openProofCardModal('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Carte preuve</button>
                     <button type="button" class="btn btn-ghost" onclick="requestArcWitness('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Ajouter un témoin</button>
                     <button type="button" class="btn btn-ghost" onclick="openArcCoBuilderRole('${arc.id}')">Ouvrir un rôle</button>
@@ -1958,12 +1958,12 @@ function renderArcGrowthPanel(arc, isOwner, content = []) {
     }
 
     return `
-        <div class="xera-growth-panel">
+        <div class="xera1-growth-panel">
             <div>
                 <h3>Construire autour de cette preuve</h3>
                 <p>Validez un jalon, proposez une contribution ou démarrez votre propre version.</p>
             </div>
-            <div class="xera-growth-action-grid">
+            <div class="xera1-growth-action-grid">
                 <button type="button" class="btn btn-primary" onclick="validateArcMilestone('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Valider le jalon</button>
                 <button type="button" class="btn btn-ghost" onclick="requestArcCollaborationWithRole('${arc.id}', '${arc.user_id}', 'co-builder')">Contribuer</button>
                 <button type="button" class="btn btn-ghost" onclick="startInspiredArc('${arc.id}')">Construire ma version</button>
@@ -1987,21 +1987,21 @@ async function afterTracePublishedGrowthLoop({ content, contentData }) {
         });
 
         const nudge = document.createElement("div");
-        nudge.className = "xera-proof-nudge";
+        nudge.className = "xera1-proof-nudge";
         nudge.innerHTML = `
             <div>
                 <strong>Carte de preuve prête</strong>
                 <span>Cette trace peut recevoir un regard ou devenir une preuve partageable.</span>
             </div>
-            <button type="button" onclick="openProofCardModal('${arc.id}', '${content.id}'); this.closest('.xera-proof-nudge')?.remove();">Ouvrir</button>
-            <button type="button" class="ghost" onclick="this.closest('.xera-proof-nudge')?.remove();">Plus tard</button>
+            <button type="button" onclick="openProofCardModal('${arc.id}', '${content.id}'); this.closest('.xera1-proof-nudge')?.remove();">Ouvrir</button>
+            <button type="button" class="ghost" onclick="this.closest('.xera1-proof-nudge')?.remove();">Plus tard</button>
         `;
-        document.querySelector(".xera-proof-nudge")?.remove();
+        document.querySelector(".xera1-proof-nudge")?.remove();
         document.body.appendChild(nudge);
         setTimeout(() => nudge.remove(), 9000);
     } catch (error) {
         console.warn(
-            "[XERA growth] afterTracePublishedGrowthLoop failed:",
+            "[XERA1 growth] afterTracePublishedGrowthLoop failed:",
             error,
         );
     }

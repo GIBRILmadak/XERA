@@ -1,10 +1,10 @@
 /**
- * XERA Interactive Tutorial Module - Conversion & Onboarding Edition
+ * XERA1 Interactive Tutorial Module - Conversion & Onboarding Edition
  * Guides both guests and new users through the vision and the product.
  */
 
-const XERA_TUTORIAL_KEY = "xera-tutorial-completed";
-const XERA_GUEST_TUTORIAL_KEY = "xera-guest-vision-completed";
+const XERA_TUTORIAL_KEY = "xera1-tutorial-completed";
+const XERA_GUEST_TUTORIAL_KEY = "xera1-guest-vision-completed";
 
 // Étapes pour les visiteurs (Convaincre de s'inscrire)
 const GUEST_TUTORIAL_STEPS = [

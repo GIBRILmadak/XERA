@@ -1,5 +1,5 @@
 /* ========================================
-   MONÉTISATION XERA - Gestion des abonnements, paiements et revenus
+   MONÉTISATION XERA1 - Gestion des abonnements, paiements et revenus
    ======================================== */
 
 // Configuration des plans

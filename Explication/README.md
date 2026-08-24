@@ -51,8 +51,8 @@ Rappels email (optionnels)
 - Variables d'environnement optionnelles:
     - `RETURN_REMINDER_EMAIL_ENABLED=1`
     - `RETURN_REMINDER_EMAIL_PROVIDER=resend` ou `webhook`
-    - `RETURN_REMINDER_EMAIL_FROM="XERA <hello@xera1.xyz>"`
-    - `RETURN_REMINDER_EMAIL_REPLY_TO=team@xera.app`
+    - `RETURN_REMINDER_EMAIL_FROM="XERA1 <hello@xera1.xyz>"`
+    - `RETURN_REMINDER_EMAIL_REPLY_TO=team@xera1.app`
     - `RETURN_REMINDER_EMAIL_API_KEY=<cle API>` (si provider `resend`)
     - `RETURN_REMINDER_EMAIL_WEBHOOK_URL=https://...` (si provider `webhook`)
     - `RETURN_REMINDER_EMAIL_WEBHOOK_TOKEN=<token optionnel>`
