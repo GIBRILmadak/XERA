@@ -343,7 +343,7 @@ function toggleMode(keepMessages = false) {
             showSignupStep(1);
             if (formTitle) formTitle.textContent = "Créer votre compte";
             if (formSubtitle)
-                formSubtitle.textContent = "Rejoignez la communauté XERA";
+                formSubtitle.textContent = "Rejoignez la communauté XERA1";
             if (usernameGroup) usernameGroup.style.display = "block";
             if (confirmPasswordGroup)
                 confirmPasswordGroup.style.display = "block";
@@ -359,7 +359,7 @@ function toggleMode(keepMessages = false) {
             signupStep1.style.display = "none";
             signupStep2.style.display = "none";
             credentialsGroup.style.display = "block";
-            if (formTitle) formTitle.textContent = "Bienvenue sur XERA";
+            if (formTitle) formTitle.textContent = "Bienvenue sur XERA1";
             if (formSubtitle)
                 formSubtitle.textContent = "Connectez-vous pour continuer";
             if (usernameGroup) usernameGroup.style.display = "none";
@@ -926,10 +926,10 @@ async function handleForgotPassword() {
 async function signInWithGoogle() {
     try {
         const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
+            provider: "google",
             options: {
-                redirectTo: `${window.location.origin}/index.html`
-            }
+                redirectTo: `${window.location.origin}/index.html`,
+            },
         });
         if (error) throw error;
         return { success: true };

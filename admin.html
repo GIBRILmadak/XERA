@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Administration | XERA</title>
+        <title>Administration | XERA1</title>
         <link
             href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap"
             rel="stylesheet"
@@ -23,9 +23,9 @@
                 style="cursor: pointer"
             >
                 <div class="logo-img">
-                    <img src="icons/logo.png" alt="XERA - Logo" />
+                    <img src="icons/logo.png" alt="XERA1 - Logo" />
                 </div>
-                <span>XΞRA</span>
+                <span>XΞRA1</span>
             </a>
             <div class="nav-links">
                 <a
@@ -58,7 +58,11 @@
                     title="Accéder à mon profil personnel"
                     aria-label="Accéder à mon profil personnel"
                 >
-                    <img src="icons/artist.svg" alt="" class="notification-icon" />
+                    <img
+                        src="icons/artist.svg"
+                        alt=""
+                        class="notification-icon"
+                    />
                 </button>
                 <div
                     class="notification-button profile-nav-button"
@@ -155,7 +159,8 @@
                 if (!user) {
                     if (navAuth) navAuth.style.display = "block";
                     if (navProfile) navProfile.style.display = "none";
-                    if (personalProfileNav) personalProfileNav.style.display = "none";
+                    if (personalProfileNav)
+                        personalProfileNav.style.display = "none";
                 } else {
                     if (navAuth) navAuth.style.display = "none";
                     if (navProfile) {

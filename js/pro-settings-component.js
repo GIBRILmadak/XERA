@@ -11,8 +11,7 @@
         const [loading, setLoading] = React.useState(true);
         const [saving, setSaving] = React.useState(false);
         const [activeSection, setActiveSection] = React.useState("identity");
-        const [mobileSectionOpen, setMobileSectionOpen] =
-            React.useState(false);
+        const [mobileSectionOpen, setMobileSectionOpen] = React.useState(false);
         const [slugError, setSlugError] = React.useState("");
         const [formData, setFormData] = React.useState({
             name: "",
@@ -336,7 +335,7 @@
                                     name: "name",
                                     value: formData.name,
                                     onChange: handleInputChange,
-                                    placeholder: "Ex: XERA Corp",
+                                    placeholder: "Ex: XERA1 Corp",
                                     className: "form-input",
                                 }),
                             ]),
@@ -356,22 +355,34 @@
                                     name: "bio",
                                     value: formData.bio,
                                     onChange: handleInputChange,
-                                    placeholder: "Ex: Construire le futur du Momentum Engine",
+                                    placeholder:
+                                        "Ex: Construire le futur du Momentum Engine",
                                     className: "form-input",
                                 }),
                             ]),
                         ]),
-                        el("label", { className: "form-group", style: { marginTop: "20px" } }, [
-                            el("span", null, "Description complète"),
-                            el("textarea", {
-                                name: "description",
-                                value: formData.description,
-                                onChange: handleInputChange,
-                                placeholder: "Détaillez vos missions, votre histoire...",
-                                className: "form-input",
-                                style: { minHeight: "150px", resize: "vertical" },
-                            }),
-                        ]),
+                        el(
+                            "label",
+                            {
+                                className: "form-group",
+                                style: { marginTop: "20px" },
+                            },
+                            [
+                                el("span", null, "Description complète"),
+                                el("textarea", {
+                                    name: "description",
+                                    value: formData.description,
+                                    onChange: handleInputChange,
+                                    placeholder:
+                                        "Détaillez vos missions, votre histoire...",
+                                    className: "form-input",
+                                    style: {
+                                        minHeight: "150px",
+                                        resize: "vertical",
+                                    },
+                                }),
+                            ],
+                        ),
                     ]);
                 case "branding":
                     return el("div", { className: "section-block" }, [
@@ -787,122 +798,162 @@
                         }`,
                     },
                     [
-                    el("div", { className: "settings-mobile-list-header" }, [
-                        el("span", null, "Sections"),
-                        el("strong", null, "Choisissez un réglage à modifier"),
-                    ]),
-                    el(
-                        "nav",
-                        { className: "settings-navigation" },
-                        sections.map((item) =>
-                            el(
-                                "button",
-                                {
-                                    key: item.id,
-                                    type: "button",
-                                    className: `settings-nav-item ${
-                                        activeSection === item.id
-                                            ? "active"
-                                            : ""
-                                    } ${item.id === "security" ? "settings-nav-danger" : ""}`,
-                                    onClick: (event) =>
-                                        openSettingsSection(item.id, event),
-                                    "aria-expanded":
-                                        activeSection === item.id &&
-                                        mobileSectionOpen,
-                                    "aria-current":
-                                        activeSection === item.id
-                                            ? "page"
-                                            : undefined,
-                                    "data-settings-section": item.id,
-                                },
+                        el(
+                            "div",
+                            { className: "settings-mobile-list-header" },
+                            [
+                                el("span", null, "Sections"),
                                 el(
-                                    "span",
-                                    { className: "settings-nav-glyph" },
-                                    item.icon,
+                                    "strong",
+                                    null,
+                                    "Choisissez un réglage à modifier",
                                 ),
-                                el("div", null, [
-                                    el("strong", null, item.title),
-                                    el("small", null, item.description),
-                                ]),
+                            ],
+                        ),
+                        el(
+                            "nav",
+                            { className: "settings-navigation" },
+                            sections.map((item) =>
+                                el(
+                                    "button",
+                                    {
+                                        key: item.id,
+                                        type: "button",
+                                        className: `settings-nav-item ${
+                                            activeSection === item.id
+                                                ? "active"
+                                                : ""
+                                        } ${item.id === "security" ? "settings-nav-danger" : ""}`,
+                                        onClick: (event) =>
+                                            openSettingsSection(item.id, event),
+                                        "aria-expanded":
+                                            activeSection === item.id &&
+                                            mobileSectionOpen,
+                                        "aria-current":
+                                            activeSection === item.id
+                                                ? "page"
+                                                : undefined,
+                                        "data-settings-section": item.id,
+                                    },
+                                    el(
+                                        "span",
+                                        { className: "settings-nav-glyph" },
+                                        item.icon,
+                                    ),
+                                    el("div", null, [
+                                        el("strong", null, item.title),
+                                        el("small", null, item.description),
+                                    ]),
+                                ),
                             ),
                         ),
-                    ),
-                    el(
-                        "div",
-                        {
-                            className: "settings-panel-stack",
-                            ref: panelStackRef,
-                        },
-                        [
-                        el("div", { className: "settings-mobile-panel-topbar" }, [
-                            el(
-                                "button",
-                                {
-                                    type: "button",
-                                    className: "settings-mobile-back-btn",
-                                    onClick: () => setMobileSectionOpen(false),
-                                    "aria-label": "Retour aux sections",
-                                },
-                                "‹",
-                            ),
-                            el(
-                                "div",
-                                { className: "settings-mobile-panel-title" },
-                                activeSectionMeta.title,
-                            ),
-                        ]),
-                        el("div", { className: "settings-panel active" }, [
-                            el("div", { className: "settings-panel-intro" }, [
+                        el(
+                            "div",
+                            {
+                                className: "settings-panel-stack",
+                                ref: panelStackRef,
+                            },
+                            [
                                 el(
-                                    "p",
-                                    null,
-                                    activeSectionMeta?.description ||
-                                        "Mettez à jour les détails de votre page professionnelle.",
+                                    "div",
+                                    {
+                                        className:
+                                            "settings-mobile-panel-topbar",
+                                    },
+                                    [
+                                        el(
+                                            "button",
+                                            {
+                                                type: "button",
+                                                className:
+                                                    "settings-mobile-back-btn",
+                                                onClick: () =>
+                                                    setMobileSectionOpen(false),
+                                                "aria-label":
+                                                    "Retour aux sections",
+                                            },
+                                            "‹",
+                                        ),
+                                        el(
+                                            "div",
+                                            {
+                                                className:
+                                                    "settings-mobile-panel-title",
+                                            },
+                                            activeSectionMeta.title,
+                                        ),
+                                    ],
                                 ),
-                            ]),
-                            el(
-                                "form",
-                                {
-                                    className: "settings-card-grid",
-                                    onSubmit: handleSubmit,
-                                },
-                                [
-                                    renderSection(),
-                                    el(
-                                        "div",
-                                        { className: "settings-panel-actions" },
-                                        [
-                                            el(
-                                                "button",
-                                                {
-                                                    type: "button",
-                                                    className: "btn-cancel",
-                                                    onClick: onClose,
-                                                    disabled: saving,
-                                                },
-                                                viewMode === "page"
-                                                    ? "Retour à la page Pro"
-                                                    : "Annuler",
-                                            ),
-                                            el(
-                                                "button",
-                                                {
-                                                    type: "submit",
-                                                    className: "btn-save",
-                                                    disabled: saving,
-                                                },
-                                                saving
-                                                    ? "Enregistrement..."
-                                                    : "Enregistrer les modifications",
-                                            ),
-                                        ],
-                                    ),
-                                ],
-                            ),
-                        ]),
-                        ],
-                    ),
+                                el(
+                                    "div",
+                                    { className: "settings-panel active" },
+                                    [
+                                        el(
+                                            "div",
+                                            {
+                                                className:
+                                                    "settings-panel-intro",
+                                            },
+                                            [
+                                                el(
+                                                    "p",
+                                                    null,
+                                                    activeSectionMeta?.description ||
+                                                        "Mettez à jour les détails de votre page professionnelle.",
+                                                ),
+                                            ],
+                                        ),
+                                        el(
+                                            "form",
+                                            {
+                                                className: "settings-card-grid",
+                                                onSubmit: handleSubmit,
+                                            },
+                                            [
+                                                renderSection(),
+                                                el(
+                                                    "div",
+                                                    {
+                                                        className:
+                                                            "settings-panel-actions",
+                                                    },
+                                                    [
+                                                        el(
+                                                            "button",
+                                                            {
+                                                                type: "button",
+                                                                className:
+                                                                    "btn-cancel",
+                                                                onClick:
+                                                                    onClose,
+                                                                disabled:
+                                                                    saving,
+                                                            },
+                                                            viewMode === "page"
+                                                                ? "Retour à la page Pro"
+                                                                : "Annuler",
+                                                        ),
+                                                        el(
+                                                            "button",
+                                                            {
+                                                                type: "submit",
+                                                                className:
+                                                                    "btn-save",
+                                                                disabled:
+                                                                    saving,
+                                                            },
+                                                            saving
+                                                                ? "Enregistrement..."
+                                                                : "Enregistrer les modifications",
+                                                        ),
+                                                    ],
+                                                ),
+                                            ],
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
                     ],
                 ),
             ],
@@ -952,5 +1003,4 @@
             }),
         );
     };
-
 })();

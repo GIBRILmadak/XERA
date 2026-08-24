@@ -465,7 +465,7 @@ class XERAProfessionalManager {
                                 .slice(0, 3)
                                 .map((profile) => {
                                     const name = this.escapeHtml(
-                                        profile.name || "Profil XERA",
+                                        profile.name || "Profil XERA1",
                                     );
                                     const title = this.escapeHtml(
                                         profile.title ||
@@ -507,7 +507,7 @@ class XERAProfessionalManager {
                     ${profiles
                         .map((profile) => {
                             const name = this.escapeHtml(
-                                profile.name || "Profil XERA",
+                                profile.name || "Profil XERA1",
                             );
                             const title = this.escapeHtml(
                                 profile.title ||
@@ -1649,7 +1649,7 @@ class XERAProfessionalManager {
                 container.innerHTML = `
                     <div class="form-group" style="margin-bottom: 20px;">
                         <label>Titre de l'actualité</label>
-                        <input type="text" id="pro-news-title" class="form-input" placeholder="Ex: XERA lève 10M€ pour le Momentum Engine" style="font-size: 1.1rem; font-weight: 700;">
+                        <input type="text" id="pro-news-title" class="form-input" placeholder="Ex: XERA1 lève 10M€ pour le Momentum Engine" style="font-size: 1.1rem; font-weight: 700;">
                     </div>
                     <div class="form-group" style="margin-bottom: 20px;">
                         <label>Contenu</label>
@@ -1693,7 +1693,7 @@ class XERAProfessionalManager {
                 container.innerHTML = `
                     <div class="form-group" style="margin-bottom: 20px;">
                         <label>Nom de l'événement</label>
-                        <input type="text" id="pro-event-title" class="form-input" placeholder="Ex: Web Summit 2026 - Meetup XERA">
+                        <input type="text" id="pro-event-title" class="form-input" placeholder="Ex: Web Summit 2026 - Meetup XERA1">
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
                         <div class="form-group">
@@ -2755,7 +2755,7 @@ class XERAProfessionalManager {
 
                     <div style="position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 35px;">
                         <div>
-                            <h1 style="font-size: 2.8rem; margin: 0; font-family: var(--font-heading); color: var(--text-primary); letter-spacing: -1px;">XERA Talent Explorer</h1>
+                            <h1 style="font-size: 2.8rem; margin: 0; font-family: var(--font-heading); color: var(--text-primary); letter-spacing: -1px;">XERA1 Talent Explorer</h1>
                             <p style="color: var(--text-secondary); margin-top: 10px; font-size: 1.15rem; max-width: 600px;">Analysez le Momentum des élites et identifiez les meilleurs profils certifiés pour vos projets.</p>
                         </div>
                         <div style="text-align: right;">
@@ -2985,7 +2985,7 @@ class XERAProfessionalManager {
                     <div style="width: 100px; height: 100px; background: rgba(99, 102, 241, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; margin: 0 auto 30px; border: 1px solid rgba(99, 102, 241, 0.2); box-shadow: 0 10px 20px rgba(99,102,241,0.1);">🔒</div>
                     <h2 style="font-size: 2.5rem; margin-bottom: 20px; font-family: var(--font-heading); color: var(--text-primary);">Débloquez l'Explorateur de Talents Elite</h2>
                     <p style="max-width: 650px; color: var(--text-secondary); margin: 0 auto 45px; line-height: 1.7; font-size: 1.2rem;">
-                        Accédez à la base de données certifiée de XERA, filtrez les profils par Momentum, et visualisez les analytics exclusifs pour vos recrutements et partenariats stratégiques.
+                            Accédez à la base de données certifiée de XERA1, filtrez les profils par Momentum, et visualisez les analytics exclusifs pour vos recrutements et partenariats stratégiques.
                     </p>
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px; width: 100%; max-width: 800px; margin: 0 auto 50px;">
@@ -2998,7 +2998,7 @@ class XERAProfessionalManager {
                             <span style="position: absolute; top: -15px; right: 30px; background: #22c55e; color: #fff; padding: 6px 18px; border-radius: 99px; font-size: 0.75rem; font-weight: 900; box-shadow: 0 5px 15px rgba(34, 197, 94, 0.4);">OFFRE ANNUELLE -20%</span>
                             <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 15px; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Abonnement Annuel</div>
                             <div style="font-size: 2.5rem; font-weight: 900; color: var(--primary-color);">384 USD<span style="font-size: 1rem; opacity: 0.5; font-weight: 400; color: var(--text-secondary);">/an</span></div>
-                            <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 15px;">La puissance XERA au meilleur prix.</p>
+                            <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 15px;">La puissance XERA1 au meilleur prix.</p>
                         </div>
                     </div>
 
@@ -3091,7 +3091,7 @@ class XERAProfessionalManager {
                         <h4 style="margin: 0 0 8px 0; font-size: 1.25rem; font-weight: 800; color: var(--text-primary);">${name}</h4>
                         <div style="font-size: 0.9rem; color: var(--primary-color); font-weight: 700; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px;">${title}</div>
                         <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; height: 3.8rem; font-style: italic;">
-                            "${user.bio || "Ce talent développe actuellement son Momentum sur XERA via des trajectoires certifiées."}"
+                            "${user.bio || "Ce talent développe actuellement son Momentum sur XERA1 via des trajectoires certifiées."}"
                         </p>
                         <div style="width: 100%; height: 1px; background: linear-gradient(to right, transparent, var(--border-color), transparent); margin-bottom: 20px;"></div>
                         <div style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
@@ -3545,7 +3545,7 @@ class XERAProfessionalOnboarding {
                 title: "Nom de votre Page",
                 desc: "Choisissez un nom qui représente votre marque ou organisation officielle.",
                 icon: "fa-building",
-                content: `<input type="text" id="onboarding-name" class="form-input" placeholder="Ex: XERA Corp" value="${this.data.name}">`,
+                content: `<input type="text" id="onboarding-name" class="form-input" placeholder="Ex: XERA1 Corp" value="${this.data.name}">`,
             },
             {
                 title: "Secteurs d'activité",
@@ -3580,7 +3580,7 @@ class XERAProfessionalOnboarding {
             },
             {
                 title: "Logo Officiel",
-                desc: "L'identité visuelle qui s'affichera partout sur XERA.",
+                desc: "L'identité visuelle qui s'affichera partout sur XERA1.",
                 icon: "fa-image",
                 content: `
                     <label for="onboarding-avatar-file" class="custom-file-upload-premium">
@@ -3625,7 +3625,7 @@ class XERAProfessionalOnboarding {
                     <img src="icons/logo.png" style="width: 24px; height: 24px; filter: brightness(0) invert(1);">
                 </div>
                 <div class="onboarding-visual-text">
-                    <h2 style="font-family: 'Outfit', sans-serif !important;">XERA Pro Page</h2>
+                    <h2 style="font-family: 'Outfit', sans-serif !important;">XERA1 Pro Page</h2>
                     <p>Déployez votre entité professionnelle et commencez à recruter ou à collaborer.</p>
                 </div>
                 <div class="onboarding-step-counter-clean">

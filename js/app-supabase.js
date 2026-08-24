@@ -140,16 +140,16 @@ function updateOpenGraphTags(context = {}) {
     try {
         // Contexte par défaut
         const pageUrl = window.location.href;
-        let ogTitle = "XERA | Tracez votre progression";
-        let ogDescription = "Découvrez les trajectoires créatives sur XERA";
+        let ogTitle = "XERA1 | Tracez votre progression";
+        let ogDescription = "Découvrez les trajectoires créatives sur XERA1";
         let ogImage = getAbsoluteImageUrl("icons/logo-192x192.png");
         let ogType = "website";
 
         // Si contexte profil
         if (context.userId || context.userProfile) {
             const profile = context.userProfile || {};
-            ogTitle = `${profile.username || "Profil"} | XERA`;
-            ogDescription = profile.bio || "Découvrez ce profil sur XERA";
+            ogTitle = `${profile.username || "Profil"} | XERA1`;
+            ogDescription = profile.bio || "Découvrez ce profil sur XERA1";
             ogImage = getAbsoluteImageUrl(
                 profile.profileImage ||
                     profile.avatar_url ||
@@ -161,11 +161,11 @@ function updateOpenGraphTags(context = {}) {
         // Si contexte contenu
         if (context.contentId || context.content) {
             const content = context.content || {};
-            ogTitle = content.title || "Contenu XERA";
+            ogTitle = content.title || "Contenu XERA1";
             ogDescription =
                 content.description ||
                 content.title ||
-                "Découvrez ce contenu sur XERA";
+                "Découvrez ce contenu sur XERA1";
 
             // Utiliser l'image du contenu si disponible
             if (
@@ -202,10 +202,10 @@ function updateOpenGraphTags(context = {}) {
 
         // Mettre à jour aussi le title principal
         if (context.userId || context.userProfile) {
-            document.title = `${context.userProfile?.username || "Profil"} | XERA`;
+            document.title = `${context.userProfile?.username || "Profil"} | XERA1`;
         } else if (context.contentId || context.content) {
             const content = context.content || {};
-            document.title = `${content.title || "Contenu"} | XERA`;
+            document.title = `${content.title || "Contenu"} | XERA1`;
         }
     } catch (error) {
         console.error("Erreur lors de la mise à jour des meta tags OG:", error);
@@ -256,7 +256,8 @@ async function initializeOpenGraphFromUrl() {
                             updateOpenGraphTags({
                                 contentId: contentId,
                                 content: {
-                                    title: foundContent.title || "Contenu XERA",
+                                    title:
+                                        foundContent.title || "Contenu XERA1",
                                     description: foundContent.description || "",
                                     media: foundContent.media || [],
                                     mediaUrl: foundContent.mediaUrl,
@@ -282,7 +283,7 @@ async function initializeOpenGraphFromUrl() {
                         updateOpenGraphTags({
                             contentId: contentId,
                             content: {
-                                title: content.title || "Contenu XERA",
+                                title: content.title || "Contenu XERA1",
                                 description: content.description || "",
                                 media: content.media || [],
                                 mediaUrl: content.media_url,
@@ -547,9 +548,9 @@ Félicitations pour ton nouveau trophée ! ${badgeInfo.icon}
 
 ${badgeInfo.text}
 
-Tu as débloqué un accomplissement majeur ! Continue à créer du contenu incroyable et inspire la communauté XERA.
+    Tu as débloqué un accomplissement majeur ! Continue à créer du contenu incroyable et inspire la communauté XERA1.
 
-Le compte XERA Admin`;
+Le compte XERA1 Admin`;
 
         // Envoyer le DM via Supabase
         if (window.supabase) {
@@ -718,7 +719,7 @@ function renderReachStatsWidget(userId) {
 }
 
 /**
- * Génère un widget de "friends on XERA"
+ * Génère un widget de "friends on XERA1"
  * Social proof: montrer les amis qui sont déjà là
  */
 function renderFriendsOnXeraWidget(userId) {
@@ -751,7 +752,7 @@ function renderFriendsOnXeraWidget(userId) {
 
         return `
             <div class="friends-on-xera-widget">
-                <span class="friends-label">Tes potes sur XERA 👋</span>
+                <span class="friends-label">Tes potes sur XERA1 👋</span>
                 <div class="friends-avatars">
                     ${friendAvatars}
                     ${moreText}
@@ -764,7 +765,7 @@ function renderFriendsOnXeraWidget(userId) {
 }
 
 /**
- * Smart notification quand un ami rejoint XERA
+ * Smart notification quand un ami rejoint XERA1
  */
 function showFriendJoinedNotification(friendId, friendName) {
     try {
@@ -774,7 +775,7 @@ function showFriendJoinedNotification(friendId, friendName) {
             <div class="toast-icon"><i class="fas fa-user-plus"></i></div>
             <div class="toast-content">
                 <div class="toast-title">Nouvelle connexion</div>
-                <div class="toast-message"><strong>${friendName}</strong> a rejoint XERA</div>
+                <div class="toast-message"><strong>${friendName}</strong> a rejoint XERA1</div>
             </div>
             <button class="btn btn-primary btn-sm" onclick="handleProfileClick('${friendId}', null, true); this.closest('.toast').remove();">
                 Voir
@@ -799,19 +800,19 @@ function renderShareButton(context = {}) {
     const { userId = null, contentId = null, className = "" } = context;
 
     let shareUrl = window.location.href;
-    let shareTitle = "XERA | Tracez votre progression";
+    let shareTitle = "XERA1 | Tracez votre progression";
     let shareUserId = null;
 
     if (userId) {
         shareUrl = buildOpenGraphShareUrl("profile", userId);
         const user = getUser(userId);
-        shareTitle = `Découvre ${user?.name || "ce profil"} sur XERA`;
+        shareTitle = `Découvre ${user?.name || "ce profil"} sur XERA1`;
         shareUserId = userId;
     } else if (contentId) {
         const content = findContentById(contentId);
         if (content) {
             shareUrl = buildOpenGraphShareUrl("content", contentId);
-            shareTitle = content.title || "Découvre ce contenu sur XERA";
+            shareTitle = content.title || "Découvre ce contenu sur XERA1";
         }
     }
 
@@ -965,7 +966,7 @@ window.shareContentElegant = async function (
                 const content = findContentById(contentId);
                 if (content) {
                     const contentData = {
-                        title: content.title || "Contenu XERA",
+                        title: content.title || "Contenu XERA1",
                         description: content.description || "",
                         image:
                             content.media?.[0]?.url ||
@@ -1366,10 +1367,10 @@ async function shareProfileLink(userId) {
     if (!userId) return;
     const user = getUser(userId);
     const url = buildProfileShareUrl(userId);
-    const title = user ? `Profil de ${user.name} | XERA` : "Profil XERA";
+    const title = user ? `Profil de ${user.name} | XERA1` : "Profil XERA1";
     const text = user
-        ? `Découvre le profil de ${user.name} sur XERA.`
-        : "Découvre ce profil sur XERA.";
+        ? `Découvre le profil de ${user.name} sur XERA1.`
+        : "Découvre ce profil sur XERA1.";
 
     if (navigator.share) {
         try {
@@ -2218,7 +2219,7 @@ async function initializeApp() {
                 await renderDiscoverGrid();
                 if (typeof window.ToastManager !== "undefined") {
                     window.ToastManager.success(
-                        "XΞRA High-Signal",
+                        "XΞRA1 High-Signal",
                         "Momentum Engine & Fluidity Active.",
                         3000,
                     );
@@ -2263,7 +2264,7 @@ async function initializeApp() {
             await renderDiscoverGrid();
             if (typeof window.ToastManager !== "undefined") {
                 window.ToastManager.success(
-                    "XΞRA High-Signal",
+                    "XΞRA1 High-Signal",
                     "Momentum Engine & Fluidity Active.",
                     3000,
                 );
@@ -2385,7 +2386,7 @@ async function initializeApp() {
         await renderDiscoverGrid();
         if (typeof window.ToastManager !== "undefined") {
             window.ToastManager.success(
-                "XΞRA High-Signal",
+                "XΞRA1 High-Signal",
                 "Momentum Engine & Fluidity Active.",
                 3000,
             );
@@ -2436,11 +2437,11 @@ async function initializeApp() {
                             window.isProUser &&
                             window.isProUser(window.currentUser);
                         if (!isPro) {
-                            console.log("Démarrage du tutoriel XERA...");
+                            console.log("Démarrage du tutoriel XERA1...");
                             window.XeraTutorial.init();
                         } else {
                             console.log(
-                                "Tutoriel XERA ignoré pour compte Pro.",
+                                "Tutoriel XERA1 ignoré pour compte Pro.",
                             );
                         }
 
@@ -2482,7 +2483,7 @@ async function initializeApp() {
         await renderDiscoverGrid();
         if (typeof window.ToastManager !== "undefined") {
             window.ToastManager.success(
-                "XΞRA High-Signal",
+                "XΞRA1 High-Signal",
                 "Momentum Engine & Fluidity Active.",
                 3000,
             );
@@ -2926,7 +2927,7 @@ function ensureLoginPromptElements() {
     overlay.innerHTML = `
 <div class="login-prompt-card">
             <button class="login-prompt-close" aria-label="Fermer">✕</button>
-            <h3 class="login-prompt-title">Vous aimez XERA ?</h3>
+            <h3 class="login-prompt-title">Vous aimez XERA1 ?</h3>
             <p class="login-prompt-text">
                 Connectez-vous et profitez sans interruption.
             </p>
@@ -3028,7 +3029,7 @@ async function handleSignOut() {
 
 function getAccountDeleteReasonLabel(reason) {
     const map = {
-        inactive: "Je n'utilise plus XERA",
+        inactive: "Je n'utilise plus XERA1",
         technical: "J'ai des problèmes techniques",
         privacy: "Confidentialité / sécurité",
         experience: "L'expérience ne me convient pas",
@@ -4039,7 +4040,7 @@ async function notifyAnnouncementOwnerOfReply(
         (typeof getCurrentUserDisplayName === "function" &&
             getCurrentUserDisplayName()) ||
         current.name ||
-        "Un membre XERA";
+        "Un membre XERA1";
     const announcementTitle = shortenReplyNotificationText(
         title || "votre annonce",
         70,
@@ -4465,7 +4466,7 @@ function showMobileArcOnboardingNotification(userId) {
             <div style="flex:1; min-width:0;">
                 <div style="font-weight:700; font-size:0.95rem; margin-bottom:4px;">Démarrez votre premier projet</div>
                 <div style="font-size:0.84rem; color:rgba(245,245,245,0.82); line-height:1.35;">
-                    Sur XERA, un projet est votre trajectoire. Créez-le pour publier vos mises à jour et suivre votre progression.
+                    Sur XERA1, un projet est votre trajectoire. Créez-le pour publier vos mises à jour et suivre votre progression.
                 </div>
             </div>
 </div>
@@ -4545,7 +4546,7 @@ async function maybeStartFirstPostFlow() {
         if (isMobileContext) return;
         const shouldOpenCreate =
             confirm(
-                "Bienvenue sur XERA. Voulez-vous publier votre première mise à jour maintenant ?",
+                "Bienvenue sur XERA1. Voulez-vous publier votre première mise à jour maintenant ?",
             ) === true;
         if (shouldOpenCreate) {
             openCreateMenu(userId, firstArcId);
@@ -4556,7 +4557,7 @@ async function maybeStartFirstPostFlow() {
     const shouldStartArc = isMobileContext
         ? true
         : confirm(
-              "Bienvenue sur XERA. Pour publier votre première mise à jour, commencez par créer votre premier projet. Lancer la création maintenant ?",
+              "Bienvenue sur XERA1. Pour publier votre première mise à jour, commencez par créer votre premier projet. Lancer la création maintenant ?",
           ) === true;
     if (isMobileContext) {
         showMobileArcOnboardingNotification(userId);
@@ -4775,6 +4776,318 @@ function convertSupabaseUser(supabaseUser) {
         profilePreferences: supabaseUser.profile_preferences || {},
         projects: userProjects[supabaseUser.id] || [],
     };
+}
+
+function getContentC2PAState(content) {
+    if (!content || typeof content !== "object") {
+        return { isAI: false, provenance: null, source: null, raw: null };
+    }
+
+    const metadata = content.metadata || {};
+    const c2paPayload =
+        metadata.c2pa ||
+        metadata.C2PA ||
+        metadata.c2pa_metadata ||
+        metadata.c2paMetadata ||
+        metadata.provenance ||
+        null;
+
+    const fallback =
+        typeof window !== "undefined" &&
+        typeof window.normalizeC2PAInspectionResult === "function" &&
+        c2paPayload
+            ? window.normalizeC2PAInspectionResult(
+                  typeof c2paPayload === "string"
+                      ? (() => {
+                            try {
+                                return JSON.parse(c2paPayload);
+                            } catch (e) {
+                                return null;
+                            }
+                        })()
+                      : c2paPayload,
+              )
+            : null;
+
+    const rawAI =
+        metadata.is_ai ??
+        metadata.isAI ??
+        metadata.ai_generated ??
+        metadata.aiGenerated ??
+        content.is_ai ??
+        content.isAI ??
+        false;
+
+    const normalized = fallback || {
+        isAI: !!rawAI,
+        provenance: null,
+        source: null,
+        raw: null,
+    };
+
+    return {
+        isAI: !!rawAI || !!normalized.isAI,
+        provenance: normalized.provenance || null,
+        source: normalized.source || null,
+        raw: normalized.raw || c2paPayload || null,
+    };
+}
+
+function renderC2PABadgeHtml(placement = "feed-card", content = null) {
+    const state = getContentC2PAState(content);
+    if (!state.isAI) return "";
+
+    const safePayload = JSON.stringify(state).replace(/'/g, "&#39;");
+    const placementClass =
+        {
+            "feed-card": "c2pa-badge--feed",
+            immersive: "c2pa-badge--immersive",
+            profile: "c2pa-badge--profile",
+        }[placement] || "c2pa-badge--feed";
+
+    return `
+        <button
+            type="button"
+            class="c2pa-badge ${placementClass}"
+            title="Contenu certifié C2PA / AI"
+            onclick="event.stopPropagation(); window.openC2PAModal(${safePayload});"
+            aria-label="Afficher les détails C2PA"
+        >
+            AI
+        </button>
+    `;
+}
+
+function ensureC2PAModal() {
+    let modal = document.getElementById("xera-c2pa-modal");
+    if (modal) return modal;
+
+    const html = `
+        <div id="xera-c2pa-modal" class="xera-c2pa-modal" aria-hidden="true" role="dialog" aria-modal="true">
+            <div class="xera-c2pa-modal__backdrop" data-close-c2pa-modal="1"></div>
+            <div class="xera-c2pa-modal__card" role="document">
+                <div class="xera-c2pa-modal__header">
+                    <div>
+                        <div class="xera-c2pa-modal__eyebrow">Content Credentials</div>
+                        <h3>Source & historique du média</h3>
+                    </div>
+                    <button type="button" class="xera-c2pa-modal__close" aria-label="Fermer" data-close-c2pa-modal="1">×</button>
+                </div>
+                <div id="xera-c2pa-modal__body" class="xera-c2pa-modal__body"></div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML("beforeend", html);
+    modal = document.getElementById("xera-c2pa-modal");
+    modal.addEventListener("click", (event) => {
+        if (event.target && event.target.dataset.closeC2paModal === "1") {
+            modal.classList.remove("is-open");
+            modal.setAttribute("aria-hidden", "true");
+        }
+    });
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            const active = document.getElementById("xera-c2pa-modal");
+            if (active && active.classList.contains("is-open")) {
+                active.classList.remove("is-open");
+                active.setAttribute("aria-hidden", "true");
+            }
+        }
+    });
+    return modal;
+}
+
+window.openC2PAModal = function (payload) {
+    const modal = ensureC2PAModal();
+    const body = document.getElementById("xera-c2pa-modal__body");
+    const state =
+        payload && typeof payload === "object"
+            ? payload
+            : { isAI: false, provenance: null, source: null };
+    const provenance = state.provenance || {};
+    const source = state.source || {};
+    const history =
+        Array.isArray(provenance.actionHistory) &&
+        provenance.actionHistory.length > 0
+            ? provenance.actionHistory
+                  .map(
+                      (entry) =>
+                          `<li><strong>${escapeHtml(entry?.action || "Action")}</strong>${entry?.when ? ` <span>• ${escapeHtml(entry.when)}</span>` : ""}</li>`,
+                  )
+                  .join("")
+            : "<li>Aucune action C2PA détectée.</li>";
+
+    body.innerHTML = `
+        <div class="xera-c2pa-modal__content">
+            <div class="xera-c2pa-modal__summary">
+                <span class="xera-c2pa-modal__pill">AI detected</span>
+                <span class="xera-c2pa-modal__value">${state.isAI ? "Confirmé" : "Non confirmé"}</span>
+            </div>
+            <dl class="xera-c2pa-modal__list">
+                <div><dt>Émetteur</dt><dd>${escapeHtml(provenance.issuer || "Non disponible")}</dd></div>
+                <div><dt>Outil / API</dt><dd>${escapeHtml(provenance.tool || provenance.api || source.claimGenerator || "Non disponible")}</dd></div>
+                <div><dt>Date</dt><dd>${escapeHtml(provenance.createdAt || "Non disponible")}</dd></div>
+                <div><dt>Modèle</dt><dd>${escapeHtml(provenance.model || "Non disponible")}</dd></div>
+            </dl>
+            <div class="xera-c2pa-modal__history">
+                <h4>Historique</h4>
+                <ul>${history}</ul>
+            </div>
+        </div>
+    `;
+
+    modal.classList.add("is-open");
+    modal.setAttribute("aria-hidden", "false");
+};
+
+window.closeC2PAModal = function () {
+    const modal = document.getElementById("xera-c2pa-modal");
+    if (!modal) return;
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+};
+
+if (
+    typeof document !== "undefined" &&
+    !document.getElementById("xera-c2pa-styles")
+) {
+    const c2paStyles = document.createElement("style");
+    c2paStyles.id = "xera-c2pa-styles";
+    c2paStyles.textContent = `
+        .c2pa-badge {
+            position: absolute;
+            z-index: 20;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 2.3rem;
+            height: 1.8rem;
+            padding: 0 0.6rem;
+            border: 1px solid rgba(148,163,184,0.6);
+            border-radius: 999px;
+            background: rgba(15,23,42,0.9);
+            color: #e2e8f0;
+            font-size: 0.62rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.28);
+            cursor: pointer;
+        }
+        .c2pa-badge--feed { right: 10px; bottom: 10px; }
+        .c2pa-badge--immersive { top: 12px; right: 12px; }
+        .c2pa-badge--profile { top: 12px; right: 12px; }
+        .xera-c2pa-modal {
+            position: fixed;
+            inset: 0;
+            display: none;
+            z-index: 9999;
+        }
+        .xera-c2pa-modal.is-open { display: block; }
+        .xera-c2pa-modal__backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.7);
+        }
+        .xera-c2pa-modal__card {
+            position: relative;
+            width: min(440px, calc(100vw - 28px));
+            margin: 10vh auto;
+            background: #0f172a;
+            border: 1px solid rgba(148,163,184,0.28);
+            border-radius: 18px;
+            box-shadow: 0 22px 60px rgba(15,23,42,0.35);
+            color: #f8fafc;
+            padding: 1.1rem 1.15rem 1.2rem;
+        }
+        .xera-c2pa-modal__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+        }
+        .xera-c2pa-modal__eyebrow {
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 0.2rem;
+        }
+        .xera-c2pa-modal__header h3 {
+            margin: 0;
+            font-size: 1.05rem;
+        }
+        .xera-c2pa-modal__close {
+            width: 2rem;
+            height: 2rem;
+            border-radius: 999px;
+            border: 1px solid rgba(148,163,184,0.3);
+            background: rgba(148,163,184,0.12);
+            color: #f8fafc;
+            font-size: 1.25rem;
+            cursor: pointer;
+        }
+        .xera-c2pa-modal__summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.7rem 0.8rem;
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(96,165,250,0.25);
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+        }
+        .xera-c2pa-modal__pill {
+            font-size: 0.62rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #93c5fd;
+        }
+        .xera-c2pa-modal__value {
+            color: #e2e8f0;
+            font-weight: 700;
+        }
+        .xera-c2pa-modal__list {
+            display: grid;
+            gap: 0.7rem;
+            margin: 0;
+        }
+        .xera-c2pa-modal__list div {
+            display: grid;
+            gap: 0.2rem;
+        }
+        .xera-c2pa-modal__list dt {
+            color: #94a3b8;
+            font-size: 0.66rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .xera-c2pa-modal__list dd {
+            margin: 0;
+            color: #e2e8f0;
+            line-height: 1.5;
+        }
+        .xera-c2pa-modal__history {
+            margin-top: 1rem;
+        }
+        .xera-c2pa-modal__history h4 {
+            margin: 0 0 0.5rem;
+            color: #f8fafc;
+            font-size: 0.92rem;
+        }
+        .xera-c2pa-modal__history ul {
+            margin: 0;
+            padding-left: 1.1rem;
+            color: #cbd5e1;
+        }
+        .xera-c2pa-modal__history li {
+            margin-bottom: 0.35rem;
+        }
+    `;
+    document.head.appendChild(c2paStyles);
 }
 
 function convertSupabaseContent(supabaseContent) {
@@ -5100,7 +5413,7 @@ function getCurrentUserDisplayName() {
         profile?.name ||
         profile?.username ||
         window.currentUser?.email ||
-        "Un membre XERA"
+        "Un membre XERA1"
     );
 }
 
@@ -6274,7 +6587,7 @@ function getSuperAdminPanelHtml() {
             <div class="verification-admin-block" style="margin-top: 1.5rem;">
                 <h4>Envoyer un email à tout le monde</h4>
                 <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                    Envoyer un email officiel XERA à tous les utilisateurs enregistrés.
+                    Envoyer un email officiel XERA1 à tous les utilisateurs enregistrés.
                 </p>
                 <div class="verification-input-row" style="flex-direction: column; align-items: stretch;">
                     <input type="text" id="admin-broadcast-subject" class="form-input" placeholder="Sujet de l'email">
@@ -6661,7 +6974,7 @@ async function refreshAdminSubscriptionRelatedViews(user) {
             await renderDiscoverGrid();
             if (typeof window.ToastManager !== "undefined") {
                 window.ToastManager.success(
-                    "XΞRA High-Signal",
+                    "XΞRA1 High-Signal",
                     "Momentum Engine & Fluidity Active.",
                     3000,
                 );
@@ -7264,7 +7577,7 @@ function sanitizeUserMedia(user) {
 
 const PROFILE_THEME_PRESETS = {
     xera: {
-        label: "XERA",
+        label: "XERA1",
         accent: "#10b981",
         secondary: "#f59e0b",
     },
@@ -8915,7 +9228,7 @@ function generateBadge(badgeType, label) {
     }
 
     const svg = badgeSVGs[badgeType];
-    if (!svg) return "";
+    if (!svg && badgeType !== "ai") return "";
 
     let cssClass = "badge";
     if (badgeType.startsWith("consistency")) cssClass += "";
@@ -8924,11 +9237,16 @@ function generateBadge(badgeType, label) {
     else if (badgeType === "pause") cssClass += " badge-pause badge-filled";
     else if (badgeType === "empty") cssClass += "";
     else if (badgeType === "transparent") cssClass += " badge-success";
+    else if (badgeType === "ai") cssClass += " badge-success badge-filled";
     else cssClass += "";
+
+    const badgeContent = svg
+        ? `<div class="badge-icon">${svg}</div>`
+        : `<div class="badge-icon" aria-hidden="true">✦</div>`;
 
     return `
 <div class="${cssClass}" title="${label}">
-            <div class="badge-icon">${svg}</div>
+            ${badgeContent}
             <span>${label}</span>
 </div>
     `;
@@ -8988,10 +9306,27 @@ function getContentBadges(content) {
         empty: "Vide",
     };
 
-    badges.push({
-        type: content.state,
-        label: stateLabels[content.state],
-    });
+    if (content && content.state) {
+        badges.push({
+            type: content.state,
+            label: stateLabels[content.state],
+        });
+    }
+
+    if (window.resolveContentAIFlag && window.resolveContentAIFlag(content)) {
+        badges.push({ type: "ai", label: "IA" });
+    } else if (
+        typeof window !== "undefined" &&
+        window.extractAIFlagFromContent &&
+        window.extractAIFlagFromContent(content)
+    ) {
+        badges.push({ type: "ai", label: "IA" });
+    } else if (
+        typeof resolveContentAIFlag === "function" &&
+        resolveContentAIFlag(content)
+    ) {
+        badges.push({ type: "ai", label: "IA" });
+    }
 
     return badges;
 }
@@ -9200,6 +9535,7 @@ function renderProfileContentMedia(content, options = {}) {
     const primaryMediaUrl = mediaUrls[0] || content?.mediaUrl || "";
     if (!primaryMediaUrl) return "";
 
+    const c2paBadge = renderC2PABadgeHtml("profile", content);
     const extraCount =
         mediaUrls.length > 1
             ? `<span class="profile-update-media-count">+${mediaUrls.length - 1} media${mediaUrls.length - 1 > 1 ? "s" : ""}</span>`
@@ -9207,8 +9543,9 @@ function renderProfileContentMedia(content, options = {}) {
 
     if (content?.type === "video") {
         return `
-            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}">
+            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}" style="position: relative;">
                 <video src="${primaryMediaUrl}" controls playsinline preload="metadata"></video>
+                ${c2paBadge}
                 ${extraCount}
             </div>
 `;
@@ -9216,8 +9553,9 @@ function renderProfileContentMedia(content, options = {}) {
 
     if (content?.type === "image") {
         return `
-            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}">
+            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}" style="position: relative;">
                 <img src="${primaryMediaUrl}" alt="${escapeHtml(content?.title || "Media update")}" loading="lazy" decoding="async">
+                ${c2paBadge}
                 ${extraCount}
             </div>
 `;
@@ -9519,6 +9857,10 @@ function renderProfileUpdateCard(
         .filter(Boolean)
         .join(" ");
 
+    const aiBadgeHtml = resolveContentAIFlag(content)
+        ? `<span class="profile-update-pill" style="background: rgba(34,197,94,0.15); color: #86efac; border-color: rgba(34,197,94,0.4);">IA</span>`
+        : "";
+
     return `
 <article class="${cardClasses}">
             <div class="profile-update-top">
@@ -9526,6 +9868,7 @@ function renderProfileUpdateCard(
                     <span class="profile-update-state" style="--profile-update-accent:${stateMeta.accent};">${stateMeta.label}</span>
                     <span class="profile-update-pill">${typeLabel}</span>
                     ${dayChip}
+                    ${aiBadgeHtml}
                 </div>
                 <div class="profile-update-meta">
                     <span>${dateLabel}</span>
@@ -10440,7 +10783,7 @@ async function handleDiscoverQuickAction(contentId, action, userId = null) {
     }
 
     if (action === "share") {
-        const title = content?.title || "Trajectoire XERA";
+        const title = content?.title || "Trajectoire XERA1";
         const url = userId
             ? buildProfileShareUrl(userId)
             : new URL(window.location.href).toString();
@@ -13226,6 +13569,10 @@ async function renderImmersiveFeed(contents) {
                 : content.mediaUrl
                   ? [content.mediaUrl]
                   : [];
+            const c2paBadgeImmersive = renderC2PABadgeHtml(
+                "immersive",
+                content,
+            );
             if (mediaList.length > 0) {
                 if (content.type === "video") {
                     mediaHtml = `
@@ -13244,6 +13591,7 @@ async function renderImmersiveFeed(contents) {
                             data-content-id="${content.contentId}"
                             disablePictureInPicture
                         ></video>
+                        ${c2paBadgeImmersive}
                         <div class="video-buffering-spinner" aria-hidden="true">
                             <div class="spinner-ring"></div>
                         </div>
@@ -13270,7 +13618,8 @@ async function renderImmersiveFeed(contents) {
                             )
                             .join("")}</div>`;
                         mediaHtml = `
-                            <div class="immersive-image-wrap">
+                            <div class="immersive-image-wrap" style="position: relative;">
+                                ${c2paBadgeImmersive}
                                 <div class="xera-carousel xera-carousel--immersive" data-carousel>
                                     <div class="xera-carousel-track">${slides}</div>
                                     <button type="button" class="xera-carousel-arrow xera-carousel-arrow--prev" aria-label="Image précédente">&lsaquo;</button>
@@ -13284,7 +13633,7 @@ async function renderImmersiveFeed(contents) {
                             </div>
                         `;
                     } else {
-                        mediaHtml = `<div class="immersive-image-wrap"><img src="${mediaList[0]}" class="immersive-image" alt="${content.title || "Media"}">${collabCornerHtml}</div>`;
+                        mediaHtml = `<div class="immersive-image-wrap" style="position: relative;"><img src="${mediaList[0]}" class="immersive-image" alt="${content.title || "Media"}">${c2paBadgeImmersive}${collabCornerHtml}</div>`;
                     }
                 }
             } else {
@@ -15043,7 +15392,7 @@ ${
     const verificationCtaHtml = showVerificationCta
         ? `
 <div class="profile-verify-block">
-            <button class="profile-verify-cta" onclick="window.location.href='subscription-plans.html'" aria-label="Demander une vérification XERA">
+            <button class="profile-verify-cta" onclick="window.location.href='subscription-plans.html'" aria-label="Demander une vérification XERA1">
                 <span>Obtenir une vérification</span>
                 <img src="icons/verify-personal.svg?v=${BADGE_ASSET_VERSION}" alt="" aria-hidden="true" />
             </button>
@@ -15164,17 +15513,28 @@ ${
         ? `
 <div class="projects-grid">
             ${projects
-                .map(
-                    (p) => `
-                <div class="project-card">
-                    <img src="${p.cover || user.banner || user.avatar}" class="project-cover" alt="Cover">
+                .map((p) => {
+                    const projectState = getContentC2PAState({
+                        metadata: p?.metadata || {},
+                    });
+                    const projectBadge = projectState.isAI
+                        ? renderC2PABadgeHtml("profile", {
+                              metadata: p?.metadata || {},
+                          })
+                        : "";
+                    return `
+                <div class="project-card" style="position: relative;">
+                    <div style="position: relative; display: block;">
+                        <img src="${p.cover || user.banner || user.avatar}" class="project-cover" alt="Cover">
+                        ${projectBadge}
+                    </div>
                     <div class="project-meta">
                         <h4>${p.name}</h4>
                         <p>${p.description || ""}</p>
                     </div>
                 </div>
-            `,
-                )
+            `;
+                })
                 .join("")}
 </div>
     `
@@ -15336,7 +15696,7 @@ ${
                 Connectez vos outils de travail
             </div>
             <h3 style="margin:0 0 0.45rem; font-size:1.1rem;">Votre flux de documentation se met à jour automatiquement</h3>
-            <p style="margin:0; color: var(--text-secondary); line-height:1.55;">Reliez GitHub, Figma, Notion et Google Cloud pour transformer votre activité réelle en mises à jour XERA sans effort.</p>
+            <p style="margin:0; color: var(--text-secondary); line-height:1.55;">Reliez GitHub, Figma, Notion et Google Cloud pour transformer votre activité réelle en mises à jour XERA1 sans effort.</p>
         </div>
         <div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center; justify-content:flex-end;">
             <button type="button" class="btn btn-secondary" onclick="startOAuthConnection('github')" style="padding:0.6rem 0.9rem; border-radius:999px; display:flex; align-items:center; gap:0.45rem;">
@@ -15432,7 +15792,7 @@ ${showPublicStats ? influenceSectionHtml : ""}
                         <img src="${user.avatar && (user.avatar.startsWith("http") || user.avatar.startsWith("data:")) ? withCacheBust(user.avatar) : "https://placehold.co/150"}" class="profile-avatar-img" alt="Avatar de ${user.name}" onclick="navigateToUserProfile('${userId}')" style="cursor: pointer;">
                     </div>
                     <div class="profile-name-block">
-                        <span class="profile-section-kicker">Profil XERA</span>
+                        <span class="profile-section-kicker">Profil XERA1</span>
                         <h2>${renderUsernameForProfile(user.name, user.id)}${monetizationBadgeHtml}</h2>
                         ${profileRoleBadgeHtml}
                         <p class="profile-title"><strong>${profileTitleHtml}</strong></p>
@@ -15486,7 +15846,7 @@ ${publicActivityHtml}
                     <a href="index.html" style="color: var(--text-secondary); text-decoration: none; transition: color 0.3s;">Accueil</a>
                     <a href="credits.html" style="color: var(--text-secondary); text-decoration: none; transition: color 0.3s;">Crédits</a>
                 </div>
-                <p style="color: var(--text-muted); font-size: 0.9rem;">© 2026 XERA - Documentez l'effort</p>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">© 2026 XERA1 - Documentez l'effort</p>
             </div>
 </footer>
     `;
@@ -17188,7 +17548,7 @@ async function openSettings(userId) {
                                 <div class="profile-customization-preview-banner"></div>
                                 <div class="profile-customization-preview-grid">
                                     <div class="profile-customization-preview-card">
-                                        <span class="profile-section-kicker">Profil XERA</span>
+                                        <span class="profile-section-kicker">Profil XERA1</span>
                                         <strong>${escapeHtml(user.name || "Utilisateur")}</strong>
                                     </div>
                                     <div class="profile-customization-preview-card is-signal">
@@ -17602,7 +17962,7 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
                                 <div class="delete-account-reasons">
                                     <label class="delete-account-reason-item">
                                         <input type="radio" name="delete-account-reason" value="inactive">
-                                        <span>Je n'utilise plus XERA</span>
+                                        <span>Je n'utilise plus XERA1</span>
                                     </label>
                                     <label class="delete-account-reason-item">
                                         <input type="radio" name="delete-account-reason" value="technical">
@@ -18204,7 +18564,7 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
                         await renderDiscoverGrid();
                         if (typeof window.ToastManager !== "undefined") {
                             window.ToastManager.success(
-                                "XΞRA High-Signal",
+                                "XΞRA1 High-Signal",
                                 "Momentum Engine & Fluidity Active.",
                                 3000,
                             );
@@ -19049,14 +19409,14 @@ function buildPublishFeedbackPayload({
         eyebrow = "Nouveau depart";
         title = "Ton premier post est en ligne.";
         message = safeArcTitle
-            ? `Tu viens de lancer "${safeArcTitle}" sur XERA.`
-            : "Tu viens de publier ton premier contenu sur XERA.";
+            ? `Tu viens de lancer "${safeArcTitle}" sur XERA1.`
+            : "Tu viens de publier ton premier contenu sur XERA1.";
     } else if (previousGapDays >= 3) {
         eyebrow = "Bon retour";
         title = "Tu viens de relancer ton rythme.";
         message = safeArcTitle
             ? `"${safeArcTitle}" repart avec une nouvelle update.`
-            : "Ta progression repart sur XERA.";
+            : "Ta progression repart sur XERA1.";
     } else if (streakDetails.streak >= 7) {
         eyebrow = "Serie en cours";
         title = `${streakDetails.streak} jours de suite.`;
@@ -19073,7 +19433,7 @@ function buildPublishFeedbackPayload({
         title = "Ta mise a jour est en ligne.";
         message = safeArcTitle
             ? `"${safeArcTitle}" a recu une nouvelle avancee.`
-            : "Ton contenu est maintenant visible sur XERA.";
+            : "Ton contenu est maintenant visible sur XERA1.";
     }
 
     const chips = [];
@@ -20033,6 +20393,7 @@ async function openCreateMenu(
         mediaTypeInput.value =
             currentMode === "announcement" ? "text" : typeSelect.value;
         latestSelectedFileName = "";
+        window.__xeraLatestMediaC2PA = null;
         if (fileInput) fileInput.value = "";
         if (videoDurationHint) videoDurationHint.textContent = "";
         previewContainer.innerHTML = "";
@@ -20263,6 +20624,10 @@ async function openCreateMenu(
                 const successUrls = successful.map((r) => r.url);
                 if (successUrls.length > 0) {
                     setUploadProgress(100);
+                    window.__xeraLatestMediaC2PA =
+                        successful[0]?.c2pa ||
+                        window.__xeraLatestMediaC2PA ||
+                        null;
                 }
                 loader.style.display = "none";
                 setUploadProgressIndeterminate();
@@ -20473,6 +20838,25 @@ async function openCreateMenu(
                 : null;
             const finalPageIdForContent = selectedArc?.page_id || finalPageId;
 
+            const selectedMediaC2PA =
+                window.__xeraLatestMediaC2PA &&
+                typeof window.__xeraLatestMediaC2PA === "object"
+                    ? {
+                          isAI: !!window.__xeraLatestMediaC2PA.isAI,
+                          provenance:
+                              window.__xeraLatestMediaC2PA.provenance || null,
+                          source: window.__xeraLatestMediaC2PA.source || null,
+                      }
+                    : null;
+            const contentMetadata = {
+                ...(selectedMediaC2PA
+                    ? {
+                          c2pa: selectedMediaC2PA,
+                          is_ai: selectedMediaC2PA.isAI,
+                      }
+                    : {}),
+            };
+
             const contentData = {
                 userId: userId,
                 dayNumber:
@@ -20490,6 +20874,7 @@ async function openCreateMenu(
                 mediaUrls: mediaUrls,
                 arcId: selectedArcId,
                 pageId: finalPageIdForContent,
+                metadata: contentMetadata,
             };
 
             closeCreateMenu();
@@ -20567,7 +20952,7 @@ async function openCreateMenu(
                         await renderDiscoverGrid();
                         if (typeof window.ToastManager !== "undefined") {
                             window.ToastManager.success(
-                                "XΞRA High-Signal",
+                                "XΞRA1 High-Signal",
                                 "Momentum Engine & Fluidity Active.",
                                 3000,
                             );
@@ -20592,7 +20977,7 @@ async function openCreateMenu(
                             ? "Mise a jour terminee"
                             : "Publication terminee",
                         message:
-                            "Votre contenu est maintenant en ligne sur XERA.",
+                            "Votre contenu est maintenant en ligne sur XERA1.",
                         autoHideMs: 3200,
                     });
                     requestAnimationFrame(() =>
@@ -20732,7 +21117,7 @@ async function deleteContent(contentId) {
             await renderDiscoverGrid();
             if (typeof window.ToastManager !== "undefined") {
                 window.ToastManager.success(
-                    "XΞRA High-Signal",
+                    "XΞRA1 High-Signal",
                     "Momentum Engine & Fluidity Active.",
                     3000,
                 );
@@ -21483,7 +21868,7 @@ function showContentDetailsModal(contentId, contentTitle) {
     updateOpenGraphTags({
         contentId: contentId,
         content: {
-            title: contentTitle || content.title || "Contenu XERA",
+            title: contentTitle || content.title || "Contenu XERA1",
             description: content.rawDescription || content.description || "",
             media:
                 content.media || content.mediaUrl

@@ -585,10 +585,10 @@
                         },
                         e("img", {
                             src: "icons/logo.png",
-                            alt: "XERA - Logo",
+                            alt: "XERA1 - Logo",
                         }),
                     ),
-                    e("span", null, "XΞRA"),
+                    e("span", null, "XΞRA1"),
                 ),
                 e(
                     "div",

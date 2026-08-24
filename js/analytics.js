@@ -4,31 +4,35 @@
 
 function calculateMomentum(series, daysInMonth) {
     const successData = series.success || [];
-    const activeDays = successData.filter(v => v > 0).length;
+    const activeDays = successData.filter((v) => v > 0).length;
     const totalVolume = successData.reduce((a, b) => a + b, 0);
 
-    if (daysInMonth <= 0) return { score: 0, activeDays: 0, totalVolume: 0, consistency: 0 };
-    if (activeDays === 0) return { score: 0, activeDays: 0, totalVolume: 0, consistency: 0 };
+    if (daysInMonth <= 0)
+        return { score: 0, activeDays: 0, totalVolume: 0, consistency: 0 };
+    if (activeDays === 0)
+        return { score: 0, activeDays: 0, totalVolume: 0, consistency: 0 };
 
     const frequency = activeDays / daysInMonth;
     const mean = totalVolume / daysInMonth;
-    const variance = successData.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / daysInMonth;
+    const variance =
+        successData.reduce((a, b) => a + Math.pow(b - mean, 2), 0) /
+        daysInMonth;
 
     // Consistency: Reward low variance (stable effort)
     const consistency = 1 / (1 + Math.pow(variance, 0.5));
 
     // Intensity: Bonus for those who do more than just one log
     const avgDaily = totalVolume / activeDays;
-    const intensity = Math.min(1.4, 0.5 + (avgDaily / 4));
+    const intensity = Math.min(1.4, 0.5 + avgDaily / 4);
 
     // Final Momentum Score: Heavy weight on frequency and consistency
-    const rawScore = (intensity * Math.pow(frequency, 1.5) * consistency) * 130;
+    const rawScore = intensity * Math.pow(frequency, 1.5) * consistency * 130;
 
     return {
         score: Math.min(100, Math.round(rawScore)),
         activeDays,
         totalVolume,
-        consistency: Math.round(consistency * 100)
+        consistency: Math.round(consistency * 100),
     };
 }
 
@@ -41,33 +45,35 @@ function generateInsights(momentum, series) {
 
     if (score > 70) {
         insights.push({
-            type: 'high',
+            type: "high",
             text: "Impulsion Exceptionnelle. Ta vélocité actuelle dépasse 90% des builders.",
-            icon: '🔥',
-            command: "Augmente la complexité de tes Traces pour scaler."
+            icon: "🔥",
+            command: "Augmente la complexité de tes Traces pour scaler.",
         });
     } else if (score > 40) {
         insights.push({
-            type: 'mid',
+            type: "mid",
             text: "Progression Stable. Maintiens ce rythme pour consolider ta trajectoire.",
-            icon: '📈',
-            command: "Enregistre une Trace 'Deep Dive' pour inspirer les autres."
+            icon: "📈",
+            command:
+                "Enregistre une Trace 'Deep Dive' pour inspirer les autres.",
         });
     } else {
         insights.push({
-            type: 'low',
+            type: "low",
             text: "Inertie détectée. Une petite action aujourd'hui relancera ton moteur.",
-            icon: '🌑',
-            command: "Poste une Trace rapide (même une simple pensée) maintenant."
+            icon: "🌑",
+            command:
+                "Poste une Trace rapide (même une simple pensée) maintenant.",
         });
     }
 
     if (totalFailure > totalSuccess * 0.3) {
         insights.push({
-            type: 'warning',
+            type: "warning",
             text: "Taux de friction élevé. Analyse tes points de blocage.",
-            icon: '⚠️',
-            command: "Revois tes milestones, elles sont peut-être trop larges."
+            icon: "⚠️",
+            command: "Revois tes milestones, elles sont peut-être trop larges.",
         });
     }
 
@@ -82,20 +88,23 @@ window.analyticsCharts = window.analyticsCharts || {};
 window.analyticsShareState = window.analyticsShareState || {};
 
 function getAnalyticsDomIds(containerId) {
-    const safeId = String(containerId || 'analytics-dashboard').replace(/[^a-zA-Z0-9_-]/g, '');
+    const safeId = String(containerId || "analytics-dashboard").replace(
+        /[^a-zA-Z0-9_-]/g,
+        "",
+    );
     return {
-        containerId: containerId || 'analytics-dashboard',
+        containerId: containerId || "analytics-dashboard",
         safeId,
         selectId: `month-select-${safeId}`,
         canvasId: `analytics-month-chart-${safeId}`,
         messageId: `analytics-message-${safeId}`,
         shareBtnId: `analytics-share-btn-${safeId}`,
         downloadBtnId: `analytics-download-btn-${safeId}`,
-        sharePanelId: `analytics-share-panel-${safeId}`
+        sharePanelId: `analytics-share-panel-${safeId}`,
     };
 }
 
-function cleanupAnalytics(containerId = 'analytics-dashboard') {
+function cleanupAnalytics(containerId = "analytics-dashboard") {
     const { safeId, containerId: dashId } = getAnalyticsDomIds(containerId);
     const chart = window.analyticsCharts[safeId];
     if (chart) {
@@ -108,7 +117,7 @@ function cleanupAnalytics(containerId = 'analytics-dashboard') {
 
     const dashboard = document.getElementById(dashId);
     if (dashboard) {
-        dashboard.innerHTML = '';
+        dashboard.innerHTML = "";
     }
 }
 
@@ -116,21 +125,21 @@ function setAnalyticsMessage(containerId, text, timeoutMs = 2500) {
     const { messageId } = getAnalyticsDomIds(containerId);
     const message = document.getElementById(messageId);
     if (!message) return;
-    message.textContent = text || '';
+    message.textContent = text || "";
     if (text && timeoutMs) {
         setTimeout(() => {
             if (message.textContent === text) {
-                message.textContent = '';
+                message.textContent = "";
             }
         }, timeoutMs);
     }
 }
 
-function notifyAnalytics(containerId, text, type = 'info') {
+function notifyAnalytics(containerId, text, type = "info") {
     if (window.ToastManager) {
-        if (type === 'success') ToastManager.success('Info', text);
-        else if (type === 'error') ToastManager.error('Erreur', text);
-        else ToastManager.info('Info', text);
+        if (type === "success") ToastManager.success("Info", text);
+        else if (type === "error") ToastManager.error("Erreur", text);
+        else ToastManager.info("Info", text);
         return;
     }
     setAnalyticsMessage(containerId, text);
@@ -138,30 +147,35 @@ function notifyAnalytics(containerId, text, type = 'info') {
 
 function buildAnalyticsShareUrl(userId) {
     try {
-        const base = new URL('analytics.html', window.location.href);
-        if (userId) base.searchParams.set('user', userId);
+        const base = new URL("analytics.html", window.location.href);
+        if (userId) base.searchParams.set("user", userId);
         return base.toString();
     } catch (error) {
-        return userId ? `analytics.html?user=${encodeURIComponent(userId)}` : 'analytics.html';
+        return userId
+            ? `analytics.html?user=${encodeURIComponent(userId)}`
+            : "analytics.html";
     }
 }
 
 function formatAnalyticsShareLabel(state) {
-    if (!state) return 'Analytics XERA';
-    const monthLabel = (state.year !== undefined && state.monthIndex !== undefined)
-        ? formatMonthLabel(state.year, state.monthIndex)
-        : '';
-    const namePart = state.userName ? ` · ${state.userName}` : '';
-    return monthLabel ? `Analytics ${monthLabel}${namePart}` : `Analytics XERA${namePart}`;
+    if (!state) return "Analytics XERA1";
+    const monthLabel =
+        state.year !== undefined && state.monthIndex !== undefined
+            ? formatMonthLabel(state.year, state.monthIndex)
+            : "";
+    const namePart = state.userName ? ` · ${state.userName}` : "";
+    return monthLabel
+        ? `Analytics ${monthLabel}${namePart}`
+        : `Analytics XERA${namePart}`;
 }
 
 function buildSocialShareUrls({ url, text }) {
-    const encodedUrl = encodeURIComponent(url || '');
-    const encodedText = encodeURIComponent(text || '');
+    const encodedUrl = encodeURIComponent(url || "");
+    const encodedText = encodeURIComponent(text || "");
     return {
         x: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
         linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
-        facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`
+        facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
     };
 }
 
@@ -173,20 +187,20 @@ async function copyToClipboard(text) {
             return true;
         }
     } catch (error) {
-        console.error('Clipboard error:', error);
+        console.error("Clipboard error:", error);
     }
     try {
-        const textarea = document.createElement('textarea');
+        const textarea = document.createElement("textarea");
         textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
         document.body.appendChild(textarea);
         textarea.select();
-        const ok = document.execCommand('copy');
+        const ok = document.execCommand("copy");
         document.body.removeChild(textarea);
         return ok;
     } catch (error) {
-        console.error('Clipboard fallback error:', error);
+        console.error("Clipboard fallback error:", error);
         return false;
     }
 }
@@ -198,7 +212,7 @@ function renderAnalyticsSharePanel(containerId, state) {
 
     const url = buildAnalyticsShareUrl(state?.userId);
     const label = formatAnalyticsShareLabel(state);
-    const text = `Mes analytics${state?.userName ? ` · ${state.userName}` : ''} sur XERA.`;
+    const text = `Mes analytics${state?.userName ? ` · ${state.userName}` : ""} sur XERA1.`;
     const shareUrls = buildSocialShareUrls({ url, text });
 
     panel.innerHTML = `
@@ -234,67 +248,87 @@ function renderAnalyticsSharePanel(containerId, state) {
 
     const copyBtn = panel.querySelector('[data-action="copy"]');
     if (copyBtn) {
-        copyBtn.addEventListener('click', async () => {
+        copyBtn.addEventListener("click", async () => {
             const ok = await copyToClipboard(url);
-            notifyAnalytics(containerId, ok ? 'Lien copié !' : 'Impossible de copier le lien.', ok ? 'success' : 'error');
+            notifyAnalytics(
+                containerId,
+                ok ? "Lien copié !" : "Impossible de copier le lien.",
+                ok ? "success" : "error",
+            );
         });
     }
 
-    panel.style.display = 'flex';
+    panel.style.display = "flex";
 }
 
 async function downloadAnalyticsChart(containerId) {
     const { safeId, canvasId } = getAnalyticsDomIds(containerId);
     const canvas = document.getElementById(canvasId);
     if (!canvas) {
-        notifyAnalytics(containerId, "Graphique introuvable.", 'error');
+        notifyAnalytics(containerId, "Graphique introuvable.", "error");
         return;
     }
     const state = window.analyticsShareState[safeId] || {};
-    const monthLabel = (state.year !== undefined && state.monthIndex !== undefined)
-        ? formatMonthLabel(state.year, state.monthIndex)
-        : 'mois';
-    const safeName = (state.userName || 'profil').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    const fileName = `analytics-${safeName}-${monthLabel.replace(/\s+/g, '-')}.png`;
+    const monthLabel =
+        state.year !== undefined && state.monthIndex !== undefined
+            ? formatMonthLabel(state.year, state.monthIndex)
+            : "mois";
+    const safeName = (state.userName || "profil")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "");
+    const fileName = `analytics-${safeName}-${monthLabel.replace(/\s+/g, "-")}.png`;
 
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 0.92));
+    const blob = await new Promise((resolve) =>
+        canvas.toBlob(resolve, "image/png", 0.92),
+    );
     if (!blob) {
-        notifyAnalytics(containerId, "Impossible de générer l'image.", 'error');
+        notifyAnalytics(containerId, "Impossible de générer l'image.", "error");
         return;
     }
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
     link.download = fileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    notifyAnalytics(containerId, "Image téléchargée.", 'success');
+    notifyAnalytics(containerId, "Image téléchargée.", "success");
 }
 
 async function shareAnalyticsChart(containerId) {
     const { safeId, canvasId, sharePanelId } = getAnalyticsDomIds(containerId);
     const canvas = document.getElementById(canvasId);
     const state = window.analyticsShareState[safeId] || {};
-    const monthLabel = (state.year !== undefined && state.monthIndex !== undefined)
-        ? formatMonthLabel(state.year, state.monthIndex)
-        : '';
-    const title = monthLabel ? `Analytics · ${monthLabel}` : 'Analytics XERA';
+    const monthLabel =
+        state.year !== undefined && state.monthIndex !== undefined
+            ? formatMonthLabel(state.year, state.monthIndex)
+            : "";
+    const title = monthLabel ? `Analytics · ${monthLabel}` : "Analytics XERA1";
     const text = monthLabel
-        ? `Mes analytics de ${monthLabel} sur XERA.`
-        : `Mes analytics sur XERA.`;
+        ? `Mes analytics de ${monthLabel} sur XERA1.`
+        : `Mes analytics sur XERA1.`;
     const url = buildAnalyticsShareUrl(state.userId);
 
     if (navigator.share) {
         try {
             if (canvas && canvas.toBlob && navigator.canShare) {
-                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 0.92));
+                const blob = await new Promise((resolve) =>
+                    canvas.toBlob(resolve, "image/png", 0.92),
+                );
                 if (blob) {
-                    const fileName = `analytics-${state.year || 'mois'}.png`;
-                    const file = new File([blob], fileName, { type: 'image/png' });
+                    const fileName = `analytics-${state.year || "mois"}.png`;
+                    const file = new File([blob], fileName, {
+                        type: "image/png",
+                    });
                     if (navigator.canShare({ files: [file] })) {
-                        await navigator.share({ title, text, url, files: [file] });
+                        await navigator.share({
+                            title,
+                            text,
+                            url,
+                            files: [file],
+                        });
                         return;
                     }
                 }
@@ -302,13 +336,13 @@ async function shareAnalyticsChart(containerId) {
             await navigator.share({ title, text, url });
             return;
         } catch (error) {
-            console.warn('Web Share cancelled or failed:', error);
+            console.warn("Web Share cancelled or failed:", error);
         }
     }
 
     const panel = document.getElementById(sharePanelId);
-    if (panel && panel.style.display === 'flex') {
-        panel.style.display = 'none';
+    if (panel && panel.style.display === "flex") {
+        panel.style.display = "none";
         return;
     }
     renderAnalyticsSharePanel(containerId, { ...state, userId: state.userId });
@@ -317,7 +351,7 @@ async function shareAnalyticsChart(containerId) {
 function getMonthInfo(dateObj) {
     return {
         year: dateObj.getFullYear(),
-        monthIndex: dateObj.getMonth()
+        monthIndex: dateObj.getMonth(),
     };
 }
 
@@ -325,8 +359,8 @@ function getMonthRange(year, monthIndex) {
     const start = new Date(year, monthIndex, 1);
     const end = new Date(year, monthIndex + 1, 0);
 
-    const startStr = start.toISOString().split('T')[0];
-    const endStr = end.toISOString().split('T')[0];
+    const startStr = start.toISOString().split("T")[0];
+    const endStr = end.toISOString().split("T")[0];
     const daysInMonth = end.getDate();
 
     return { startStr, endStr, daysInMonth };
@@ -334,11 +368,14 @@ function getMonthRange(year, monthIndex) {
 
 function formatMonthLabel(year, monthIndex) {
     const date = new Date(year, monthIndex, 1);
-    return new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(date);
+    return new Intl.DateTimeFormat("fr-FR", {
+        month: "long",
+        year: "numeric",
+    }).format(date);
 }
 
 function monthKey(year, monthIndex) {
-    const month = String(monthIndex + 1).padStart(2, '0');
+    const month = String(monthIndex + 1).padStart(2, "0");
     return `${year}-${month}`;
 }
 
@@ -346,7 +383,11 @@ function buildMonthList(createdAt) {
     const createdDate = createdAt ? new Date(createdAt) : new Date();
     const now = new Date();
 
-    const start = new Date(createdDate.getFullYear(), createdDate.getMonth(), 1);
+    const start = new Date(
+        createdDate.getFullYear(),
+        createdDate.getMonth(),
+        1,
+    );
     const end = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const months = [];
@@ -359,7 +400,7 @@ function buildMonthList(createdAt) {
             year,
             monthIndex,
             key: monthKey(year, monthIndex),
-            label: formatMonthLabel(year, monthIndex)
+            label: formatMonthLabel(year, monthIndex),
         });
         cursor.setMonth(cursor.getMonth() + 1);
     }
@@ -371,18 +412,18 @@ async function getMonthlyMetrics(userId, year, monthIndex) {
     try {
         const { startStr, endStr } = getMonthRange(year, monthIndex);
         const { data, error } = await supabase
-            .from('daily_metrics')
-            .select('date, success_count, failure_count, pause_count')
-            .eq('user_id', userId)
-            .gte('date', startStr)
-            .lte('date', endStr)
-            .order('date', { ascending: true });
+            .from("daily_metrics")
+            .select("date, success_count, failure_count, pause_count")
+            .eq("user_id", userId)
+            .gte("date", startStr)
+            .lte("date", endStr)
+            .order("date", { ascending: true });
 
         if (error) throw error;
 
         return { success: true, metrics: data || [] };
     } catch (error) {
-        console.error('Erreur récupération métriques mensuelles:', error);
+        console.error("Erreur récupération métriques mensuelles:", error);
         return { success: false, error: error.message };
     }
 }
@@ -396,10 +437,10 @@ async function getMonthlyLiveHours(userId, year, monthIndex) {
         const startIso = monthStart.toISOString();
 
         const { data, error } = await supabase
-            .from('streaming_sessions')
-            .select('id, started_at, ended_at')
-            .eq('user_id', userId)
-            .lte('started_at', endIso)
+            .from("streaming_sessions")
+            .select("id, started_at, ended_at")
+            .eq("user_id", userId)
+            .lte("started_at", endIso)
             .or(`ended_at.gte.${startIso},ended_at.is.null`);
 
         if (error) throw error;
@@ -413,10 +454,10 @@ async function getMonthlyLiveHours(userId, year, monthIndex) {
 
         if (sessionIds.length > 0) {
             const { data: presenceRows, error: presenceError } = await supabase
-                .from('stream_viewers')
-                .select('stream_id, last_seen')
-                .eq('user_id', userId)
-                .in('stream_id', sessionIds);
+                .from("stream_viewers")
+                .select("stream_id, last_seen")
+                .eq("user_id", userId)
+                .in("stream_id", sessionIds);
 
             if (presenceError) {
                 presenceQueryFailed = true;
@@ -437,16 +478,19 @@ async function getMonthlyLiveHours(userId, year, monthIndex) {
         (data || []).forEach((session) => {
             if (!session.started_at) return;
             const start = new Date(session.started_at);
-            const explicitEndMs = session.ended_at ? new Date(session.ended_at).getTime() : 0;
+            const explicitEndMs = session.ended_at
+                ? new Date(session.ended_at).getTime()
+                : 0;
             const hostLastSeenMs = hostLastSeenByStreamId.get(session.id) || 0;
             let effectiveEndMs = explicitEndMs;
 
             if (!Number.isFinite(effectiveEndMs) || effectiveEndMs <= 0) {
                 if (hostLastSeenMs > 0) {
                     // If heartbeat is still fresh, consider the stream active now.
-                    effectiveEndMs = (nowMs - hostLastSeenMs) <= LIVE_PRESENCE_STALE_MS
-                        ? nowMs
-                        : hostLastSeenMs;
+                    effectiveEndMs =
+                        nowMs - hostLastSeenMs <= LIVE_PRESENCE_STALE_MS
+                            ? nowMs
+                            : hostLastSeenMs;
                 } else if (presenceQueryFailed) {
                     // Keep legacy behavior if presence lookup temporarily fails.
                     effectiveEndMs = nowMs;
@@ -458,7 +502,8 @@ async function getMonthlyLiveHours(userId, year, monthIndex) {
 
             if (!effectiveEndMs) return;
             const end = new Date(effectiveEndMs);
-            if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+            if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()))
+                return;
 
             const clampedStart = start < monthStart ? monthStart : start;
             const clampedEnd = end > monthEnd ? monthEnd : end;
@@ -477,10 +522,12 @@ async function getMonthlyLiveHours(userId, year, monthIndex) {
             }
         });
 
-        const liveHours = durations.map(ms => ms > 0 ? Math.ceil(ms / 3600000) : 0);
+        const liveHours = durations.map((ms) =>
+            ms > 0 ? Math.ceil(ms / 3600000) : 0,
+        );
         return { success: true, liveHours };
     } catch (error) {
-        console.error('Erreur récupération heures live:', error);
+        console.error("Erreur récupération heures live:", error);
         return { success: false, error: error.message };
     }
 }
@@ -493,7 +540,7 @@ function buildSeries(metrics, daysInMonth, liveHours = []) {
 
     metrics.forEach((m) => {
         if (!m.date) return;
-        const parts = m.date.split('-');
+        const parts = m.date.split("-");
         if (parts.length !== 3) return;
         const day = parseInt(parts[2], 10);
         if (!day || day < 1 || day > daysInMonth) return;
@@ -512,7 +559,11 @@ function buildSeries(metrics, daysInMonth, liveHours = []) {
     return { success, failure, pause, live };
 }
 
-function renderDashboardShell(months, selectedKey, containerId = 'analytics-dashboard') {
+function renderDashboardShell(
+    months,
+    selectedKey,
+    containerId = "analytics-dashboard",
+) {
     const domIds = getAnalyticsDomIds(containerId);
     const safeId = domIds.safeId;
     const dashId = domIds.containerId;
@@ -525,12 +576,14 @@ function renderDashboardShell(months, selectedKey, containerId = 'analytics-dash
 
     const dashboard = document.getElementById(dashId);
     if (!dashboard) return;
-    const showShareActions = containerId === 'analytics-dashboard';
+    const showShareActions = containerId === "analytics-dashboard";
 
-    const options = months.map((m) => {
-        const selected = m.key === selectedKey ? 'selected' : '';
-        return `<option value="${m.key}" ${selected}>${m.label}</option>`;
-    }).join('');
+    const options = months
+        .map((m) => {
+            const selected = m.key === selectedKey ? "selected" : "";
+            return `<option value="${m.key}" ${selected}>${m.label}</option>`;
+        })
+        .join("");
 
     const momentumId = `momentum-insight-${safeId}`;
 
@@ -545,7 +598,9 @@ function renderDashboardShell(months, selectedKey, containerId = 'analytics-dash
                     <select id="${selectId}" class="prestige-select">
                         ${options}
                     </select>
-                    ${showShareActions ? `
+                    ${
+                        showShareActions
+                            ? `
                         <div class="analytics-chart-actions">
                             <button class="analytics-action-btn" id="${downloadBtnId}" title="Télécharger">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -563,7 +618,9 @@ function renderDashboardShell(months, selectedKey, containerId = 'analytics-dash
                                 <span>Partager</span>
                             </button>
                         </div>
-                    ` : ''}
+                    `
+                            : ""
+                    }
                 </div>
             </div>
 
@@ -571,7 +628,7 @@ function renderDashboardShell(months, selectedKey, containerId = 'analytics-dash
                 <!-- Dynamiquement injecté par renderMonth -->
             </div>
 
-            ${showShareActions ? `<div id="${sharePanelId}" class="analytics-share-panel" style="display:none;"></div>` : ''}
+            ${showShareActions ? `<div id="${sharePanelId}" class="analytics-share-panel" style="display:none;"></div>` : ""}
 
             <div class="chart-prestige-wrap">
                 <canvas id="${canvasId}" height="320"></canvas>
@@ -582,7 +639,13 @@ function renderDashboardShell(months, selectedKey, containerId = 'analytics-dash
     `;
 }
 
-function renderMonthlyChart({ year, monthIndex, daysInMonth, series, containerId }) {
+function renderMonthlyChart({
+    year,
+    monthIndex,
+    daysInMonth,
+    series,
+    containerId,
+}) {
     const domIds = getAnalyticsDomIds(containerId);
     const safeId = domIds.safeId;
     const canvasId = domIds.canvasId;
@@ -595,7 +658,7 @@ function renderMonthlyChart({ year, monthIndex, daysInMonth, series, containerId
         ...series.failure,
         ...series.pause,
         ...series.live,
-        0
+        0,
     );
     // Dynamic scale: align chart height to the highest daily vector/value.
     const yMax = maxValue > 0 ? maxValue : 1;
@@ -605,39 +668,39 @@ function renderMonthlyChart({ year, monthIndex, daysInMonth, series, containerId
     }
 
     window.analyticsCharts[safeId] = new Chart(ctx, {
-        type: 'line',
+        type: "line",
         data: {
             labels,
             datasets: [
                 {
-                    label: 'Succès',
+                    label: "Succès",
                     data: series.success,
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(139, 92, 246, 0.12)',
-                    tension: 0.3
+                    borderColor: "#10b981",
+                    backgroundColor: "rgba(139, 92, 246, 0.12)",
+                    tension: 0.3,
                 },
                 {
-                    label: 'Échecs',
+                    label: "Échecs",
                     data: series.failure,
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                    tension: 0.3
+                    borderColor: "#ef4444",
+                    backgroundColor: "rgba(239, 68, 68, 0.12)",
+                    tension: 0.3,
                 },
                 {
-                    label: 'Pauses',
+                    label: "Pauses",
                     data: series.pause,
-                    borderColor: '#6366f1',
-                    backgroundColor: 'rgba(99, 102, 241, 0.12)',
-                    tension: 0.3
+                    borderColor: "#6366f1",
+                    backgroundColor: "rgba(99, 102, 241, 0.12)",
+                    tension: 0.3,
                 },
                 {
-                    label: 'Live (heures)',
+                    label: "Live (heures)",
                     data: series.live,
-                    borderColor: '#a855f7',
-                    backgroundColor: 'rgba(168, 85, 247, 0.12)',
-                    tension: 0.3
-                }
-            ]
+                    borderColor: "#a855f7",
+                    backgroundColor: "rgba(168, 85, 247, 0.12)",
+                    tension: 0.3,
+                },
+            ],
         },
         options: {
             responsive: true,
@@ -645,41 +708,41 @@ function renderMonthlyChart({ year, monthIndex, daysInMonth, series, containerId
             plugins: {
                 legend: {
                     labels: {
-                        color: '#ffffff'
-                    }
+                        color: "#ffffff",
+                    },
                 },
                 title: {
                     display: true,
                     text: formatMonthLabel(year, monthIndex),
-                    color: '#ffffff',
+                    color: "#ffffff",
                     font: {
                         size: 16,
-                        weight: '700'
-                    }
-                }
+                        weight: "700",
+                    },
+                },
             },
             scales: {
                 y: {
                     beginAtZero: true,
                     max: yMax,
                     ticks: {
-                        color: '#ffffff',
-                        stepSize: 1
+                        color: "#ffffff",
+                        stepSize: 1,
                     },
                     grid: {
-                        color: 'rgba(255,255,255,0.08)'
-                    }
+                        color: "rgba(255,255,255,0.08)",
+                    },
                 },
                 x: {
                     ticks: {
-                        color: '#ffffff'
+                        color: "#ffffff",
                     },
                     grid: {
-                        color: 'rgba(255,255,255,0.08)'
-                    }
-                }
-            }
-        }
+                        color: "rgba(255,255,255,0.08)",
+                    },
+                },
+            },
+        },
     });
 
     const existing = window.analyticsShareState[safeId] || {};
@@ -687,15 +750,20 @@ function renderMonthlyChart({ year, monthIndex, daysInMonth, series, containerId
         ...existing,
         year,
         monthIndex,
-        daysInMonth
+        daysInMonth,
     };
 }
 
-async function renderMonth(userId, year, monthIndex, containerId = 'analytics-dashboard') {
+async function renderMonth(
+    userId,
+    year,
+    monthIndex,
+    containerId = "analytics-dashboard",
+) {
     const { messageId } = getAnalyticsDomIds(containerId);
     const message = document.getElementById(messageId);
     if (message) {
-        message.textContent = 'Calcul de la vélocité...';
+        message.textContent = "Calcul de la vélocité...";
     }
 
     const { daysInMonth } = getMonthRange(year, monthIndex);
@@ -704,12 +772,14 @@ async function renderMonth(userId, year, monthIndex, containerId = 'analytics-da
 
     if (!metricsResult.success) {
         if (message) {
-            message.textContent = 'Erreur lors du chargement des données.';
+            message.textContent = "Erreur lors du chargement des données.";
         }
         return;
     }
 
-    const liveHours = liveResult.success ? liveResult.liveHours : Array(daysInMonth).fill(0);
+    const liveHours = liveResult.success
+        ? liveResult.liveHours
+        : Array(daysInMonth).fill(0);
     const series = buildSeries(metricsResult.metrics, daysInMonth, liveHours);
 
     renderMonthlyChart({ year, monthIndex, daysInMonth, series, containerId });
@@ -740,26 +810,31 @@ async function renderMonth(userId, year, monthIndex, containerId = 'analytics-da
                 </div>
             </div>
             <div class="insights-container-prestige">
-                ${insights.map(insight => `
+                ${insights
+                    .map(
+                        (insight) => `
                     <div class="insight-pill insight-${insight.type}">
                         <div class="insight-main">
                             <span class="insight-icon">${insight.icon}</span>
                             <span class="insight-text">${insight.text}</span>
                         </div>
-                        ${insight.command ? `<div class="insight-command">COMMAND: ${insight.command}</div>` : ''}
+                        ${insight.command ? `<div class="insight-command">COMMAND: ${insight.command}</div>` : ""}
                     </div>
-                `).join('')}
+                `,
+                    )
+                    .join("")}
             </div>
         `;
     }
 
-    const total = series.success.reduce((a, b) => a + b, 0)
-        + series.failure.reduce((a, b) => a + b, 0)
-        + series.pause.reduce((a, b) => a + b, 0)
-        + series.live.reduce((a, b) => a + b, 0);
+    const total =
+        series.success.reduce((a, b) => a + b, 0) +
+        series.failure.reduce((a, b) => a + b, 0) +
+        series.pause.reduce((a, b) => a + b, 0) +
+        series.live.reduce((a, b) => a + b, 0);
 
     if (message) {
-        message.textContent = total === 0 ? 'Aucune donnée pour ce mois.' : '';
+        message.textContent = total === 0 ? "Aucune donnée pour ce mois." : "";
     }
 }
 
@@ -767,41 +842,46 @@ async function renderAnalyticsDashboard(user, options = {}) {
     if (!user) return;
 
     const userId = user.id;
-    const containerId = options.containerId || 'analytics-dashboard';
+    const containerId = options.containerId || "analytics-dashboard";
     const months = buildMonthList(user.created_at);
     const nowInfo = getMonthInfo(new Date());
     const currentKey = monthKey(nowInfo.year, nowInfo.monthIndex);
 
     renderDashboardShell(months, currentKey, containerId);
 
-    const { safeId, selectId, shareBtnId, downloadBtnId } = getAnalyticsDomIds(containerId);
+    const { safeId, selectId, shareBtnId, downloadBtnId } =
+        getAnalyticsDomIds(containerId);
     window.analyticsShareState[safeId] = {
         ...(window.analyticsShareState[safeId] || {}),
         userId,
-        userName: user.name || user.username || 'Profil'
+        userName: user.name || user.username || "Profil",
     };
     const select = document.getElementById(selectId);
     if (!select) return;
 
     const getSelectedMonth = () => {
-        const [yearStr, monthStr] = select.value.split('-');
+        const [yearStr, monthStr] = select.value.split("-");
         const year = parseInt(yearStr, 10);
         const monthIndex = parseInt(monthStr, 10) - 1;
         return { year, monthIndex };
     };
 
-    select.addEventListener('change', () => {
+    select.addEventListener("change", () => {
         const { year, monthIndex } = getSelectedMonth();
         renderMonth(userId, year, monthIndex, containerId);
     });
 
     const shareBtn = document.getElementById(shareBtnId);
     if (shareBtn) {
-        shareBtn.addEventListener('click', () => shareAnalyticsChart(containerId));
+        shareBtn.addEventListener("click", () =>
+            shareAnalyticsChart(containerId),
+        );
     }
     const downloadBtn = document.getElementById(downloadBtnId);
     if (downloadBtn) {
-        downloadBtn.addEventListener('click', () => downloadAnalyticsChart(containerId));
+        downloadBtn.addEventListener("click", () =>
+            downloadAnalyticsChart(containerId),
+        );
     }
 
     const { year, monthIndex } = getSelectedMonth();
@@ -810,13 +890,15 @@ async function renderAnalyticsDashboard(user, options = {}) {
 
 async function renderProfileAnalytics(userId) {
     if (!userId) return;
-    const container = document.getElementById('profile-analytics');
+    const container = document.getElementById("profile-analytics");
     if (!container) return;
 
-    const user = typeof getUser === 'function' ? getUser(userId) : null;
+    const user = typeof getUser === "function" ? getUser(userId) : null;
     const userData = user || { id: userId };
 
-    await renderAnalyticsDashboard(userData, { containerId: 'profile-analytics' });
+    await renderAnalyticsDashboard(userData, {
+        containerId: "profile-analytics",
+    });
 }
 
 window.cleanupAnalytics = cleanupAnalytics;

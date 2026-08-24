@@ -36,7 +36,7 @@ const {
     RETURN_REMINDER_SWEEP_MS = "600000",
     RETURN_REMINDER_EMAIL_ENABLED = "0",
     RETURN_REMINDER_EMAIL_PROVIDER = "none",
-    RETURN_REMINDER_EMAIL_FROM = "XERA <hello@xera1.xyz>",
+    RETURN_REMINDER_EMAIL_FROM = "XERA1 <hello@xera1.xyz>",
     RETURN_REMINDER_EMAIL_REPLY_TO = "hello@xera1.xyz",
     RETURN_REMINDER_EMAIL_API_KEY = "",
     RETURN_REMINDER_EMAIL_WEBHOOK_URL = "",
@@ -382,10 +382,10 @@ function renderOpenGraphSharePage({
     type = "website",
 }) {
     const safeTitle = escapeHtmlAttr(
-        title || "XERA | Tracez votre progression",
+        title || "XERA1 | Tracez votre progression",
     );
     const safeDescription = escapeHtmlAttr(
-        description || "Découvrez les trajectoires créatives sur XERA",
+        description || "Découvrez les trajectoires créatives sur XERA1",
     );
     const safeImage = escapeHtmlAttr(image || DEFAULT_SHARE_IMAGE_URL);
     const safeUrl = escapeHtmlAttr(url || PRIMARY_ORIGIN);
@@ -415,9 +415,9 @@ function renderOpenGraphSharePage({
 </head>
 <body>
     <main>
-        <h1>${escapeHtmlText(title || "XERA")}</h1>
-        <p>${escapeHtmlText(description || "Ouverture de XERA...")}</p>
-        <p><a href="${safeTargetUrl}">Ouvrir dans XERA</a></p>
+        <h1>${escapeHtmlText(title || "XERA1")}</h1>
+        <p>${escapeHtmlText(description || "Ouverture de XERA1...")}</p>
+        <p><a href="${safeTargetUrl}">Ouvrir dans XERA1</a></p>
     </main>
 </body>
 </html>`;
@@ -446,10 +446,10 @@ async function handleContentSharePage(req, res) {
             `/index.html?content=${encodeURIComponent(content.id)}`,
         );
         const html = renderOpenGraphSharePage({
-            title: content.title || "Contenu XERA",
+            title: content.title || "Contenu XERA1",
             description: summarizeShareDescription(
                 content.description,
-                "Découvrez ce contenu sur XERA",
+                "Découvrez ce contenu sur XERA1",
             ),
             image: pickShareImage(content),
             url: shareUrl,
@@ -480,7 +480,7 @@ async function handleProfileSharePage(req, res) {
         if (error) throw error;
         if (!user) return res.status(404).send("Profile not found");
 
-        const displayName = user.name || "Profil XERA";
+        const displayName = user.name || "Profil XERA1";
         const shareUrl = buildAbsoluteAppUrl(
             `/share/profile/${encodeURIComponent(user.id)}`,
         );
@@ -488,10 +488,10 @@ async function handleProfileSharePage(req, res) {
             `/profile?user=${encodeURIComponent(user.id)}`,
         );
         const html = renderOpenGraphSharePage({
-            title: `${displayName} | XERA`,
+            title: `${displayName} | XERA1`,
             description: summarizeShareDescription(
                 user.bio || user.title,
-                "Découvrez ce profil sur XERA",
+                "Découvrez ce profil sur XERA1",
             ),
             image: pickShareImage(user),
             url: shareUrl,
@@ -2544,7 +2544,7 @@ function buildNotificationPushPayload(notification) {
         stream: "Live en cours",
     };
 
-    const title = typeTitleMap[notification?.type] || "Notification XERA";
+    const title = typeTitleMap[notification?.type] || "Notification XERA1";
     const icon = `${PRIMARY_ORIGIN.replace(/\/$/, "")}/icons/logo.png`;
     const rawLink = String(notification?.link || "").trim();
     const link = rawLink
@@ -2645,7 +2645,9 @@ async function sendPushToUser(userId, payload) {
                         const message = {
                             tokens,
                             notification: {
-                                title: String(payloadWithBadge.title || "XERA"),
+                                title: String(
+                                    payloadWithBadge.title || "XERA1",
+                                ),
                                 body: String(payloadWithBadge.body || ""),
                                 image: String(payloadWithBadge.icon || ""),
                             },
@@ -2884,7 +2886,7 @@ async function confirmSupportPayment({
                 description:
                     description ||
                     pendingPayment?.description ||
-                    "Soutien XERA",
+                    "Soutien XERA1",
                 metadata: mergedMetadata,
             })
             .eq("id", pendingTransactionId);
@@ -2901,7 +2903,7 @@ async function confirmSupportPayment({
                 amount_commission_xera: breakdown.commission,
                 currency: "USD",
                 status: "succeeded",
-                description: description || "Soutien XERA",
+                description: description || "Soutien XERA1",
                 metadata: mergedMetadata,
             })
             .select("id")
@@ -3092,11 +3094,11 @@ function buildReminderEmailLayout({
         .filter(Boolean);
     const safeGreeting = String(greeting || "Bonjour,").trim() || "Bonjour,";
     const safeHeadline = String(headline || "").trim();
-    const safeCtaLabel = String(ctaLabel || "Découvrir sur XERA").trim();
+    const safeCtaLabel = String(ctaLabel || "Découvrir sur XERA1").trim();
     const safeCtaUrl = String(ctaUrl || buildDiscoverReminderUrl()).trim();
     const safeFooter = String(
         footer ||
-            "Tu reçois ce message car tu as activé les notifications par email sur XERA. Tu peux les désactiver à tout moment dans tes réglages.",
+            "Tu reçois ce message car tu as activé les notifications par email sur XERA1. Tu peux les désactiver à tout moment dans tes réglages.",
     ).trim();
 
     const htmlParagraphs = safeLines
@@ -3137,7 +3139,7 @@ function buildReminderEmailLayout({
           <!-- Header -->
           <tr>
             <td style="padding:40px 40px 24px 40px;text-align:left;">
-              <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA" style="width:56px;height:56px;border-radius:14px;display:block;" />
+              <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA1" style="width:56px;height:56px;border-radius:14px;display:block;" />
             </td>
           </tr>
 
@@ -3145,7 +3147,7 @@ function buildReminderEmailLayout({
           <tr>
             <td style="padding:0 40px 40px 40px;">
               <div style="font-size:12px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#6366f1;margin-bottom:16px;">
-                ${escapeHtmlAttr(eyebrow || "XERA Update")}
+                ${escapeHtmlAttr(eyebrow || "XERA1 Update")}
               </div>
               <h1 style="margin:0 0 20px 0;font-size:28px;font-weight:900;line-height:1.2;color:#111827;letter-spacing:-0.02em;">
                 ${escapeHtmlAttr(safeHeadline)}
@@ -3171,7 +3173,7 @@ function buildReminderEmailLayout({
                 ${escapeHtmlAttr(safeFooter)}
               </p>
               <div style="margin-top:24px;font-size:12px;color:#9ca3af;font-weight:500;">
-                &copy; ${new Date().getFullYear()} XERA. Tous droits réservés.
+                &copy; ${new Date().getFullYear()} XERA1. Tous droits réservés.
               </div>
             </td>
           </tr>
@@ -3198,7 +3200,7 @@ function buildDailyPostReminderCampaign(user, context, slot) {
     const greeting = user.name ? `Bonjour ${user.name},` : "Bonjour,";
     const variants = [
         {
-            subject: `XERA - ${arcTitle} t'attend toujours`,
+            subject: `XERA1 - ${arcTitle} t'attend toujours`,
             headline: "Si tu as 30 secondes, reviens nous montrer ou tu en es.",
             bodyLines: [
                 `Ton projet "${arcTitle}" est toujours en cours.`,
@@ -3207,7 +3209,7 @@ function buildDailyPostReminderCampaign(user, context, slot) {
             ctaLabel: "Revenir poster",
         },
         {
-            subject: `XERA - On n'a pas oublie ${arcTitle}`,
+            subject: `XERA1 - On n'a pas oublie ${arcTitle}`,
             headline: "On n'a pas oublie ton projet.",
             bodyLines: [
                 `Tu peux revenir sur "${arcTitle}" quand tu veux.`,
@@ -3216,7 +3218,7 @@ function buildDailyPostReminderCampaign(user, context, slot) {
             ctaLabel: "Ouvrir mon update",
         },
         {
-            subject: `XERA - Tu veux remettre ${arcTitle} en mouvement ?`,
+            subject: `XERA1 - Tu veux remettre ${arcTitle} en mouvement ?`,
             headline: "Tu peux remettre ton projet en mouvement aujourd'hui.",
             bodyLines: [
                 `"${arcTitle}" merite sa petite mise a jour du jour.`,
@@ -3225,7 +3227,7 @@ function buildDailyPostReminderCampaign(user, context, slot) {
             ctaLabel: "Publier en un clic",
         },
         {
-            subject: `XERA - Un petit signe de vie pour ${arcTitle} ?`,
+            subject: `XERA1 - Un petit signe de vie pour ${arcTitle} ?`,
             headline: "Un petit signe de vie suffit.",
             bodyLines: [
                 `Si tu avances sur "${arcTitle}", viens nous montrer ca.`,
@@ -3278,7 +3280,7 @@ function buildInactiveReengagementCampaign(user, context, now) {
     const ctaUrl = `${PRIMARY_ORIGIN.replace(/\/$/, "")}/index.html?dashboard=1`;
     const greeting = user.name ? `Salut ${user.name},` : "Salut,";
 
-    const subject = "Ça bouge fort sur XERA 🚀 (tu manques à l'appel)";
+    const subject = "Ça bouge fort sur XERA1 🚀 (tu manques à l'appel)";
     const headline =
         "Ça fait une semaine que tu ne t'es pas connecté, et franchement, tu rates pas mal de choses.";
     const bodyLines = [
@@ -3330,7 +3332,7 @@ function buildSocialProgressCampaign(user, context, now) {
     const greeting = user.name ? `Bonjour ${user.name},` : "Bonjour,";
     const variants = [
         {
-            subject: `XERA - ${authorName} a publie quelque chose de nouveau`,
+            subject: `XERA1 - ${authorName} a publie quelque chose de nouveau`,
             headline: "Ca bouge encore du cote des comptes que tu suis.",
             bodyLines: [
                 `${authorName} a partage ${activityTitle}.`,
@@ -3340,7 +3342,7 @@ function buildSocialProgressCampaign(user, context, now) {
         },
         {
             subject:
-                "XERA - Pendant ton absence, quelques updates sont tombees",
+                "XERA1 - Pendant ton absence, quelques updates sont tombees",
             headline: "Tu as peut-etre manque deux ou trois choses.",
             bodyLines: [
                 `${activityCount} update${activityCount > 1 ? "s" : ""} recente${activityCount > 1 ? "s" : ""} viennent d'apparaitre chez les comptes que tu suis.`,
@@ -3349,16 +3351,16 @@ function buildSocialProgressCampaign(user, context, now) {
             ctaLabel: "Retourner dans l'app",
         },
         {
-            subject: "XERA - Les autres avancent, et ta place est toujours la",
+            subject: "XERA1 - Les autres avancent, et ta place est toujours la",
             headline: "Les autres avancent, et ta place est toujours la.",
             bodyLines: [
                 `${authorName} et d'autres continuent a documenter leur progression.`,
                 "Reviens voir ce qui se passe et poster la tienne quand tu veux.",
             ],
-            ctaLabel: "Revenir sur XERA",
+            ctaLabel: "Revenir sur XERA1",
         },
         {
-            subject: "XERA - Il y a du nouveau dans ton reseau",
+            subject: "XERA1 - Il y a du nouveau dans ton reseau",
             headline: "Il y a du nouveau dans ton reseau.",
             bodyLines: [
                 `${authorName} bouge, et tu n'es pas loin de reprendre toi aussi.`,
@@ -3372,7 +3374,7 @@ function buildSocialProgressCampaign(user, context, now) {
         variants,
     );
     const layout = buildReminderEmailLayout({
-        eyebrow: "Pendant ce temps sur XERA",
+        eyebrow: "Pendant ce temps sur XERA1",
         greeting,
         headline: variant.headline,
         bodyLines: variant.bodyLines,
@@ -3784,7 +3786,7 @@ async function sweepReturnReminderPush(now = new Date()) {
 
         try {
             const pushPayload = JSON.stringify({
-                title: campaign.subject.replace("XERA - ", "XERA • "),
+                title: campaign.subject.replace("XERA1 - ", "XERA1 • "),
                 body: campaign.text
                     .split("\n")
                     .filter((l) => l.trim())
@@ -4436,11 +4438,11 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
         }
 
         const layout = buildReminderEmailLayout({
-            eyebrow: "Annonce XERA",
+            eyebrow: "Annonce XERA1",
             greeting: "Bonjour,",
             headline: subject,
             bodyLines: body.split("\n"),
-            ctaLabel: ctaLabel || "Ouvrir XERA",
+            ctaLabel: ctaLabel || "Ouvrir XERA1",
             ctaUrl: ctaUrl || buildDiscoverReminderUrl(),
         });
 
@@ -4481,7 +4483,7 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
                         }
                         const payload = {
                             to: user.email,
-                            subject: `XERA - ${subject}`,
+                            subject: `XERA1 - ${subject}`,
                             html: layout.html,
                             text: layout.text,
                         };
@@ -5091,7 +5093,7 @@ app.post("/api/monetization/support", async (req, res) => {
                 amount_commission_xera: breakdown.commission,
                 currency: "USD",
                 status: "succeeded",
-                description: description || "Soutien XERA",
+                description: description || "Soutien XERA1",
                 metadata,
             })
             .select(

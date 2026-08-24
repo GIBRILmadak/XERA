@@ -135,7 +135,7 @@ class XeraNudgeManager {
                 this.showNudge({
                     id: "nudge-first-project-generic",
                     title: "Documentez votre effort",
-                    message: "XERA est conçu pour transformer votre progression en preuve. Lancez votre premier ARC pour commencer.",
+                    message: "XERA1 est conçu pour transformer votre progression en preuve. Lancez votre premier ARC pour commencer.",
                     actionLabel: "Lancer un projet",
                     onAction: () => window.openCreateModal()
                 });

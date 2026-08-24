@@ -729,6 +729,26 @@ async function handleFileSelection(
             }
         }
 
+        let c2paInspection = null;
+        if (typeof inspectMediaC2PA === "function") {
+            try {
+                c2paInspection = await inspectMediaC2PA(file);
+                if (c2paInspection && c2paInspection.isAI) {
+                    console.info(
+                        "C2PA AI metadata detected before compression:",
+                        c2paInspection,
+                    );
+                }
+                file.__xeraC2PA = c2paInspection;
+                window.__xeraLatestMediaC2PA = c2paInspection;
+            } catch (error) {
+                console.warn(
+                    "Inspection C2PA ignorée avant compression:",
+                    error,
+                );
+            }
+        }
+
         if (preview && isAllowedImageFile(file)) {
             createImagePreview(file, (dataUrl) => {
                 if (typeof preview === "function") {
@@ -748,8 +768,14 @@ async function handleFileSelection(
         if (shouldCompress) {
             try {
                 fileToUpload = await compressImage(file);
+                if (c2paInspection) {
+                    fileToUpload.__xeraC2PA = c2paInspection;
+                }
             } catch (error) {
                 console.error("Erreur compression:", error);
+                if (c2paInspection) {
+                    fileToUpload.__xeraC2PA = c2paInspection;
+                }
             }
         }
 
@@ -775,6 +801,14 @@ async function handleFileSelection(
                     console.error("Erreur onAfterUpload:", e);
                 }
             }
+        }
+
+        if (result && c2paInspection) {
+            result.c2pa = c2paInspection;
+            result.is_ai = !!c2paInspection.isAI;
+            result.provenance = c2paInspection.provenance || null;
+            result.source = c2paInspection.source || null;
+            window.__xeraLatestMediaC2PA = c2paInspection;
         }
 
         uploadedFiles[currentIndex] = result;

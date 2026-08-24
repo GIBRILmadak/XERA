@@ -352,7 +352,7 @@ function getNotificationTitle(notification) {
         mention: "Tu as été cité",
         achievement: "Palier franchi",
     };
-    return titles[notification.type] || "XERA";
+    return titles[notification.type] || "XERA1";
 }
 
 function getCurrentPageStreamId() {
@@ -515,7 +515,7 @@ function showBrowserNotification(notification) {
 }
 
 async function showDeviceNotification({
-    title = "XERA",
+    title = "XERA1",
     body = "",
     icon = "icons/logo.png",
     tag = undefined,
@@ -633,7 +633,7 @@ async function showReturnReminderNotification(reminderDate = new Date()) {
     const isMorning = hour < 14;
 
     // Neuro-Psychologie : Framing d'identité et de momentum
-    const title = isMorning ? "XERA • L'Intention" : "XERA • La Trace";
+    const title = isMorning ? "XERA1 • L'Intention" : "XERA1 • La Trace";
 
     const body = isMorning
         ? "Quelle est ta micro-victoire d'aujourd'hui ? Fixe l'intention."

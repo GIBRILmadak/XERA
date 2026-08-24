@@ -120,7 +120,7 @@ function xeraGetContentId(content) {
 }
 
 function xeraGetContentTitle(content) {
-    return content?.title || "Trace XERA";
+    return content?.title || "Trace XERA1";
 }
 
 function xeraGetContentDescription(content) {
@@ -1491,7 +1491,7 @@ function renderProofCardMarkup(arc, content) {
             ? `Jour ${content.day_number}`
             : `J${calculateDaysSince(arc.start_date)}`;
     const description = xeraGetContentDescription(content) || arc.goal || "";
-    const author = arc.users?.name || "Builder XERA";
+    const author = arc.users?.name || "Builder XERA1";
     const mediaUrl = content?.media_url || arc.media_url;
     const mediaHtml = mediaUrl
         ? `<div class="xera-proof-media" style="background-image:url('${xeraEscapeHtml(mediaUrl)}')"></div>`

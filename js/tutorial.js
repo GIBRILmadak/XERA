@@ -12,7 +12,7 @@ const GUEST_TUTORIAL_STEPS = [
         id: "vision",
         title: "Standardiser la Confiance",
         message:
-            "Le but de XERA est de standardiser la confiance technique et d'éliminer l'asymétrie d'information entre les créateurs de technologie et le marché mondial. Prouvez votre valeur par l'action grâce à la <strong>Proof of Building</strong>.",
+            "Le but de XERA1 est de standardiser la confiance technique et d'éliminer l'asymétrie d'information entre les créateurs de technologie et le marché mondial. Prouvez votre valeur par l'action grâce à la <strong>Proof of Building</strong>.",
         element: null,
         position: "center",
     },

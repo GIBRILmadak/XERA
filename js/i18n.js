@@ -27,9 +27,10 @@
             heroEyebrow: "TRACK YOUR GOALS WITH PROJECTS",
             heroTitle: "Turn your progress into opportunities.",
             heroLede:
-                "XERA is a progression infrastructure where builders document their work, attract the right audiences (investors, collaborators, community) and transform their progress into real reputation.",
+                "XERA1 is a progression infrastructure where builders document their work, attract the right audiences (investors, collaborators, community) and transform their progress into real reputation.",
             heroBullet1: "Create a project or goal",
-            heroBullet2: "Publish your track record with evidence, target those who see your progress, attract collaborators, investors, or financial support",
+            heroBullet2:
+                "Publish your track record with evidence, target those who see your progress, attract collaborators, investors, or financial support",
             heroBullet3: "Build a reputation based on execution",
             heroCTA: "Start your first project",
             heroWatch: "Watch 60s demo",
@@ -49,11 +50,12 @@
             heroEyebrow: "SUIVEZ VOS OBJECTIFS AVEC LES PROJETS",
             heroTitle: "Transformez votre progression en opportunités.",
             heroLede:
-                "XERA est une infrastructure de progression où les builders documentent leur travail, attirent les bonnes audiences (investisseurs, collaborateurs, communauté) et transforment leurs avancées en réputation réelle.",
+                "XERA1 est une infrastructure de progression où les builders documentent leur travail, attirent les bonnes audiences (investisseurs, collaborateurs, communauté) et transforment leurs avancées en réputation réelle.",
             heroBullet1: "Créez des projets (plans du début à la fin)",
             heroBullet2:
                 "Publiez vos traces avec preuves,Ciblez qui voit votre progression",
-            heroBullet3: "Attirez collaborateurs, investisseurs ou soutien financier, et Construisez une réputation basée sur l’exécution",
+            heroBullet3:
+                "Attirez collaborateurs, investisseurs ou soutien financier, et Construisez une réputation basée sur l’exécution",
             heroCTA: "Lancez votre premier projet",
             heroWatch: "Voir la démo 60s",
             heroMeta:

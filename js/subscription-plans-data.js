@@ -264,13 +264,13 @@
         }),
         Object.freeze({
             id: "commission",
-            question: "Quelle commission prend XERA ?",
-            answer: "XERA prélève une commission de 20% sur chaque transaction. Cela signifie que vous recevez 80% du montant des soutiens. Par exemple, pour un soutien de $10, vous recevez $8 net.",
+            question: "Quelle commission prend XERA1 ?",
+            answer: "XERA1 prélève une commission de 20% sur chaque transaction. Cela signifie que vous recevez 80% du montant des soutiens. Par exemple, pour un soutien de $10, vous recevez $8 net.",
         }),
         Object.freeze({
             id: "video-monetization",
             question: "Comment fonctionne la monétisation vidéo ?",
-            answer: "Avec le plan Pro, vous gagnez $0.40 pour chaque 1000 vues sur vos vidéos de plus de 60 secondes. Les revenus sont calculés mensuellement et versés sur votre compte KPay, moins la commission de 20% de XERA.",
+            answer: "Avec le plan Pro, vous gagnez $0.40 pour chaque 1000 vues sur vos vidéos de plus de 60 secondes. Les revenus sont calculés mensuellement et versés sur votre compte KPay, moins la commission de 20% de XERA1.",
         }),
         Object.freeze({
             id: "switch-plan",
