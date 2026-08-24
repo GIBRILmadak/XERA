@@ -1150,7 +1150,7 @@ function isMobileDevice() {
 function getInitialProfileUserId() {
     try {
         const params = new URLSearchParams(window.location.search);
-        return params.get("user") || params.get("u");
+        return params.get("user") || params.get("u") || params.get("id");
     } catch (error) {
         return null;
     }
@@ -15973,7 +15973,9 @@ async function renderProfileIntoContainer(userId) {
 
     const hasLegacyProfileUserId =
         window.location.pathname.includes("/profile") &&
-        new URLSearchParams(window.location.search).has("user");
+        (new URLSearchParams(window.location.search).has("user") ||
+            new URLSearchParams(window.location.search).has("u") ||
+            new URLSearchParams(window.location.search).has("id"));
 
     if (
         (isPageProRoute() || hasLegacyProfileUserId) &&
