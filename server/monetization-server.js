@@ -3308,6 +3308,55 @@ function buildInactiveReengagementCampaign(user, context, now) {
     };
 }
 
+function buildNoProjectCampaign(user, context, now) {
+    if (
+        !Number.isFinite(context.accountAgeDays) ||
+        context.accountAgeDays < 1
+    ) {
+        return null;
+    }
+    if (
+        isSentRecently(user.last_no_project_reminder_sent_at, 7 * DAY_MS, now)
+    ) {
+        return null;
+    }
+
+    const displayName = String(user.name || "").trim();
+    const greeting = displayName ? `Salut ${displayName} 👋` : "Salut 👋";
+    const ctaUrl = buildDiscoverReminderUrl();
+    const layout = buildReminderEmailLayout({
+        eyebrow: "Bienvenue sur XERA1",
+        greeting,
+        headline:
+            "Ton histoire est peut-être encore en train d'attendre d'être racontée.",
+        bodyLines: [
+            "Tu as créé ton compte sur XERA1.",
+            "Chaque jour, de nouveaux développeurs, designers, étudiants et entrepreneurs rejoignent XERA1 pour montrer ce qu'ils construisent réellement.",
+            "Aujourd'hui, ton profil est peut-être vide... alors que toi, tu ne l'es probablement pas.",
+            "Prends 5 minutes aujourd'hui :",
+            "✅ Complète ton profil",
+            "✅ Ajoute tes compétences",
+            "✅ Présente ton projet actuel",
+            "✅ Publie ton premier post",
+            "Tu n'as pas besoin d'attendre que ton projet soit terminé. Les meilleurs builders documentent leur progression au fur et à mesure.",
+            "Le badge Membre Pionnier Vérifié est réservé aux membres qui démontrent réellement leur travail : profil complété, activité authentique et au moins 5 publications documentant un vrai projet.",
+            "Merci de faire partie des premiers builders qui construisent XERA1 avec nous. Chaque retour, chaque publication et chaque projet partagé contribue à construire une communauté où les réalisations comptent plus que les promesses.",
+            "À bientôt,\nL'équipe XERA1",
+        ],
+        ctaLabel: "Retourner sur XERA1",
+        ctaUrl,
+        footer: "XERA1 inc • XERA1",
+    });
+
+    return {
+        type: "no_project",
+        subject: "XERA1 - Ton histoire attend d'être racontée",
+        html: layout.html,
+        text: layout.text,
+        ctaUrl,
+    };
+}
+
 function buildSocialProgressCampaign(user, context, now) {
     const noRecentPost = !Number.isFinite(context.inactivityDays);
     if (
@@ -3512,6 +3561,7 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
             lastOwnDateKey && lastOwnDateKey === dateKey,
         );
         const inactivityDays = getDaysSince(lastOwnContent?.created_at, now);
+        const accountAgeDays = getDaysSince(user.created_at, now);
         const projectAgeDays = oldestActiveArc?.created_at
             ? getDaysSince(oldestActiveArc.created_at, now)
             : 0;
@@ -3543,6 +3593,7 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
             lastOwnContent,
             hasPostedToday,
             inactivityDays,
+            accountAgeDays,
             projectAgeDays,
             socialSignal:
                 socialCandidates.length > 0
@@ -3564,6 +3615,9 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
 function selectReminderCampaign(user, context, now = new Date()) {
     if (!user || !context) return null;
     return (
+        (!context.activeArcs || context.activeArcs.length === 0
+            ? buildNoProjectCampaign(user, context, now)
+            : null) ||
         buildInactiveReengagementCampaign(user, context, now) ||
         buildSocialProgressCampaign(user, context, now) ||
         buildDailyPostReminderCampaign(user, context, context.slot)
@@ -3670,7 +3724,7 @@ async function sweepReturnReminderEmails(now = new Date()) {
     const { data: users, error } = await supabase
         .from("users")
         .select(
-            "id, name, email_reminder_enabled, email_reminder_timezone, last_email_reminder_slot, last_inactive_reminder_sent_at, last_social_progress_email_sent_at",
+            "id, name, created_at, email_reminder_enabled, email_reminder_timezone, last_email_reminder_slot, last_inactive_reminder_sent_at, last_no_project_reminder_sent_at, last_social_progress_email_sent_at",
         )
         .eq("email_reminder_enabled", true);
 
@@ -3723,6 +3777,9 @@ async function sweepReturnReminderEmails(now = new Date()) {
         }
         if (campaign.type === "inactive_week") {
             updatePayload.last_inactive_reminder_sent_at = now.toISOString();
+        }
+        if (campaign.type === "no_project") {
+            updatePayload.last_no_project_reminder_sent_at = now.toISOString();
         }
         if (campaign.type === "social_progress") {
             updatePayload.last_social_progress_email_sent_at =
