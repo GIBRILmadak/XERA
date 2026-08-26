@@ -1198,7 +1198,7 @@ window.showDeviceNotification = showDeviceNotification;
 
 document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
-    if (!currentUser) return;
+    if (!window.currentUser) return;
     loadNotifications().catch((error) => {
         console.warn("Notifications visibility refresh failed:", error);
     });

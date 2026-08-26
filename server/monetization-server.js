@@ -6,7 +6,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const webpush = require("web-push");
 const crypto = require("crypto");
 const { buildBotPostDraft } = require("./bot-post-generator");
-const oauthHandler = require("./oauth-handler");
+const oauthHandler = require("./o²  dler");
 const { startOAuthRefreshScheduler } = require("./oauth-token-manager");
 const { startIngestionWorker } = require("./ingestion-queue");
 const { normalizeReturnPathForBrowser } = require("./payment-return-paths");
@@ -606,6 +606,16 @@ const PROTECTED_BADGES = new Set([
     "enterprise",
     "ambassador",
 ]);
+
+async function approvePaidVerificationRequest(userId) {
+    if (!userId) return;
+    const { error } = await supabase
+        .from("verification_requests")
+        .update({ status: "approved" })
+        .eq("user_id", userId)
+        .eq("status", "pending");
+    if (error) throw error;
+}
 
 /**
  * Calcule les fonctionnalités premium selon le plan
@@ -2114,6 +2124,15 @@ async function sweepExpiredSubscriptions() {
 
         if (usersError) throw usersError;
 
+        try {
+            await notifyUpcomingSubscriptionExpiries();
+        } catch (notificationError) {
+            console.warn(
+                "Subscription expiry notification warning:",
+                notificationError?.message || notificationError,
+            );
+        }
+
         const userIds = (expiredUsers || [])
             .map((row) => row.id)
             .filter(Boolean);
@@ -2216,6 +2235,11 @@ async function activateSubscription({
             throw new Error("Paiement en attente introuvable.");
         }
         if (String(data.status || "").toLowerCase() === "succeeded") {
+            if (
+                ["standard", "medium", "pro", "elite"].includes(normalizedPlan)
+            ) {
+                await approvePaidVerificationRequest(userId);
+            }
             const { data: existingUser } = await supabase
                 .from("users")
                 .select("*")
@@ -2241,6 +2265,11 @@ async function activateSubscription({
             .eq("status", "succeeded")
             .maybeSingle();
         if (existing?.id && existing.id !== pendingTransactionId) {
+            if (
+                ["standard", "medium", "pro", "elite"].includes(normalizedPlan)
+            ) {
+                await approvePaidVerificationRequest(userId);
+            }
             const { data: existingUser } = await supabase
                 .from("users")
                 .select("*")
@@ -2412,6 +2441,24 @@ async function activateSubscription({
         transactionId = insertedTransaction?.id || null;
     }
 
+    if (["standard", "medium", "pro", "elite"].includes(normalizedPlan)) {
+        await approvePaidVerificationRequest(userId);
+    }
+
+    try {
+        await notifySubscriptionActivation({
+            userId,
+            plan,
+            billingCycle,
+            planEndsAt: updatedUser?.plan_ends_at || periodEndIso,
+        });
+    } catch (notificationError) {
+        console.warn(
+            "Subscription activation notification warning:",
+            notificationError?.message || notificationError,
+        );
+    }
+
     invalidateUserAppCaches(userId);
 
     return {
@@ -2517,6 +2564,108 @@ async function createNotificationRecord({
     }
 }
 
+async function createUniqueSubscriptionNotification({
+    userId,
+    type,
+    message,
+    planEndsAt,
+    link,
+}) {
+    if (!userId || !type || !message) return false;
+
+    const { data: existing, error: lookupError } = await supabase
+        .from("notifications")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("type", type)
+        .eq("message", message)
+        .limit(1);
+    if (lookupError) throw lookupError;
+    if (existing?.length) return false;
+
+    const notification = await createNotificationRecord({
+        userId,
+        type,
+        message,
+        link,
+        metadata: { plan_ends_at: planEndsAt },
+    });
+    return Boolean(notification);
+}
+
+async function notifySubscriptionActivation({
+    userId,
+    plan,
+    billingCycle,
+    planEndsAt,
+}) {
+    const planLabel = String(plan || "").toUpperCase();
+    const cycleLabel =
+        String(billingCycle || "monthly").toLowerCase() === "annual"
+            ? "annuel"
+            : "mensuel";
+    const expiryLabel = planEndsAt
+        ? new Date(planEndsAt).toLocaleDateString("fr-FR")
+        : "la fin de votre période";
+
+    return createUniqueSubscriptionNotification({
+        userId,
+        type: "subscription_activated",
+        message: `Paiement KPay confirmé : votre plan ${planLabel} ${cycleLabel} et votre badge sont actifs jusqu'au ${expiryLabel}.`,
+        planEndsAt,
+        link: "profile.html",
+    });
+}
+
+async function notifySubscriptionExpiryReminder(user, daysRemaining) {
+    const expiryLabel = new Date(user.plan_ends_at).toLocaleDateString("fr-FR");
+    const message =
+        daysRemaining === 0
+            ? `Votre abonnement ${String(user.plan || "").toUpperCase()} et votre badge expirent aujourd'hui (${expiryLabel}). Renouvelez votre abonnement pour conserver vos avantages.`
+            : `Votre abonnement ${String(user.plan || "").toUpperCase()} et votre badge expirent dans ${daysRemaining} jours (${expiryLabel}). Renouvelez votre abonnement pour conserver vos avantages.`;
+
+    return createUniqueSubscriptionNotification({
+        userId: user.id,
+        type: `subscription_expiry_${daysRemaining}d`,
+        message,
+        planEndsAt: user.plan_ends_at,
+        link: "subscription-plans.html",
+    });
+}
+
+async function notifyUpcomingSubscriptionExpiries() {
+    const now = Date.now();
+    const windowMs = Math.max(SUBSCRIPTION_SWEEP_MS || 0, 10 * 60 * 1000);
+    const { data: users, error } = await supabase
+        .from("users")
+        .select("id, plan, plan_status, plan_ends_at")
+        .eq("plan_status", "active")
+        .not("plan_ends_at", "is", null);
+    if (error) throw error;
+
+    let sentCount = 0;
+    for (const user of users || []) {
+        if (!isValidPlanId(user.plan) || user.plan === "page_verification") {
+            continue;
+        }
+        const remainingMs = new Date(user.plan_ends_at).getTime() - now;
+        for (const daysRemaining of [7, 3, 0]) {
+            const targetMs = daysRemaining * 24 * 60 * 60 * 1000;
+            if (
+                remainingMs >= targetMs - windowMs &&
+                remainingMs <= targetMs + windowMs
+            ) {
+                if (
+                    await notifySubscriptionExpiryReminder(user, daysRemaining)
+                ) {
+                    sentCount++;
+                }
+            }
+        }
+    }
+    return sentCount;
+}
+
 async function purgeStalePushSubscription(endpoint) {
     if (!endpoint) return;
     try {
@@ -2542,6 +2691,10 @@ function buildNotificationPushPayload(notification) {
         mention: "Mention",
         achievement: "Succès débloqué",
         stream: "Live en cours",
+        subscription_activated: "Abonnement confirmé",
+        subscription_expiry_7d: "Abonnement bientôt expiré",
+        subscription_expiry_3d: "Abonnement bientôt expiré",
+        subscription_expiry_0d: "Abonnement expiré aujourd'hui",
     };
 
     const title = typeTitleMap[notification?.type] || "Notification XERA1";
@@ -3646,7 +3799,9 @@ async function resolveReminderEmailAddress(userId) {
 }
 
 async function sendReminderEmail(payload) {
-    if (!supportsEmailReminders()) return { success: false, skipped: true };
+    if (!supportsEmailReminders() && !payload?.transactional) {
+        return { success: false, skipped: true };
+    }
     if (!payload?.to || !payload?.subject) {
         return { success: false, skipped: true };
     }
@@ -3716,6 +3871,50 @@ async function sendReminderEmail(payload) {
         console.warn("Reminder email send failed:", error?.message || error);
         return { success: false, error: error?.message || String(error) };
     }
+}
+
+async function sendSubscriptionConfirmationEmail({
+    userId,
+    plan,
+    billingCycle,
+    planEndsAt,
+}) {
+    const email = await resolveReminderEmailAddress(userId);
+    if (!email) {
+        return { success: false, skipped: true, reason: "email_missing" };
+    }
+
+    const planLabel = String(plan || "").toUpperCase();
+    const cycleLabel =
+        String(billingCycle || "monthly").toLowerCase() === "annual"
+            ? "annuel"
+            : "mensuel";
+    const expiryLabel = planEndsAt
+        ? new Date(planEndsAt).toLocaleDateString("fr-FR", {
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
+          })
+        : "la fin de votre période";
+
+    return sendReminderEmail({
+        to: email,
+        transactional: true,
+        subject: "Votre vérification XERA1 est active",
+        html: buildReminderEmailLayout({
+            eyebrow: "Confirmation XERA1",
+            greeting: "Bonjour,",
+            headline: "Paiement confirmé, vérification activée",
+            bodyLines: [
+                `Votre paiement KPay a été confirmé par XERA1.`,
+                `Le plan ${planLabel} (${cycleLabel}) est actif jusqu'au ${expiryLabel}.`,
+                "Votre vérification et les fonctionnalités associées sont maintenant disponibles.",
+            ],
+            ctaLabel: "Ouvrir mon profil",
+            ctaUrl: buildProfileReminderUrl(userId),
+        }).html,
+        text: `Votre paiement KPay a été confirmé. Le plan ${planLabel} (${cycleLabel}) et votre vérification sont actifs jusqu'au ${expiryLabel}.`,
+    });
 }
 
 async function sweepReturnReminderEmails(now = new Date()) {
@@ -4355,7 +4554,7 @@ async function handleKPayCallback(req, res) {
                     confirmationSource: "kpay_callback",
                 });
             } else {
-                await activateSubscription({
+                const activationResult = await activateSubscription({
                     userId:
                         callbackTransaction.to_user_id ||
                         callbackTransaction.from_user_id,
@@ -4373,6 +4572,26 @@ async function handleKPayCallback(req, res) {
                     pendingTransactionId: callbackTransaction.id,
                     confirmationSource: "kpay_callback",
                 });
+
+                if (!activationResult?.alreadyActivated) {
+                    const activatedUserId =
+                        callbackTransaction.to_user_id ||
+                        callbackTransaction.from_user_id;
+                    const emailResult = await sendSubscriptionConfirmationEmail(
+                        {
+                            userId: activatedUserId,
+                            plan: callbackMetadata.plan,
+                            billingCycle: callbackMetadata.billing_cycle,
+                            planEndsAt: activationResult?.user?.plan_ends_at,
+                        },
+                    );
+                    if (!emailResult.success && !emailResult.skipped) {
+                        console.warn(
+                            "Subscription confirmation email failed:",
+                            emailResult.error,
+                        );
+                    }
+                }
             }
         } else if (isTerminalFailure) {
             await failPendingTransaction({
@@ -4850,6 +5069,21 @@ app.post("/api/admin/subscription-payments/confirm", async (req, res) => {
             confirmedBy: authResult.user.id,
             note,
         });
+
+        if (!activationResult?.alreadyActivated) {
+            const emailResult = await sendSubscriptionConfirmationEmail({
+                userId: payment.userId,
+                plan: payment.plan,
+                billingCycle: payment.billingCycle,
+                planEndsAt: activationResult?.user?.plan_ends_at,
+            });
+            if (!emailResult.success && !emailResult.skipped) {
+                console.warn(
+                    "Manual subscription confirmation email failed:",
+                    emailResult.error,
+                );
+            }
+        }
 
         const { data: refreshedPayment, error: refreshedPaymentError } =
             await supabase

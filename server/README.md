@@ -66,6 +66,7 @@ Rappels email (optionnels)
     - `GET /api/cron/sweep-subscriptions`
     - header recommande: `Authorization: Bearer <CRON_SECRET>`
 - Si vous passez plus tard sur `Vercel Pro`, vous pouvez reintroduire des crons Vercel avec le meme `CRON_SECRET`.
+- Les confirmations de paiement KPay utilisent le meme fournisseur email (`resend` ou `webhook`) mais restent transactionnelles : `RETURN_REMINDER_EMAIL_ENABLED` peut rester a `0` sans bloquer l'email d'activation. Configurez le fournisseur, l'expediteur et sa cle API.
 - Campagnes email actuellement gerees:
     - rappel de post du jour avec lien direct vers l'ouverture du formulaire
     - reactivation apres 7 jours sans update

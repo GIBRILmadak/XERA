@@ -11,6 +11,7 @@
         <link rel="icon" type="image/svg+xml" href="icons/logo.png" />
         <link rel="stylesheet" href="css/style.css" />
         <link rel="stylesheet" href="css/search-notification.css" />
+        <link rel="stylesheet" href="css/admin.css" />
         <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
     </head>
     <body class="has-mobile-nav">
@@ -147,7 +148,6 @@
                 } catch (e) {}
             })();
         </script>
-        <script src="js/admin-bots.js"></script>
         <script>
             document.addEventListener("DOMContentLoaded", async () => {
                 const user = await checkAuth();
@@ -197,9 +197,8 @@
                     return;
                 }
 
-                if (typeof renderSuperAdminPage === "function") {
+                if (typeof renderSuperAdminPage === "function")
                     renderSuperAdminPage();
-                }
                 if (typeof fetchAdminAnnouncements === "function") {
                     fetchAdminAnnouncements();
                 }

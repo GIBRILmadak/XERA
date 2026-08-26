@@ -533,6 +533,16 @@ export const PROTECTED_BADGES = new Set([
     "ambassador",
 ]);
 
+async function approvePaidVerificationRequest(userId) {
+    if (!userId) return;
+    const { error } = await supabase
+        .from("verification_requests")
+        .update({ status: "approved" })
+        .eq("user_id", userId)
+        .eq("status", "pending");
+    if (error) throw error;
+}
+
 export function shouldClearBadge(value) {
     if (!value) return false;
     const normalized = String(value).toLowerCase();
@@ -574,6 +584,9 @@ export async function activateSubscription({
             throw new Error("Paiement en attente introuvable.");
         }
         if (String(data.status || "").toLowerCase() === "succeeded") {
+            if (["standard", "medium", "pro", "elite"].includes(normalizedPlan)) {
+                await approvePaidVerificationRequest(userId);
+            }
             const { data: existingUser } = await supabase
                 .from("users")
                 .select("*")
@@ -599,6 +612,9 @@ export async function activateSubscription({
             .eq("status", "succeeded")
             .maybeSingle();
         if (existing?.id && existing.id !== pendingTransactionId) {
+            if (["standard", "medium", "pro", "elite"].includes(normalizedPlan)) {
+                await approvePaidVerificationRequest(userId);
+            }
             const { data: existingUser } = await supabase
                 .from("users")
                 .select("*")
@@ -755,6 +771,10 @@ export async function activateSubscription({
                 .single();
         if (insertTxError) throw insertTxError;
         transactionId = insertedTransaction?.id || null;
+    }
+
+    if (["standard", "medium", "pro", "elite"].includes(normalizedPlan)) {
+        await approvePaidVerificationRequest(userId);
     }
 
     return {

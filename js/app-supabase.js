@@ -1288,7 +1288,7 @@ function navigateToPersonalProfile() {
         user: String(userId),
         view: "personal",
     });
-    window.location.href = `profile.html?${query.toString()}`;
+    window.location.href = `profile-personal.html?${query.toString()}`;
 }
 
 window.navigateToPersonalProfile = navigateToPersonalProfile;
@@ -2204,6 +2204,7 @@ async function initializeApp() {
     const initialContentId = getInitialContentId();
     const profileOnlyPage = isProfileOnlyPage();
     const discoverAvailable = hasDiscoverPage();
+    let initialProfileRenderStarted = false;
 
     const hydratedDiscover = hydrateDiscoverFromCache();
     if (hydratedDiscover) {
@@ -2274,6 +2275,14 @@ async function initializeApp() {
             return;
         }
 
+        // A profile page must not wait for the global discover feed to finish.
+        if (initialProfileId) {
+            initialProfileRenderStarted = true;
+            renderProfileIntoContainer(initialProfileId).catch((error) => {
+                console.error("Initial profile render failed:", error);
+            });
+        }
+
         const skipLanding = isMobileDevice();
         // savedSession already loaded at the top to avoid flicker
 
@@ -2283,12 +2292,6 @@ async function initializeApp() {
             INITIAL_AUTH_TIMEOUT_MS,
             "Auth check",
         );
-
-        if (!user && profileOnlyPage && !initialProfileId) {
-            clearTimeout(safetyTimeout);
-            window.location.href = "login.html";
-            return;
-        }
 
         const heroVisibilityPromise = updateHeroVisibilityForUser(
             user ? user.id : null,
@@ -2326,7 +2329,14 @@ async function initializeApp() {
                 navigateTo("discover");
             }
             await Promise.all([
-                runInitialDataLoad(loadAllData, "Initial private data load"),
+                withTimeout(
+                    runInitialDataLoad(
+                        loadAllData,
+                        "Initial private data load",
+                    ),
+                    INITIAL_AUTH_TIMEOUT_MS,
+                    "Initial private data load",
+                ),
                 withTimeout(
                     heroVisibilityPromise,
                     INITIAL_AUTH_TIMEOUT_MS,
@@ -2349,7 +2359,14 @@ async function initializeApp() {
             }
             updateNavigation(false);
             await Promise.all([
-                runInitialDataLoad(loadPublicData, "Initial public data load"),
+                withTimeout(
+                    runInitialDataLoad(
+                        loadPublicData,
+                        "Initial public data load",
+                    ),
+                    INITIAL_AUTH_TIMEOUT_MS,
+                    "Initial public data load",
+                ),
                 withTimeout(
                     heroVisibilityPromise,
                     INITIAL_AUTH_TIMEOUT_MS,
@@ -2363,7 +2380,14 @@ async function initializeApp() {
         } else {
             updateNavigation(false);
             await Promise.all([
-                runInitialDataLoad(loadPublicData, "Initial public data load"),
+                withTimeout(
+                    runInitialDataLoad(
+                        loadPublicData,
+                        "Initial public data load",
+                    ),
+                    INITIAL_AUTH_TIMEOUT_MS,
+                    "Initial public data load",
+                ),
                 withTimeout(
                     heroVisibilityPromise,
                     INITIAL_AUTH_TIMEOUT_MS,
@@ -2392,7 +2416,7 @@ async function initializeApp() {
             );
         }
 
-        if (initialProfileId) {
+        if (initialProfileId && !initialProfileRenderStarted) {
             if (initialArcId) window.selectedArcId = initialArcId;
             window.currentProfileViewed = initialProfileId;
             await renderProfileIntoContainer(initialProfileId);
@@ -2567,6 +2591,29 @@ function updateNavigation(isLoggedIn) {
     const navAuth = document.getElementById("nav-auth");
     const navProfile = document.getElementById("nav-profile");
     const navMessages = document.getElementById("messages-nav-btn");
+    const navLinks = document.querySelector("nav .nav-links");
+
+    let navPersonal = document.getElementById("nav-personal-profile");
+    if (!navPersonal && navLinks) {
+        navPersonal = document.createElement("a");
+        navPersonal.id = "nav-personal-profile";
+        navPersonal.className = "notification-button";
+        navPersonal.title = "Profil personnel";
+        navPersonal.setAttribute("aria-label", "Profil personnel");
+        navPersonal.innerHTML = '<i class="fas fa-user"></i>';
+        navPersonal.onclick = (event) => {
+            event.preventDefault();
+            window.navigateToPersonalProfile?.();
+        };
+        navLinks.insertBefore(navPersonal, navAuth || null);
+    }
+
+    const isSuperAdmin =
+        isLoggedIn &&
+        window.currentUser?.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
+    if (navPersonal) {
+        navPersonal.style.display = isSuperAdmin ? "flex" : "none";
+    }
 
     if (navAuth) {
         if (isLoggedIn) {
@@ -6757,15 +6804,19 @@ function renderSuperAdminPage() {
     const container = document.getElementById("admin-dashboard");
     if (!container) return;
     container.innerHTML = `
-<div class="settings-section">
-            <div class="settings-header" style="border:none; margin-bottom:1rem; padding-bottom:0;">
+<div class="admin-console-shell">
+            <div class="admin-console-header">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap: 1rem; flex-wrap: wrap;">
                     <div style="display:flex; align-items:center; gap: 0.75rem;">
-                        <h2>Administration</h2>
-                        <span class="admin-badge">Super admin</span>
+                        <div>
+                            <p class="admin-eyebrow">XERA1 / CONTROL ROOM</p>
+                            <h1>Administration</h1>
+                        </div>
+                        <span class="admin-status-pill"><span></span> Super admin</span>
                     </div>
+                    <a class="admin-top-action" href="badges-admin.html">Vérification Pages Pro <span>→</span></a>
                 </div>
-                <p>Gestion complète du compte et des annonces officielles.</p>
+                <p class="admin-console-intro">Pilotez les signaux critiques de la plateforme, traitez les demandes et publiez les décisions officielles.</p>
             </div>
 </div>
 ${getSuperAdminPanelHtml()}
@@ -7320,14 +7371,30 @@ async function fetchVerificationRequests() {
     try {
         const { data, error } = await supabase
             .from("verification_requests")
-            .select(
-                "id, user_id, type, status, created_at, users(id, name, avatar)",
-            )
+            .select("id, user_id, type, status, created_at")
             .eq("status", "pending")
             .order("created_at", { ascending: false });
 
         if (error) throw error;
-        verificationRequests = data || [];
+        const requests = data || [];
+        const userIds = Array.from(
+            new Set(requests.map((request) => request.user_id).filter(Boolean)),
+        );
+        let usersById = new Map();
+        if (userIds.length) {
+            const { data: users, error: usersError } = await supabase
+                .from("users")
+                .select("id, name, avatar")
+                .in("id", userIds);
+            if (usersError) throw usersError;
+            usersById = new Map((users || []).map((user) => [user.id, user]));
+        }
+
+        verificationRequests = requests.map((request) => ({
+            ...request,
+            userId: request.user_id,
+            users: usersById.get(request.user_id) || null,
+        }));
         return verificationRequests;
     } catch (error) {
         console.error("Erreur récupération demandes vérification:", error);
@@ -8158,6 +8225,11 @@ function renderAmbassadorBadgeById(userId) {
     return `<img src="icons/embassadeur.svg?v=${BADGE_ASSET_VERSION}" alt="Ambassadeur" class="username-badge">`;
 }
 
+function renderPageVerificationBadgeById(pageId) {
+    if (!pageId || !verifiedPageIds.has(pageId)) return "";
+    return `<img src="icons/verify-com.svg?v=${BADGE_ASSET_VERSION}" alt="Page Pro vérifiée" class="username-badge" title="Page Pro vérifiée">`;
+}
+
 function normalizeDiscoveryAccountRole(value) {
     const raw = String(value || "")
         .trim()
@@ -8222,6 +8294,10 @@ function renderProfileRoleBadgeByUser(user) {
 
 function renderVerificationBadgeById(userId) {
     const user = getUser(userId) || {};
+
+    if (isAmbassadorUserId(userId)) {
+        return renderAmbassadorBadgeById(userId);
+    }
 
     const badgeValue = user.badge ? String(user.badge).toLowerCase() : "";
     const planActive = isPlanActiveByDate(user);
@@ -8289,10 +8365,6 @@ function renderVerificationBadgeById(userId) {
     if (isCreatorListed || personalRequested) {
         return `<img src="icons/verify-personal.svg?v=${BADGE_ASSET_VERSION}" alt="Créateur vérifié" class="verification-badge">`;
     }
-    if (badgeValue === "ambassador") {
-        return renderAmbassadorBadgeById(userId);
-    }
-
     return "";
 }
 
@@ -8370,12 +8442,15 @@ function wrapUsernameLabel(nameHtml) {
     return `<span class="username-label"${styleAttr}>${normalizedName}</span>`;
 }
 
-function renderUsernameWithBadge(nameHtml, userId, isPage = false) {
+function renderUsernameWithBadge(nameHtml, userId, isPage = false, pageId = null) {
     if (!nameHtml) return "";
     const labelHtml = wrapUsernameLabel(nameHtml);
 
     if (isPage) {
-        return `<span class="username-with-badge">${labelHtml}<img src="icons/verify-com.svg" class="username-badge" title="Page Professionnelle Officielle"></span>`;
+        const pageBadge = renderPageVerificationBadgeById(pageId || userId);
+        return pageBadge
+            ? `<span class="username-with-badge">${labelHtml}${pageBadge}</span>`
+            : labelHtml;
     }
 
     const verificationHtml = renderVerificationBadgeById(userId);
@@ -10924,6 +10999,7 @@ function renderUserCard(
                 title: page.industry,
                 slug: page.slug,
                 isPage: true,
+                pageId: latestContent.pageId,
             };
         }
     }
@@ -11192,7 +11268,7 @@ function renderUserCard(
             <button class="profile-link card-profile-link" data-profile-user-id="${userId}" onclick="event.preventDefault(); event.stopPropagation(); ${profileOnClick}" type="button" aria-label="Voir le profil de ${escapeHtml(displayUser.name || "cet utilisateur")}">
                 <img src="${displayUser.avatar || "https://placehold.co/40"}" class="card-avatar" loading="lazy" decoding="async">
                 <div class="profile-link-text">
-                    <h3 class="discover-user-name">${renderUsernameWithBadge(displayUser.name, userId)}${proBadgeHtml}${monetizationBadgeHtml}</h3>
+                    <h3 class="discover-user-name">${renderUsernameWithBadge(displayUser.name, userId, displayUser.isPage, displayUser.pageId)}${proBadgeHtml}${monetizationBadgeHtml}</h3>
                     ${momentumBadgeHtml}
                     <div class="card-user-title">${displayUser.title || ""}</div>
                 </div>
@@ -13299,6 +13375,7 @@ async function renderImmersiveHeader(user, pageId = null) {
                 avatar: page.avatar_url || "icons/enterprise.svg",
                 slug: page.slug,
                 isPage: true,
+                pageId,
             };
         }
     }
@@ -13338,7 +13415,7 @@ async function renderImmersiveHeader(user, pageId = null) {
 <div class="immersive-header" id="immersive-header-content">
             <button class="profile-link immersive-profile-link" onclick="event.stopPropagation(); ${profileOnClick}">
                 <img src="${displayUser.avatar}" class="immersive-user-avatar">
-                <span class="immersive-user-name">${renderUsernameWithBadge(displayUser.name, user.id)}</span>
+                <span class="immersive-user-name">${renderUsernameWithBadge(displayUser.name, user.id, displayUser.isPage, displayUser.pageId)}</span>
             </button>
             ${subscribeBtnHtml}
 </div>
@@ -13520,6 +13597,7 @@ async function renderImmersiveFeed(contents) {
                         avatar: page.avatar_url || "icons/enterprise.svg",
                         slug: page.slug,
                         isPage: true,
+                        pageId: content.pageId,
                     };
                 }
             }
@@ -13527,6 +13605,8 @@ async function renderImmersiveFeed(contents) {
             const contentUserNameHtml = renderUsernameWithBadge(
                 displayUser.name,
                 displayUser.id,
+                displayUser.isPage,
+                displayUser.pageId,
             );
             const contentUserAvatar = displayUser.avatar;
 
@@ -15870,6 +15950,7 @@ function isPageProRoute() {
         if (pathname === "/pagepro") return true;
 
         const params = new URLSearchParams(window.location.search);
+        if (params.get("view") === "personal") return false;
         if (params.has("pro")) return true;
 
         // Si on est sur profile.html, on vérifie si l'utilisateur affiché est de type pro
@@ -15943,8 +16024,10 @@ async function renderProfileIntoContainer(userId) {
     const isPro = user ? isProAccountType(accountType, accountSubtype) : null;
 
     const isProRoute = isPageProRoute();
+    const personalProfileRequested =
+        new URLSearchParams(window.location.search).get("view") === "personal";
 
-    if (user && !isProRoute && isPro) {
+    if (user && !isProRoute && isPro && !personalProfileRequested) {
         try {
             window.history.replaceState(
                 {},
@@ -15966,13 +16049,14 @@ async function renderProfileIntoContainer(userId) {
         }
     }
 
-    const bodyIsPro = isPageProRoute();
+    const bodyIsPro = isPageProRoute() && !personalProfileRequested;
     if (typeof document !== "undefined" && document.body) {
         document.body.classList.toggle("is-pro", bodyIsPro);
     }
 
     const hasLegacyProfileUserId =
         window.location.pathname.includes("/profile") &&
+        !personalProfileRequested &&
         (new URLSearchParams(window.location.search).has("user") ||
             new URLSearchParams(window.location.search).has("u") ||
             new URLSearchParams(window.location.search).has("id"));
@@ -21173,6 +21257,7 @@ window.refreshOAuthConnectionStatuses = refreshOAuthConnectionStatuses;
 window.navigateToUserProfile = navigateToUserProfile;
 window.renderUsernameWithBadge = renderUsernameWithBadge;
 window.renderAmbassadorBadgeById = renderAmbassadorBadgeById;
+window.renderPageVerificationBadgeById = renderPageVerificationBadgeById;
 window.isAmbassadorUserId = isAmbassadorUserId;
 window.requestVerification = requestVerification;
 window.addVerifiedUserId = addVerifiedUserId;
@@ -21192,13 +21277,52 @@ window.fetchFeedbackInbox = fetchFeedbackInbox;
 window.fetchVerifiedBadges = fetchVerifiedBadges;
 window.fetchVerificationRequests = fetchVerificationRequests;
 window.getVerifiedBadgeSets = getVerifiedBadgeSets;
+async function resolveProfessionalPageId(value) {
+    const lookup = String(value || "").trim();
+    if (!lookup || !supabase) throw new Error("Identifiant de page manquant.");
+
+    if (isUuid(lookup)) {
+        const byId = await supabase
+            .from("professional_pages")
+            .select("id")
+            .eq("id", lookup)
+            .maybeSingle();
+        if (byId.error) throw byId.error;
+        if (byId.data?.id) return byId.data.id;
+    }
+
+    const bySlug = await supabase
+        .from("professional_pages")
+        .select("id")
+        .eq("slug", lookup)
+        .maybeSingle();
+    if (bySlug.error) throw bySlug.error;
+    if (bySlug.data?.id) return bySlug.data.id;
+
+    const byName = await supabase
+        .from("professional_pages")
+        .select("id")
+        .eq("name", lookup)
+        .maybeSingle();
+    if (byName.error) throw byName.error;
+    if (byName.data?.id) return byName.data.id;
+
+    throw new Error("Page Pro introuvable avec cet ID ou ce slug.");
+}
+
 window.addVerifiedPageId = async function (pageId) {
     if (!pageId) return;
     try {
+        if (!isVerificationAdmin()) {
+            throw new Error(
+                "Vous devez être super-admin pour vérifier une page.",
+            );
+        }
+        const resolvedPageId = await resolveProfessionalPageId(pageId);
         const { error } = await supabase
             .from("verified_badges")
             .upsert(
-                { user_id: pageId, type: "page" },
+                { user_id: resolvedPageId, type: "page" },
                 { onConflict: "user_id,type" },
             );
         if (error) throw error;
@@ -21216,23 +21340,32 @@ window.addVerifiedPageId = async function (pageId) {
                 .renderProPage(window.currentProPageSlug)
                 .catch(() => {});
         }
+        return resolvedPageId;
     } catch (err) {
         console.error("addVerifiedPageId failed", err);
         if (window.ToastManager)
             ToastManager.error(
                 "Erreur",
-                "Impossible d'appliquer la vérification de la page.",
+                err?.message ||
+                    "Impossible d'appliquer la vérification de la page.",
             );
+        throw err;
     }
 };
 
 window.removeVerifiedPageId = async function (pageId) {
     if (!pageId) return;
     try {
+        if (!isVerificationAdmin()) {
+            throw new Error(
+                "Vous devez être super-admin pour retirer une vérification.",
+            );
+        }
+        const resolvedPageId = await resolveProfessionalPageId(pageId);
         const { error } = await supabase
             .from("verified_badges")
             .delete()
-            .eq("user_id", pageId)
+            .eq("user_id", resolvedPageId)
             .eq("type", "page");
         if (error) throw error;
         await fetchVerifiedBadges();
@@ -21254,8 +21387,10 @@ window.removeVerifiedPageId = async function (pageId) {
         if (window.ToastManager)
             ToastManager.error(
                 "Erreur",
-                "Impossible de retirer la vérification de la page.",
+                err?.message ||
+                    "Impossible de retirer la vérification de la page.",
             );
+        throw err;
     }
 };
 
@@ -21294,7 +21429,7 @@ document.addEventListener("DOMContentLoaded", function () {
     setupPwaSwUpdateReload();
     // Initialiser les meta tags OG rapidement pour le partage social
     initializeOpenGraphFromUrl();
-    initializeApp();
+    window.xeraInitializationPromise = initializeApp();
 });
 window.openCreateMenu = openCreateMenu;
 

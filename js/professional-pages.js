@@ -109,6 +109,13 @@ class XERAProfessionalManager {
         return "subscription-plans.html";
     }
 
+    hasPageProEntitlements(pageId, ownerSubscriptionActive = false) {
+        const isVerified =
+            typeof window.isVerifiedPageId === "function" &&
+            window.isVerifiedPageId(pageId);
+        return Boolean(isVerified || ownerSubscriptionActive);
+    }
+
     buildPageSlug(name) {
         return String(name || "")
             .trim()
@@ -603,6 +610,14 @@ class XERAProfessionalManager {
      * Initialise la navigation pour afficher le bouton Page Pro si nécessaire
      */
     async initNavigation(retryCount = 0) {
+        if (
+            String(window.location.pathname || "").endsWith(
+                "profile-personal.html",
+            )
+        ) {
+            return;
+        }
+
         // Attendre que l'utilisateur soit chargé (Augmenté à 15s pour correspondre à app-supabase)
         if (!window.currentUser || !window.currentUser.id) {
             if (retryCount < 60) {
@@ -1912,13 +1927,21 @@ class XERAProfessionalManager {
 
             const isOwner =
                 window.currentUser && page.owner_id === window.currentUser.id;
+            if (typeof window.fetchVerifiedBadges === "function") {
+                await window.fetchVerifiedBadges().catch((verificationError) => {
+                    console.warn(
+                        "[Pro] Vérifications indisponibles, conservation du cache local:",
+                        verificationError,
+                    );
+                });
+            }
             const isPageVerified =
                 typeof window.isVerifiedPageId === "function"
                     ? window.isVerifiedPageId(page.id)
                     : false;
 
             const pageVerifiedBadgeHtml = isPageVerified
-                ? `<span class="pro-badge-pill">Page Professionnelle</span>`
+                ? `<span class="pro-badge-pill"><img src="icons/verify-com.svg?v=2" alt="Page Pro vérifiée" class="pro-page-verification-badge"> Page Professionnelle</span>`
                 : `<span class="pro-badge-pill" style="background: rgba(255,255,255,0.05); color: var(--text-secondary);">Page Non-Vérifiée</span>`;
 
             const pageVerificationCtaHtml =
@@ -1961,18 +1984,22 @@ class XERAProfessionalManager {
                         ? window.hasActivePaidPlan(ownerProfile)
                         : false;
             }
+            const pageProEntitlementsActive = this.hasPageProEntitlements(
+                page.id,
+                pageOwnerSubscriptionActive,
+            );
 
             const recommendedProfiles =
                 await this.getRecommendedProfilesForPage(page, employees);
             const recommendedProfilesHtml = this.renderRecommendedProfiles(
                 recommendedProfiles,
                 page,
-                pageOwnerSubscriptionActive,
+                pageProEntitlementsActive,
             );
             const officialComparisonHtml = this.renderOfficialComparison(
                 page,
                 recommendedProfiles,
-                pageOwnerSubscriptionActive,
+                pageProEntitlementsActive,
             );
 
             // Injection des styles premium spécifiques
@@ -2080,13 +2107,18 @@ class XERAProfessionalManager {
                     }
                     .pro-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; justify-content: center; }
                     .pro-name-row h2 { font-size: clamp(1.7rem, 6vw, 2.4rem); margin: 0; font-weight: 800; letter-spacing: -0.8px; line-height: 1.05; }
-                    .pro-badge-pill {
+                    .pro-badge-pill { 
                         background: #8b5cf6;
                         color: #fff;
                         padding: 6px 14px;
                         border-radius: 999px;
                         font-size: 0.78rem;
                         font-weight: 600;
+                    }
+                    .pro-page-verification-badge {
+                        width: 18px;
+                        height: 18px;
+                        vertical-align: middle;
                     }
                     .pro-industry-label { color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; text-align: center; }
                     .pro-members-count { color: var(--text-secondary); font-size: 0.86rem; margin-top: 8px; text-align: center; }
