@@ -285,6 +285,9 @@
                 ? buildHtmlUrl(target, { query, hash })
                 : toHtmlUrl(target);
 
+        const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+        if (destination === currentUrl) return;
+
         if (replace) {
             window.location.replace(destination);
             return;

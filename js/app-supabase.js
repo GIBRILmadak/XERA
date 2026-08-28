@@ -140,16 +140,16 @@ function updateOpenGraphTags(context = {}) {
     try {
         // Contexte par défaut
         const pageUrl = window.location.href;
-        let ogTitle = "XERA1 | Tracez votre progression";
-        let ogDescription = "Découvrez les trajectoires créatives sur XERA1";
+        let ogTitle = "XERA | Tracez votre progression";
+        let ogDescription = "Découvrez les trajectoires créatives sur XERA";
         let ogImage = getAbsoluteImageUrl("icons/logo-192x192.png");
         let ogType = "website";
 
         // Si contexte profil
         if (context.userId || context.userProfile) {
             const profile = context.userProfile || {};
-            ogTitle = `${profile.username || "Profil"} | XERA1`;
-            ogDescription = profile.bio || "Découvrez ce profil sur XERA1";
+            ogTitle = `${profile.username || "Profil"} | XERA`;
+            ogDescription = profile.bio || "Découvrez ce profil sur XERA";
             ogImage = getAbsoluteImageUrl(
                 profile.profileImage ||
                     profile.avatar_url ||
@@ -161,11 +161,11 @@ function updateOpenGraphTags(context = {}) {
         // Si contexte contenu
         if (context.contentId || context.content) {
             const content = context.content || {};
-            ogTitle = content.title || "Contenu XERA1";
+            ogTitle = content.title || "Contenu XERA";
             ogDescription =
                 content.description ||
                 content.title ||
-                "Découvrez ce contenu sur XERA1";
+                "Découvrez ce contenu sur XERA";
 
             // Utiliser l'image du contenu si disponible
             if (
@@ -202,10 +202,10 @@ function updateOpenGraphTags(context = {}) {
 
         // Mettre à jour aussi le title principal
         if (context.userId || context.userProfile) {
-            document.title = `${context.userProfile?.username || "Profil"} | XERA1`;
+            document.title = `${context.userProfile?.username || "Profil"} | XERA`;
         } else if (context.contentId || context.content) {
             const content = context.content || {};
-            document.title = `${content.title || "Contenu"} | XERA1`;
+            document.title = `${content.title || "Contenu"} | XERA`;
         }
     } catch (error) {
         console.error("Erreur lors de la mise à jour des meta tags OG:", error);
@@ -238,13 +238,16 @@ function updateMetaTag(property, content) {
 async function initializeOpenGraphFromUrl() {
     try {
         const params = new URLSearchParams(window.location.search);
-        const contentId = params.get("content");
-        const userId = params.get("user");
+        const contentId = params.get("content") || null;
+        const userId = params.get("user") || null;
 
         // Si c'est un partage de contenu
         if (contentId) {
-            // Essayer de charger le contenu depuis le cache local d'abord
-            if (window.userContents) {
+            // Essayer de charger le contenu depuis le cache local d'abord, sinon charger depuis Supabase
+            if (
+                window.userContents &&
+                window.userContents[window.currentUserId]
+            ) {
                 for (const uid in window.userContents) {
                     const contents = window.userContents[uid];
                     if (Array.isArray(contents)) {
@@ -256,8 +259,7 @@ async function initializeOpenGraphFromUrl() {
                             updateOpenGraphTags({
                                 contentId: contentId,
                                 content: {
-                                    title:
-                                        foundContent.title || "Contenu XERA1",
+                                    title: foundContent.title || "Contenu XERA",
                                     description: foundContent.description || "",
                                     media: foundContent.media || [],
                                     mediaUrl: foundContent.mediaUrl,
@@ -283,7 +285,7 @@ async function initializeOpenGraphFromUrl() {
                         updateOpenGraphTags({
                             contentId: contentId,
                             content: {
-                                title: content.title || "Contenu XERA1",
+                                title: content.title || "Contenu XERA",
                                 description: content.description || "",
                                 media: content.media || [],
                                 mediaUrl: content.media_url,
@@ -300,8 +302,12 @@ async function initializeOpenGraphFromUrl() {
 
         // Si c'est un partage de profil
         if (userId) {
-            // Essayer de charger l'utilisateur depuis le cache
-            if (window.allUsers && Array.isArray(window.allUsers)) {
+            // Essayer de charger l'utilisateur depuis le cache, sinon charger depuis Supabase
+            if (
+                window.allUsers &&
+                Array.isArray(window.allUsers) &&
+                window.allUsers.length > 0
+            ) {
                 const foundUser = window.allUsers.find(
                     (u) => u.id === userId || u.userId === userId,
                 );
@@ -548,9 +554,9 @@ Félicitations pour ton nouveau trophée ! ${badgeInfo.icon}
 
 ${badgeInfo.text}
 
-    Tu as débloqué un accomplissement majeur ! Continue à créer du contenu incroyable et inspire la communauté XERA1.
+Tu as débloqué un accomplissement majeur ! Continue à créer du contenu incroyable et inspire la communauté XERA.
 
-Le compte XERA1 Admin`;
+Le compte XERA Admin`;
 
         // Envoyer le DM via Supabase
         if (window.supabase) {
@@ -719,7 +725,7 @@ function renderReachStatsWidget(userId) {
 }
 
 /**
- * Génère un widget de "friends on XERA1"
+ * Génère un widget de "friends on XERA"
  * Social proof: montrer les amis qui sont déjà là
  */
 function renderFriendsOnXeraWidget(userId) {
@@ -751,8 +757,8 @@ function renderFriendsOnXeraWidget(userId) {
                 : "";
 
         return `
-            <div class="friends-on-xera1-widget">
-                <span class="friends-label">Tes potes sur XERA1 👋</span>
+            <div class="friends-on-xera-widget">
+                <span class="friends-label">Tes potes sur XERA 👋</span>
                 <div class="friends-avatars">
                     ${friendAvatars}
                     ${moreText}
@@ -765,7 +771,7 @@ function renderFriendsOnXeraWidget(userId) {
 }
 
 /**
- * Smart notification quand un ami rejoint XERA1
+ * Smart notification quand un ami rejoint XERA
  */
 function showFriendJoinedNotification(friendId, friendName) {
     try {
@@ -775,7 +781,7 @@ function showFriendJoinedNotification(friendId, friendName) {
             <div class="toast-icon"><i class="fas fa-user-plus"></i></div>
             <div class="toast-content">
                 <div class="toast-title">Nouvelle connexion</div>
-                <div class="toast-message"><strong>${friendName}</strong> a rejoint XERA1</div>
+                <div class="toast-message"><strong>${friendName}</strong> a rejoint XERA</div>
             </div>
             <button class="btn btn-primary btn-sm" onclick="handleProfileClick('${friendId}', null, true); this.closest('.toast').remove();">
                 Voir
@@ -800,19 +806,19 @@ function renderShareButton(context = {}) {
     const { userId = null, contentId = null, className = "" } = context;
 
     let shareUrl = window.location.href;
-    let shareTitle = "XERA1 | Tracez votre progression";
+    let shareTitle = "XERA | Tracez votre progression";
     let shareUserId = null;
 
     if (userId) {
         shareUrl = buildOpenGraphShareUrl("profile", userId);
         const user = getUser(userId);
-        shareTitle = `Découvre ${user?.name || "ce profil"} sur XERA1`;
+        shareTitle = `Découvre ${user?.name || "ce profil"} sur XERA`;
         shareUserId = userId;
     } else if (contentId) {
         const content = findContentById(contentId);
         if (content) {
             shareUrl = buildOpenGraphShareUrl("content", contentId);
-            shareTitle = content.title || "Découvre ce contenu sur XERA1";
+            shareTitle = content.title || "Découvre ce contenu sur XERA";
         }
     }
 
@@ -966,7 +972,7 @@ window.shareContentElegant = async function (
                 const content = findContentById(contentId);
                 if (content) {
                     const contentData = {
-                        title: content.title || "Contenu XERA1",
+                        title: content.title || "Contenu XERA",
                         description: content.description || "",
                         image:
                             content.media?.[0]?.url ||
@@ -1150,7 +1156,7 @@ function isMobileDevice() {
 function getInitialProfileUserId() {
     try {
         const params = new URLSearchParams(window.location.search);
-        return params.get("user") || params.get("u") || params.get("id");
+        return params.get("user") || params.get("u");
     } catch (error) {
         return null;
     }
@@ -1284,6 +1290,12 @@ function navigateToPersonalProfile() {
         return;
     }
 
+    if (
+        String(window.location.pathname || "").endsWith("profile-personal.html")
+    ) {
+        return;
+    }
+
     const query = new URLSearchParams({
         user: String(userId),
         view: "personal",
@@ -1367,10 +1379,10 @@ async function shareProfileLink(userId) {
     if (!userId) return;
     const user = getUser(userId);
     const url = buildProfileShareUrl(userId);
-    const title = user ? `Profil de ${user.name} | XERA1` : "Profil XERA1";
+    const title = user ? `Profil de ${user.name} | XERA` : "Profil XERA";
     const text = user
-        ? `Découvre le profil de ${user.name} sur XERA1.`
-        : "Découvre ce profil sur XERA1.";
+        ? `Découvre le profil de ${user.name} sur XERA.`
+        : "Découvre ce profil sur XERA.";
 
     if (navigator.share) {
         try {
@@ -2204,7 +2216,6 @@ async function initializeApp() {
     const initialContentId = getInitialContentId();
     const profileOnlyPage = isProfileOnlyPage();
     const discoverAvailable = hasDiscoverPage();
-    let initialProfileRenderStarted = false;
 
     const hydratedDiscover = hydrateDiscoverFromCache();
     if (hydratedDiscover) {
@@ -2220,7 +2231,7 @@ async function initializeApp() {
                 await renderDiscoverGrid();
                 if (typeof window.ToastManager !== "undefined") {
                     window.ToastManager.success(
-                        "XΞRA1 High-Signal",
+                        "XΞRA High-Signal",
                         "Momentum Engine & Fluidity Active.",
                         3000,
                     );
@@ -2265,7 +2276,7 @@ async function initializeApp() {
             await renderDiscoverGrid();
             if (typeof window.ToastManager !== "undefined") {
                 window.ToastManager.success(
-                    "XΞRA1 High-Signal",
+                    "XΞRA High-Signal",
                     "Momentum Engine & Fluidity Active.",
                     3000,
                 );
@@ -2273,14 +2284,6 @@ async function initializeApp() {
             if (waitMessage) waitMessage.classList.add("is-hidden");
             clearTimeout(safetyTimeout);
             return;
-        }
-
-        // A profile page must not wait for the global discover feed to finish.
-        if (initialProfileId) {
-            initialProfileRenderStarted = true;
-            renderProfileIntoContainer(initialProfileId).catch((error) => {
-                console.error("Initial profile render failed:", error);
-            });
         }
 
         const skipLanding = isMobileDevice();
@@ -2292,6 +2295,12 @@ async function initializeApp() {
             INITIAL_AUTH_TIMEOUT_MS,
             "Auth check",
         );
+
+        if (!user && profileOnlyPage && !initialProfileId) {
+            clearTimeout(safetyTimeout);
+            window.location.href = "login.html";
+            return;
+        }
 
         const heroVisibilityPromise = updateHeroVisibilityForUser(
             user ? user.id : null,
@@ -2329,14 +2338,7 @@ async function initializeApp() {
                 navigateTo("discover");
             }
             await Promise.all([
-                withTimeout(
-                    runInitialDataLoad(
-                        loadAllData,
-                        "Initial private data load",
-                    ),
-                    INITIAL_AUTH_TIMEOUT_MS,
-                    "Initial private data load",
-                ),
+                runInitialDataLoad(loadAllData, "Initial private data load"),
                 withTimeout(
                     heroVisibilityPromise,
                     INITIAL_AUTH_TIMEOUT_MS,
@@ -2359,14 +2361,7 @@ async function initializeApp() {
             }
             updateNavigation(false);
             await Promise.all([
-                withTimeout(
-                    runInitialDataLoad(
-                        loadPublicData,
-                        "Initial public data load",
-                    ),
-                    INITIAL_AUTH_TIMEOUT_MS,
-                    "Initial public data load",
-                ),
+                runInitialDataLoad(loadPublicData, "Initial public data load"),
                 withTimeout(
                     heroVisibilityPromise,
                     INITIAL_AUTH_TIMEOUT_MS,
@@ -2380,14 +2375,7 @@ async function initializeApp() {
         } else {
             updateNavigation(false);
             await Promise.all([
-                withTimeout(
-                    runInitialDataLoad(
-                        loadPublicData,
-                        "Initial public data load",
-                    ),
-                    INITIAL_AUTH_TIMEOUT_MS,
-                    "Initial public data load",
-                ),
+                runInitialDataLoad(loadPublicData, "Initial public data load"),
                 withTimeout(
                     heroVisibilityPromise,
                     INITIAL_AUTH_TIMEOUT_MS,
@@ -2410,13 +2398,13 @@ async function initializeApp() {
         await renderDiscoverGrid();
         if (typeof window.ToastManager !== "undefined") {
             window.ToastManager.success(
-                "XΞRA1 High-Signal",
+                "XΞRA High-Signal",
                 "Momentum Engine & Fluidity Active.",
                 3000,
             );
         }
 
-        if (initialProfileId && !initialProfileRenderStarted) {
+        if (initialProfileId) {
             if (initialArcId) window.selectedArcId = initialArcId;
             window.currentProfileViewed = initialProfileId;
             await renderProfileIntoContainer(initialProfileId);
@@ -2452,7 +2440,7 @@ async function initializeApp() {
                 }
                 // Vérifier si le tutoriel est déjà terminé avant de lancer
                 const isTutorialCompleted =
-                    localStorage.getItem("xera1-tutorial-completed") === "true";
+                    localStorage.getItem("xera-tutorial-completed") === "true";
                 if (window.XeraTutorial && !isTutorialCompleted) {
                     // Ne pas lancer le tutoriel pour les comptes Pro
                     try {
@@ -2461,11 +2449,11 @@ async function initializeApp() {
                             window.isProUser &&
                             window.isProUser(window.currentUser);
                         if (!isPro) {
-                            console.log("Démarrage du tutoriel XERA1...");
+                            console.log("Démarrage du tutoriel XERA...");
                             window.XeraTutorial.init();
                         } else {
                             console.log(
-                                "Tutoriel XERA1 ignoré pour compte Pro.",
+                                "Tutoriel XERA ignoré pour compte Pro.",
                             );
                         }
 
@@ -2504,10 +2492,24 @@ async function initializeApp() {
         clearTimeout(safetyTimeout);
         window.userLoadError = error?.message || "Erreur de chargement";
         window.hasLoadedUsers = true;
-        await renderDiscoverGrid();
+        if (profileOnlyPage && (initialProfileId || window.currentUserId)) {
+            try {
+                await runInitialDataLoad(
+                    loadPublicData,
+                    "Fallback public profile load",
+                );
+                await renderProfileIntoContainer(
+                    initialProfileId || window.currentUserId,
+                );
+            } catch (profileError) {
+                console.error("Fallback profile render failed:", profileError);
+            }
+        } else {
+            await renderDiscoverGrid();
+        }
         if (typeof window.ToastManager !== "undefined") {
             window.ToastManager.success(
-                "XΞRA1 High-Signal",
+                "XΞRA High-Signal",
                 "Momentum Engine & Fluidity Active.",
                 3000,
             );
@@ -2591,29 +2593,6 @@ function updateNavigation(isLoggedIn) {
     const navAuth = document.getElementById("nav-auth");
     const navProfile = document.getElementById("nav-profile");
     const navMessages = document.getElementById("messages-nav-btn");
-    const navLinks = document.querySelector("nav .nav-links");
-
-    let navPersonal = document.getElementById("nav-personal-profile");
-    if (!navPersonal && navLinks) {
-        navPersonal = document.createElement("a");
-        navPersonal.id = "nav-personal-profile";
-        navPersonal.className = "notification-button";
-        navPersonal.title = "Profil personnel";
-        navPersonal.setAttribute("aria-label", "Profil personnel");
-        navPersonal.innerHTML = '<i class="fas fa-user"></i>';
-        navPersonal.onclick = (event) => {
-            event.preventDefault();
-            window.navigateToPersonalProfile?.();
-        };
-        navLinks.insertBefore(navPersonal, navAuth || null);
-    }
-
-    const isSuperAdmin =
-        isLoggedIn &&
-        window.currentUser?.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
-    if (navPersonal) {
-        navPersonal.style.display = isSuperAdmin ? "flex" : "none";
-    }
 
     if (navAuth) {
         if (isLoggedIn) {
@@ -2707,7 +2686,7 @@ function applyProHeroVisibility() {
         window.isProUser(window.currentUser),
     );
 
-    document.body.classList.toggle("xera1-pro-account", isPro);
+    document.body.classList.toggle("xera-pro-account", isPro);
 
     const hero = document.getElementById("hero");
     if (hero) {
@@ -2974,7 +2953,7 @@ function ensureLoginPromptElements() {
     overlay.innerHTML = `
 <div class="login-prompt-card">
             <button class="login-prompt-close" aria-label="Fermer">✕</button>
-            <h3 class="login-prompt-title">Vous aimez XERA1 ?</h3>
+            <h3 class="login-prompt-title">Vous aimez XERA ?</h3>
             <p class="login-prompt-text">
                 Connectez-vous et profitez sans interruption.
             </p>
@@ -3076,7 +3055,7 @@ async function handleSignOut() {
 
 function getAccountDeleteReasonLabel(reason) {
     const map = {
-        inactive: "Je n'utilise plus XERA1",
+        inactive: "Je n'utilise plus XERA",
         technical: "J'ai des problèmes techniques",
         privacy: "Confidentialité / sécurité",
         experience: "L'expérience ne me convient pas",
@@ -3264,20 +3243,22 @@ function adjustNavForAccountType(user) {
     const accountSubtype =
         user?.account_subtype || user?.user_metadata?.account_subtype || "";
 
+    const isSuperAdmin = user?.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
     const isPro =
-        [
-            "community",
-            "enterprise",
-            "company",
-            "pro",
-            "communauté",
-            "entreprise",
-            "institution",
-            "organization",
-            "organisation",
-            "org",
-            "team",
-        ].includes(accountType.toLowerCase()) ||
+        (!isSuperAdmin &&
+            [
+                "community",
+                "enterprise",
+                "company",
+                "pro",
+                "communauté",
+                "entreprise",
+                "institution",
+                "organization",
+                "organisation",
+                "org",
+                "team",
+            ].includes(accountType.toLowerCase())) ||
         [
             "community",
             "enterprise",
@@ -3318,10 +3299,10 @@ function snapshotUserContents() {
     return snapshot;
 }
 
-const XERA_CACHE_USERS_KEY = "xera1:cache:users";
-const XERA_CACHE_DISCOVER_LATEST_KEY = "xera1:cache:discover:latest";
-const XERA_CACHE_DISCOVER_TS_KEY = "xera1:cache:discover:ts";
-const XERA_CACHE_PROFILE_CONTENT_PREFIX = "xera1:cache:profile:contents:";
+const XERA_CACHE_USERS_KEY = "xera:cache:users";
+const XERA_CACHE_DISCOVER_LATEST_KEY = "xera:cache:discover:latest";
+const XERA_CACHE_DISCOVER_TS_KEY = "xera:cache:discover:ts";
+const XERA_CACHE_PROFILE_CONTENT_PREFIX = "xera:cache:profile:contents:";
 
 async function ensureOnlineOrNotify() {
     try {
@@ -4087,7 +4068,7 @@ async function notifyAnnouncementOwnerOfReply(
         (typeof getCurrentUserDisplayName === "function" &&
             getCurrentUserDisplayName()) ||
         current.name ||
-        "Un membre XERA1";
+        "Un membre XERA";
     const announcementTitle = shortenReplyNotificationText(
         title || "votre annonce",
         70,
@@ -4209,8 +4190,8 @@ function clearPendingCreatePostAfterArc() {
     window.pendingCreatePostAfterArc = null;
 }
 
-const XERA_CREATE_PREFS_KEY_PREFIX = "xera1:create:prefs:";
-const XERA_CREATE_METRICS_KEY_PREFIX = "xera1:create:metrics:";
+const XERA_CREATE_PREFS_KEY_PREFIX = "xera:create:prefs:";
+const XERA_CREATE_METRICS_KEY_PREFIX = "xera:create:metrics:";
 const XERA_CREATE_METRIC_HISTORY_LIMIT = 8;
 const XERA_CREATE_TAG_LIMIT = 6;
 const XERA_CREATE_TITLE_LIMIT = 4;
@@ -4513,7 +4494,7 @@ function showMobileArcOnboardingNotification(userId) {
             <div style="flex:1; min-width:0;">
                 <div style="font-weight:700; font-size:0.95rem; margin-bottom:4px;">Démarrez votre premier projet</div>
                 <div style="font-size:0.84rem; color:rgba(245,245,245,0.82); line-height:1.35;">
-                    Sur XERA1, un projet est votre trajectoire. Créez-le pour publier vos mises à jour et suivre votre progression.
+                    Sur XERA, un projet est votre trajectoire. Créez-le pour publier vos mises à jour et suivre votre progression.
                 </div>
             </div>
 </div>
@@ -4593,7 +4574,7 @@ async function maybeStartFirstPostFlow() {
         if (isMobileContext) return;
         const shouldOpenCreate =
             confirm(
-                "Bienvenue sur XERA1. Voulez-vous publier votre première mise à jour maintenant ?",
+                "Bienvenue sur XERA. Voulez-vous publier votre première mise à jour maintenant ?",
             ) === true;
         if (shouldOpenCreate) {
             openCreateMenu(userId, firstArcId);
@@ -4604,7 +4585,7 @@ async function maybeStartFirstPostFlow() {
     const shouldStartArc = isMobileContext
         ? true
         : confirm(
-              "Bienvenue sur XERA1. Pour publier votre première mise à jour, commencez par créer votre premier projet. Lancer la création maintenant ?",
+              "Bienvenue sur XERA. Pour publier votre première mise à jour, commencez par créer votre premier projet. Lancer la création maintenant ?",
           ) === true;
     if (isMobileContext) {
         showMobileArcOnboardingNotification(userId);
@@ -4692,7 +4673,7 @@ function timeAgo(date) {
 function loadCarouselImagesForIndex(carousel, index, slideCount) {
     if (!carousel) return;
 
-    const slides = carousel.querySelectorAll(".xera1-carousel-slide img");
+    const slides = carousel.querySelectorAll(".xera-carousel-slide img");
     if (slides.length === 0) return;
 
     // Charger l'image courante en priorité, puis les images adjacentes
@@ -4727,14 +4708,14 @@ function initXeraCarousels(root = document) {
         // Charger les images de manière séquentielle
         sequentiallyLoadCarouselImages(carousel);
 
-        const track = carousel.querySelector(".xera1-carousel-track");
+        const track = carousel.querySelector(".xera-carousel-track");
         if (!track) return;
-        const dots = Array.from(carousel.querySelectorAll(".xera1-dot"));
+        const dots = Array.from(carousel.querySelectorAll(".xera-dot"));
         const slideCount = Math.max(dots.length, track.children.length || 0);
         const countCurrent = carousel.querySelector("[data-carousel-current]");
         const countTotal = carousel.querySelector("[data-carousel-total]");
-        const prevBtn = carousel.querySelector(".xera1-carousel-arrow--prev");
-        const nextBtn = carousel.querySelector(".xera1-carousel-arrow--next");
+        const prevBtn = carousel.querySelector(".xera-carousel-arrow--prev");
+        const nextBtn = carousel.querySelector(".xera-carousel-arrow--next");
 
         if (countTotal) countTotal.textContent = String(slideCount || 0);
 
@@ -4906,27 +4887,27 @@ function renderC2PABadgeHtml(placement = "feed-card", content = null) {
 }
 
 function ensureC2PAModal() {
-    let modal = document.getElementById("xera1-c2pa-modal");
+    let modal = document.getElementById("xera-c2pa-modal");
     if (modal) return modal;
 
     const html = `
-        <div id="xera1-c2pa-modal" class="xera1-c2pa-modal" aria-hidden="true" role="dialog" aria-modal="true">
-            <div class="xera1-c2pa-modal__backdrop" data-close-c2pa-modal="1"></div>
-            <div class="xera1-c2pa-modal__card" role="document">
-                <div class="xera1-c2pa-modal__header">
+        <div id="xera-c2pa-modal" class="xera-c2pa-modal" aria-hidden="true" role="dialog" aria-modal="true">
+            <div class="xera-c2pa-modal__backdrop" data-close-c2pa-modal="1"></div>
+            <div class="xera-c2pa-modal__card" role="document">
+                <div class="xera-c2pa-modal__header">
                     <div>
-                        <div class="xera1-c2pa-modal__eyebrow">Content Credentials</div>
+                        <div class="xera-c2pa-modal__eyebrow">Content Credentials</div>
                         <h3>Source & historique du média</h3>
                     </div>
-                    <button type="button" class="xera1-c2pa-modal__close" aria-label="Fermer" data-close-c2pa-modal="1">×</button>
+                    <button type="button" class="xera-c2pa-modal__close" aria-label="Fermer" data-close-c2pa-modal="1">×</button>
                 </div>
-                <div id="xera1-c2pa-modal__body" class="xera1-c2pa-modal__body"></div>
+                <div id="xera-c2pa-modal__body" class="xera-c2pa-modal__body"></div>
             </div>
         </div>
     `;
 
     document.body.insertAdjacentHTML("beforeend", html);
-    modal = document.getElementById("xera1-c2pa-modal");
+    modal = document.getElementById("xera-c2pa-modal");
     modal.addEventListener("click", (event) => {
         if (event.target && event.target.dataset.closeC2paModal === "1") {
             modal.classList.remove("is-open");
@@ -4935,7 +4916,7 @@ function ensureC2PAModal() {
     });
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
-            const active = document.getElementById("xera1-c2pa-modal");
+            const active = document.getElementById("xera-c2pa-modal");
             if (active && active.classList.contains("is-open")) {
                 active.classList.remove("is-open");
                 active.setAttribute("aria-hidden", "true");
@@ -4947,7 +4928,7 @@ function ensureC2PAModal() {
 
 window.openC2PAModal = function (payload) {
     const modal = ensureC2PAModal();
-    const body = document.getElementById("xera1-c2pa-modal__body");
+    const body = document.getElementById("xera-c2pa-modal__body");
     const state =
         payload && typeof payload === "object"
             ? payload
@@ -4966,18 +4947,18 @@ window.openC2PAModal = function (payload) {
             : "<li>Aucune action C2PA détectée.</li>";
 
     body.innerHTML = `
-        <div class="xera1-c2pa-modal__content">
-            <div class="xera1-c2pa-modal__summary">
-                <span class="xera1-c2pa-modal__pill">AI detected</span>
-                <span class="xera1-c2pa-modal__value">${state.isAI ? "Confirmé" : "Non confirmé"}</span>
+        <div class="xera-c2pa-modal__content">
+            <div class="xera-c2pa-modal__summary">
+                <span class="xera-c2pa-modal__pill">AI detected</span>
+                <span class="xera-c2pa-modal__value">${state.isAI ? "Confirmé" : "Non confirmé"}</span>
             </div>
-            <dl class="xera1-c2pa-modal__list">
+            <dl class="xera-c2pa-modal__list">
                 <div><dt>Émetteur</dt><dd>${escapeHtml(provenance.issuer || "Non disponible")}</dd></div>
                 <div><dt>Outil / API</dt><dd>${escapeHtml(provenance.tool || provenance.api || source.claimGenerator || "Non disponible")}</dd></div>
                 <div><dt>Date</dt><dd>${escapeHtml(provenance.createdAt || "Non disponible")}</dd></div>
                 <div><dt>Modèle</dt><dd>${escapeHtml(provenance.model || "Non disponible")}</dd></div>
             </dl>
-            <div class="xera1-c2pa-modal__history">
+            <div class="xera-c2pa-modal__history">
                 <h4>Historique</h4>
                 <ul>${history}</ul>
             </div>
@@ -4989,7 +4970,7 @@ window.openC2PAModal = function (payload) {
 };
 
 window.closeC2PAModal = function () {
-    const modal = document.getElementById("xera1-c2pa-modal");
+    const modal = document.getElementById("xera-c2pa-modal");
     if (!modal) return;
     modal.classList.remove("is-open");
     modal.setAttribute("aria-hidden", "true");
@@ -4997,10 +4978,10 @@ window.closeC2PAModal = function () {
 
 if (
     typeof document !== "undefined" &&
-    !document.getElementById("xera1-c2pa-styles")
+    !document.getElementById("xera-c2pa-styles")
 ) {
     const c2paStyles = document.createElement("style");
-    c2paStyles.id = "xera1-c2pa-styles";
+    c2paStyles.id = "xera-c2pa-styles";
     c2paStyles.textContent = `
         .c2pa-badge {
             position: absolute;
@@ -5025,19 +5006,19 @@ if (
         .c2pa-badge--feed { right: 10px; bottom: 10px; }
         .c2pa-badge--immersive { top: 12px; right: 12px; }
         .c2pa-badge--profile { top: 12px; right: 12px; }
-        .xera1-c2pa-modal {
+        .xera-c2pa-modal {
             position: fixed;
             inset: 0;
             display: none;
             z-index: 9999;
         }
-        .xera1-c2pa-modal.is-open { display: block; }
-        .xera1-c2pa-modal__backdrop {
+        .xera-c2pa-modal.is-open { display: block; }
+        .xera-c2pa-modal__backdrop {
             position: absolute;
             inset: 0;
             background: rgba(15, 23, 42, 0.7);
         }
-        .xera1-c2pa-modal__card {
+        .xera-c2pa-modal__card {
             position: relative;
             width: min(440px, calc(100vw - 28px));
             margin: 10vh auto;
@@ -5048,25 +5029,25 @@ if (
             color: #f8fafc;
             padding: 1.1rem 1.15rem 1.2rem;
         }
-        .xera1-c2pa-modal__header {
+        .xera-c2pa-modal__header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 1rem;
             margin-bottom: 0.75rem;
         }
-        .xera1-c2pa-modal__eyebrow {
+        .xera-c2pa-modal__eyebrow {
             font-size: 0.68rem;
             letter-spacing: 0.1em;
             text-transform: uppercase;
             color: #94a3b8;
             margin-bottom: 0.2rem;
         }
-        .xera1-c2pa-modal__header h3 {
+        .xera-c2pa-modal__header h3 {
             margin: 0;
             font-size: 1.05rem;
         }
-        .xera1-c2pa-modal__close {
+        .xera-c2pa-modal__close {
             width: 2rem;
             height: 2rem;
             border-radius: 999px;
@@ -5076,7 +5057,7 @@ if (
             font-size: 1.25rem;
             cursor: pointer;
         }
-        .xera1-c2pa-modal__summary {
+        .xera-c2pa-modal__summary {
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -5087,50 +5068,50 @@ if (
             border-radius: 12px;
             margin-bottom: 0.75rem;
         }
-        .xera1-c2pa-modal__pill {
+        .xera-c2pa-modal__pill {
             font-size: 0.62rem;
             letter-spacing: 0.08em;
             text-transform: uppercase;
             color: #93c5fd;
         }
-        .xera1-c2pa-modal__value {
+        .xera-c2pa-modal__value {
             color: #e2e8f0;
             font-weight: 700;
         }
-        .xera1-c2pa-modal__list {
+        .xera-c2pa-modal__list {
             display: grid;
             gap: 0.7rem;
             margin: 0;
         }
-        .xera1-c2pa-modal__list div {
+        .xera-c2pa-modal__list div {
             display: grid;
             gap: 0.2rem;
         }
-        .xera1-c2pa-modal__list dt {
+        .xera-c2pa-modal__list dt {
             color: #94a3b8;
             font-size: 0.66rem;
             letter-spacing: 0.08em;
             text-transform: uppercase;
         }
-        .xera1-c2pa-modal__list dd {
+        .xera-c2pa-modal__list dd {
             margin: 0;
             color: #e2e8f0;
             line-height: 1.5;
         }
-        .xera1-c2pa-modal__history {
+        .xera-c2pa-modal__history {
             margin-top: 1rem;
         }
-        .xera1-c2pa-modal__history h4 {
+        .xera-c2pa-modal__history h4 {
             margin: 0 0 0.5rem;
             color: #f8fafc;
             font-size: 0.92rem;
         }
-        .xera1-c2pa-modal__history ul {
+        .xera-c2pa-modal__history ul {
             margin: 0;
             padding-left: 1.1rem;
             color: #cbd5e1;
         }
-        .xera1-c2pa-modal__history li {
+        .xera-c2pa-modal__history li {
             margin-bottom: 0.35rem;
         }
     `;
@@ -5460,7 +5441,7 @@ function getCurrentUserDisplayName() {
         profile?.name ||
         profile?.username ||
         window.currentUser?.email ||
-        "Un membre XERA1"
+        "Un membre XERA"
     );
 }
 
@@ -6080,11 +6061,12 @@ function attachMentionAutocomplete(textarea) {
 
     let autocompleteList = null;
     let lastQuery = "";
+    let mentionSearchRequest = 0;
 
     const createList = () => {
         const list = document.createElement("div");
         list.className = "mention-autocomplete-list";
-        list.style.position = "absolute";
+        list.style.position = "fixed";
         list.style.zIndex = "20000";
         list.style.background = "var(--bg-secondary)";
         list.style.border = "1px solid var(--border-color)";
@@ -6100,14 +6082,23 @@ function attachMentionAutocomplete(textarea) {
     const updateListPosition = () => {
         if (!autocompleteList) return;
         const rect = textarea.getBoundingClientRect();
-        autocompleteList.style.top = `${rect.bottom + window.scrollY + 5}px`;
-        autocompleteList.style.left = `${rect.left + window.scrollX}px`;
-        autocompleteList.style.width = `${rect.width}px`;
+        autocompleteList.style.top = `${Math.min(rect.bottom + 5, window.innerHeight - 210)}px`;
+        autocompleteList.style.left = `${Math.max(8, rect.left)}px`;
+        autocompleteList.style.width = `${Math.min(rect.width, window.innerWidth - 16)}px`;
     };
 
     const performMentionSearch = async (query) => {
         if (query === lastQuery) return;
         lastQuery = query;
+        const requestId = ++mentionSearchRequest;
+        autocompleteList.innerHTML = `
+            <div class="mention-search-loading" role="status" aria-live="polite">
+                <span class="mention-search-spinner" aria-hidden="true"></span>
+                Recherche en cours...
+            </div>
+        `;
+        autocompleteList.style.display = "block";
+        updateListPosition();
 
         try {
             const [usersRes, pagesRes] = await Promise.all([
@@ -6125,6 +6116,7 @@ function attachMentionAutocomplete(textarea) {
 
             const users = (usersRes.data || []).filter((u) => u && u.name);
             const pages = (pagesRes.data || []).filter((p) => p && p.name);
+            if (requestId !== mentionSearchRequest) return;
             const results = [
                 ...users.map((u) => ({
                     id: u.id,
@@ -6147,10 +6139,15 @@ function attachMentionAutocomplete(textarea) {
             if (results.length > 0) {
                 renderResults(results);
             } else {
-                autocompleteList.style.display = "none";
+                autocompleteList.innerHTML = `<div class="mention-search-empty">Aucun résultat</div>`;
+                autocompleteList.style.display = "block";
+                updateListPosition();
             }
         } catch (err) {
             console.warn("Mention search error:", err);
+            autocompleteList.innerHTML = `<div class="mention-search-empty">Recherche indisponible</div>`;
+            autocompleteList.style.display = "block";
+            updateListPosition();
         }
     };
 
@@ -6201,10 +6198,16 @@ function attachMentionAutocomplete(textarea) {
 
         if (lastAt !== -1) {
             const query = textBefore.substring(lastAt + 1);
-            // On ne cherche que si l'at est collé à du texte ou si on vient de le taper
-            if (!query.includes(" ") && query.length >= 1) {
+            if (!query.includes(" ")) {
                 if (!autocompleteList) autocompleteList = createList();
-                performMentionSearch(query);
+                if (query.length === 0) {
+                    lastQuery = "";
+                    autocompleteList.innerHTML = `<div class="mention-search-hint">Tapez un nom après @ pour rechercher</div>`;
+                    autocompleteList.style.display = "block";
+                    updateListPosition();
+                } else {
+                    performMentionSearch(query);
+                }
                 return;
             }
         }
@@ -6558,6 +6561,22 @@ function getSuperAdminPanelHtml() {
             </div>
 
             <div class="verification-admin-block" style="margin-top: 1.5rem;">
+                <h4>Codes de réduction abonnements</h4>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Crée un code, sa période de validité et une réduction de 10 à 100 %.</p>
+                <div class="verification-input-row" style="flex-wrap: wrap; align-items: end;">
+                    <label>Code<input type="text" id="admin-discount-code" class="form-input" maxlength="40" placeholder="BIENVENUE10"></label>
+                    <label>Plan offert<select id="admin-discount-plan" class="form-input"><option value="standard">Standard</option><option value="medium">Medium</option><option value="pro">Pro</option><option value="elite">Elite</option><option value="page_verification">Page verification</option></select></label>
+                    <label>Réduction (%)<input type="number" id="admin-discount-percent" class="form-input" min="10" max="100" step="1" value="100"></label>
+                    <label>Avantages (jours)<input type="number" id="admin-discount-duration" class="form-input" min="1" step="1" placeholder="30"></label>
+                    <label>Limite utilisations<input type="number" id="admin-discount-max-uses" class="form-input" min="1" step="1" placeholder="Illimitée"></label>
+                    <label>Début<input type="datetime-local" id="admin-discount-from" class="form-input"></label>
+                    <label>Fin (optionnelle)<input type="datetime-local" id="admin-discount-until" class="form-input"></label>
+                    <button type="button" class="btn-verify" onclick="createAdminDiscountCode()">Créer le code</button>
+                </div>
+                <div id="admin-discount-codes-list" style="margin-top:0.9rem; display:flex; flex-direction:column; gap:0.5rem;"></div>
+            </div>
+
+            <div class="verification-admin-block" style="margin-top: 1.5rem;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                     <div>
                         <h4 style="margin:0;">Paiements abonnements KPay</h4>
@@ -6634,7 +6653,7 @@ function getSuperAdminPanelHtml() {
             <div class="verification-admin-block" style="margin-top: 1.5rem;">
                 <h4>Envoyer un email à tout le monde</h4>
                 <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                    Envoyer un email officiel XERA1 à tous les utilisateurs enregistrés.
+                    Envoyer un email officiel XERA à tous les utilisateurs enregistrés.
                 </p>
                 <div class="verification-input-row" style="flex-direction: column; align-items: stretch;">
                     <input type="text" id="admin-broadcast-subject" class="form-input" placeholder="Sujet de l'email">
@@ -6804,19 +6823,15 @@ function renderSuperAdminPage() {
     const container = document.getElementById("admin-dashboard");
     if (!container) return;
     container.innerHTML = `
-<div class="admin-console-shell">
-            <div class="admin-console-header">
+<div class="settings-section">
+            <div class="settings-header" style="border:none; margin-bottom:1rem; padding-bottom:0;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap: 1rem; flex-wrap: wrap;">
                     <div style="display:flex; align-items:center; gap: 0.75rem;">
-                        <div>
-                            <p class="admin-eyebrow">XERA1 / CONTROL ROOM</p>
-                            <h1>Administration</h1>
-                        </div>
-                        <span class="admin-status-pill"><span></span> Super admin</span>
+                        <h2>Administration</h2>
+                        <span class="admin-badge">Super admin</span>
                     </div>
-                    <a class="admin-top-action" href="badges-admin.html">Vérification Pages Pro <span>→</span></a>
                 </div>
-                <p class="admin-console-intro">Pilotez les signaux critiques de la plateforme, traitez les demandes et publiez les décisions officielles.</p>
+                <p>Gestion complète du compte et des annonces officielles.</p>
             </div>
 </div>
 ${getSuperAdminPanelHtml()}
@@ -6824,6 +6839,7 @@ ${getSuperAdminPanelHtml()}
     // Précharge les stats temps réel si visible
     setTimeout(() => refreshAppPulse(), 150);
     setTimeout(() => fetchAdminSubscriptionPayments(), 150);
+    setTimeout(() => fetchAdminDiscountCodes(), 150);
     setTimeout(() => fetchAdminWithdrawalRequests(), 150);
 }
 
@@ -7025,7 +7041,7 @@ async function refreshAdminSubscriptionRelatedViews(user) {
             await renderDiscoverGrid();
             if (typeof window.ToastManager !== "undefined") {
                 window.ToastManager.success(
-                    "XΞRA1 High-Signal",
+                    "XΞRA High-Signal",
                     "Momentum Engine & Fluidity Active.",
                     3000,
                 );
@@ -7056,6 +7072,86 @@ async function fetchAdminSubscriptionPayments() {
                 ${escapeHtml(error?.message || "Impossible de charger les paiements.")}
             </div>
 `;
+    }
+}
+
+function renderAdminDiscountCodes(items) {
+    const container = document.getElementById("admin-discount-codes-list");
+    if (!container) return;
+    container.innerHTML = !items.length
+        ? '<div class="verification-empty">Aucun code créé.</div>'
+        : items
+              .map(
+                  (item) => `
+            <div class="admin-card" style="display:flex;justify-content:space-between;gap:0.75rem;align-items:center;flex-wrap:wrap;border:1px solid var(--border-color);padding:0.7rem;border-radius:8px;">
+                <strong>${escapeHtml(item.code)} - ${escapeHtml(item.plan || "?")} - ${Number(item.discount_percent)}%</strong>
+                <span style="color:var(--text-secondary);font-size:0.85rem;">Code: ${formatAdminPaymentDate(item.valid_from)} → ${item.valid_until ? formatAdminPaymentDate(item.valid_until) : "Sans fin"} | Avantages: ${Number(item.benefit_duration_days)} jours | Usages: ${Number(item.uses_count || 0)}${item.max_uses ? `/${Number(item.max_uses)}` : ""}</span>
+                ${item.active ? `<button type="button" class="btn-cancel" onclick="deactivateAdminDiscountCode('${escapeHtml(item.id)}')">Désactiver</button>` : '<span class="admin-badge">Désactivé</span>'}
+            </div>`,
+              )
+              .join("");
+}
+
+async function fetchAdminDiscountCodes() {
+    const container = document.getElementById("admin-discount-codes-list");
+    if (!container) return;
+    try {
+        const payload = await fetchSuperAdminJson("/api/admin/discount-codes");
+        renderAdminDiscountCodes(payload?.codes || []);
+    } catch (error) {
+        container.innerHTML = `<div class="verification-empty">${escapeHtml(error?.message || "Impossible de charger les codes.")}</div>`;
+    }
+}
+
+async function createAdminDiscountCode() {
+    const code = document.getElementById("admin-discount-code")?.value || "";
+    const percent =
+        document.getElementById("admin-discount-percent")?.value || "";
+    const plan =
+        document.getElementById("admin-discount-plan")?.value || "standard";
+    const duration =
+        document.getElementById("admin-discount-duration")?.value || "";
+    const maxUses =
+        document.getElementById("admin-discount-max-uses")?.value || "";
+    const from = document.getElementById("admin-discount-from")?.value || "";
+    const until = document.getElementById("admin-discount-until")?.value || "";
+    try {
+        await fetchSuperAdminJson("/api/admin/discount-codes", {
+            method: "POST",
+            body: JSON.stringify({
+                code,
+                plan,
+                discount_percent: percent,
+                benefit_duration_days: duration,
+                max_uses: maxUses || undefined,
+                valid_from: from || undefined,
+                valid_until: until || undefined,
+            }),
+        });
+        ToastManager?.success("Code créé", "Le code de réduction est actif.");
+        document.getElementById("admin-discount-code").value = "";
+        document.getElementById("admin-discount-percent").value = "";
+        await fetchAdminDiscountCodes();
+    } catch (error) {
+        ToastManager?.error(
+            "Erreur",
+            error?.message || "Impossible de créer le code.",
+        );
+    }
+}
+
+async function deactivateAdminDiscountCode(id) {
+    try {
+        await fetchSuperAdminJson(
+            `/api/admin/discount-codes/${encodeURIComponent(id)}`,
+            { method: "DELETE" },
+        );
+        await fetchAdminDiscountCodes();
+    } catch (error) {
+        ToastManager?.error(
+            "Erreur",
+            error?.message || "Impossible de désactiver le code.",
+        );
     }
 }
 
@@ -7371,30 +7467,14 @@ async function fetchVerificationRequests() {
     try {
         const { data, error } = await supabase
             .from("verification_requests")
-            .select("id, user_id, type, status, created_at")
+            .select(
+                "id, user_id, type, status, created_at, users(id, name, avatar)",
+            )
             .eq("status", "pending")
             .order("created_at", { ascending: false });
 
         if (error) throw error;
-        const requests = data || [];
-        const userIds = Array.from(
-            new Set(requests.map((request) => request.user_id).filter(Boolean)),
-        );
-        let usersById = new Map();
-        if (userIds.length) {
-            const { data: users, error: usersError } = await supabase
-                .from("users")
-                .select("id, name, avatar")
-                .in("id", userIds);
-            if (usersError) throw usersError;
-            usersById = new Map((users || []).map((user) => [user.id, user]));
-        }
-
-        verificationRequests = requests.map((request) => ({
-            ...request,
-            userId: request.user_id,
-            users: usersById.get(request.user_id) || null,
-        }));
+        verificationRequests = data || [];
         return verificationRequests;
     } catch (error) {
         console.error("Erreur récupération demandes vérification:", error);
@@ -7505,7 +7585,7 @@ function isGifUrl(value) {
     return lower.includes(".gif");
 }
 
-const GIF_SNAPSHOT_CACHE_KEY = "xera1:gif:snapshots";
+const GIF_SNAPSHOT_CACHE_KEY = "xera:gif:snapshots";
 const GIF_SNAPSHOT_CACHE_MAX = 50;
 const gifSnapshotCache = new Map();
 const gifSnapshotInFlight = new Set();
@@ -7643,8 +7723,8 @@ function sanitizeUserMedia(user) {
 }
 
 const PROFILE_THEME_PRESETS = {
-    xera1: {
-        label: "XERA1",
+    xera: {
+        label: "XERA",
         accent: "#10b981",
         secondary: "#f59e0b",
     },
@@ -7672,7 +7752,7 @@ const PROFILE_THEME_PRESETS = {
 
 const DEFAULT_PROFILE_PREFERENCES = {
     appearance: {
-        theme: "xera1",
+        theme: "xera",
         accent: "#10b981",
         secondary: "#f59e0b",
         layout: "balanced",
@@ -7715,7 +7795,7 @@ function normalizeProfilePreferences(rawPreferences) {
     const theme = PROFILE_THEME_PRESETS[rawAppearance.theme]
         ? rawAppearance.theme
         : DEFAULT_PROFILE_PREFERENCES.appearance.theme;
-    const preset = PROFILE_THEME_PRESETS[theme] || PROFILE_THEME_PRESETS.xera1;
+    const preset = PROFILE_THEME_PRESETS[theme] || PROFILE_THEME_PRESETS.xera;
     const layout = ["balanced", "showcase", "compact"].includes(
         rawAppearance.layout,
     )
@@ -8225,11 +8305,6 @@ function renderAmbassadorBadgeById(userId) {
     return `<img src="icons/embassadeur.svg?v=${BADGE_ASSET_VERSION}" alt="Ambassadeur" class="username-badge">`;
 }
 
-function renderPageVerificationBadgeById(pageId) {
-    if (!pageId || !verifiedPageIds.has(pageId)) return "";
-    return `<img src="icons/verify-com.svg?v=${BADGE_ASSET_VERSION}" alt="Page Pro vérifiée" class="username-badge" title="Page Pro vérifiée">`;
-}
-
 function normalizeDiscoveryAccountRole(value) {
     const raw = String(value || "")
         .trim()
@@ -8294,10 +8369,6 @@ function renderProfileRoleBadgeByUser(user) {
 
 function renderVerificationBadgeById(userId) {
     const user = getUser(userId) || {};
-
-    if (isAmbassadorUserId(userId)) {
-        return renderAmbassadorBadgeById(userId);
-    }
 
     const badgeValue = user.badge ? String(user.badge).toLowerCase() : "";
     const planActive = isPlanActiveByDate(user);
@@ -8365,6 +8436,10 @@ function renderVerificationBadgeById(userId) {
     if (isCreatorListed || personalRequested) {
         return `<img src="icons/verify-personal.svg?v=${BADGE_ASSET_VERSION}" alt="Créateur vérifié" class="verification-badge">`;
     }
+    if (badgeValue === "ambassador") {
+        return renderAmbassadorBadgeById(userId);
+    }
+
     return "";
 }
 
@@ -8372,6 +8447,24 @@ function renderVerificationBadgeOnly(userId) {
     const verificationHtml = renderVerificationBadgeById(userId);
     if (!verificationHtml) return "";
     return `<div class="badge-container">${verificationHtml}</div>`;
+}
+
+function renderVerifiedPageBadge(pageId) {
+    if (
+        !pageId ||
+        typeof window.isVerifiedPageId !== "function" ||
+        !window.isVerifiedPageId(pageId)
+    ) {
+        return "";
+    }
+    return `<img src="icons/verify_page.svg" alt="Page vérifiée" class="verification-badge page-verification-badge">`;
+}
+
+function renderVerifiedPageName(nameHtml, pageId) {
+    if (!nameHtml) return "";
+    const badgeHtml = renderVerifiedPageBadge(pageId);
+    if (!badgeHtml) return nameHtml;
+    return `<span class="username-with-badge username-with-page-badge">${nameHtml}${badgeHtml}</span>`;
 }
 
 function renderUsernameForProfile(nameHtml, userId) {
@@ -8403,7 +8496,7 @@ function renderCertificationsHtml(certs) {
                 <span style="font-size: 0.9rem; color: var(--text-secondary);">${label}</span>
                 <div class="pro-page-link" onclick="navigateToProPage('${page.slug}')" style="display: flex; align-items: center; gap: 6px; cursor: pointer; background: rgba(var(--primary-rgb), 0.05); padding: 4px 10px; border-radius: 20px; border: 1px solid rgba(var(--primary-rgb), 0.1); transition: all 0.2s;">
                     <img src="${logo}" style="width: 20px; height: 20px; border-radius: 4px; object-fit: cover; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" alt="${page.name}">
-                    <span style="font-weight: 600; color: var(--primary-color); font-size: 0.9rem;">${page.name}</span>
+                    <span style="font-weight: 600; color: var(--primary-color); font-size: 0.9rem;">${renderVerifiedPageName(page.name, page.id)}</span>
                 </div>
             </div>
         `;
@@ -8442,20 +8535,12 @@ function wrapUsernameLabel(nameHtml) {
     return `<span class="username-label"${styleAttr}>${normalizedName}</span>`;
 }
 
-function renderUsernameWithBadge(
-    nameHtml,
-    userId,
-    isPage = false,
-    pageId = null,
-) {
+function renderUsernameWithBadge(nameHtml, userId, isPage = false) {
     if (!nameHtml) return "";
     const labelHtml = wrapUsernameLabel(nameHtml);
 
     if (isPage) {
-        const pageBadge = renderPageVerificationBadgeById(pageId || userId);
-        return pageBadge
-            ? `<span class="username-with-badge">${labelHtml}${pageBadge}</span>`
-            : labelHtml;
+        return renderVerifiedPageName(labelHtml, userId);
     }
 
     const verificationHtml = renderVerificationBadgeById(userId);
@@ -9668,8 +9753,7 @@ function renderProfileUpdateCard(
 
     // GESTION DES TYPES PROFESSIONNELS (Actualités & Événements)
     if (content.type === "news" || content.type === "event") {
-        const typeLabel =
-            content.type === "news" ? "Actualité Officielle" : "Événement";
+        const typeLabel = content.type === "news" ? "Post" : "Événement";
         const accentColor = content.type === "news" ? "#f59e0b" : "#c084fc";
         const dateLabel = safeFormatDate(content.createdAt, {
             month: "long",
@@ -9737,12 +9821,13 @@ function renderProfileUpdateCard(
                         <h3 style="margin: 0; font-size: 1.5rem; line-height: 1.2; font-family: var(--font-heading); color: #fff;">${titleHtml}</h3>
                         <span style="font-size: 0.8rem; color: var(--text-secondary);">${dateLabel}</span>
                     </div>
-                    <p style="font-size: 1.05rem; line-height: 1.6; color: var(--text-secondary); margin-bottom: 15px;">${descriptionHtml}</p>
+                    <p class="pro-post-description" data-pro-post-id="${escapeHtml(content.id || "")}" onclick="toggleProPostDescription('${escapeHtml(content.id || "")}')">${descriptionHtml}</p>
                     ${proContextHtml}
                     ${mediaHtml}
                     <div class="pro-card-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">
                          <div class="profile-update-stats">
                             <span style="color: var(--text-secondary); font-size: 0.85rem;">Publié officiellement</span>
+                            <button type="button" class="pro-post-expand-btn" onclick="event.stopPropagation(); toggleProPostDescription('${escapeHtml(content.id || "")}')">Lire la suite</button>
                          </div>
                          <div style="display: flex; gap: 10px;">
                             <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); shareContent('${content.id}')"><i class="fas fa-share"></i></button>
@@ -9899,15 +9984,19 @@ function renderProfileUpdateCard(
                 const isValidatedByThisPage =
                     content.isValidatedPro &&
                     content.validatedByPageId === page.id;
+                const pageNameHtml = renderVerifiedPageName(
+                    escapeHtml(page.name),
+                    page.id,
+                );
                 managementHtml += `
                     <div class="profile-update-management pro-management">
                         ${
                             isValidatedByThisPage
                                 ? `
-                            <button class="btn-action" style="background: #ef4444; color: #fff;" onclick="event.stopPropagation(); window.professionalManager.invalidateTrace('${content.contentId}').then(() => renderProfileIntoContainer('${profileUserId}'))">Révoquer Validation (${page.name})</button>
+                            <button class="btn-action" style="background: #ef4444; color: #fff;" onclick="event.stopPropagation(); window.professionalManager.invalidateTrace('${content.contentId}').then(() => renderProfileIntoContainer('${profileUserId}'))">Révoquer Validation (${pageNameHtml})</button>
                         `
                                 : `
-                            <button class="btn-action" style="background: #000; color: #fff;" onclick="event.stopPropagation(); window.professionalManager.validateTrace('${content.contentId}', '${page.id}').then(() => renderProfileIntoContainer('${profileUserId}'))">Accorder Seal of Approval (${page.name})</button>
+                            <button class="btn-action" style="background: #000; color: #fff;" onclick="event.stopPropagation(); window.professionalManager.validateTrace('${content.contentId}', '${page.id}').then(() => renderProfileIntoContainer('${profileUserId}'))">Accorder Seal of Approval (${pageNameHtml})</button>
                         `
                         }
                     </div>
@@ -10863,7 +10952,7 @@ async function handleDiscoverQuickAction(contentId, action, userId = null) {
     }
 
     if (action === "share") {
-        const title = content?.title || "Trajectoire XERA1";
+        const title = content?.title || "Trajectoire XERA";
         const url = userId
             ? buildProfileShareUrl(userId)
             : new URL(window.location.href).toString();
@@ -10871,7 +10960,7 @@ async function handleDiscoverQuickAction(contentId, action, userId = null) {
             if (navigator.share) {
                 await navigator.share({
                     title,
-                    text: `Découvre cette trajectoire sur XERA1: ${title}`,
+                    text: `Découvre cette trajectoire sur XERA: ${title}`,
                     url,
                 });
                 return;
@@ -11004,7 +11093,6 @@ function renderUserCard(
                 title: page.industry,
                 slug: page.slug,
                 isPage: true,
-                pageId: latestContent.pageId,
             };
         }
     }
@@ -11114,21 +11202,21 @@ function renderUserCard(
                 const slides = mediaList
                     .map(
                         (url, index) =>
-                            `<div class="xera1-carousel-slide"><img class="card-media" ${index === 0 ? `src="${url}"` : `data-src="${url}"`} alt="${latestContent.title || "Preview"}" loading="lazy" decoding="async" data-content-id="${latestContent.contentId}"></div>`,
+                            `<div class="xera-carousel-slide"><img class="card-media" ${index === 0 ? `src="${url}"` : `data-src="${url}"`} alt="${latestContent.title || "Preview"}" loading="lazy" decoding="async" data-content-id="${latestContent.contentId}"></div>`,
                     )
                     .join("");
-                const dots = `<div class="xera1-carousel-dots">${mediaList
+                const dots = `<div class="xera-carousel-dots">${mediaList
                     .map(
                         (_, i) =>
-                            `<span class="xera1-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
+                            `<span class="xera-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
                     )
                     .join("")}</div>`;
                 mediaHtml = `
                     <div class="card-media-wrap card-media-wrap--editorial has-multi-media">
-                        <div class="xera1-carousel" data-carousel>
-                            <div class="xera1-carousel-track">${slides}</div>
-                            <button type="button" class="xera1-carousel-arrow xera1-carousel-arrow--prev" aria-label="Image précédente">&lsaquo;</button>
-                            <button type="button" class="xera1-carousel-arrow xera1-carousel-arrow--next" aria-label="Image suivante">&rsaquo;</button>
+                        <div class="xera-carousel" data-carousel>
+                            <div class="xera-carousel-track">${slides}</div>
+                            <button type="button" class="xera-carousel-arrow xera-carousel-arrow--prev" aria-label="Image précédente">&lsaquo;</button>
+                            <button type="button" class="xera-carousel-arrow xera-carousel-arrow--next" aria-label="Image suivante">&rsaquo;</button>
                             <div class="card-media-count" aria-label="${mediaList.length} images dans ce post">
                                 <span data-carousel-current>1</span>/<span data-carousel-total>${mediaList.length}</span>
                             </div>
@@ -11273,7 +11361,7 @@ function renderUserCard(
             <button class="profile-link card-profile-link" data-profile-user-id="${userId}" onclick="event.preventDefault(); event.stopPropagation(); ${profileOnClick}" type="button" aria-label="Voir le profil de ${escapeHtml(displayUser.name || "cet utilisateur")}">
                 <img src="${displayUser.avatar || "https://placehold.co/40"}" class="card-avatar" loading="lazy" decoding="async">
                 <div class="profile-link-text">
-                    <h3 class="discover-user-name">${renderUsernameWithBadge(displayUser.name, userId, displayUser.isPage, displayUser.pageId)}${proBadgeHtml}${monetizationBadgeHtml}</h3>
+                    <h3 class="discover-user-name">${renderUsernameWithBadge(displayUser.name, displayUser.isPage ? latestContent.pageId : userId, displayUser.isPage)}${proBadgeHtml}${monetizationBadgeHtml}</h3>
                     ${momentumBadgeHtml}
                     <div class="card-user-title">${displayUser.title || ""}</div>
                 </div>
@@ -13380,7 +13468,6 @@ async function renderImmersiveHeader(user, pageId = null) {
                 avatar: page.avatar_url || "icons/enterprise.svg",
                 slug: page.slug,
                 isPage: true,
-                pageId,
             };
         }
     }
@@ -13420,7 +13507,7 @@ async function renderImmersiveHeader(user, pageId = null) {
 <div class="immersive-header" id="immersive-header-content">
             <button class="profile-link immersive-profile-link" onclick="event.stopPropagation(); ${profileOnClick}">
                 <img src="${displayUser.avatar}" class="immersive-user-avatar">
-                <span class="immersive-user-name">${renderUsernameWithBadge(displayUser.name, user.id, displayUser.isPage, displayUser.pageId)}</span>
+                <span class="immersive-user-name">${renderUsernameWithBadge(displayUser.name, displayUser.isPage ? pageId : user.id, displayUser.isPage)}</span>
             </button>
             ${subscribeBtnHtml}
 </div>
@@ -13602,16 +13689,14 @@ async function renderImmersiveFeed(contents) {
                         avatar: page.avatar_url || "icons/enterprise.svg",
                         slug: page.slug,
                         isPage: true,
-                        pageId: content.pageId,
                     };
                 }
             }
 
             const contentUserNameHtml = renderUsernameWithBadge(
                 displayUser.name,
-                displayUser.id,
+                displayUser.isPage ? content.pageId : displayUser.id,
                 displayUser.isPage,
-                displayUser.pageId,
             );
             const contentUserAvatar = displayUser.avatar;
 
@@ -13693,23 +13778,23 @@ async function renderImmersiveFeed(contents) {
                         const slides = mediaList
                             .map(
                                 (u, index) =>
-                                    `<div class="xera1-carousel-slide"><img ${index === 0 ? `src="${u}"` : `data-src="${u}"`} class="immersive-image" alt="${content.title || "Media"}" loading="lazy" decoding="async"></div>`,
+                                    `<div class="xera-carousel-slide"><img ${index === 0 ? `src="${u}"` : `data-src="${u}"`} class="immersive-image" alt="${content.title || "Media"}" loading="lazy" decoding="async"></div>`,
                             )
                             .join("");
-                        const dots = `<div class="xera1-carousel-dots">${mediaList
+                        const dots = `<div class="xera-carousel-dots">${mediaList
                             .map(
                                 (_, i) =>
-                                    `<span class="xera1-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
+                                    `<span class="xera-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
                             )
                             .join("")}</div>`;
                         mediaHtml = `
                             <div class="immersive-image-wrap" style="position: relative;">
                                 ${c2paBadgeImmersive}
-                                <div class="xera1-carousel xera1-carousel--immersive" data-carousel>
-                                    <div class="xera1-carousel-track">${slides}</div>
-                                    <button type="button" class="xera1-carousel-arrow xera1-carousel-arrow--prev" aria-label="Image précédente">&lsaquo;</button>
-                                    <button type="button" class="xera1-carousel-arrow xera1-carousel-arrow--next" aria-label="Image suivante">&rsaquo;</button>
-                                    <div class="xera1-carousel-counter" aria-label="Collection de ${mediaList.length} images">
+                                <div class="xera-carousel xera-carousel--immersive" data-carousel>
+                                    <div class="xera-carousel-track">${slides}</div>
+                                    <button type="button" class="xera-carousel-arrow xera-carousel-arrow--prev" aria-label="Image précédente">&lsaquo;</button>
+                                    <button type="button" class="xera-carousel-arrow xera-carousel-arrow--next" aria-label="Image suivante">&rsaquo;</button>
+                                    <div class="xera-carousel-counter" aria-label="Collection de ${mediaList.length} images">
                                         Collection <span data-carousel-current>1</span>/<span data-carousel-total>${mediaList.length}</span>
                                     </div>
                                     ${dots}
@@ -14538,7 +14623,7 @@ function setupImmersiveFullscreenToggle(root = document) {
             wrap.addEventListener("click", (event) => {
                 if (
                     event.target.closest(
-                        "button, a, input, textarea, select, [contenteditable='true'], .post-info, .xera1-carousel-arrow, .xera1-carousel-dots, .support-overlay, .arc-collab-avatars",
+                        "button, a, input, textarea, select, [contenteditable='true'], .post-info, .xera-carousel-arrow, .xera-carousel-dots, .support-overlay, .arc-collab-avatars",
                     )
                 ) {
                     return;
@@ -14707,7 +14792,7 @@ function setupImmersiveSnapNav() {
 
     const isInteractiveTarget = (target) =>
         !!target?.closest(
-            "input, textarea, select, button, a, [contenteditable='true'], .xera1-carousel, .xera1-carousel-track, .xera1-carousel-arrow",
+            "input, textarea, select, button, a, [contenteditable='true'], .xera-carousel, .xera-carousel-track, .xera-carousel-arrow",
         );
 
     const getPosts = () =>
@@ -15477,7 +15562,7 @@ ${
     const verificationCtaHtml = showVerificationCta
         ? `
 <div class="profile-verify-block">
-            <button class="profile-verify-cta" onclick="window.location.href='subscription-plans.html'" aria-label="Demander une vérification XERA1">
+            <button class="profile-verify-cta" onclick="window.location.href='subscription-plans.html'" aria-label="Demander une vérification XERA">
                 <span>Obtenir une vérification</span>
                 <img src="icons/verify-personal.svg?v=${BADGE_ASSET_VERSION}" alt="" aria-hidden="true" />
             </button>
@@ -15781,7 +15866,7 @@ ${
                 Connectez vos outils de travail
             </div>
             <h3 style="margin:0 0 0.45rem; font-size:1.1rem;">Votre flux de documentation se met à jour automatiquement</h3>
-            <p style="margin:0; color: var(--text-secondary); line-height:1.55;">Reliez GitHub, Figma, Notion et Google Cloud pour transformer votre activité réelle en mises à jour XERA1 sans effort.</p>
+            <p style="margin:0; color: var(--text-secondary); line-height:1.55;">Reliez GitHub, Figma, Notion et Google Cloud pour transformer votre activité réelle en mises à jour XERA sans effort.</p>
         </div>
         <div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center; justify-content:flex-end;">
             <button type="button" class="btn btn-secondary" onclick="startOAuthConnection('github')" style="padding:0.6rem 0.9rem; border-radius:999px; display:flex; align-items:center; gap:0.45rem;">
@@ -15877,7 +15962,7 @@ ${showPublicStats ? influenceSectionHtml : ""}
                         <img src="${user.avatar && (user.avatar.startsWith("http") || user.avatar.startsWith("data:")) ? withCacheBust(user.avatar) : "https://placehold.co/150"}" class="profile-avatar-img" alt="Avatar de ${user.name}" onclick="navigateToUserProfile('${userId}')" style="cursor: pointer;">
                     </div>
                     <div class="profile-name-block">
-                        <span class="profile-section-kicker">Profil XERA1</span>
+                        <span class="profile-section-kicker">Profil XERA</span>
                         <h2>${renderUsernameForProfile(user.name, user.id)}${monetizationBadgeHtml}</h2>
                         ${profileRoleBadgeHtml}
                         <p class="profile-title"><strong>${profileTitleHtml}</strong></p>
@@ -15931,7 +16016,7 @@ ${publicActivityHtml}
                     <a href="index.html" style="color: var(--text-secondary); text-decoration: none; transition: color 0.3s;">Accueil</a>
                     <a href="credits.html" style="color: var(--text-secondary); text-decoration: none; transition: color 0.3s;">Crédits</a>
                 </div>
-                <p style="color: var(--text-muted); font-size: 0.9rem;">© 2026 XERA1 - Documentez l'effort</p>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">© 2026 XERA - Documentez l'effort</p>
             </div>
 </footer>
     `;
@@ -15955,13 +16040,15 @@ function isPageProRoute() {
         if (pathname === "/pagepro") return true;
 
         const params = new URLSearchParams(window.location.search);
-        if (params.get("view") === "personal") return false;
         if (params.has("pro")) return true;
 
         // Si on est sur profile.html, on vérifie si l'utilisateur affiché est de type pro
         if (pathname === "/profile.html" || pathname === "/profile") {
             const userId = params.get("user");
             if (userId && typeof getUser === "function") {
+                if (userId === "b0f9f893-1706-4721-899c-d26ad79afc86") {
+                    return false;
+                }
                 const user = getUser(userId);
                 const accountType =
                     user?.account_type ||
@@ -16026,13 +16113,15 @@ async function renderProfileIntoContainer(userId) {
         user?.account_type || user?.user_metadata?.account_type || null;
     const accountSubtype =
         user?.account_subtype || user?.user_metadata?.account_subtype || null;
-    const isPro = user ? isProAccountType(accountType, accountSubtype) : null;
-
+    const isSuperAdminProfile =
+        userId === "b0f9f893-1706-4721-899c-d26ad79afc86";
     const isProRoute = isPageProRoute();
-    const personalProfileRequested =
-        new URLSearchParams(window.location.search).get("view") === "personal";
+    const isPro =
+        user && (!isSuperAdminProfile || isProRoute)
+            ? isProAccountType(accountType, accountSubtype)
+            : isProRoute;
 
-    if (user && !isProRoute && isPro && !personalProfileRequested) {
+    if (user && !isProRoute && isPro) {
         try {
             window.history.replaceState(
                 {},
@@ -16054,17 +16143,14 @@ async function renderProfileIntoContainer(userId) {
         }
     }
 
-    const bodyIsPro = isPageProRoute() && !personalProfileRequested;
+    const bodyIsPro = isPageProRoute();
     if (typeof document !== "undefined" && document.body) {
         document.body.classList.toggle("is-pro", bodyIsPro);
     }
 
     const hasLegacyProfileUserId =
         window.location.pathname.includes("/profile") &&
-        !personalProfileRequested &&
-        (new URLSearchParams(window.location.search).has("user") ||
-            new URLSearchParams(window.location.search).has("u") ||
-            new URLSearchParams(window.location.search).has("id"));
+        new URLSearchParams(window.location.search).has("user");
 
     if (
         (isPageProRoute() || hasLegacyProfileUserId) &&
@@ -16618,10 +16704,7 @@ async function handleProfileNavigation() {
         return;
     }
 
-    const targetUserId =
-        window.__requestedProfileUserId ||
-        window.currentUserId ||
-        window.currentUser?.id;
+    const targetUserId = window.currentUserId || window.currentUser?.id;
     const accountType =
         window.currentUser.account_type ||
         window.currentUser.user_metadata?.account_type ||
@@ -16633,10 +16716,13 @@ async function handleProfileNavigation() {
     const isSuperAdmin =
         !!window.currentUser &&
         window.currentUser.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
-    const profileRoute =
-        isProAccountType(accountType, accountSubtype) && !isSuperAdmin
-            ? "pagepro"
-            : "profile";
+    if (isSuperAdmin) {
+        navigateToPersonalProfile();
+        return;
+    }
+    const profileRoute = isProAccountType(accountType, accountSubtype)
+        ? "pagepro"
+        : "profile";
     window.currentProfileViewed = targetUserId || null;
 
     if (!document.getElementById("profile")) {
@@ -16686,8 +16772,6 @@ async function selectArc(arcId, userId) {
 window.selectArc = selectArc;
 
 async function navigateToUserProfile(userId) {
-    if (!userId) return;
-    window.__requestedProfileUserId = userId;
     window.currentProfileViewed = userId;
     const user = getUser(userId);
     const accountType =
@@ -16724,10 +16808,6 @@ async function navigateToUserProfile(userId) {
 
     // Déclencher le rendu (qui pourra écraser le skeleton avec les vraies données)
     await renderProfileIntoContainer(userId);
-
-    if (window.__requestedProfileUserId === userId) {
-        window.__requestedProfileUserId = null;
-    }
 }
 
 function navigateToProPage(slug) {
@@ -17648,7 +17728,7 @@ async function openSettings(userId) {
                                 <div class="profile-customization-preview-banner"></div>
                                 <div class="profile-customization-preview-grid">
                                     <div class="profile-customization-preview-card">
-                                        <span class="profile-section-kicker">Profil XERA1</span>
+                                        <span class="profile-section-kicker">Profil XERA</span>
                                         <strong>${escapeHtml(user.name || "Utilisateur")}</strong>
                                     </div>
                                     <div class="profile-customization-preview-card is-signal">
@@ -17912,14 +17992,14 @@ async function openSettings(userId) {
 
                             <div class="form-group">
                                 <label>Webhook Endpoint (Simulé)</label>
-                                <input type="text" class="form-input" value="https://xera1.tech/api/hook/v1/publish" readonly>
+                                <input type="text" class="form-input" value="https://xera.tech/api/hook/v1/publish" readonly>
                             </div>
 
                             <div class="form-group">
                                 <label>Exemple cURL</label>
                                 <pre style="background:rgba(0,0,0,0.5); padding:1rem; border-radius:10px; font-size:0.8rem; overflow-x:auto; color:var(--accent-color);">
-curl -X POST https://xera1.tech/api/hook/v1/publish \\
-  -H "X-XERA1-KEY: [VOTRE_CLE]" \\
+curl -X POST https://xera.tech/api/hook/v1/publish \\
+  -H "X-XERA-KEY: [VOTRE_CLE]" \\
   -d '{"title": "Git Commit: Merge UI", "day": 12, "arc_id": "..."}'
                                 </pre>
                             </div>
@@ -18062,7 +18142,7 @@ curl -X POST https://xera1.tech/api/hook/v1/publish \\
                                 <div class="delete-account-reasons">
                                     <label class="delete-account-reason-item">
                                         <input type="radio" name="delete-account-reason" value="inactive">
-                                        <span>Je n'utilise plus XERA1</span>
+                                        <span>Je n'utilise plus XERA</span>
                                     </label>
                                     <label class="delete-account-reason-item">
                                         <input type="radio" name="delete-account-reason" value="technical">
@@ -18664,7 +18744,7 @@ curl -X POST https://xera1.tech/api/hook/v1/publish \\
                         await renderDiscoverGrid();
                         if (typeof window.ToastManager !== "undefined") {
                             window.ToastManager.success(
-                                "XΞRA1 High-Signal",
+                                "XΞRA High-Signal",
                                 "Momentum Engine & Fluidity Active.",
                                 3000,
                             );
@@ -19509,14 +19589,14 @@ function buildPublishFeedbackPayload({
         eyebrow = "Nouveau depart";
         title = "Ton premier post est en ligne.";
         message = safeArcTitle
-            ? `Tu viens de lancer "${safeArcTitle}" sur XERA1.`
-            : "Tu viens de publier ton premier contenu sur XERA1.";
+            ? `Tu viens de lancer "${safeArcTitle}" sur XERA.`
+            : "Tu viens de publier ton premier contenu sur XERA.";
     } else if (previousGapDays >= 3) {
         eyebrow = "Bon retour";
         title = "Tu viens de relancer ton rythme.";
         message = safeArcTitle
             ? `"${safeArcTitle}" repart avec une nouvelle update.`
-            : "Ta progression repart sur XERA1.";
+            : "Ta progression repart sur XERA.";
     } else if (streakDetails.streak >= 7) {
         eyebrow = "Serie en cours";
         title = `${streakDetails.streak} jours de suite.`;
@@ -19533,7 +19613,7 @@ function buildPublishFeedbackPayload({
         title = "Ta mise a jour est en ligne.";
         message = safeArcTitle
             ? `"${safeArcTitle}" a recu une nouvelle avancee.`
-            : "Ton contenu est maintenant visible sur XERA1.";
+            : "Ton contenu est maintenant visible sur XERA.";
     }
 
     const chips = [];
@@ -20095,10 +20175,10 @@ async function openCreateMenu(
 	                            <div id="create-media-loader" style="display: none; margin-bottom: 1rem;">
 	                                <div style="display: inline-block; width: 24px; height: 24px; border: 2px solid var(--accent-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
 	                                <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Upload en cours...</p>
-	                                <div class="xera1-upload-progress">
-	                                    <div id="create-media-progress-bar" class="xera1-upload-progress-bar is-indeterminate"></div>
+	                                <div class="xera-upload-progress">
+	                                    <div id="create-media-progress-bar" class="xera-upload-progress-bar is-indeterminate"></div>
 	                                </div>
-	                                <div id="create-media-progress-label" class="xera1-upload-progress-label"></div>
+	                                <div id="create-media-progress-label" class="xera-upload-progress-label"></div>
 	                            </div>
 	                            <div id="create-media-placeholder">
 	                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-secondary); margin-bottom: 0.5rem;">
@@ -20239,21 +20319,21 @@ async function openCreateMenu(
         const slides = clean
             .map(
                 (u) =>
-                    `<div class="xera1-carousel-slide"><img src="${u}" alt="Media" loading="lazy" decoding="async"></div>`,
+                    `<div class="xera-carousel-slide"><img src="${u}" alt="Media" loading="lazy" decoding="async"></div>`,
             )
             .join("");
         const dots =
             clean.length > 1
-                ? `<div class="xera1-carousel-dots">${clean
+                ? `<div class="xera-carousel-dots">${clean
                       .map(
                           (_, i) =>
-                              `<span class="xera1-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
+                              `<span class="xera-dot ${i === 0 ? "active" : ""}" data-index="${i}"></span>`,
                       )
                       .join("")}</div>`
                 : "";
         previewContainer.innerHTML = buildMediaPreviewShell(`
-            <div class="xera1-carousel" data-carousel>
-                <div class="xera1-carousel-track">${slides}</div>
+            <div class="xera-carousel" data-carousel>
+                <div class="xera-carousel-track">${slides}</div>
                 ${dots}
             </div>
 `);
@@ -21052,7 +21132,7 @@ async function openCreateMenu(
                         await renderDiscoverGrid();
                         if (typeof window.ToastManager !== "undefined") {
                             window.ToastManager.success(
-                                "XΞRA1 High-Signal",
+                                "XΞRA High-Signal",
                                 "Momentum Engine & Fluidity Active.",
                                 3000,
                             );
@@ -21077,7 +21157,7 @@ async function openCreateMenu(
                             ? "Mise a jour terminee"
                             : "Publication terminee",
                         message:
-                            "Votre contenu est maintenant en ligne sur XERA1.",
+                            "Votre contenu est maintenant en ligne sur XERA.",
                         autoHideMs: 3200,
                     });
                     requestAnimationFrame(() =>
@@ -21217,7 +21297,7 @@ async function deleteContent(contentId) {
             await renderDiscoverGrid();
             if (typeof window.ToastManager !== "undefined") {
                 window.ToastManager.success(
-                    "XΞRA1 High-Signal",
+                    "XΞRA High-Signal",
                     "Momentum Engine & Fluidity Active.",
                     3000,
                 );
@@ -21246,6 +21326,22 @@ async function deleteContent(contentId) {
 }
 
 // Rendre les fonctions disponibles globalement
+window.renderRichDescription = renderRichDescription;
+window.renderProfileUpdateCard = renderProfileUpdateCard;
+window.toggleProPostDescription = function (contentId) {
+    const description = Array.from(
+        document.querySelectorAll(".pro-post-description"),
+    ).find((element) => element.dataset.proPostId === String(contentId || ""));
+    if (!description) return;
+    description.classList.toggle("is-expanded");
+    description
+        .closest(".pro-feed-card")
+        ?.querySelector(".pro-post-expand-btn")
+        ?.classList.toggle(
+            "is-expanded",
+            description.classList.contains("is-expanded"),
+        );
+};
 window.editContent = editContent;
 window.deleteContent = deleteContent;
 window.openSettings = openSettings;
@@ -21270,8 +21366,9 @@ window.startOAuthConnection = startOAuthConnection;
 window.refreshOAuthConnectionStatuses = refreshOAuthConnectionStatuses;
 window.navigateToUserProfile = navigateToUserProfile;
 window.renderUsernameWithBadge = renderUsernameWithBadge;
+window.renderVerifiedPageBadge = renderVerifiedPageBadge;
+window.renderVerifiedPageName = renderVerifiedPageName;
 window.renderAmbassadorBadgeById = renderAmbassadorBadgeById;
-window.renderPageVerificationBadgeById = renderPageVerificationBadgeById;
 window.isAmbassadorUserId = isAmbassadorUserId;
 window.requestVerification = requestVerification;
 window.addVerifiedUserId = addVerifiedUserId;
@@ -21291,52 +21388,13 @@ window.fetchFeedbackInbox = fetchFeedbackInbox;
 window.fetchVerifiedBadges = fetchVerifiedBadges;
 window.fetchVerificationRequests = fetchVerificationRequests;
 window.getVerifiedBadgeSets = getVerifiedBadgeSets;
-async function resolveProfessionalPageId(value) {
-    const lookup = String(value || "").trim();
-    if (!lookup || !supabase) throw new Error("Identifiant de page manquant.");
-
-    if (isUuid(lookup)) {
-        const byId = await supabase
-            .from("professional_pages")
-            .select("id")
-            .eq("id", lookup)
-            .maybeSingle();
-        if (byId.error) throw byId.error;
-        if (byId.data?.id) return byId.data.id;
-    }
-
-    const bySlug = await supabase
-        .from("professional_pages")
-        .select("id")
-        .eq("slug", lookup)
-        .maybeSingle();
-    if (bySlug.error) throw bySlug.error;
-    if (bySlug.data?.id) return bySlug.data.id;
-
-    const byName = await supabase
-        .from("professional_pages")
-        .select("id")
-        .eq("name", lookup)
-        .maybeSingle();
-    if (byName.error) throw byName.error;
-    if (byName.data?.id) return byName.data.id;
-
-    throw new Error("Page Pro introuvable avec cet ID ou ce slug.");
-}
-
 window.addVerifiedPageId = async function (pageId) {
     if (!pageId) return;
     try {
-        if (!isVerificationAdmin()) {
-            throw new Error(
-                "Vous devez être super-admin pour vérifier une page.",
-            );
-        }
-        const resolvedPageId = await resolveProfessionalPageId(pageId);
         const { error } = await supabase
             .from("verified_badges")
             .upsert(
-                { user_id: resolvedPageId, type: "page" },
+                { user_id: pageId, type: "page" },
                 { onConflict: "user_id,type" },
             );
         if (error) throw error;
@@ -21354,32 +21412,23 @@ window.addVerifiedPageId = async function (pageId) {
                 .renderProPage(window.currentProPageSlug)
                 .catch(() => {});
         }
-        return resolvedPageId;
     } catch (err) {
         console.error("addVerifiedPageId failed", err);
         if (window.ToastManager)
             ToastManager.error(
                 "Erreur",
-                err?.message ||
-                    "Impossible d'appliquer la vérification de la page.",
+                "Impossible d'appliquer la vérification de la page.",
             );
-        throw err;
     }
 };
 
 window.removeVerifiedPageId = async function (pageId) {
     if (!pageId) return;
     try {
-        if (!isVerificationAdmin()) {
-            throw new Error(
-                "Vous devez être super-admin pour retirer une vérification.",
-            );
-        }
-        const resolvedPageId = await resolveProfessionalPageId(pageId);
         const { error } = await supabase
             .from("verified_badges")
             .delete()
-            .eq("user_id", resolvedPageId)
+            .eq("user_id", pageId)
             .eq("type", "page");
         if (error) throw error;
         await fetchVerifiedBadges();
@@ -21401,10 +21450,8 @@ window.removeVerifiedPageId = async function (pageId) {
         if (window.ToastManager)
             ToastManager.error(
                 "Erreur",
-                err?.message ||
-                    "Impossible de retirer la vérification de la page.",
+                "Impossible de retirer la vérification de la page.",
             );
-        throw err;
     }
 };
 
@@ -21443,7 +21490,7 @@ document.addEventListener("DOMContentLoaded", function () {
     setupPwaSwUpdateReload();
     // Initialiser les meta tags OG rapidement pour le partage social
     initializeOpenGraphFromUrl();
-    window.xeraInitializationPromise = initializeApp();
+    initializeApp();
 });
 window.openCreateMenu = openCreateMenu;
 
@@ -21965,7 +22012,7 @@ function sequentiallyLoadCarouselImages(carouselElement) {
  * Charge les images des carousels visibles dans le DOM
  */
 function loadAllCarouselImagesSequentially() {
-    const carousels = document.querySelectorAll(".xera1-carousel");
+    const carousels = document.querySelectorAll(".xera-carousel");
     carousels.forEach((carousel) => sequentiallyLoadCarouselImages(carousel));
 }
 
@@ -22019,7 +22066,7 @@ function showContentDetailsModal(contentId, contentTitle) {
     updateOpenGraphTags({
         contentId: contentId,
         content: {
-            title: contentTitle || content.title || "Contenu XERA1",
+            title: contentTitle || content.title || "Contenu XERA",
             description: content.rawDescription || content.description || "",
             media:
                 content.media || content.mediaUrl

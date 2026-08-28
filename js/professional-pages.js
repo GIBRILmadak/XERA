@@ -39,6 +39,8 @@ class XERAProfessionalManager {
         this.onboarding = null;
         this.myPageSlug = null;
         this.proPagesCache = new Map();
+        this.initialStateHandled = false;
+        this.initialStatePromise = null;
 
         // Initialiser l'état global
         window.userHasProPage = window.userHasProPage || false;
@@ -512,6 +514,7 @@ class XERAProfessionalManager {
                 </div>
                 <div class="pro-match-list">
                     ${profiles
+                        .slice(0, 3)
                         .map((profile) => {
                             const name = this.escapeHtml(
                                 profile.name || "Profil XERA1",
@@ -616,6 +619,20 @@ class XERAProfessionalManager {
             )
         ) {
             return;
+        }
+
+        const initialParams = new URLSearchParams(window.location.search);
+        if (
+            (initialParams.get("pro") || initialParams.get("explorer")) &&
+            !this.initialStateHandled &&
+            !this.initialStatePromise
+        ) {
+            this.publicInitialStateStarted = true;
+            this.initialStatePromise = this.handleInitialState().finally(() => {
+                this.initialStateHandled = true;
+                this.initialStatePromise = null;
+            });
+            await this.initialStatePromise;
         }
 
         // Attendre que l'utilisateur soit chargé (Augmenté à 15s pour correspondre à app-supabase)
@@ -780,7 +797,15 @@ class XERAProfessionalManager {
             console.log("Pro Page Navigation Initialized. Has Page:", hasPage);
 
             // Gérer l'état initial depuis l'URL (permet de rester sur la page au refresh)
-            await this.handleInitialState();
+            if (!this.initialStateHandled && !this.initialStatePromise) {
+                this.initialStatePromise = this.handleInitialState().finally(
+                    () => {
+                        this.initialStateHandled = true;
+                        this.initialStatePromise = null;
+                    },
+                );
+                await this.initialStatePromise;
+            }
 
             // Si on a une page pro, empêcher le onboarding intempestif
             if (hasPage) {
@@ -828,11 +853,6 @@ class XERAProfessionalManager {
         const userId = params.get("user");
         const explorer = params.get("explorer");
 
-        if (proSlug) {
-            await this.renderProPage(proSlug);
-            return true;
-        }
-
         if (userId && window.location.pathname.includes("pagepro")) {
             const page = await this.getPageByOwnerId(userId);
             if (page?.slug) {
@@ -843,6 +863,11 @@ class XERAProfessionalManager {
 
         if (explorer === "1") {
             await this.renderTalentExplorer();
+            return true;
+        }
+
+        if (proSlug) {
+            await this.renderProPage(proSlug);
             return true;
         }
 
@@ -1072,6 +1097,94 @@ class XERAProfessionalManager {
         if (error) return null;
         this.proPagesCache.set(pageId, data);
         return data;
+    }
+
+    async getPageFollowState(pageId) {
+        if (!pageId) return { count: 0, isFollowing: false, available: false };
+
+        try {
+            const [{ count, error: countError }, followResult] =
+                await Promise.all([
+                    this.supabase
+                        .from("page_followers")
+                        .select("id", { count: "exact", head: true })
+                        .eq("page_id", pageId),
+                    window.currentUser?.id
+                        ? this.supabase
+                              .from("page_followers")
+                              .select("id")
+                              .eq("page_id", pageId)
+                              .eq("user_id", window.currentUser.id)
+                              .limit(1)
+                        : Promise.resolve({ data: [] }),
+                ]);
+
+            if (countError) throw countError;
+            if (followResult.error) throw followResult.error;
+
+            return {
+                count: count || 0,
+                isFollowing: (followResult.data || []).length > 0,
+                available: true,
+            };
+        } catch (error) {
+            console.warn("Abonnements Page Pro indisponibles:", error);
+            return { count: 0, isFollowing: false, available: false };
+        }
+    }
+
+    async togglePageFollow(pageId) {
+        if (!pageId) return;
+        if (!window.currentUser?.id) {
+            window.location.href = "login.html?redirect=profile.html";
+            return;
+        }
+
+        const button = document.getElementById(`page-follow-btn-${pageId}`);
+        if (button) button.disabled = true;
+
+        try {
+            const state = await this.getPageFollowState(pageId);
+            if (!state.available) {
+                throw new Error(
+                    "Les abonnements aux Pages Pro sont indisponibles.",
+                );
+            }
+
+            const query = this.supabase
+                .from("page_followers")
+                .delete()
+                .eq("page_id", pageId)
+                .eq("user_id", window.currentUser.id);
+
+            const { error } = state.isFollowing
+                ? await query
+                : await this.supabase.from("page_followers").insert({
+                      page_id: pageId,
+                      user_id: window.currentUser.id,
+                  });
+
+            if (error && error.code !== "23505") throw error;
+
+            const nextState = await this.getPageFollowState(pageId);
+            if (button) {
+                button.classList.toggle("is-following", nextState.isFollowing);
+                button.innerHTML = `<img src="icons/${nextState.isFollowing ? "subscribed" : "subscribe"}.svg" class="btn-icon" style="width: 20px; height: 20px;"> ${nextState.isFollowing ? "Abonné" : "S'abonner"}`;
+            }
+            const countElement = document.getElementById(
+                `page-follow-count-${pageId}`,
+            );
+            if (countElement)
+                countElement.textContent = String(nextState.count);
+        } catch (error) {
+            console.error("Erreur abonnement Page Pro:", error);
+            window.ToastManager?.error(
+                "Erreur",
+                error?.message || "Impossible de modifier l'abonnement.",
+            );
+        } finally {
+            if (button) button.disabled = false;
+        }
     }
 
     async getPageByOwnerId(ownerId) {
@@ -1516,18 +1629,29 @@ class XERAProfessionalManager {
                 return;
             }
 
-            container.innerHTML = updates
-                .map((update) => {
-                    // On utilise la fonction de rendu globale si disponible, sinon fallback
-                    if (typeof window.renderProfileUpdateCard === "function") {
-                        return window.renderProfileUpdateCard(update, {
-                            profileUserId: update.user_id,
-                            currentUserId: window.currentUserId,
-                        });
-                    }
+            const normalizedUpdates = updates.map((update) => ({
+                ...update,
+                type: update.metadata?.sub_type === "event" ? "event" : "news",
+                createdAt: update.created_at,
+            }));
 
-                    // Fallback (ancien style amélioré)
-                    return `
+            container.innerHTML = `
+                <div class="pro-posts-carousel" tabindex="0" aria-label="Publications de la page">
+                    ${normalizedUpdates
+                        .map((update) => {
+                            // On utilise la fonction de rendu globale si disponible, sinon fallback
+                            if (
+                                typeof window.renderProfileUpdateCard ===
+                                "function"
+                            ) {
+                                return window.renderProfileUpdateCard(update, {
+                                    profileUserId: update.user_id,
+                                    currentUserId: window.currentUserId,
+                                });
+                            }
+
+                            // Fallback (ancien style amélioré)
+                            return `
                     <div class="timeline-card pro-feed-card" style="margin-bottom: 20px; padding: 25px;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
                             <h4 style="margin: 0; font-size: 1.2rem; font-family: var(--font-heading);">
@@ -1561,8 +1685,14 @@ class XERAProfessionalManager {
                         }
                     </div>
                 `;
-                })
-                .join("");
+                        })
+                        .join("")}
+                </div>
+                <div class="pro-posts-scroll-hint" aria-hidden="true">
+                    <span>Faites défiler pour voir les autres publications</span>
+                    <span class="pro-posts-scroll-arrow">→</span>
+                </div>
+            `;
         } catch (err) {
             console.error(err);
             container.innerHTML = `<p style="color: #ef4444;">Erreur lors du chargement des actualités.</p>`;
@@ -1594,12 +1724,19 @@ class XERAProfessionalManager {
 
         const page = this.proPagesCache.get(content.validatedByPageId);
         const pageName = page ? page.name : "Organisation";
+        const pageNameHtml =
+            typeof window.renderVerifiedPageName === "function"
+                ? window.renderVerifiedPageName(
+                      pageName,
+                      content.validatedByPageId,
+                  )
+                : pageName;
         const pageAvatar = page?.avatar_url || "icons/enterprise.svg";
 
         return `
             <div class="seal-of-approval" title="Validé officiellement par ${pageName}" style="display: flex; align-items: center; gap: 6px; background: #000; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 800; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.2); width: fit-content; margin-top: 5px;">
                 <img src="${pageAvatar}" style="width: 14px; height: 14px; border-radius: 3px; object-fit: cover;">
-                <span>VALIDÉ PAR ${pageName.toUpperCase()}</span>
+                <span>VALIDÉ PAR ${pageNameHtml}</span>
                 <span style="color: #00ff88;">✔</span>
             </div>
         `;
@@ -1620,13 +1757,13 @@ class XERAProfessionalManager {
         }
 
         modal.innerHTML = `
-            <div class="onboarding-xxl pro-create-modal-content" style="width: 600px; max-width: 95vw; padding: 0; background: var(--bg-secondary); border: 1px solid var(--border-color); overflow: hidden; display: flex; flex-direction: column;">
-                <div class="modal-header" style="padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                    <h2 style="margin: 0; font-size: 1.25rem;">Créer une publication officielle</h2>
-                    <button onclick="this.closest('.modal-overlay-xxl').remove()" style="background: none; border: none; font-size: 1.5rem; color: var(--text-secondary); cursor: pointer;">×</button>
+            <div class="onboarding-xxl pro-create-modal-content">
+                <div class="modal-header pro-create-modal-header">
+                    <h2>Créer une publication officielle</h2>
+                    <button class="pro-create-modal-close" type="button" aria-label="Fermer" onclick="this.closest('.modal-overlay-xxl').remove()">×</button>
                 </div>
 
-                <div class="pro-create-tabs" style="display: flex; background: var(--bg-primary);">
+                <div class="pro-create-tabs">
                     <button class="pro-tab-btn ${initialType === "news" ? "active" : ""}" data-type="news">
                         <i class="fas fa-newspaper"></i> Actualité
                     </button>
@@ -1635,11 +1772,11 @@ class XERAProfessionalManager {
                     </button>
                 </div>
 
-                <div id="pro-create-form-container" style="padding: 25px; flex: 1; overflow-y: auto;">
+                <div id="pro-create-form-container">
                     <!-- Formulaire dynamique -->
                 </div>
 
-                <div class="modal-footer" style="padding: 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 15px; background: var(--bg-primary);">
+                <div class="modal-footer pro-create-modal-footer">
                     <button class="btn btn-secondary" onclick="this.closest('.modal-overlay-xxl').remove()">Annuler</button>
                     <button id="pro-submit-btn" class="btn btn-primary">Publier maintenant</button>
                 </div>
@@ -1662,19 +1799,19 @@ class XERAProfessionalManager {
             );
             if (type === "news") {
                 container.innerHTML = `
-                    <div class="form-group" style="margin-bottom: 20px;">
+                    <div class="form-group pro-create-form-group">
                         <label>Titre de l'actualité</label>
-                        <input type="text" id="pro-news-title" class="form-input" placeholder="Ex: XERA1 lève 10M€ pour le Momentum Engine" style="font-size: 1.1rem; font-weight: 700;">
+                        <input type="text" id="pro-news-title" class="form-input" placeholder="LE TITRE DE VOTRE ACTUALITÉ" style="font-size: 1.1rem; font-weight: 700;">
                     </div>
-                    <div class="form-group" style="margin-bottom: 20px;">
+                    <div class="form-group pro-create-form-group">
                         <label>Contenu</label>
                         <textarea id="pro-news-content" class="form-input" rows="8" placeholder="Écrivez votre annonce officielle ici..."></textarea>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group pro-create-form-group pro-create-media-group">
                         <label>Image de couverture (Optionnelle)</label>
-                        <div id="pro-news-media-preview" style="margin-bottom: 10px; display: none;"></div>
-                        <label class="btn btn-secondary" style="display: inline-flex; cursor: pointer;">
-                            <i class="fas fa-image" style="margin-right: 8px;"></i> Ajouter un média
+                        <div id="pro-news-media-preview"></div>
+                        <label class="btn btn-secondary pro-create-upload-control">
+                            <i class="fas fa-image"></i> Ajouter un média
                             <input type="file" id="pro-news-file" accept="image/*" style="display: none;">
                         </label>
                         <input type="hidden" id="pro-news-media-url">
@@ -1706,11 +1843,11 @@ class XERAProfessionalManager {
                 };
             } else {
                 container.innerHTML = `
-                    <div class="form-group" style="margin-bottom: 20px;">
+                    <div class="form-group pro-create-form-group">
                         <label>Nom de l'événement</label>
                         <input type="text" id="pro-event-title" class="form-input" placeholder="Ex: Web Summit 2026 - Meetup XERA1">
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div class="pro-create-event-grid">
                         <div class="form-group">
                             <label>Date</label>
                             <input type="date" id="pro-event-date" class="form-input">
@@ -1720,11 +1857,11 @@ class XERAProfessionalManager {
                             <input type="time" id="pro-event-time" class="form-input">
                         </div>
                     </div>
-                    <div class="form-group" style="margin-bottom: 20px;">
+                    <div class="form-group pro-create-form-group">
                         <label>Lieu / Lien (Online)</label>
                         <input type="text" id="pro-event-location" class="form-input" placeholder="Ex: Paris, Station F ou Lien Zoom">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group pro-create-form-group">
                         <label>Description de l'événement</label>
                         <textarea id="pro-event-desc" class="form-input" rows="5" placeholder="Détails, agenda, intervenants..."></textarea>
                     </div>
@@ -1927,13 +2064,19 @@ class XERAProfessionalManager {
 
             const isOwner =
                 window.currentUser && page.owner_id === window.currentUser.id;
+            const pageFollowState = await this.getPageFollowState(page.id);
+            const pageFollowHtml = isOwner
+                ? `<span class="pro-page-follow-count"><strong id="page-follow-count-${page.id}">${pageFollowState.count}</strong> abonnés</span>`
+                : `<button id="page-follow-btn-${page.id}" class="btn-pro-primary pro-page-follow-btn${pageFollowState.isFollowing ? " is-following" : ""}" onclick="window.professionalManager.togglePageFollow('${page.id}')"><img src="icons/${pageFollowState.isFollowing ? "subscribed" : "subscribe"}.svg" class="btn-icon" style="width: 20px; height: 20px;"> ${pageFollowState.isFollowing ? "Abonné" : "S'abonner"}</button>`;
             if (typeof window.fetchVerifiedBadges === "function") {
-                await window.fetchVerifiedBadges().catch((verificationError) => {
-                    console.warn(
-                        "[Pro] Vérifications indisponibles, conservation du cache local:",
-                        verificationError,
-                    );
-                });
+                await window
+                    .fetchVerifiedBadges()
+                    .catch((verificationError) => {
+                        console.warn(
+                            "[Pro] Vérifications indisponibles, conservation du cache local:",
+                            verificationError,
+                        );
+                    });
             }
             const isPageVerified =
                 typeof window.isVerifiedPageId === "function"
@@ -1941,7 +2084,7 @@ class XERAProfessionalManager {
                     : false;
 
             const pageVerifiedBadgeHtml = isPageVerified
-                ? `<span class="pro-badge-pill"><img src="icons/verify-com.svg?v=2" alt="Page Pro vérifiée" class="pro-page-verification-badge"> Page Professionnelle</span>`
+                ? `<span class="pro-badge-pill"><img src="icons/verify_page.svg" alt="Page Pro vérifiée" class="pro-page-verification-badge"> Page Professionnelle</span>`
                 : `<span class="pro-badge-pill" style="background: rgba(255,255,255,0.05); color: var(--text-secondary);">Page Non-Vérifiée</span>`;
 
             const pageVerificationCtaHtml =
@@ -2507,6 +2650,7 @@ class XERAProfessionalManager {
 
                         <div class="pro-actions-row">
                             ${page.website_url ? `<a href="${page.website_url}" target="_blank" class="btn-pro-primary" style="text-decoration:none;"><i class="fas fa-globe"></i><span class="btn-pro-label-long">Visiter le site officiel</span><span class="btn-pro-label-short">Web</span></a>` : ""}
+                            ${pageFollowHtml}
                             ${
                                 isOwner
                                     ? `
@@ -2516,14 +2660,20 @@ class XERAProfessionalManager {
                                     : ""
                             }
                         </div>
-                        <div class="pro-info-carousel">
+                        ${
+                            isOwner
+                                ? `<div class="pro-info-carousel">
                             ${recommendedProfilesHtml}
                             ${officialComparisonHtml}
-                        </div>
+                        </div>`
+                                : ""
+                        }
                     </div>
 
                     <!-- QUICK ACTIONS -->
-                    <div class="pro-features-grid">
+                    ${
+                        isOwner
+                            ? `<div class="pro-features-grid">
                         <div class="feature-card-pro" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">
                             <div class="feature-icon-box"><i class="fas fa-handshake"></i></div>
                             <div class="feature-info">
@@ -2548,7 +2698,9 @@ class XERAProfessionalManager {
                             </div>
                             <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
                         </div>
-                    </div>
+                            </div>`
+                            : ""
+                    }
 
                     <div class="pro-content-layout">
                         <!-- MAIN CONTENT -->
@@ -2721,6 +2873,7 @@ class XERAProfessionalManager {
      * Ouvre l'explorateur de talents premium (Standalone Page)
      */
     async openTopTalentExplorer() {
+        this.syncUrl({ pro: null, explorer: "1" });
         await this.renderTalentExplorer();
     }
 

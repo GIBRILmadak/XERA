@@ -708,6 +708,56 @@ function computeKPayAmount(plan, billingCycle, currency) {
     return Math.ceil(amountUsd);
 }
 
+function normalizeDiscountCode(value) {
+    return String(value || "")
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, "");
+}
+
+async function findActiveDiscountCode(rawCode) {
+    const code = normalizeDiscountCode(rawCode);
+    if (!code) return null;
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase
+        .from("subscription_discount_codes")
+        .select(
+            "id, code, plan, discount_percent, valid_from, valid_until, benefit_duration_days, max_uses, uses_count, active",
+        )
+        .eq("code", code)
+        .eq("active", true)
+        .lte("valid_from", nowIso)
+        .or(`valid_until.is.null,valid_until.gte.${nowIso}`)
+        .maybeSingle();
+    if (error) throw error;
+    return data || null;
+}
+
+async function redeemDiscountCode(code, userId) {
+    const { data, error } = await supabase.rpc(
+        "redeem_subscription_discount_code",
+        {
+            p_code: code,
+            p_user_id: userId,
+        },
+    );
+    if (error) {
+        if (error.message?.includes("INVALID_DISCOUNT_CODE")) return null;
+        if (error.message?.includes("DISCOUNT_CODE_ALREADY_USED")) {
+            const duplicate = new Error("Ce code a déjà été utilisé.");
+            duplicate.code = "DISCOUNT_CODE_ALREADY_USED";
+            throw duplicate;
+        }
+        throw error;
+    }
+    return Array.isArray(data) ? data[0] || null : data || null;
+}
+
+function applyDiscount(amountUsd, discountPercent) {
+    const percent = Math.min(100, Math.max(0, Number(discountPercent) || 0));
+    return Math.max(0, Math.round(amountUsd * (1 - percent / 100) * 100) / 100);
+}
+
 function computeSupportCheckoutAmount(amountUsd, currency) {
     const normalizedAmount = roundMoney(amountUsd);
     if (
@@ -938,6 +988,9 @@ async function createPendingSubscriptionPayment({
     billingCycle,
     currency,
     amount,
+    originalAmount,
+    discountCode,
+    discountPercent,
     method,
     provider,
     walletId,
@@ -959,6 +1012,9 @@ async function createPendingSubscriptionPayment({
         callback_enabled: callbackEnabled,
         callback_origin: callbackEnabled ? callbackOrigin || null : null,
         checkout_started_at: nowIso,
+        original_amount: originalAmount ?? amount,
+        discount_code: discountCode || null,
+        discount_percent: discountPercent || 0,
     };
 
     const { data, error } = await supabase
@@ -1061,13 +1117,20 @@ async function createPendingSupportPayment({
     };
 }
 
-async function initiateKPayPayment(amount, externalId, description, returnUrl) {
+async function initiateKPayPayment(
+    amount,
+    externalId,
+    description,
+    successUrl,
+    cancelUrl = successUrl,
+) {
     const requestBody = {
         amount,
         externalId,
         description,
-        returnUrl,
-        cancelUrl: returnUrl,
+        successUrl,
+        cancelUrl,
+        returnUrl: successUrl,
         mode: "GATEWAY",
     };
 
@@ -2211,6 +2274,7 @@ async function activateSubscription({
     confirmationSource = "kpay_callback",
     confirmedBy,
     note,
+    benefitExpiresAt,
 }) {
     const paymentId = transactionRefId ? `kpay_${transactionRefId}` : null;
     const normalizedPlan = String(plan || "").toLowerCase();
@@ -2285,8 +2349,11 @@ async function activateSubscription({
 
     const now = new Date();
     const nowIso = now.toISOString();
-    const periodEnd =
-        billingCycle === "annual" ? addMonths(now, 12) : addMonths(now, 1);
+    const periodEnd = benefitExpiresAt
+        ? new Date(benefitExpiresAt)
+        : billingCycle === "annual"
+          ? addMonths(now, 12)
+          : addMonths(now, 1);
     const periodEndIso = periodEnd.toISOString();
 
     let badgeToApply = badgeForPlan;
@@ -4120,10 +4187,6 @@ function startReminderScheduler() {
 
 async function handleKPaySubscriptionCheckout(req, res) {
     try {
-        if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
-            return res.status(500).send("KPay keys not configured");
-        }
-
         const callbackConfig = getKPayCallbackConfig(req);
 
         const {
@@ -4136,6 +4199,7 @@ async function handleKPaySubscriptionCheckout(req, res) {
             access_token: accessToken,
             user_id: fallbackUserId,
             return_path: rawReturnPath,
+            discount_code: rawDiscountCode,
         } = req.body || {};
 
         const planId = String(plan || "").toLowerCase();
@@ -4176,9 +4240,61 @@ async function handleKPaySubscriptionCheckout(req, res) {
             buildProfileReturnPath(userId),
         );
 
-        const amount = computeKPayAmount(planId, billingCycle, currency);
-        if (!amount) {
+        const originalAmount = computeKPayAmount(
+            planId,
+            billingCycle,
+            currency,
+        );
+        if (!originalAmount) {
             return res.status(400).send("Montant invalide");
+        }
+
+        const normalizedDiscountCode = normalizeDiscountCode(rawDiscountCode);
+        let discount = null;
+        if (normalizedDiscountCode) {
+            discount = await findActiveDiscountCode(normalizedDiscountCode);
+            if (!discount)
+                return res.status(400).send("Code de réduction invalide");
+        }
+        const discountPercent = Number(discount?.discount_percent || 0);
+        const discountedUsd = applyDiscount(
+            computeKPayAmount(planId, billingCycle, "USD"),
+            discountPercent,
+        );
+        const amount = discount
+            ? currency === "CDF"
+                ? Math.round(discountedUsd * USD_TO_CDF_RATE_VALUE)
+                : Math.ceil(discountedUsd)
+            : originalAmount;
+
+        if (amount === 0) {
+            if (discountPercent < 100) {
+                return res.status(400).send("Montant invalide");
+            }
+            const redeemedCode = await redeemDiscountCode(
+                normalizedDiscountCode,
+                userId,
+            );
+            if (!redeemedCode) {
+                return res.status(400).send("Code de réduction invalide");
+            }
+            await activateSubscription({
+                userId,
+                plan: redeemedCode.plan,
+                billingCycle,
+                currency,
+                amount: 0,
+                confirmationSource: "discount_code",
+                benefitExpiresAt: redeemedCode.benefit_expires_at,
+            });
+            const freeReturnUrl = new URL(returnPath, PRIMARY_ORIGIN);
+            freeReturnUrl.searchParams.set("status", "success");
+            freeReturnUrl.searchParams.set("plan", redeemedCode.plan);
+            return res.redirect(302, freeReturnUrl.toString());
+        }
+
+        if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
+            return res.status(500).send("KPay keys not configured");
         }
 
         const pendingPayment = await createPendingSubscriptionPayment({
@@ -4187,6 +4303,9 @@ async function handleKPaySubscriptionCheckout(req, res) {
             billingCycle,
             currency,
             amount,
+            originalAmount,
+            discountCode: discount?.code || null,
+            discountPercent,
             method,
             provider,
             walletId,
@@ -4207,6 +4326,8 @@ async function handleKPaySubscriptionCheckout(req, res) {
             }
             callbackUrl = `${callbackConfig.callbackOrigin}/api/kpay/callback/${encodeURIComponent(state)}`;
         }
+        const paymentReturnUrl =
+            callbackUrl || new URL(returnPath, PRIMARY_ORIGIN).toString();
 
         console.info("[KPay checkout]", {
             gatewayMode: String(KPAY_GATEWAY_MODE),
@@ -4229,7 +4350,7 @@ async function handleKPaySubscriptionCheckout(req, res) {
             amount,
             pendingPayment.checkoutRefId,
             `Abonnement ${planId} (${billingCycle})`,
-            callbackUrl,
+            paymentReturnUrl,
         );
 
         await storeKPayPaymentReference(pendingPayment, kpayRes);
@@ -4400,6 +4521,8 @@ async function handleKPaySupportCheckout(req, res) {
             }
             callbackUrl = `${callbackConfig.callbackOrigin}/api/kpay/callback/${encodeURIComponent(state)}`;
         }
+        const paymentReturnUrl =
+            callbackUrl || new URL(returnPath, PRIMARY_ORIGIN).toString();
 
         console.info("[KPay support checkout]", {
             gatewayMode: String(KPAY_GATEWAY_MODE),
@@ -4423,7 +4546,7 @@ async function handleKPaySupportCheckout(req, res) {
             pendingPayment.checkoutRefId,
             description ||
                 `Soutien pour ${recipientProfile.name || "un createur"}`,
-            callbackUrl,
+            paymentReturnUrl,
         );
 
         await storeKPayPaymentReference(pendingPayment, kpayRes);
@@ -5000,6 +5123,180 @@ app.get("/api/admin/subscription-payments", async (req, res) => {
     } catch (error) {
         console.error("Admin subscription payments list error:", error);
         return res.status(500).json({ error: "Erreur serveur." });
+    }
+});
+
+app.get("/api/admin/discount-codes", async (req, res) => {
+    try {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error)
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        const { data, error } = await supabase
+            .from("subscription_discount_codes")
+            .select(
+                "id, code, plan, discount_percent, valid_from, valid_until, benefit_duration_days, max_uses, uses_count, active, created_at",
+            )
+            .order("created_at", { ascending: false });
+        if (error) throw error;
+        return res.json({ success: true, codes: data || [] });
+    } catch (error) {
+        console.error("Admin discount codes list error:", error);
+        return res.status(500).json({
+            error: error?.message || "Impossible de charger les codes.",
+        });
+    }
+});
+
+app.post("/api/admin/discount-codes", async (req, res) => {
+    try {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error)
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        const code = normalizeDiscountCode(req.body?.code);
+        const plan = String(req.body?.plan || "").toLowerCase();
+        const discountPercent = Number(req.body?.discount_percent);
+        const benefitDurationDays = Number(req.body?.benefit_duration_days);
+        const maxUses = req.body?.max_uses ? Number(req.body.max_uses) : null;
+        const validFrom = new Date(req.body?.valid_from || Date.now());
+        const validUntil = req.body?.valid_until
+            ? new Date(req.body.valid_until)
+            : null;
+        if (!/^[A-Z0-9_-]{3,40}$/.test(code))
+            return res
+                .status(400)
+                .json({ error: "Code invalide (3 à 40 caractères)." });
+        if (discountPercent !== 100)
+            return res.status(400).json({
+                error: "Une certification offerte doit utiliser une réduction de 100 %.",
+            });
+        if (!isValidPlanId(plan))
+            return res.status(400).json({ error: "Plan offert invalide." });
+        if (!Number.isInteger(benefitDurationDays) || benefitDurationDays < 1)
+            return res
+                .status(400)
+                .json({
+                    error: "La durée des avantages doit être d'au moins 1 jour.",
+                });
+        if (maxUses !== null && (!Number.isInteger(maxUses) || maxUses < 1))
+            return res
+                .status(400)
+                .json({ error: "La limite d'utilisation est invalide." });
+        if (
+            Number.isNaN(validFrom.getTime()) ||
+            (validUntil && Number.isNaN(validUntil.getTime())) ||
+            (validUntil && validUntil < validFrom)
+        )
+            return res
+                .status(400)
+                .json({ error: "Période de validité invalide." });
+        const { data, error } = await supabase
+            .from("subscription_discount_codes")
+            .insert({
+                code,
+                plan,
+                discount_percent: discountPercent,
+                valid_from: validFrom.toISOString(),
+                valid_until: validUntil?.toISOString() || null,
+                benefit_duration_days: benefitDurationDays,
+                max_uses: maxUses,
+                created_by: authResult.user.id,
+            })
+            .select(
+                "id, code, plan, discount_percent, valid_from, valid_until, benefit_duration_days, max_uses, uses_count, active, created_at",
+            )
+            .single();
+        if (error) throw error;
+        return res.status(201).json({ success: true, code: data });
+    } catch (error) {
+        console.error("Admin discount code create error:", error);
+        return res.status(500).json({
+            error:
+                error?.code === "23505"
+                    ? "Ce code existe déjà."
+                    : error?.message || "Impossible de créer le code.",
+        });
+    }
+});
+
+app.patch("/api/admin/discount-codes/:id", async (req, res) => {
+    try {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error)
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        const plan = String(req.body?.plan || "").toLowerCase();
+        const discountPercent = Number(req.body?.discount_percent ?? 100);
+        const benefitDurationDays = Number(req.body?.benefit_duration_days);
+        const maxUses = req.body?.max_uses ? Number(req.body.max_uses) : null;
+        const validFrom = new Date(req.body?.valid_from || Date.now());
+        const validUntil = req.body?.valid_until
+            ? new Date(req.body.valid_until)
+            : null;
+        if (
+            !isValidPlanId(plan) ||
+            discountPercent !== 100 ||
+            !Number.isInteger(benefitDurationDays) ||
+            benefitDurationDays < 1 ||
+            (maxUses !== null && (!Number.isInteger(maxUses) || maxUses < 1)) ||
+            Number.isNaN(validFrom.getTime()) ||
+            (validUntil && Number.isNaN(validUntil.getTime())) ||
+            (validUntil && validUntil < validFrom)
+        ) {
+            return res
+                .status(400)
+                .json({ error: "Paramètres du code invalides." });
+        }
+        const { data, error } = await supabase
+            .from("subscription_discount_codes")
+            .update({
+                plan,
+                discount_percent: 100,
+                benefit_duration_days: benefitDurationDays,
+                max_uses: maxUses,
+                valid_from: validFrom.toISOString(),
+                valid_until: validUntil?.toISOString() || null,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", req.params.id)
+            .select(
+                "id, code, plan, discount_percent, valid_from, valid_until, benefit_duration_days, max_uses, uses_count, active, created_at",
+            )
+            .single();
+        if (error) throw error;
+        return res.json({ success: true, code: data });
+    } catch (error) {
+        console.error("Admin discount code update error:", error);
+        return res
+            .status(500)
+            .json({
+                error: error?.message || "Impossible de modifier le code.",
+            });
+    }
+});
+
+app.delete("/api/admin/discount-codes/:id", async (req, res) => {
+    try {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error)
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        const { error } = await supabase
+            .from("subscription_discount_codes")
+            .update({ active: false, updated_at: new Date().toISOString() })
+            .eq("id", req.params.id);
+        if (error) throw error;
+        return res.json({ success: true });
+    } catch (error) {
+        console.error("Admin discount code deactivate error:", error);
+        return res.status(500).json({
+            error: error?.message || "Impossible de désactiver le code.",
+        });
     }
 });
 

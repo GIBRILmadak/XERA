@@ -199,7 +199,7 @@ export function initBadgeAdminPage({
                                 <div style="display:flex; align-items:center; gap:0.6rem; min-width:0;">
                                     <img src="${pageAvatar}" alt="${pageName}" style="width:32px; height:32px; border-radius:6px; object-fit:cover;">
                                     <div style="display:flex; flex-direction:column; min-width:0;">
-                                        <span class="verification-request-name" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${pageName}</span>
+                                        <span class="verification-request-name" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${typeof window.renderVerifiedPageName === "function" ? window.renderVerifiedPageName(pageName, pg.id || pid) : pageName}</span>
                                         <span class="verification-request-id" style="color:var(--text-secondary); font-size:0.8rem;">${pageSlug}</span>
                                     </div>
                                 </div>

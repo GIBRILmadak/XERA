@@ -181,7 +181,10 @@
 
             if (!user || !accessToken) {
                 const loginUrl = new URL("login.html", window.location.origin);
-                loginUrl.searchParams.set("redirect", "subscription-plans.html");
+                loginUrl.searchParams.set(
+                    "redirect",
+                    "subscription-plans.html",
+                );
                 window.location.href = loginUrl.toString();
                 return;
             }
@@ -218,6 +221,10 @@
                     returnPath;
             }
             params.set("return_path", returnPath);
+            const discountCode = document
+                .getElementById("subscription-discount-code")
+                ?.value?.trim();
+            if (discountCode) params.set("discount_code", discountCode);
 
             // A browser navigation preserves K-Pay's 302 redirect. Using fetch here
             // can turn the cross-origin gateway redirect into a CORS failure.
@@ -249,7 +256,10 @@
             }
 
             if (typeof window.showToast === "function") {
-                window.showToast("Erreur lors de l'initialisation du paiement sécurisé.", "error");
+                window.showToast(
+                    "Erreur lors de l'initialisation du paiement sécurisé.",
+                    "error",
+                );
             }
         }
     }
@@ -509,11 +519,10 @@
                 type: ACTIONS.SET_SELECTED_PLAN,
                 payload: normalizedPlanId,
             });
-
-            await navigateToSubscriptionPayment(
-                normalizedPlanId,
-                state.billingCycle,
-            );
+            dispatch({
+                type: ACTIONS.SET_CONFIRM_MODAL_OPEN,
+                payload: true,
+            });
             return true;
         }
 

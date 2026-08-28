@@ -459,10 +459,8 @@
                 }
 
                 selectedPlanId = normalizedPlanId;
-                await Hooks.navigateToSubscriptionPayment(
-                    normalizedPlanId,
-                    billingCycle,
-                );
+                const modal = document.getElementById("confirmModal");
+                if (modal) modal.classList.add("active");
                 return true;
             },
             setBillingCycle,
@@ -1065,6 +1063,18 @@
                             }),
                             " Vous serez redirigé vers KPay pour finaliser le paiement sécurisé.",
                         ),
+                        e(
+                            "label",
+                            { htmlFor: "subscription-discount-code" },
+                            "Code de réduction (optionnel)",
+                        ),
+                        e("input", {
+                            id: "subscription-discount-code",
+                            className: "form-input",
+                            type: "text",
+                            maxLength: 40,
+                            placeholder: "Entrez votre code",
+                        }),
                         e(
                             "button",
                             {

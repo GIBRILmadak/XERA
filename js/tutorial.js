@@ -284,6 +284,17 @@ class XeraTutorial {
     }
 
     positionTooltip(targetRect, position) {
+        if (
+            window.matchMedia &&
+            window.matchMedia("(max-width: 768px)").matches
+        ) {
+            this.tooltip.style.position = "fixed";
+            this.tooltip.style.top = "50%";
+            this.tooltip.style.left = "50%";
+            this.tooltip.style.transform = "translate(-50%, -50%)";
+            return;
+        }
+
         const gap = 20;
         const tooltipWidth = 340;
         let top, left;

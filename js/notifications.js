@@ -241,20 +241,17 @@ function handleNewNotification(notification) {
         normalized.read = true;
     }
     notifications.unshift(normalized);
-    hydrateNotificationMetadata([normalized]).catch(() => {});
-
-    if (!shouldQuietLiveChat) {
-        // Afficher une notification toast
-        showNotificationToast(normalized);
-
-        // Afficher une notification navigateur si permis
-        showBrowserNotification(normalized);
-
-        // Jouer un son (optionnel)
-        playNotificationSound(normalized.type);
-    } else {
-        void markNotificationAsReadSilently(normalized.id);
-    }
+    hydrateNotificationMetadata([normalized])
+        .catch(() => {})
+        .finally(() => {
+            if (!shouldQuietLiveChat) {
+                showNotificationToast(normalized);
+                showBrowserNotification(normalized);
+                playNotificationSound(normalized.type);
+            } else {
+                void markNotificationAsReadSilently(normalized.id);
+            }
+        });
 
     // Mettre à jour le badge
     updateNotificationBadge();
@@ -266,6 +263,7 @@ function showNotificationToast(notification) {
 
     const title = getNotificationTitle(notification);
     const message = notification.message || "";
+    const actor = notification.actor;
     const type = [
         "encouragement",
         "peer_validation",
@@ -285,7 +283,7 @@ function showNotificationToast(notification) {
     const toast = document.createElement("div");
     toast.className = "toast show";
     toast.innerHTML = `
-        <div class="toast-icon">${getNotificationIcon(notification.type)}</div>
+        ${renderNotificationAvatar(actor, title, "toast")}
         <div class="toast-content">
             <div class="toast-title">${title}</div>
             <div class="toast-message">${message}</div>
@@ -305,6 +303,44 @@ function showNotificationToast(notification) {
         toast.classList.remove("show");
         setTimeout(() => toast.remove(), 300);
     });
+}
+
+function escapeNotificationHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function getNotificationInitials(actor, fallback = "X") {
+    const name = String(actor?.name || actor?.username || fallback).trim();
+    return (
+        name
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part) => part[0])
+            .join("")
+            .toUpperCase() || "X"
+    );
+}
+
+function renderNotificationAvatar(actor, fallbackName, variant = "panel") {
+    const name =
+        actor?.name || actor?.username || fallbackName || "Membre XERA";
+    const avatar = String(actor?.avatar || actor?.avatar_url || "").trim();
+    const className =
+        variant === "toast"
+            ? "notification-toast-avatar"
+            : "notification-avatar";
+
+    if (avatar) {
+        return `<img class="${className}" src="${escapeNotificationHtml(avatar)}" alt="Avatar de ${escapeNotificationHtml(name)}" loading="lazy" />`;
+    }
+
+    return `<div class="${className} notification-avatar-fallback" aria-hidden="true">${escapeNotificationHtml(getNotificationInitials(actor, name))}</div>`;
 }
 
 // Obtenir l'icône selon le type de notification
@@ -807,25 +843,19 @@ function renderNotifications() {
 
     container.innerHTML = notifications
         .map((notif) => {
-            const avatar = notif.actor?.avatar;
-            const icon = getNotificationIcon(notif.type);
             const displayName =
                 notif.actor?.name || getNotificationTitle(notif);
             return `
-        <div class="notification-item ${notif.read ? "" : "unread"}" data-type="${notif.type}" onclick="handleNotificationClick('${notif.id}')" style="display:flex;gap:12px;align-items:flex-start;">
-            <div class="notification-leading" style="width:42px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-                ${
-                    avatar
-                        ? `<img class="notification-avatar" src="${avatar}" alt="${displayName}" loading="lazy" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--border-color, rgba(255,255,255,0.12));" />`
-                        : `<div class="notification-icon" style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--surface-alt, #1f2937);font-size:18px;">${icon}</div>`
-                }
+        <div class="notification-item ${notif.read ? "" : "unread"}" data-type="${escapeNotificationHtml(notif.type)}" onclick="handleNotificationClick('${escapeNotificationHtml(notif.id)}')">
+            <div class="notification-leading">
+                ${renderNotificationAvatar(notif.actor, displayName)}
             </div>
-            <div class="notification-content" style="flex:1;min-width:0;">
-                <div class="notification-title" style="font-weight:700;">${getNotificationTitle(notif)}</div>
-                <div class="notification-message" style="color:var(--text-secondary,#b5b5c3);">${notif.message}</div>
-                <div class="notification-meta" style="display:flex;gap:8px;align-items:center;color:var(--text-muted,#9ca3af);font-size:0.85rem;margin-top:4px;">
+            <div class="notification-content">
+                <div class="notification-title">${escapeNotificationHtml(getNotificationTitle(notif))}</div>
+                <div class="notification-message">${escapeNotificationHtml(notif.message)}</div>
+                <div class="notification-meta">
                     <span class="notification-time">${formatNotificationTime(notif.created_at)}</span>
-                    ${displayName ? `<span class="notification-actor" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayName}</span>` : ""}
+                    ${displayName ? `<span class="notification-actor">${escapeNotificationHtml(displayName)}</span>` : ""}
                 </div>
             </div>
         </div>
@@ -1191,6 +1221,14 @@ function normalizeNotifications(list) {
 function normalizeNotification(notif) {
     const n = { ...notif };
     n.link = normalizeNotificationLink(n);
+    n.actorId =
+        n.actor_id ||
+        n.actorId ||
+        n.sender_id ||
+        n.senderId ||
+        n.from_user_id ||
+        n.fromUserId ||
+        null;
     return n;
 }
 
@@ -1252,6 +1290,15 @@ function extractStreamId(link = "") {
 }
 
 function extractUserIdFromLink(link = "") {
+    try {
+        const parsed = new URL(link, window.location.href);
+        const queryUserId =
+            parsed.searchParams.get("user") || parsed.searchParams.get("u");
+        if (queryUserId) return queryUserId;
+    } catch (error) {
+        // Fall back to legacy link formats below.
+    }
+
     const m =
         link.match(/profile\.html\?[^#]*user=([a-f0-9-]{8,})/i) ||
         link.match(/profile\.html\?user=([a-f0-9-]{8,})/i) ||
@@ -1272,6 +1319,7 @@ async function hydrateNotificationMetadata(list) {
         const userId = extractUserIdFromLink(link);
         if (streamId) streamIds.add(streamId);
         if (userId) userIds.add(userId);
+        if (n.actorId) userIds.add(n.actorId);
     });
 
     let streamMap = {};
@@ -1314,7 +1362,7 @@ async function hydrateNotificationMetadata(list) {
         const streamId = extractStreamId(n.link);
         const userIdFromLink = extractUserIdFromLink(n.link);
         const stream = streamId ? streamMap[streamId] : null;
-        const actorId = userIdFromLink || stream?.user_id || null;
+        const actorId = n.actorId || userIdFromLink || stream?.user_id || null;
         if (actorId && userMap[actorId]) {
             n.actor = userMap[actorId];
         }
