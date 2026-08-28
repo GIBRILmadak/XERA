@@ -8442,7 +8442,12 @@ function wrapUsernameLabel(nameHtml) {
     return `<span class="username-label"${styleAttr}>${normalizedName}</span>`;
 }
 
-function renderUsernameWithBadge(nameHtml, userId, isPage = false, pageId = null) {
+function renderUsernameWithBadge(
+    nameHtml,
+    userId,
+    isPage = false,
+    pageId = null,
+) {
     if (!nameHtml) return "";
     const labelHtml = wrapUsernameLabel(nameHtml);
 
@@ -16613,7 +16618,10 @@ async function handleProfileNavigation() {
         return;
     }
 
-    const targetUserId = window.currentUserId || window.currentUser?.id;
+    const targetUserId =
+        window.__requestedProfileUserId ||
+        window.currentUserId ||
+        window.currentUser?.id;
     const accountType =
         window.currentUser.account_type ||
         window.currentUser.user_metadata?.account_type ||
@@ -16678,6 +16686,8 @@ async function selectArc(arcId, userId) {
 window.selectArc = selectArc;
 
 async function navigateToUserProfile(userId) {
+    if (!userId) return;
+    window.__requestedProfileUserId = userId;
     window.currentProfileViewed = userId;
     const user = getUser(userId);
     const accountType =
@@ -16714,6 +16724,10 @@ async function navigateToUserProfile(userId) {
 
     // Déclencher le rendu (qui pourra écraser le skeleton avec les vraies données)
     await renderProfileIntoContainer(userId);
+
+    if (window.__requestedProfileUserId === userId) {
+        window.__requestedProfileUserId = null;
+    }
 }
 
 function navigateToProPage(slug) {

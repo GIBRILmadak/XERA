@@ -542,7 +542,8 @@ textarea {
     content: "";
     position: absolute;
     top: 50%;
-    right: -1.1rem;
+    right: 0.45rem;
+    z-index: 3;
     width: 0.65rem;
     height: 0.65rem;
     margin-top: -0.325rem;
@@ -6859,11 +6860,15 @@ html.light-mode .profile-signal-panel {
 
 #floating-create-container {
     position: fixed;
-    right: 1.2rem;
-    bottom: 1.2rem;
+    right: max(1rem, env(safe-area-inset-right));
+    bottom: max(1rem, env(safe-area-inset-bottom));
     z-index: 2600;
     display: flex;
     justify-content: flex-end;
+    width: 56px;
+    height: 56px;
+    pointer-events: none;
+    transform: none !important;
 }
 
 #floating-create-container .btn-add {
@@ -6881,6 +6886,8 @@ html.light-mode .profile-signal-panel {
     gap: 0.25rem;
     font-weight: 700;
     letter-spacing: 0.01em;
+    pointer-events: auto;
+    transform: none;
 }
 
 #floating-create-container .btn-add img {
@@ -6890,8 +6897,10 @@ html.light-mode .profile-signal-panel {
 
 @media (max-width: 700px) {
     #floating-create-container {
-        right: 1rem;
-        bottom: 1rem;
+        right: max(0.75rem, env(safe-area-inset-right));
+        bottom: max(0.75rem, env(safe-area-inset-bottom));
+        width: 52px;
+        height: 52px;
     }
     #floating-create-container .btn-add {
         width: 52px;
