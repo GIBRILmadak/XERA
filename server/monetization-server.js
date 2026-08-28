@@ -6,9 +6,6 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const webpush = require("web-push");
 const crypto = require("crypto");
 const { buildBotPostDraft } = require("./bot-post-generator");
-const oauthHandler = require("./o²  dler");
-const { startOAuthRefreshScheduler } = require("./oauth-token-manager");
-const { startIngestionWorker } = require("./ingestion-queue");
 const { normalizeReturnPathForBrowser } = require("./payment-return-paths");
 const {
     buildDistributedMinuteSlots,
@@ -144,7 +141,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // Routes OAuth
-app.use("/api/auth", oauthHandler);
+app.use("/api/auth", (req, res, next) => {
+    return require("./oauth-handler")(req, res, next);
+});
 
 const allowedOrigins = APP_BASE_URL.split(",")
     .map((v) => v.trim())
@@ -1123,6 +1122,7 @@ async function initiateKPayPayment(
     description,
     successUrl,
     cancelUrl = successUrl,
+    currency,
 ) {
     const requestBody = {
         amount,
@@ -1131,8 +1131,8 @@ async function initiateKPayPayment(
         successUrl,
         cancelUrl,
         returnUrl: successUrl,
-        mode: "GATEWAY",
     };
+    if (currency) requestBody.currency = currency;
 
     const response = await fetch(
         "https://admin.kpay.site/api/v1/payments/init",
@@ -4351,6 +4351,8 @@ async function handleKPaySubscriptionCheckout(req, res) {
             pendingPayment.checkoutRefId,
             `Abonnement ${planId} (${billingCycle})`,
             paymentReturnUrl,
+            paymentReturnUrl,
+            currency,
         );
 
         await storeKPayPaymentReference(pendingPayment, kpayRes);
@@ -4547,6 +4549,8 @@ async function handleKPaySupportCheckout(req, res) {
             description ||
                 `Soutien pour ${recipientProfile.name || "un createur"}`,
             paymentReturnUrl,
+            paymentReturnUrl,
+            currency,
         );
 
         await storeKPayPaymentReference(pendingPayment, kpayRes);
@@ -7887,6 +7891,8 @@ if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {
 }
 
 if (isDirectRun) {
+    const { startOAuthRefreshScheduler } = require("./oauth-token-manager");
+    const { startIngestionWorker } = require("./ingestion-queue");
     startOAuthRefreshScheduler();
     startIngestionWorker();
 }
