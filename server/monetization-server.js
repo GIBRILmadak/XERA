@@ -5176,11 +5176,9 @@ app.post("/api/admin/discount-codes", async (req, res) => {
         if (!isValidPlanId(plan))
             return res.status(400).json({ error: "Plan offert invalide." });
         if (!Number.isInteger(benefitDurationDays) || benefitDurationDays < 1)
-            return res
-                .status(400)
-                .json({
-                    error: "La durée des avantages doit être d'au moins 1 jour.",
-                });
+            return res.status(400).json({
+                error: "La durée des avantages doit être d'au moins 1 jour.",
+            });
         if (maxUses !== null && (!Number.isInteger(maxUses) || maxUses < 1))
             return res
                 .status(400)
@@ -5271,11 +5269,9 @@ app.patch("/api/admin/discount-codes/:id", async (req, res) => {
         return res.json({ success: true, code: data });
     } catch (error) {
         console.error("Admin discount code update error:", error);
-        return res
-            .status(500)
-            .json({
-                error: error?.message || "Impossible de modifier le code.",
-            });
+        return res.status(500).json({
+            error: error?.message || "Impossible de modifier le code.",
+        });
     }
 });
 
