@@ -5371,6 +5371,11 @@ app.post("/api/admin/discount-codes", async (req, res) => {
                 error?.code === "23505"
                     ? "Ce code existe déjà."
                     : error?.message || "Impossible de créer le code.",
+            diagnostic: {
+                code: error?.code || null,
+                details: error?.details || null,
+                hint: error?.hint || null,
+            },
         });
     }
 });
@@ -8142,7 +8147,14 @@ app.post("/api/admin/partners", async (req, res) => {
         return res.status(201).json({ partner: data });
     } catch (error) {
         console.error("/api/admin/partners error:", error);
-        return res.status(500).json({ error: error?.message || "Création impossible." });
+        return res.status(500).json({
+            error: error?.message || "Création impossible.",
+            diagnostic: {
+                code: error?.code || null,
+                details: error?.details || null,
+                hint: error?.hint || null,
+            },
+        });
     }
 });
 app.get("/api/admin/partners", async (req, res) => {

@@ -6910,7 +6910,12 @@ async function fetchSuperAdminJson(path, options = {}) {
     }
 
     if (!response.ok) {
-        throw new Error(payload?.error || "Erreur API super-admin.");
+        const diagnosticCode = payload?.diagnostic?.code;
+        const diagnosticDetail = payload?.diagnostic?.details || payload?.diagnostic?.hint;
+        const diagnostic = diagnosticCode
+            ? ` [diagnostic ${diagnosticCode}${diagnosticDetail ? `: ${diagnosticDetail}` : ""}]`
+            : "";
+        throw new Error(`${payload?.error || "Erreur API super-admin."}${diagnostic}`);
     }
 
     return payload;
