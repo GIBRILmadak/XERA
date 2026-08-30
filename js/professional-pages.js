@@ -2102,10 +2102,26 @@ class XERAProfessionalManager {
                 .eq("page_id", page.id)
                 .order("created_at", { ascending: false });
 
-            const avatar = page.avatar_url || "icons/enterprise.svg";
+            const toPublicMediaUrl = (value) => {
+                const stored = String(value || "").trim();
+                if (!stored) return "";
+                if (/^(https?:|data:|blob:)/i.test(stored)) return stored;
+                const path = stored.replace(/^\/+/, "").replace(/^media\//, "");
+                try {
+                    return this.supabase.storage.from("media").getPublicUrl(path).data.publicUrl || "";
+                } catch (_) {
+                    return "";
+                }
+            };
+            const avatar = toPublicMediaUrl(page.avatar_url) || "icons/enterprise.svg";
             // Une bannière absente reste une surface éditoriale : aucune image externe
             // n'est ajoutée à la page professionnelle.
-            const banner = page.banner_url || "";
+            // Older pages can contain either a complete Storage URL or its object
+            // path. Normalize both forms identically for owners and visitors.
+            const banner = toPublicMediaUrl(page.banner_url);
+            const bannerAlt = this.escapeHtml(
+                `Bannière de ${page.name || "la Page Pro"}`,
+            );
             const pageOwner =
                 window.currentUser?.id === page.owner_id
                     ? window.currentUser
@@ -2605,14 +2621,14 @@ class XERAProfessionalManager {
                         .pro-card-premium, .sidebar-card-premium, .pro-creation-card { padding: 22px; }
                     }
 
-                    /* Portfolio institutionnel vivant — surcharge locale de la Page Pro. */
-                    #pro-page { background: #f4f5f8; }
+                    /* Portfolio institutionnel vivant — thème sombre local de la Page Pro. */
+                    #pro-page { background: #090d16; }
                     #pro-page .pro-page-wrapper {
-                        --pro-ink: #111827;
-                        --pro-muted: #5f6675;
-                        --pro-line: #e5e7ef;
-                        --pro-violet: #6d3df5;
-                        --pro-violet-soft: #f0edff;
+                        --pro-ink: #f5f3ff;
+                        --pro-muted: #aab2c3;
+                        --pro-line: #293244;
+                        --pro-violet: #946cff;
+                        --pro-violet-soft: #211947;
                         max-width: 1240px;
                         padding: 28px clamp(16px, 3vw, 38px) 72px;
                         background: transparent;
@@ -2621,7 +2637,7 @@ class XERAProfessionalManager {
                         overflow: visible;
                     }
                     #pro-page .pro-header-card {
-                        background: #fff;
+                        background: #101624;
                         border: 1px solid var(--pro-line);
                         border-radius: 24px;
                         box-shadow: 0 16px 38px rgba(17,24,39,.06);
@@ -2657,8 +2673,8 @@ class XERAProfessionalManager {
                     #pro-page .pro-header-info > div:first-child { display: grid; grid-template-columns: 126px minmax(0,1fr); gap: 22px; align-items: end; }
                     #pro-page .pro-avatar-overlap {
                         width: 126px; height: 126px; margin: -62px 0 0;
-                        border: 5px solid #fff; border-radius: 22px; background: #fff;
-                        box-shadow: 0 12px 28px rgba(17,24,39,.16);
+                        border: 5px solid #101624; border-radius: 22px; background: #101624;
+                        box-shadow: 0 12px 28px rgba(0,0,0,.32);
                     }
                     #pro-page .pro-main-details { padding: 0; margin: 0; text-align: left; }
                     #pro-page .pro-industry-label { color: var(--pro-violet); font-size: .72rem; text-align: left; margin: 0 0 7px; }
@@ -2672,8 +2688,8 @@ class XERAProfessionalManager {
                     }
                     #pro-page .pro-interests-label { color: var(--pro-muted); text-align: left; letter-spacing: .08em; }
                     #pro-page .pro-interest-list { justify-content: flex-start; margin: 0; }
-                    #pro-page .pro-interest-chip { background: #f7f7fa; border-color: var(--pro-line); color: #3f4654; border-radius: 9px; padding: 6px 9px; }
-                    #pro-page .pro-interest-chip:hover { background: var(--pro-violet-soft); color: #5130c7; border-color: #d8d0ff; }
+                    #pro-page .pro-interest-chip { background: #171f30; border-color: #344057; color: #d5d9e3; border-radius: 9px; padding: 6px 9px; }
+                    #pro-page .pro-interest-chip:hover { background: #282051; color: #f3efff; border-color: #6e55c7; }
                     #pro-page .pro-secondary-details > .pro-role-label { color: var(--pro-muted); }
                     #pro-page .pro-secondary-details > .pro-role-label span { color: var(--pro-ink); }
                     #pro-page .pro-actions-row {
@@ -2689,26 +2705,26 @@ class XERAProfessionalManager {
                     }
                     #pro-page .btn-pro-primary { background: var(--pro-violet); box-shadow: 0 7px 15px rgba(109,61,245,.18); }
                     #pro-page .btn-pro-primary:hover { background: #5930d4; transform: translateY(-1px); }
-                    #pro-page .btn-pro-secondary { background: #fff; color: #303848; border-color: #d6d9e2; }
-                    #pro-page .btn-pro-secondary:hover { background: #f6f5fb; border-color: #bdb4ee; color: #5130c7; }
+                    #pro-page .btn-pro-secondary { background: #171f2e; color: #e5e7ef; border-color: #38445a; }
+                    #pro-page .btn-pro-secondary:hover { background: #242d40; border-color: #7961d7; color: #fff; }
                     #pro-page .pro-features-grid { grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin-bottom: 24px; }
                     #pro-page .pro-features-grid > .feature-card-pro:nth-child(3) { grid-column: auto; }
-                    #pro-page .feature-card-pro { background: #fff; color: var(--pro-ink); border-color: var(--pro-line); border-radius: 16px; min-height: 110px; padding: 16px; }
-                    #pro-page .feature-card-pro:hover { background: #fff; border-color: #cfc5ff; box-shadow: 0 10px 24px rgba(17,24,39,.07); }
+                    #pro-page .feature-card-pro { background: #121826; color: var(--pro-ink); border-color: var(--pro-line); border-radius: 16px; min-height: 110px; padding: 16px; }
+                    #pro-page .feature-card-pro:hover { background: #171f30; border-color: #6250aa; box-shadow: 0 10px 24px rgba(0,0,0,.25); }
                     #pro-page .feature-icon-box { background: var(--pro-violet-soft); color: var(--pro-violet); border-radius: 11px; }
                     #pro-page .feature-info h4 { color: var(--pro-ink); }
                     #pro-page .feature-info p, #pro-page .feature-arrow { color: var(--pro-muted); }
                     #pro-page .pro-info-carousel { padding: 0 30px 24px; margin: 0; }
-                    #pro-page .pro-info-carousel > section { background: #fafaff; border-color: var(--pro-line); border-radius: 14px; color: var(--pro-ink); }
+                    #pro-page .pro-info-carousel > section { background: #161e2d; border-color: var(--pro-line); border-radius: 14px; color: var(--pro-ink); }
                     #pro-page .pro-content-layout { grid-template-columns: minmax(0, 1fr) 310px; align-items: start; gap: 26px; }
                     #pro-page .pro-main-col { display: grid; gap: 22px; }
                     #pro-page .pro-page-sidebar { position: sticky; top: 92px; gap: 12px; }
                     #pro-page .pro-card-premium, #pro-page .sidebar-card-premium, #pro-page .pro-creation-card {
-                        background: #fff; color: var(--pro-ink); border-color: var(--pro-line); border-radius: 16px;
-                        box-shadow: 0 8px 22px rgba(17,24,39,.035);
+                        background: #121826; color: var(--pro-ink); border-color: var(--pro-line); border-radius: 16px;
+                        box-shadow: 0 8px 22px rgba(0,0,0,.2);
                     }
                     #pro-page .pro-creation-card { padding: 16px; border-top: 3px solid var(--pro-violet); }
-                    #pro-page .pro-creation-input-shell { background: #f8f8fb; border-color: #ececf2; border-radius: 12px; margin-bottom: 11px; }
+                    #pro-page .pro-creation-input-shell { background: #0d1320; border-color: #273146; border-radius: 12px; margin-bottom: 11px; }
                     #pro-page .pro-creation-input-shell button { color: var(--pro-muted); }
                     #pro-page .pro-tab-item { color: var(--pro-muted); background: transparent; border-radius: 9px; min-height: 39px; }
                     #pro-page .pro-tab-item:hover { background: var(--pro-violet-soft); color: #5130c7; }
@@ -2717,9 +2733,9 @@ class XERAProfessionalManager {
                     #pro-page .btn-pill-small { border-radius: 9px; color: #5130c7; background: var(--pro-violet-soft); }
                     #pro-page .btn-pill-small:hover { background: var(--pro-violet); }
                     #pro-page .org-arcs-grid { grid-template-columns: repeat(auto-fit,minmax(240px,1fr)) !important; gap: 13px !important; margin: -7px 0 0 !important; }
-                    #pro-page .arc-card-pro-premium { background: #fff; color: var(--pro-ink); border-color: var(--pro-line); border-left: 3px solid var(--pro-violet); border-radius: 14px; padding: 18px; }
-                    #pro-page .arc-card-pro-premium:hover { background: #fff; border-color: #cfc5ff; box-shadow: 0 10px 25px rgba(17,24,39,.06); transform: translateY(-2px); }
-                    #pro-page .pro-empty-state { border-color: #d9dbe5; background: #fbfbfd; color: var(--pro-ink); }
+                    #pro-page .arc-card-pro-premium { background: #121826; color: var(--pro-ink); border-color: var(--pro-line); border-left: 3px solid var(--pro-violet); border-radius: 14px; padding: 18px; }
+                    #pro-page .arc-card-pro-premium:hover { background: #171f30; border-color: #6250aa; box-shadow: 0 10px 25px rgba(0,0,0,.25); transform: translateY(-2px); }
+                    #pro-page .pro-empty-state { border-color: #313b4e; background: #101624; color: var(--pro-ink); }
                     #pro-page .pro-empty-text { color: var(--pro-muted); }
                     #pro-page #company-updates-container { margin: -8px 0 0 !important; }
                     #pro-page .employees-grid { margin: -7px 0 0 !important; }
@@ -2775,6 +2791,11 @@ class XERAProfessionalManager {
                     #pro-page .pro-banner-container {
                         background: linear-gradient(120deg, rgba(0,0,0,.25), rgba(116,76,224,.16)), linear-gradient(135deg, #080c14 0%, #17253c 58%, #493b82 100%);
                     }
+                    #pro-page .pro-banner-img { display: block; position: relative; z-index: 1; }
+                    #pro-page .pro-banner-container.pro-banner-unavailable {
+                        background: #0b1120 !important;
+                    }
+                    #pro-page .pro-banner-container.pro-banner-unavailable::after { display: none; }
                     #pro-page .pro-avatar-overlap { border-color: #101624; background: #101624; }
                     #pro-page .pro-name-row h2,
                     #pro-page .feature-info h4,
@@ -2841,7 +2862,7 @@ class XERAProfessionalManager {
                     <!-- HEADER -->
                     <div class="pro-header-card">
                         <div class="pro-banner-container">
-                            ${banner ? `<img src="${banner}" class="pro-banner-img">` : ""}
+                            ${banner ? `<img src="${this.escapeHtml(banner)}" class="pro-banner-img" alt="${bannerAlt}" onerror="this.remove(); this.parentElement.classList.add('pro-banner-unavailable');">` : ""}
                             ${isOwner ? `<div class="pro-edit-banner-btn" onclick="window.professionalManager.openPageSettings('${page.id}')"><i class="fas fa-edit"></i></div>` : ""}
                         </div>
 

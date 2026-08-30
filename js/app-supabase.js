@@ -7145,8 +7145,8 @@ async function fetchAdminPartners() {
         box.innerHTML = !(data.partners||[]).length ? '<div class="verification-empty">Aucun partenaire.</div>' : data.partners.map(p => `<div class="admin-card" style="padding:.75rem;border:1px solid var(--border-color);border-radius:10px"><strong>${escapeHtml(p.name)}</strong> · ${escapeHtml(p.status)}<br><small>Partenaire: ${(p.partner_codes||[]).map(c=>escapeHtml(c.code)).join(', ')||'—'} · Réduction: ${(p.partner_discount_codes||[]).map(c=>escapeHtml(c.code)).join(', ')||'—'}</small><div style="display:flex;gap:.4rem;margin-top:.5rem"><input id="partner-code-${p.id}" class="form-input" placeholder="Nouveau code"><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','partner')">Code partenaire</button><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','discount')">Code réduction 20%</button></div></div>`).join('');
     } catch (e) { box.textContent=e.message||'Impossible de charger les partenaires.'; }
 }
-async function createAdminPartner() { try { const name=document.getElementById('admin-partner-name').value; await fetchSuperAdminJson('/api/admin/partners',{method:'POST',body:JSON.stringify({name})}); document.getElementById('admin-partner-name').value=''; await fetchAdminPartners(); } catch(e) { ToastManager?.error('Erreur',e.message||'Création impossible.'); } }
-async function createAdminPartnerCode(id, kind) { try { const code=document.getElementById(`partner-code-${id}`).value; await fetchSuperAdminJson(`/api/admin/partners/${encodeURIComponent(id)}/codes`,{method:'POST',body:JSON.stringify({kind,code})}); await fetchAdminPartners(); } catch(e) { ToastManager?.error('Erreur',e.message||'Création impossible.'); } }
+async function createAdminPartner() { try { const input=document.getElementById('admin-partner-name'); const name=input?.value?.trim(); if(!name) throw new Error('Saisissez le nom du partenaire.'); await fetchSuperAdminJson('/api/admin/partners',{method:'POST',body:JSON.stringify({name})}); input.value=''; window.ToastManager?.success?.('Partenaire créé', 'Le partenaire est maintenant disponible.'); window.showToast?.('Partenaire créé avec succès.', 'success'); await fetchAdminPartners(); } catch(e) { window.ToastManager?.error?.('Erreur',e.message||'Création impossible.'); window.showToast?.(e.message||'Création impossible.', 'error'); } }
+async function createAdminPartnerCode(id, kind) { try { const code=document.getElementById(`partner-code-${id}`).value; await fetchSuperAdminJson(`/api/admin/partners/${encodeURIComponent(id)}/codes`,{method:'POST',body:JSON.stringify({kind,code})}); window.ToastManager?.success?.('Code créé', 'Le code est actif.'); await fetchAdminPartners(); } catch(e) { window.ToastManager?.error?.('Erreur',e.message||'Création impossible.'); window.showToast?.(e.message||'Création impossible.', 'error'); } }
 
 async function fetchAdminDiscountCodes() {
     const container = document.getElementById("admin-discount-codes-list");
@@ -7184,14 +7184,22 @@ async function createAdminDiscountCode() {
                 valid_until: until || undefined,
             }),
         });
-        ToastManager?.success("Code créé", "Le code de réduction est actif.");
+        window.ToastManager?.success?.(
+            "Code créé",
+            "Le code de réduction est actif.",
+        );
+        window.showToast?.("Code de réduction créé avec succès.", "success");
         document.getElementById("admin-discount-code").value = "";
         document.getElementById("admin-discount-percent").value = "";
         await fetchAdminDiscountCodes();
     } catch (error) {
-        ToastManager?.error(
+        window.ToastManager?.error?.(
             "Erreur",
             error?.message || "Impossible de créer le code.",
+        );
+        window.showToast?.(
+            error?.message || "Impossible de créer le code.",
+            "error",
         );
     }
 }

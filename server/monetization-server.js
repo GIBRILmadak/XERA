@@ -789,6 +789,7 @@ async function findActiveDiscountCode(rawCode) {
         .or(`valid_until.is.null,valid_until.gte.${nowIso}`)
         .maybeSingle();
     if (error) throw error;
+    if (data?.max_uses !== null && Number(data.uses_count || 0) >= Number(data.max_uses)) return null;
     return data || null;
 }
 
@@ -4402,7 +4403,9 @@ async function handleKPaySubscriptionCheckout(req, res) {
             computeKPayAmount(planId, billingCycle, "USD"),
             discountPercent,
         );
-        const amount = discount
+        // A partner discount code is a valid discount too: it must reduce the
+        // checkout amount while retaining its attribution metadata.
+        const amount = (discount || partnerDiscount)
             ? currency === "CDF"
                 ? Math.round(discountedUsd * USD_TO_CDF_RATE_VALUE)
                 : Math.ceil(discountedUsd)
@@ -5320,10 +5323,8 @@ app.post("/api/admin/discount-codes", async (req, res) => {
             return res
                 .status(400)
                 .json({ error: "Code invalide (3 à 40 caractères)." });
-        if (discountPercent !== 100)
-            return res.status(400).json({
-                error: "Une certification offerte doit utiliser une réduction de 100 %.",
-            });
+        if (!Number.isInteger(discountPercent) || discountPercent < 10 || discountPercent > 100)
+            return res.status(400).json({ error: "La réduction doit être comprise entre 10 et 100 %." });
         if (!isValidPlanId(plan))
             return res.status(400).json({ error: "Plan offert invalide." });
         if (!Number.isInteger(benefitDurationDays) || benefitDurationDays < 1)
@@ -5361,7 +5362,10 @@ app.post("/api/admin/discount-codes", async (req, res) => {
         if (error) throw error;
         return res.status(201).json({ success: true, code: data });
     } catch (error) {
-        console.error("Admin discount code create error:", error);
+        console.error("Admin discount code create error:", { code: error?.code, message: error?.message, details: error?.details, hint: error?.hint });
+        if (["42P01", "PGRST205", "42883"].includes(error?.code)) {
+            return res.status(503).json({ error: "Le schéma des codes de réduction n'est pas installé. Exécutez sql/20260830_subscription_discount_codes.sql dans Supabase, puis réessayez." });
+        }
         return res.status(500).json({
             error:
                 error?.code === "23505"
@@ -8121,7 +8125,25 @@ app.get("/api/partners/dashboard", async (req, res) => {
 });
 
 app.post("/api/admin/partners", async (req, res) => {
-    try { const auth = await authenticateSuperAdmin(req); if (auth.error) return res.status(auth.error.status).json({ error: auth.error.message }); const name = String(req.body?.name || "").trim(); if (name.length < 2) return res.status(400).json({ error: "Nom partenaire invalide." }); const { data, error } = await supabase.from("partners").insert({ name }).select().single(); if (error) throw error; res.status(201).json({ partner: data }); } catch (error) { res.status(500).json({ error: error?.message || "Création impossible." }); }
+    try {
+        const auth = await authenticateSuperAdmin(req);
+        if (auth.error) return res.status(auth.error.status).json({ error: auth.error.message });
+        const name = String(req.body?.name || "").trim();
+        if (name.length < 2) return res.status(400).json({ error: "Nom partenaire invalide." });
+        const { data, error } = await supabase.from("partners").insert({ name }).select().single();
+        if (error) {
+            console.error("/api/admin/partners insert failed:", { code: error.code, message: error.message, details: error.details });
+            if (["42P01", "PGRST205"].includes(error.code)) {
+                return res.status(503).json({ error: "Le schéma Partenaires n'est pas encore installé. Exécutez sql/20260830_partner_affiliates.sql dans Supabase, puis rechargez." });
+            }
+            if (error.code === "23505") return res.status(409).json({ error: "Un partenaire portant ce nom existe déjà." });
+            throw error;
+        }
+        return res.status(201).json({ partner: data });
+    } catch (error) {
+        console.error("/api/admin/partners error:", error);
+        return res.status(500).json({ error: error?.message || "Création impossible." });
+    }
 });
 app.get("/api/admin/partners", async (req, res) => {
     try { const auth = await authenticateSuperAdmin(req); if (auth.error) return res.status(auth.error.status).json({ error: auth.error.message }); const { data, error } = await supabase.from("partners").select("id,name,status,commission_rate,created_at,partner_codes(id,code,status,expires_at),partner_discount_codes(id,code,discount_percent,status,expires_at)").order("created_at", { ascending:false }); if (error) throw error; res.json({ partners:data||[] }); } catch (error) { res.status(500).json({ error:error?.message||"Chargement impossible." }); }
