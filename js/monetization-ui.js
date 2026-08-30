@@ -172,6 +172,13 @@ function createSupportModal() {
                         <span id="global-summary-amount">$0.00</span>
                     </div>
                 </div>
+                <label class="support-payment-method" for="global-support-payment-method">Moyen de paiement</label>
+                <select id="global-support-payment-method" class="form-input">
+                    <option value="card">Carte bancaire (Visa / Mastercard)</option>
+                    <option value="mobile_money">Mobile Money</option>
+                    <option value="paypal">PayPal</option>
+                </select>
+                <p class="support-payment-help">KPay affichera ce moyen lorsqu’il est disponible dans votre pays.</p>
                 <button class="btn-primary btn-full" id="global-support-submit" onclick="processGlobalSupport()" disabled>
                     <i class="fas fa-heart"></i> Envoyer le soutien
                 </button>
@@ -321,6 +328,7 @@ async function processGlobalSupport() {
             amount,
             description: 'Soutien depuis le profil',
             returnPath: globalSupportState.returnPath,
+            paymentMethod: document.getElementById('global-support-payment-method')?.value || 'card',
         });
 
         if (result.success) {

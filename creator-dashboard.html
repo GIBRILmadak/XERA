@@ -187,8 +187,8 @@
                         <div class="wallet-panel-header">
                             <div class="wallet-panel-heading-row">
                                 <div>
-                                    <h3><i class="fas fa-mobile-screen-button"></i> Compte Mobile Money</h3>
-                                    <p>Enregistrez le numéro sur lequel XERA1 devra envoyer vos retraits.</p>
+                                    <h3><i class="fas fa-mobile-screen-button"></i> Moyen de retrait</h3>
+                                    <p>Mobile Money est actuellement le seul moyen de retrait proposé par KPay. Carte et PayPal sont disponibles pour payer, mais pas pour recevoir un retrait.</p>
                                 </div>
                                 <button
                                     type="button"
@@ -251,6 +251,15 @@
                         </div>
 
                         <form id="withdrawalRequestForm" class="wallet-form">
+                            <label class="wallet-field">
+                                <span>Moyen de retrait</span>
+                                <select id="withdrawalMethod" disabled aria-describedby="withdrawalMethodHelp">
+                                    <option value="mobile_money">Mobile Money — disponible</option>
+                                    <option value="card">Carte bancaire — indisponible chez KPay</option>
+                                    <option value="paypal">PayPal — indisponible chez KPay</option>
+                                </select>
+                                <small id="withdrawalMethodHelp">Les retraits sont automatiquement envoyés vers votre compte Mobile Money après confirmation KPay.</small>
+                            </label>
                             <div class="wallet-form-grid">
                                 <label class="wallet-field">
                                     <span>Montant (USD)</span>

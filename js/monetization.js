@@ -1294,6 +1294,7 @@ async function redirectToSupportCheckout({
     description = "",
     returnPath = "",
     sourceElement = null,
+    paymentMethod = "card",
 }) {
     if (supportCheckoutInProgress) {
         return { success: false, error: "Le paiement est déjà en cours d'initialisation." };
@@ -1355,7 +1356,9 @@ async function redirectToSupportCheckout({
         params.set("return_path", returnPath || buildSupportReturnPath(sourceElement));
         params.set("user_id", user.id);
         params.set("access_token", accessToken);
-        params.set("method", "card");
+        const method = ["card", "mobile_money", "paypal"].includes(String(paymentMethod).toLowerCase())
+            ? String(paymentMethod).toLowerCase() : "card";
+        params.set("method", method);
         // The support amount is selected in USD, then converted server-side
         // to CDF for the K-Pay Mobile Money gateway.
         params.set("currency", "CDF");

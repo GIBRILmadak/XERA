@@ -49,6 +49,7 @@ const {
     KPAY_CHECKOUT_URL = process.env.KPAY_CHECKOUT_URL ||
         "https://admin.kpay.site",
     KPAY_CALLBACK_SECRET = process.env.KPAY_CALLBACK_SECRET || "",
+    KPAY_WEBHOOK_SECRET = process.env.KPAY_WEBHOOK_SECRET || "",
     KPAY_PAYOUTS_ENABLED = process.env.KPAY_PAYOUTS_ENABLED || "0",
     KPAY_PAYOUT_CURRENCIES = process.env.KPAY_PAYOUT_CURRENCIES || "{}",
     SUPER_ADMIN_ID = process.env.SUPER_ADMIN_ID ||
@@ -139,6 +140,37 @@ try {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const app = express();
+// Must be registered before express.json(): KPay signs the exact raw JSON bytes.
+app.post("/api/webhooks/kpay", express.raw({ type: "application/json" }), async (req, res) => {
+    const signature = String(req.headers["x-kpay-signature"] || "").trim().toLowerCase();
+    const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
+    if (!KPAY_WEBHOOK_SECRET || !signature || !raw.length) return res.status(400).send("Invalid webhook");
+    const expected = crypto.createHmac("sha256", KPAY_WEBHOOK_SECRET).update(raw).digest("hex");
+    if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return res.status(400).send("Invalid signature");
+    let payload;
+    try { payload = JSON.parse(raw.toString("utf8")); } catch (_) { return res.status(400).send("Invalid JSON"); }
+    const event = String(payload?.event || req.headers["x-kpay-event"] || "").toLowerCase();
+    // This callback is deliberately restricted to payouts; deposit activation keeps
+    // using the already secured checkout callback flow.
+    if (!event.startsWith("payout.")) return res.status(200).send("Ignored");
+    const status = String(payload?.status || "").toUpperCase();
+    if (!["COMPLETED", "FAILED", "CANCELLED"].includes(status)) return res.status(200).send("Acknowledged");
+    const withdrawalId = String(payload?.externalId || "").replace(/^XERA-WD-/, "");
+    if (!withdrawalId) return res.status(400).send("Missing external id");
+    try {
+        const paid = status === "COMPLETED";
+        const isPartnerPayout = withdrawalId.startsWith("PW-");
+        const { error } = await supabase.from(isPartnerPayout ? "partner_payouts" : "withdrawal_requests").update({
+            status: paid ? "paid" : "rejected", kpay_status: status,
+            kpay_withdrawal_id: payload?.paymentId || payload?.withdrawalId || payload?.id || null, kpay_reference: payload?.reference || null,
+            paid_at: paid ? (payload?.completedAt || new Date().toISOString()) : null,
+            ...(isPartnerPayout ? { note: paid ? null : `KPay: ${String(payload?.failureReason || status).slice(0, 220)}` } : { admin_note: paid ? null : `KPay: ${String(payload?.failureReason || status).slice(0, 220)}` }),
+            updated_at: new Date().toISOString(),
+        }).eq("id", isPartnerPayout ? withdrawalId.slice(3) : withdrawalId).eq("status", "processing");
+        if (error) throw error;
+        return res.status(200).send("OK");
+    } catch (error) { console.error("KPay payout webhook error:", error); return res.status(500).send("Retry"); }
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -789,18 +821,19 @@ async function createPartnerAffiliationFromSubscription({ userId, subscriptionId
 async function createPartnerCommissionForSupport({ transactionId, beneficiaryUserId, gross, netCreator }) {
     const nowIso = new Date().toISOString();
     const { data: affiliation, error: affiliationError } = await supabase.from("partner_affiliations")
-        .select("id, partner_id, partners!inner(status, commission_rate)")
+        .select("id, partner_id, partners!inner(status, commission_rate), partner_discount_codes!inner(status, expires_at)")
         .eq("user_id", beneficiaryUserId).eq("status", "active")
-        .lte("eligible_from", nowIso).gte("eligible_until", nowIso).eq("partners.status", "active")
+        .lte("eligible_from", nowIso).gte("eligible_until", nowIso).eq("partners.status", "active").eq("partner_discount_codes.status", "active")
         .order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (affiliationError) throw affiliationError;
     if (!affiliation) return null;
+    if (affiliation.partner_discount_codes?.expires_at && new Date(affiliation.partner_discount_codes.expires_at).getTime() < Date.now()) return null;
     const rate = Number(affiliation.partners?.commission_rate || .05);
     const commission = Math.round(Number(gross) * rate * 100) / 100;
     const { data, error } = await supabase.from("partner_commissions").insert({
         partner_id: affiliation.partner_id, affiliation_id: affiliation.id, support_transaction_id: transactionId,
         beneficiary_user_id: beneficiaryUserId, amount_gross: gross, commission_amount: commission,
-        beneficiary_net_amount: Math.max(0, Math.round((Number(netCreator) - commission) * 100) / 100), currency: "USD", status: "pending",
+        beneficiary_net_amount: Math.max(0, Math.round((Number(netCreator) - commission) * 100) / 100), currency: "USD", status: "available", available_at: new Date().toISOString(),
     }).select("id").maybeSingle();
     // A unique constraint makes repeated payment webhooks idempotent.
     if (error && error.code !== "23505") throw error;
@@ -4302,8 +4335,8 @@ async function handleKPaySubscriptionCheckout(req, res) {
             return_path: rawReturnPath,
             discount_code: rawDiscountCode,
         } = req.body || {};
-
         const planId = String(plan || "").toLowerCase();
+        const paymentMethod = String(method || "card").toLowerCase();
         const billingCycle =
             String(billingCycleRaw || "monthly").toLowerCase() === "annual"
                 ? "annual"
@@ -4313,6 +4346,9 @@ async function handleKPaySubscriptionCheckout(req, res) {
 
         if (!KPAY_PLANS[planId]) {
             return res.status(400).send("Plan invalide");
+        }
+        if (!["card", "mobile_money", "paypal"].includes(paymentMethod)) {
+            return res.status(400).send("Moyen de paiement invalide");
         }
         if (!allowedCurrencies.has(currency)) {
             return res.status(400).send("Devise invalide");
@@ -4413,7 +4449,7 @@ async function handleKPaySubscriptionCheckout(req, res) {
             discountPercent,
             partnerId: partnerDiscount?.partner_id || null,
             partnerDiscountCodeId: partnerDiscount?.id || null,
-            method,
+            method: paymentMethod,
             provider,
             walletId,
             returnPath,
@@ -4502,6 +4538,10 @@ async function handleKPaySupportCheckout(req, res) {
             description: rawDescription,
             return_path: rawReturnPath,
         } = req.body || {};
+        const paymentMethod = String(method || "card").toLowerCase();
+        if (!["card", "mobile_money", "paypal"].includes(paymentMethod)) {
+            return res.status(400).send("Moyen de paiement invalide");
+        }
 
         const requestUser = await resolveRequestUser(
             accessToken,
@@ -4605,7 +4645,7 @@ async function handleKPaySupportCheckout(req, res) {
             amountUsd,
             checkoutAmount,
             checkoutCurrency: currency,
-            method,
+            method: paymentMethod,
             provider,
             walletId,
             description:
@@ -8051,6 +8091,8 @@ app.post("/api/partners/activate", async (req, res) => {
         const { data: partnerCode, error } = await supabase.from("partner_codes").select("id, partner_id, status, expires_at, partners!inner(status)")
             .eq("code", code).eq("status", "active").eq("partners.status", "active").or(`expires_at.is.null,expires_at.gte.${now}`).maybeSingle();
         if (error) throw error; if (!partnerCode) return res.status(400).json({ error: "Ce code partenaire est invalide, expiré ou révoqué." });
+        const { data: existing } = await supabase.from("partner_page_memberships").select("partner_id,status").eq("professional_page_id", pageId).maybeSingle();
+        if (existing?.status === "active" && existing.partner_id !== partnerCode.partner_id) return res.status(409).json({ error: "Cette Page Pro est déjà rattachée à un autre partenaire." });
         const { data, error: upsertError } = await supabase.from("partner_page_memberships").upsert({ professional_page_id: pageId, partner_id: partnerCode.partner_id, partner_code_id: partnerCode.id, status: "active", activated_at: now, deactivated_at: null, updated_at: now }, { onConflict: "professional_page_id" }).select("id, partner_id, status").single();
         if (upsertError) throw upsertError;
         await supabase.from("partner_audit_log").insert({ actor_id: auth.user.id, action: "page_partnership_activated", entity_type: "partner_page_membership", entity_id: data.id, metadata: { page_id: pageId, partner_code_id: partnerCode.id } });
@@ -8064,12 +8106,17 @@ app.get("/api/partners/dashboard", async (req, res) => {
         const pageId = String(req.query.page_id || "");
         const { data: page } = await supabase.from("professional_pages").select("id").eq("id", pageId).eq("owner_id", auth.user.id).maybeSingle();
         if (!page) return res.status(403).json({ error: "Accès refusé." });
-        const { data: membership, error } = await supabase.from("partner_page_memberships").select("id, partner_id, status, partners!inner(name, status)").eq("professional_page_id", pageId).maybeSingle(); if (error) throw error;
+        const { data: membership, error } = await supabase.from("partner_page_memberships").select("id, partner_id, partner_code_id, status, partners!inner(name, status)").eq("professional_page_id", pageId).maybeSingle(); if (error) throw error;
         if (!membership || membership.status !== "active" || membership.partners.status !== "active") return res.json({ active: false });
+        const { data: activeCode } = await supabase.from("partner_codes").select("status,expires_at").eq("id", membership.partner_code_id).maybeSingle();
+        if (!activeCode || activeCode.status !== "active" || (activeCode.expires_at && new Date(activeCode.expires_at).getTime() < Date.now())) return res.json({ active: false, reason: "expired_or_revoked" });
         const { data: commissions, error: commissionError } = await supabase.from("partner_commissions").select("id, amount_gross, commission_amount, status, created_at, beneficiary_user_id, support_transaction_id").eq("partner_id", membership.partner_id).order("created_at", { ascending: false }).limit(100); if (commissionError) throw commissionError;
         const rows = commissions || []; const sum = (status) => rows.filter(r => status.includes(r.status)).reduce((n,r)=>n + Number(r.commission_amount || 0), 0);
         const affiliateResult = await supabase.from("partner_affiliations").select("user_id", { count: "exact", head: true }).eq("partner_id", membership.partner_id);
-        res.json({ active: true, partner: membership.partners.name, metrics: { total: sum(["pending","available","paid"]), available: sum(["available"]), paid: sum(["paid"]), affiliates: affiliateResult.count || 0, donations: rows.length, donationGross: rows.reduce((n,r)=>n+Number(r.amount_gross||0),0) }, commissions: rows });
+        const [{ data: payoutSetting }, { data: payouts }] = await Promise.all([supabase.from("partner_payout_settings").select("account_name,wallet_number,status").eq("partner_id", membership.partner_id).maybeSingle(), supabase.from("partner_payouts").select("amount_usd,status").eq("partner_id", membership.partner_id)]);
+        const reserved=(payouts||[]).filter(p=>["processing","paid"].includes(p.status)).reduce((n,p)=>n+Number(p.amount_usd||0),0);
+        const paid=(payouts||[]).filter(p=>p.status==="paid").reduce((n,p)=>n+Number(p.amount_usd||0),0);
+        res.json({ active: true, partner: membership.partners.name, payoutSetting: payoutSetting || null, metrics: { total: sum(["pending","available","paid"]), available: Math.max(0,sum(["available"])-reserved), paid, affiliates: affiliateResult.count || 0, donations: rows.length, donationGross: rows.reduce((n,r)=>n+Number(r.amount_gross||0),0) }, commissions: rows });
     } catch (error) { res.status(500).json({ error: error?.message || "Dashboard indisponible." }); }
 });
 
@@ -8077,10 +8124,16 @@ app.post("/api/admin/partners", async (req, res) => {
     try { const auth = await authenticateSuperAdmin(req); if (auth.error) return res.status(auth.error.status).json({ error: auth.error.message }); const name = String(req.body?.name || "").trim(); if (name.length < 2) return res.status(400).json({ error: "Nom partenaire invalide." }); const { data, error } = await supabase.from("partners").insert({ name }).select().single(); if (error) throw error; res.status(201).json({ partner: data }); } catch (error) { res.status(500).json({ error: error?.message || "Création impossible." }); }
 });
 app.get("/api/admin/partners", async (req, res) => {
-    try { const auth = await authenticateSuperAdmin(req); if (auth.error) return res.status(auth.error.status).json({ error: auth.error.message }); const { data, error } = await supabase.from("partners").select("id,name,status,commission_rate,created_at,partner_codes(code,status,expires_at),partner_discount_codes(code,discount_percent,status,expires_at)").order("created_at", { ascending:false }); if (error) throw error; res.json({ partners:data||[] }); } catch (error) { res.status(500).json({ error:error?.message||"Chargement impossible." }); }
+    try { const auth = await authenticateSuperAdmin(req); if (auth.error) return res.status(auth.error.status).json({ error: auth.error.message }); const { data, error } = await supabase.from("partners").select("id,name,status,commission_rate,created_at,partner_codes(id,code,status,expires_at),partner_discount_codes(id,code,discount_percent,status,expires_at)").order("created_at", { ascending:false }); if (error) throw error; res.json({ partners:data||[] }); } catch (error) { res.status(500).json({ error:error?.message||"Chargement impossible." }); }
 });
 app.post("/api/admin/partners/:id/codes", async (req, res) => {
     try { const auth=await authenticateSuperAdmin(req); if(auth.error)return res.status(auth.error.status).json({error:auth.error.message}); const code=normalizeDiscountCode(req.body?.code); const kind=String(req.body?.kind||""); const expiresAt=req.body?.expires_at||null; if(!/^[A-Z0-9_-]{3,60}$/.test(code)||!['partner','discount'].includes(kind))return res.status(400).json({error:'Code invalide.'}); const table=kind==='partner'?'partner_codes':'partner_discount_codes'; const payload=kind==='partner'?{partner_id:req.params.id,code,expires_at:expiresAt}:{partner_id:req.params.id,code,discount_percent:20,expires_at:expiresAt}; const {data,error}=await supabase.from(table).insert(payload).select().single();if(error)throw error;res.status(201).json({code:data}); }catch(error){res.status(500).json({error:error?.code==='23505'?'Ce code existe déjà.':error?.message||'Création impossible.'});}
+});
+app.patch("/api/admin/partners/:partnerId/codes/:kind/:codeId", async (req, res) => {
+    try { const auth=await authenticateSuperAdmin(req); if(auth.error)return res.status(auth.error.status).json({error:auth.error.message}); const table=req.params.kind==="partner"?"partner_codes":req.params.kind==="discount"?"partner_discount_codes":null; const status=String(req.body?.status||""); if(!table||!["active","revoked","expired"].includes(status))return res.status(400).json({error:"Mise à jour invalide."}); const {data,error}=await supabase.from(table).update({status,revoked_at:status==="revoked"?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq("id",req.params.codeId).eq("partner_id",req.params.partnerId).select().single(); if(error)throw error; await supabase.from("partner_audit_log").insert({actor_id:auth.user.id,action:"partner_code_updated",entity_type:table,entity_id:data.id,metadata:{status}}); res.json({success:true,code:data}); }catch(error){res.status(500).json({error:error?.message||"Mise à jour impossible."});}
+});
+app.patch("/api/admin/partners/:id", async (req, res) => {
+    try { const auth=await authenticateSuperAdmin(req); if(auth.error)return res.status(auth.error.status).json({error:auth.error.message}); const status=String(req.body?.status||""); if(!["active","revoked","expired"].includes(status))return res.status(400).json({error:"Statut invalide."}); const {data,error}=await supabase.from("partners").update({status,updated_at:new Date().toISOString()}).eq("id",req.params.id).select().single();if(error)throw error;await supabase.from("partner_audit_log").insert({actor_id:auth.user.id,action:"partner_updated",entity_type:"partners",entity_id:data.id,metadata:{status}});res.json({success:true,partner:data}); }catch(error){res.status(500).json({error:error?.message||"Mise à jour impossible."});}
 });
 
 if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {

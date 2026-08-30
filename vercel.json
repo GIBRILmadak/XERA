@@ -39,7 +39,7 @@
         },
         {
             "path": "/api/cron/sweep-kpay-payouts",
-            "schedule": "*/10 * * * *"
+            "schedule": "20 0 * * *"
         }
     ]
 }
