@@ -317,3 +317,22 @@
         justify-self: start;
     }
 }
+/* Immediate acknowledgement for every admin action while its request runs. */
+.admin-action-pending {
+    cursor: wait !important;
+    opacity: .72;
+    position: relative;
+}
+.admin-action-pending::before {
+    content: "";
+    display: inline-block;
+    width: .78em;
+    height: .78em;
+    margin-right: .45em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    vertical-align: -.08em;
+    animation: xera-admin-spin .7s linear infinite;
+}
+@keyframes xera-admin-spin { to { transform: rotate(360deg); } }

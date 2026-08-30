@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Paiements KPay | XERA1</title>
+    <link rel="icon" type="image/png" href="icons/logo-192x192.png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/admin.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
+</head>
+<body>
+    <main id="kpay-payments-page" class="settings-container admin-page" style="margin-top:40px"></main>
+    <script src="js/router.js"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/monetization-utils.js"></script>
+    <script src="js/app-supabase.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => window.renderKpayPaymentsPage?.());
+    </script>
+</body>
+</html>

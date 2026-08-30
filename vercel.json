@@ -10,7 +10,9 @@
         { "source": "/pagepro", "destination": "/profile.html" },
         { "source": "/pagepro/:path*", "destination": "/profile.html" },
         { "source": "/analytics", "destination": "/analytics.html" },
+        { "source": "/commissions", "destination": "/commissions.html" },
         { "source": "/admin", "destination": "/admin.html" },
+        { "source": "/kpay-payments", "destination": "/kpay-payments.html" },
         { "source": "/badges-admin", "destination": "/badges-admin.html" },
         { "source": "/create-stream", "destination": "/create-stream.html" },
         {
@@ -34,6 +36,10 @@
         {
             "path": "/api/cron/sweep-subscriptions",
             "schedule": "5 0 * * *"
+        },
+        {
+            "path": "/api/cron/sweep-kpay-payouts",
+            "schedule": "*/10 * * * *"
         }
     ]
 }

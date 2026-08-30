@@ -112,7 +112,7 @@ const PLANS = {
 
 // Règles de paiement (KPay uniquement)
 const PAYMENT_RULES = {
-    commissionRate: 0.2,
+    commissionRate: 0.25,
     minTipAmount: 1.0,
     maxTipAmount: 1000.0,
 };

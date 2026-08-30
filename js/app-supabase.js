@@ -6585,33 +6585,9 @@ function getSuperAdminPanelHtml() {
             </div>
 
             <div class="verification-admin-block" style="margin-top: 1.5rem;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-                    <div>
-                        <h4 style="margin:0;">Paiements abonnements KPay</h4>
-                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin:0.35rem 0 0;">
-                            Confirme ici un paiement recu sur KPay pour activer exactement le palier achete.
-                        </p>
-                    </div>
-                    <button class="btn-verify" type="button" onclick="fetchAdminSubscriptionPayments()">
-                        Rafraîchir
-                    </button>
-                </div>
-                <div id="admin-subscription-payments-list" style="margin-top:0.9rem; display:flex; flex-direction:column; gap:0.75rem;"></div>
-            </div>
-
-            <div class="verification-admin-block" style="margin-top: 1.5rem;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-                    <div>
-                        <h4 style="margin:0;">Retraits Mobile Money</h4>
-                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin:0.35rem 0 0;">
-                            Traite ici les demandes de retrait envoyées depuis la page de monétisation.
-                        </p>
-                    </div>
-                    <button class="btn-verify" type="button" onclick="fetchAdminWithdrawalRequests()">
-                        Rafraîchir
-                    </button>
-                </div>
-                <div id="admin-withdrawal-requests-list" style="margin-top:0.9rem; display:flex; flex-direction:column; gap:0.75rem;"></div>
+                <h4 style="margin:0;">Paiements KPay</h4>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin:0.35rem 0 0.8rem;">Les abonnements sont activés automatiquement uniquement après confirmation sécurisée de KPay. Consultez ici l'historique, sans validation manuelle.</p>
+                <a href="kpay-payments.html" class="btn-verify" style="display:inline-flex;align-items:center;text-decoration:none">Voir les paiements reçus</a>
             </div>
 
             <div class="verification-admin-block" style="margin-top: 1.5rem;">
@@ -6846,10 +6822,33 @@ ${getSuperAdminPanelHtml()}
     `;
     // Précharge les stats temps réel si visible
     setTimeout(() => refreshAppPulse(), 150);
-    setTimeout(() => fetchAdminSubscriptionPayments(), 150);
     setTimeout(() => fetchAdminDiscountCodes(), 150);
     setTimeout(() => fetchAdminPartners(), 150);
-    setTimeout(() => fetchAdminWithdrawalRequests(), 150);
+    installAdminButtonFeedback(container);
+}
+
+function installAdminButtonFeedback(container) {
+    if (!container || container.dataset.feedbackInstalled) return;
+    container.dataset.feedbackInstalled = "true";
+    container.addEventListener("click", (event) => {
+        const button = event.target.closest("button");
+        if (!button || button.disabled || button.dataset.noPendingFeedback === "true") return;
+        const label = button.textContent.trim();
+        button.dataset.originalLabel = label;
+        button.disabled = true;
+        button.classList.add("admin-action-pending");
+        button.setAttribute("aria-busy", "true");
+        button.textContent = "Traitement…";
+        // Functions invoked by inline handlers are asynchronous. Restore if no
+        // navigation/re-render happened, while preserving immediate click feedback.
+        window.setTimeout(() => {
+            if (!button.isConnected || !button.classList.contains("admin-action-pending")) return;
+            button.disabled = false;
+            button.classList.remove("admin-action-pending");
+            button.removeAttribute("aria-busy");
+            button.textContent = button.dataset.originalLabel || label;
+        }, 8000);
+    });
 }
 
 async function fetchSuperAdminJson(path, options = {}) {
@@ -7025,6 +7024,45 @@ function renderAdminSubscriptionPaymentsList(items) {
         })
         .join("");
 }
+
+function renderKpayPaymentHistory(items) {
+    const container = document.getElementById("kpay-payments-history");
+    if (!container) return;
+    if (!Array.isArray(items) || items.length === 0) {
+        container.innerHTML = '<div class="verification-empty">Aucun paiement KPay confirmé.</div>';
+        return;
+    }
+    container.innerHTML = items.map((payment) => {
+        const user = payment.user || {};
+        const amount = Number(payment.amount || 0).toLocaleString("fr-FR", { style: "currency", currency: payment.currency || "USD" });
+        return `<div class="admin-card" style="border:1px solid var(--border-color);border-radius:12px;padding:1rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.75rem;align-items:center">
+            <div><small style="color:var(--text-secondary)">Utilisateur</small><strong style="display:block">${escapeHtml(user.name || "Utilisateur")}</strong></div>
+            <div><small style="color:var(--text-secondary)">Montant reçu</small><strong style="display:block">${amount}</strong></div>
+            <div><small style="color:var(--text-secondary)">Plan</small><strong style="display:block">${escapeHtml(String(payment.plan || "—").toUpperCase())} · ${payment.billingCycle === "annual" ? "Annuel" : "Mensuel"}</strong></div>
+            <div><small style="color:var(--text-secondary)">Confirmé le</small><strong style="display:block">${escapeHtml(formatAdminPaymentDate(payment.updatedAt || payment.createdAt))}</strong></div>
+            <div><small style="color:var(--text-secondary)">Référence KPay</small><strong style="display:block;word-break:break-all">${escapeHtml(payment.transactionRefId || payment.checkoutRefId || "—")}</strong></div>
+            <div><span class="admin-badge">${escapeHtml(payment.status || "succeeded")}</span></div>
+        </div>`;
+    }).join("");
+}
+
+async function renderKpayPaymentsPage() {
+    const container = document.getElementById("kpay-payments-page");
+    if (!container) return;
+    const user = await checkAuth();
+    if (!user || !isSuperAdmin()) { container.innerHTML = '<div class="settings-section"><h2>Accès refusé</h2><p>Cette page est réservée au super-admin.</p></div>'; return; }
+    container.innerHTML = `<div class="settings-section"><div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap"><div><a href="admin.html" style="color:var(--text-secondary)">← Administration</a><h2 style="margin:.6rem 0 0">Paiements KPay</h2><p style="color:var(--text-secondary)">Historique en lecture seule des paiements confirmés automatiquement par KPay.</p></div><button class="btn-verify" type="button" onclick="fetchKpayPaymentHistory()">Rafraîchir</button></div><div id="kpay-payments-history" style="margin-top:1rem;display:flex;flex-direction:column;gap:.7rem"></div></div>`;
+    installAdminButtonFeedback(container); await fetchKpayPaymentHistory();
+}
+
+async function fetchKpayPaymentHistory() {
+    const container = document.getElementById("kpay-payments-history"); if (!container) return;
+    container.innerHTML = '<div class="loading-spinner"></div>';
+    try { const payload = await fetchSuperAdminJson("/api/admin/subscription-payments?status=succeeded&limit=100"); renderKpayPaymentHistory(payload?.payments || []); }
+    catch (error) { container.innerHTML = `<div class="verification-empty">${escapeHtml(error?.message || "Impossible de charger les paiements.")}</div>`; }
+}
+window.renderKpayPaymentsPage = renderKpayPaymentsPage;
+window.fetchKpayPaymentHistory = fetchKpayPaymentHistory;
 
 async function refreshAdminSubscriptionRelatedViews(user) {
     if (!user?.id) return;

@@ -49,6 +49,8 @@ const {
     KPAY_CHECKOUT_URL = process.env.KPAY_CHECKOUT_URL ||
         "https://admin.kpay.site",
     KPAY_CALLBACK_SECRET = process.env.KPAY_CALLBACK_SECRET || "",
+    KPAY_PAYOUTS_ENABLED = process.env.KPAY_PAYOUTS_ENABLED || "0",
+    KPAY_PAYOUT_CURRENCIES = process.env.KPAY_PAYOUT_CURRENCIES || "{}",
     SUPER_ADMIN_ID = process.env.SUPER_ADMIN_ID ||
         "b0f9f893-1706-4721-899c-d26ad79afc86",
 } = process.env;
@@ -673,7 +675,8 @@ const USD_TO_CDF_RATE_VALUE = Math.max(
 const WITHDRAWAL_MIN_USD = 5;
 const SUPPORT_MIN_USD = 1;
 const SUPPORT_MAX_USD = 1000;
-const SUPPORT_COMMISSION_RATE = 0.2;
+// XERA1 retains 25% of every confirmed platform donation; this is calculated server-side.
+const SUPPORT_COMMISSION_RATE = 0.25;
 const SUPPORTED_MOBILE_MONEY_PROVIDERS = new Set([
     "airtel_money",
     "orange_money",
@@ -688,6 +691,31 @@ const MOBILE_MONEY_PROVIDER_LABELS = {
     afrimoney: "Afrimoney",
     other: "Autre",
 };
+
+function areKPayPayoutsEnabled() { return ["1", "true", "yes", "on"].includes(String(KPAY_PAYOUTS_ENABLED).toLowerCase()); }
+function getKPayPayoutCurrency(country) { try { const values = JSON.parse(KPAY_PAYOUT_CURRENCIES); return String(values?.[String(country || "").toUpperCase()] || "").toUpperCase(); } catch (_) { return ""; } }
+async function kpayPayoutRequest(path, options = {}) {
+    const response = await fetch(`https://admin.kpay.site/api/v1/payments${path}`, {
+        ...options,
+        headers: { "X-API-Key": KPAY_PUBLIC_KEY, "X-Secret-Key": KPAY_SECRET_KEY, "Content-Type": "application/json", ...(options.headers || {}) },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.message || data?.error || `KPay payout error (${response.status})`);
+    return data;
+}
+async function initiateAutomaticKPayPayout({ withdrawalId, amountUsd, phoneNumber, description }) {
+    if (!areKPayPayoutsEnabled()) throw new Error("Les retraits KPay ne sont pas encore activés dans la configuration serveur.");
+    const prediction = await kpayPayoutRequest("/predict-provider", { method: "POST", body: JSON.stringify({ phoneNumber }) });
+    if (!prediction?.provider || !prediction?.country) throw new Error("Opérateur Mobile Money non reconnu par KPay.");
+    const payoutCurrency = getKPayPayoutCurrency(prediction.country);
+    if (!payoutCurrency) throw new Error("Devise de retrait non configurée pour ce pays KPay.");
+    const rateData = await kpayPayoutRequest("/exchange-rate?from=USD&to=" + encodeURIComponent(payoutCurrency));
+    const rate = Number(rateData?.rate);
+    if (!Number.isFinite(rate) || rate <= 0) throw new Error("Conversion USD indisponible pour cet opérateur KPay.");
+    const amount = Math.max(1, Math.round(Number(amountUsd) * rate));
+    const payout = await kpayPayoutRequest("/withdraw", { method: "POST", body: JSON.stringify({ amount, provider: prediction.provider, phoneNumber: prediction.phoneNumber || phoneNumber, externalId: `XERA-WD-${withdrawalId}`, description }) });
+    return { payout, prediction, rate, payoutCurrency };
+}
 
 function isValidPlanId(value) {
     return ["standard", "medium", "pro", "elite", "page_verification"].includes(
@@ -772,7 +800,7 @@ async function createPartnerCommissionForSupport({ transactionId, beneficiaryUse
     const { data, error } = await supabase.from("partner_commissions").insert({
         partner_id: affiliation.partner_id, affiliation_id: affiliation.id, support_transaction_id: transactionId,
         beneficiary_user_id: beneficiaryUserId, amount_gross: gross, commission_amount: commission,
-        beneficiary_net_amount: Math.round((Number(gross) - commission) * 100) / 100, currency: "USD", status: "pending",
+        beneficiary_net_amount: Math.max(0, Math.round((Number(netCreator) - commission) * 100) / 100), currency: "USD", status: "pending",
     }).select("id").maybeSingle();
     // A unique constraint makes repeated payment webhooks idempotent.
     if (error && error.code !== "23505") throw error;
@@ -2185,7 +2213,7 @@ async function buildCreatorWalletOverview(userId) {
             videoPending: roundMoney(videoPending),
             minimumWithdrawalUsd: WITHDRAWAL_MIN_USD,
             canRequestWithdrawal:
-                availableBalance >= WITHDRAWAL_MIN_USD &&
+                availableBalance >= WITHDRAWAL_MIN_USD * 2 &&
                 Boolean(
                     payoutSettings?.status === "active" &&
                     payoutSettings?.walletNumber &&
@@ -3199,14 +3227,13 @@ async function confirmSupportPayment({
         gross: breakdown.gross,
         netCreator: breakdown.netCreator,
     });
-    // Partner campaigns take a 5% share of the confirmed donation; the beneficiary receives 95%.
-    // The existing XERA platform fee is not additionally charged on these eligible donations.
+    // Partner campaigns add their 5% share to XERA's platform fee; both remain traceable.
     if (partnerCommission?.commission) {
-        const partnerNet = Math.round((breakdown.gross - partnerCommission.commission) * 100) / 100;
-        await supabase.from("transactions").update({ amount_net_creator: partnerNet, amount_commission_xera: 0 }).eq("id", transactionId);
+        const partnerNet = Math.max(0, Math.round((breakdown.netCreator - partnerCommission.commission) * 100) / 100);
         mergedMetadata.partner_commission_amount = partnerCommission.commission;
         mergedMetadata.amount_net_creator = partnerNet;
-        mergedMetadata.amount_commission_xera = 0;
+        mergedMetadata.amount_commission_xera = breakdown.commission;
+        await supabase.from("transactions").update({ amount_net_creator: partnerNet, amount_commission_xera: breakdown.commission, metadata: mergedMetadata }).eq("id", transactionId);
     }
     const notification = await createNotificationRecord({
         userId: toUserId,
@@ -5388,6 +5415,9 @@ app.post("/api/admin/subscription-payments/confirm", async (req, res) => {
                 .status(authResult.error.status)
                 .json({ error: authResult.error.message });
         }
+        return res.status(410).json({
+            error: "La validation manuelle est désactivée. Les abonnements sont activés automatiquement après confirmation KPay.",
+        });
 
         const {
             payment_id: paymentId,
@@ -5498,6 +5528,9 @@ app.post("/api/admin/subscription-payments/fail", async (req, res) => {
                 .status(authResult.error.status)
                 .json({ error: authResult.error.message });
         }
+        return res.status(410).json({
+            error: "La validation manuelle est désactivée. KPay détermine le statut final du paiement.",
+        });
 
         const { payment_id: paymentId, reason } = req.body || {};
         if (!paymentId) {
@@ -5956,9 +5989,13 @@ app.post("/api/monetization/withdrawals", async (req, res) => {
                 error: "Votre compte Mobile Money est inactif. Reenregistrez-le avant le retrait.",
             });
         }
-        if (requestedAmount > overview.wallet.availableBalance) {
+        // A withdrawal can never drain the wallet: a $5 reserve remains available.
+        const maxWithdrawal = roundMoney(
+            Math.max(0, overview.wallet.availableBalance - WITHDRAWAL_MIN_USD),
+        );
+        if (requestedAmount > maxWithdrawal) {
             return res.status(400).json({
-                error: "Solde disponible insuffisant pour ce retrait.",
+                error: `Vous devez conserver au moins ${WITHDRAWAL_MIN_USD} USD sur votre compte. Montant maximum retirable : ${formatMoneyUsd(maxWithdrawal)}.`,
             });
         }
 
@@ -5975,17 +6012,33 @@ app.post("/api/monetization/withdrawals", async (req, res) => {
                 wallet_number: payoutSettings.walletNumber,
                 account_name: payoutSettings.accountName,
                 note,
-                status: "pending",
+                status: "processing",
                 requested_at: new Date().toISOString(),
+                processed_at: new Date().toISOString(),
             })
             .select("*")
             .single();
         if (error) throw error;
 
-        return res.json({
-            success: true,
-            withdrawal: extractWithdrawalRequest(data),
-        });
+        try {
+            const initiated = await initiateAutomaticKPayPayout({ withdrawalId: data.id, amountUsd: requestedAmount, phoneNumber: payoutSettings.walletNumber, description: "Retrait XERA1" });
+            const kpayStatus = String(initiated.payout?.status || "PENDING").toUpperCase();
+            const terminalPaid = kpayStatus === "COMPLETED";
+            const { data: updated, error: updateError } = await supabase.from("withdrawal_requests").update({
+                provider: initiated.prediction.provider, provider_country: initiated.prediction.country,
+                kpay_withdrawal_id: initiated.payout?.id || null, kpay_reference: initiated.payout?.reference || null,
+                kpay_status: kpayStatus, payout_currency: initiated.payout?.payoutCurrency || initiated.payout?.currency || initiated.payoutCurrency,
+                payout_amount: initiated.payout?.payoutAmount || initiated.payout?.netAmount || null, exchange_rate: initiated.payout?.exchangeRate || initiated.rate,
+                payout_fee_amount: initiated.payout?.feeAmount || null, status: terminalPaid ? "paid" : "processing", paid_at: terminalPaid ? new Date().toISOString() : null,
+                operator_ref_id: initiated.payout?.reference || null,
+            }).eq("id", data.id).select("*").single();
+            if (updateError) throw updateError;
+            return res.json({ success: true, withdrawal: extractWithdrawalRequest(updated) });
+        } catch (payoutError) {
+            await supabase.from("withdrawal_requests").update({ status: "rejected", admin_note: `KPay: ${String(payoutError.message || "échec").slice(0, 240)}`, updated_at: new Date().toISOString() }).eq("id", data.id);
+            return res.status(502).json({ error: payoutError.message || "Retrait KPay impossible." });
+        }
+
     } catch (error) {
         console.error("Monetization withdrawal request error:", error);
         if (isMissingRelationError(error) || isMissingColumnError(error)) {
@@ -5997,6 +6050,28 @@ app.post("/api/monetization/withdrawals", async (req, res) => {
             .status(500)
             .json({ error: "Impossible de creer la demande de retrait." });
     }
+});
+
+async function sweepKPayPayouts() {
+    if (!areKPayPayoutsEnabled()) return { checked: 0, updated: 0 };
+    const { data: rows, error } = await supabase.from("withdrawal_requests").select("id,kpay_withdrawal_id").eq("status", "processing").not("kpay_withdrawal_id", "is", null).limit(100);
+    if (error) throw error;
+    let updated = 0;
+    for (const row of rows || []) {
+        const payout = await kpayPayoutRequest(`/withdraw/${encodeURIComponent(row.kpay_withdrawal_id)}`);
+        const status = String(payout?.status || "PENDING").toUpperCase();
+        if (!["COMPLETED", "FAILED", "CANCELLED"].includes(status)) continue;
+        const paid = status === "COMPLETED";
+        const { error: updateError } = await supabase.from("withdrawal_requests").update({ status: paid ? "paid" : "rejected", kpay_status: status, paid_at: paid ? new Date().toISOString() : null, admin_note: paid ? null : `KPay: ${payout?.failureReason || status}`, updated_at: new Date().toISOString() }).eq("id", row.id);
+        if (updateError) throw updateError;
+        updated += 1;
+    }
+    return { checked: (rows || []).length, updated };
+}
+
+app.get("/api/cron/sweep-kpay-payouts", async (req, res) => {
+    const auth = authorizeCronRequest(req); if (auth.error) return res.status(auth.error.status).json({ error: auth.error.message });
+    try { return res.json({ success: true, ...(await sweepKPayPayouts()) }); } catch (error) { return res.status(500).json({ error: error?.message || "Synchronisation KPay impossible." }); }
 });
 
 app.get("/api/admin/withdrawal-requests", async (req, res) => {
@@ -6092,6 +6167,9 @@ app.post("/api/admin/withdrawal-requests/status", async (req, res) => {
                 .status(authResult.error.status)
                 .json({ error: authResult.error.message });
         }
+        return res.status(410).json({
+            error: "Le traitement manuel des retraits est désactivé. Le statut payé doit provenir du prestataire de décaissement.",
+        });
 
         const requestId = String(req.body?.request_id || "").trim();
         const status = String(req.body?.status || "")
