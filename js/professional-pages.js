@@ -2655,6 +2655,7 @@ class XERAProfessionalManager {
                                 isOwner
                                     ? `
                                 <button class="btn-pro-secondary" onclick="window.professionalManager.openTeamManagement('${page.id}')"><i class="fas fa-users-cog"></i><span class="btn-pro-label-long">Gérer l'équipe</span><span class="btn-pro-label-short">Équipe</span></button>
+                                <a href="commissions.html" class="btn-pro-secondary" style="text-decoration:none"><i class="fas fa-chart-line"></i><span class="btn-pro-label-long">Commissions</span><span class="btn-pro-label-short">Com.</span></a>
                                 <button class="btn-pro-secondary" onclick="window.professionalManager.openPageSettings('${page.id}')"><i class="fas fa-cog"></i><span class="btn-pro-label-long">Réglages Page</span><span class="btn-pro-label-short">Réglages</span></button>
                             `
                                     : ""

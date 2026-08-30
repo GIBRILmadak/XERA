@@ -2310,6 +2310,7 @@ async function initializeApp() {
             window.currentUser = user;
             window.currentUserId = user.id;
             window.currentViewerId = user.id;
+            trackPostPublishUpsellConversion(user);
 
             const isCurrentRoutePro = isPageProRoute();
 
@@ -6576,6 +6577,13 @@ function getSuperAdminPanelHtml() {
                 <div id="admin-discount-codes-list" style="margin-top:0.9rem; display:flex; flex-direction:column; gap:0.5rem;"></div>
             </div>
 
+            <div class="verification-admin-block" style="margin-top:1.5rem;">
+                <h4>Partenariats</h4>
+                <p style="color:var(--text-secondary);font-size:.9rem;">Créez le partenaire, puis ses deux codes indépendants : activation Page Pro et réduction Pro (20 %).</p>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap"><input id="admin-partner-name" class="form-input" placeholder="Nom du partenaire"><button class="btn-verify" type="button" onclick="createAdminPartner()">Créer partenaire</button><button class="btn-verify" type="button" onclick="fetchAdminPartners()">Rafraîchir</button></div>
+                <div id="admin-partners-list" style="margin-top:.9rem;display:flex;flex-direction:column;gap:.5rem"></div>
+            </div>
+
             <div class="verification-admin-block" style="margin-top: 1.5rem;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                     <div>
@@ -6840,6 +6848,7 @@ ${getSuperAdminPanelHtml()}
     setTimeout(() => refreshAppPulse(), 150);
     setTimeout(() => fetchAdminSubscriptionPayments(), 150);
     setTimeout(() => fetchAdminDiscountCodes(), 150);
+    setTimeout(() => fetchAdminPartners(), 150);
     setTimeout(() => fetchAdminWithdrawalRequests(), 150);
 }
 
@@ -7091,6 +7100,15 @@ function renderAdminDiscountCodes(items) {
               )
               .join("");
 }
+
+async function fetchAdminPartners() {
+    const box = document.getElementById("admin-partners-list"); if (!box) return;
+    try { const data = await fetchSuperAdminJson("/api/admin/partners");
+        box.innerHTML = !(data.partners||[]).length ? '<div class="verification-empty">Aucun partenaire.</div>' : data.partners.map(p => `<div class="admin-card" style="padding:.75rem;border:1px solid var(--border-color);border-radius:10px"><strong>${escapeHtml(p.name)}</strong> · ${escapeHtml(p.status)}<br><small>Partenaire: ${(p.partner_codes||[]).map(c=>escapeHtml(c.code)).join(', ')||'—'} · Réduction: ${(p.partner_discount_codes||[]).map(c=>escapeHtml(c.code)).join(', ')||'—'}</small><div style="display:flex;gap:.4rem;margin-top:.5rem"><input id="partner-code-${p.id}" class="form-input" placeholder="Nouveau code"><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','partner')">Code partenaire</button><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','discount')">Code réduction 20%</button></div></div>`).join('');
+    } catch (e) { box.textContent=e.message||'Impossible de charger les partenaires.'; }
+}
+async function createAdminPartner() { try { const name=document.getElementById('admin-partner-name').value; await fetchSuperAdminJson('/api/admin/partners',{method:'POST',body:JSON.stringify({name})}); document.getElementById('admin-partner-name').value=''; await fetchAdminPartners(); } catch(e) { ToastManager?.error('Erreur',e.message||'Création impossible.'); } }
+async function createAdminPartnerCode(id, kind) { try { const code=document.getElementById(`partner-code-${id}`).value; await fetchSuperAdminJson(`/api/admin/partners/${encodeURIComponent(id)}/codes`,{method:'POST',body:JSON.stringify({kind,code})}); await fetchAdminPartners(); } catch(e) { ToastManager?.error('Erreur',e.message||'Création impossible.'); } }
 
 async function fetchAdminDiscountCodes() {
     const container = document.getElementById("admin-discount-codes-list");
@@ -19724,6 +19742,76 @@ ${chipsHtml ? `<div class="publish-feedback-chips">${chipsHtml}</div>` : ""}
     window.setTimeout(removeCard, 7000);
 }
 
+const POST_PUBLISH_UPSELL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+function trackPostPublishUpsell(eventName) {
+    try {
+        window.gtag?.("event", eventName, { event_category: "conversion" });
+    } catch (error) {
+        // Analytics is optional and must never affect publishing.
+    }
+}
+
+function shouldShowPostPublishUpsell(user) {
+    if (!user || hasActivePaidPlan(user)) return false;
+    if (document.getElementById("post-publish-upsell")) return false;
+    try {
+        const lastShown = Number(localStorage.getItem("xera:post-publish-upsell:last-shown") || 0);
+        return !lastShown || Date.now() - lastShown >= POST_PUBLISH_UPSELL_COOLDOWN_MS;
+    } catch (error) {
+        return true;
+    }
+}
+
+function showPostPublishUpsell(user) {
+    if (!shouldShowPostPublishUpsell(user)) return false;
+    try { localStorage.setItem("xera:post-publish-upsell:last-shown", String(Date.now())); } catch (error) {}
+
+    // The success card is useful, but this is the one post-publication dialog: never stack both.
+    document.getElementById("publish-feedback-card")?.remove();
+    const avatar = user.avatar || user.avatar_url || user.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.id || user.name || "xera")}`;
+    const verified = isCurrentUserVerified() || Boolean(user.badge);
+    const overlay = document.createElement("div");
+    overlay.id = "post-publish-upsell";
+    overlay.className = "post-publish-upsell";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "post-publish-upsell-title");
+    overlay.innerHTML = `
+        <section class="post-publish-upsell__dialog" tabindex="-1">
+            <button type="button" class="post-publish-upsell__close" aria-label="Fermer la suggestion">✕</button>
+            <div class="post-publish-upsell__avatar-wrap">
+                <img class="post-publish-upsell__avatar" src="${escapeHtml(avatar)}" alt="Avatar de ${escapeHtml(user.name || "votre profil")}">
+                ${verified ? '<span class="post-publish-upsell__badge" aria-label="Profil vérifié"><img src="icons/verify-personal.svg" alt=""></span>' : ""}
+            </div>
+            <p class="post-publish-upsell__eyebrow">C’est publié</p>
+            <h2 id="post-publish-upsell-title">Maintenant, donne-lui plus de portée.</h2>
+            <p>Ton contenu est en ligne. Les fonctionnalités avancées XERA1 t’aident à augmenter son potentiel de visibilité et à toucher une audience plus large.</p>
+            <div class="post-publish-upsell__levels" aria-label="Niveaux de potentiel de visibilité">
+                <span>Potentiel <strong>1,5×</strong></span><span>Potentiel <strong>2×</strong></span><span>Potentiel <strong>5×</strong></span>
+            </div>
+            <button type="button" class="post-publish-upsell__cta">Débloquer plus de portée</button>
+        </section>`;
+    const dialog = overlay.querySelector(".post-publish-upsell__dialog");
+    const close = () => { trackPostPublishUpsell("post_publish_upsell_closed"); overlay.classList.remove("is-visible"); setTimeout(() => overlay.remove(), 180); document.removeEventListener("keydown", onKeydown); };
+    const onKeydown = (event) => { if (event.key === "Escape") close(); };
+    overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+    overlay.querySelector(".post-publish-upsell__close").addEventListener("click", close);
+    overlay.querySelector(".post-publish-upsell__cta").addEventListener("click", () => { try { sessionStorage.setItem("xera:post-publish-upsell:clicked", "1"); } catch (error) {} trackPostPublishUpsell("post_publish_upsell_clicked"); const url = window.XeraRouter?.buildHtmlUrl?.("subscriptionPlans") || "subscription-plans.html"; window.location.href = url; });
+    document.body.appendChild(overlay); document.addEventListener("keydown", onKeydown); requestAnimationFrame(() => { overlay.classList.add("is-visible"); dialog.focus(); });
+    trackPostPublishUpsell("post_publish_upsell_shown");
+    return true;
+}
+
+function trackPostPublishUpsellConversion(user) {
+    if (!hasActivePaidPlan(user)) return;
+    try {
+        if (sessionStorage.getItem("xera:post-publish-upsell:clicked") !== "1") return;
+        sessionStorage.removeItem("xera:post-publish-upsell:clicked");
+        trackPostPublishUpsell("post_publish_upsell_conversion");
+    } catch (error) {}
+}
+
 function showBackgroundPublishBanner({
     state = "loading",
     title = "",
@@ -21160,9 +21248,11 @@ async function openCreateMenu(
                             "Votre contenu est maintenant en ligne sur XERA.",
                         autoHideMs: 3200,
                     });
-                    requestAnimationFrame(() =>
-                        showPublishFeedbackCard(publishFeedback),
-                    );
+                    requestAnimationFrame(() => {
+                        // Only a confirmed, newly-created post can trigger the optional upsell.
+                        const shownUpsell = !isEdit && showPostPublishUpsell(window.currentUser);
+                        if (!shownUpsell) showPublishFeedbackCard(publishFeedback);
+                    });
                 } else {
                     showBackgroundPublishBanner({
                         state: "error",

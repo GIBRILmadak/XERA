@@ -732,6 +732,53 @@ async function findActiveDiscountCode(rawCode) {
     return data || null;
 }
 
+async function findActivePartnerDiscountCode(rawCode) {
+    const code = normalizeDiscountCode(rawCode);
+    if (!code) return null;
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase
+        .from("partner_discount_codes")
+        .select("id, code, partner_id, discount_percent, status, starts_at, expires_at, partners!inner(status)")
+        .eq("code", code).eq("status", "active").eq("partners.status", "active")
+        .lte("starts_at", nowIso).or(`expires_at.is.null,expires_at.gte.${nowIso}`)
+        .maybeSingle();
+    if (error) throw error;
+    return data || null;
+}
+
+async function createPartnerAffiliationFromSubscription({ userId, subscriptionId, periodEnd, metadata }) {
+    const partnerCodeId = metadata?.partner_discount_code_id;
+    const partnerId = metadata?.partner_id;
+    if (!partnerCodeId || !partnerId || !subscriptionId || !periodEnd) return null;
+    const { data, error } = await supabase.from("partner_affiliations").upsert({
+        user_id: userId, partner_id: partnerId, partner_discount_code_id: partnerCodeId,
+        subscription_id: subscriptionId, status: "active", eligible_from: new Date().toISOString(), eligible_until: periodEnd,
+    }, { onConflict: "user_id,subscription_id" }).select("id").maybeSingle();
+    if (error) throw error;
+    return data || null;
+}
+
+async function createPartnerCommissionForSupport({ transactionId, beneficiaryUserId, gross, netCreator }) {
+    const nowIso = new Date().toISOString();
+    const { data: affiliation, error: affiliationError } = await supabase.from("partner_affiliations")
+        .select("id, partner_id, partners!inner(status, commission_rate)")
+        .eq("user_id", beneficiaryUserId).eq("status", "active")
+        .lte("eligible_from", nowIso).gte("eligible_until", nowIso).eq("partners.status", "active")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (affiliationError) throw affiliationError;
+    if (!affiliation) return null;
+    const rate = Number(affiliation.partners?.commission_rate || .05);
+    const commission = Math.round(Number(gross) * rate * 100) / 100;
+    const { data, error } = await supabase.from("partner_commissions").insert({
+        partner_id: affiliation.partner_id, affiliation_id: affiliation.id, support_transaction_id: transactionId,
+        beneficiary_user_id: beneficiaryUserId, amount_gross: gross, commission_amount: commission,
+        beneficiary_net_amount: Math.round((Number(gross) - commission) * 100) / 100, currency: "USD", status: "pending",
+    }).select("id").maybeSingle();
+    // A unique constraint makes repeated payment webhooks idempotent.
+    if (error && error.code !== "23505") throw error;
+    return data ? { ...data, commission } : null;
+}
+
 async function redeemDiscountCode(code, userId) {
     const { data, error } = await supabase.rpc(
         "redeem_subscription_discount_code",
@@ -990,6 +1037,8 @@ async function createPendingSubscriptionPayment({
     originalAmount,
     discountCode,
     discountPercent,
+    partnerId,
+    partnerDiscountCodeId,
     method,
     provider,
     walletId,
@@ -1014,6 +1063,8 @@ async function createPendingSubscriptionPayment({
         original_amount: originalAmount ?? amount,
         discount_code: discountCode || null,
         discount_percent: discountPercent || 0,
+        partner_id: partnerId || null,
+        partner_discount_code_id: partnerDiscountCodeId || null,
     };
 
     const { data, error } = await supabase
@@ -2471,6 +2522,14 @@ async function activateSubscription({
     if (confirmedBy) mergedMetadata.confirmed_by = confirmedBy;
     if (note) mergedMetadata.admin_note = note;
 
+    // Persist the attribution at confirmation time; never infer it later from a coupon string.
+    await createPartnerAffiliationFromSubscription({
+        userId,
+        subscriptionId: insertedSubscription?.id,
+        periodEnd: periodEndIso,
+        metadata: mergedMetadata,
+    });
+
     let transactionId = pendingTransactionId || null;
     if (pendingTransactionId) {
         const { error: updateTxError } = await supabase
@@ -3134,6 +3193,21 @@ async function confirmSupportPayment({
 
     const senderName =
         senderProfile?.name || mergedMetadata.sender_name || "Un utilisateur";
+    const partnerCommission = await createPartnerCommissionForSupport({
+        transactionId,
+        beneficiaryUserId: toUserId,
+        gross: breakdown.gross,
+        netCreator: breakdown.netCreator,
+    });
+    // Partner campaigns take a 5% share of the confirmed donation; the beneficiary receives 95%.
+    // The existing XERA platform fee is not additionally charged on these eligible donations.
+    if (partnerCommission?.commission) {
+        const partnerNet = Math.round((breakdown.gross - partnerCommission.commission) * 100) / 100;
+        await supabase.from("transactions").update({ amount_net_creator: partnerNet, amount_commission_xera: 0 }).eq("id", transactionId);
+        mergedMetadata.partner_commission_amount = partnerCommission.commission;
+        mergedMetadata.amount_net_creator = partnerNet;
+        mergedMetadata.amount_commission_xera = 0;
+    }
     const notification = await createNotificationRecord({
         userId: toUserId,
         type: "support",
@@ -4251,12 +4325,16 @@ async function handleKPaySubscriptionCheckout(req, res) {
 
         const normalizedDiscountCode = normalizeDiscountCode(rawDiscountCode);
         let discount = null;
+        let partnerDiscount = null;
         if (normalizedDiscountCode) {
             discount = await findActiveDiscountCode(normalizedDiscountCode);
-            if (!discount)
+            if (!discount) partnerDiscount = await findActivePartnerDiscountCode(normalizedDiscountCode);
+            if (!discount && !partnerDiscount)
                 return res.status(400).send("Code de réduction invalide");
+            if (partnerDiscount && planId !== "pro")
+                return res.status(400).send("Ce code partenaire est valable uniquement pour l'abonnement Pro.");
         }
-        const discountPercent = Number(discount?.discount_percent || 0);
+        const discountPercent = Number(discount?.discount_percent || partnerDiscount?.discount_percent || 0);
         const discountedUsd = applyDiscount(
             computeKPayAmount(planId, billingCycle, "USD"),
             discountPercent,
@@ -4304,8 +4382,10 @@ async function handleKPaySubscriptionCheckout(req, res) {
             currency,
             amount,
             originalAmount,
-            discountCode: discount?.code || null,
+            discountCode: discount?.code || partnerDiscount?.code || null,
             discountPercent,
+            partnerId: partnerDiscount?.partner_id || null,
+            partnerDiscountCodeId: partnerDiscount?.id || null,
             method,
             provider,
             walletId,
@@ -7879,6 +7959,50 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
         if (error && error.stack) console.error(error.stack);
         return res.status(500).send("Erreur interne");
     }
+});
+
+// ==================== PARTNERSHIPS / COMMISSIONS ====================
+app.post("/api/partners/activate", async (req, res) => {
+    try {
+        const auth = await authenticateRequest(req); if (auth.error) return res.status(auth.error.status).json({ error: auth.error.message });
+        const code = normalizeDiscountCode(req.body?.code); const pageId = String(req.body?.professional_page_id || "");
+        if (!code || !pageId) return res.status(400).json({ error: "Code partenaire et Page Pro requis." });
+        const { data: page, error: pageError } = await supabase.from("professional_pages").select("id").eq("id", pageId).eq("owner_id", auth.user.id).maybeSingle();
+        if (pageError) throw pageError; if (!page) return res.status(403).json({ error: "Vous ne gérez pas cette Page Pro." });
+        const now = new Date().toISOString();
+        const { data: partnerCode, error } = await supabase.from("partner_codes").select("id, partner_id, status, expires_at, partners!inner(status)")
+            .eq("code", code).eq("status", "active").eq("partners.status", "active").or(`expires_at.is.null,expires_at.gte.${now}`).maybeSingle();
+        if (error) throw error; if (!partnerCode) return res.status(400).json({ error: "Ce code partenaire est invalide, expiré ou révoqué." });
+        const { data, error: upsertError } = await supabase.from("partner_page_memberships").upsert({ professional_page_id: pageId, partner_id: partnerCode.partner_id, partner_code_id: partnerCode.id, status: "active", activated_at: now, deactivated_at: null, updated_at: now }, { onConflict: "professional_page_id" }).select("id, partner_id, status").single();
+        if (upsertError) throw upsertError;
+        await supabase.from("partner_audit_log").insert({ actor_id: auth.user.id, action: "page_partnership_activated", entity_type: "partner_page_membership", entity_id: data.id, metadata: { page_id: pageId, partner_code_id: partnerCode.id } });
+        res.json({ success: true, membership: data });
+    } catch (error) { res.status(500).json({ error: error?.message || "Activation impossible." }); }
+});
+
+app.get("/api/partners/dashboard", async (req, res) => {
+    try {
+        const auth = await authenticateRequest(req); if (auth.error) return res.status(auth.error.status).json({ error: auth.error.message });
+        const pageId = String(req.query.page_id || "");
+        const { data: page } = await supabase.from("professional_pages").select("id").eq("id", pageId).eq("owner_id", auth.user.id).maybeSingle();
+        if (!page) return res.status(403).json({ error: "Accès refusé." });
+        const { data: membership, error } = await supabase.from("partner_page_memberships").select("id, partner_id, status, partners!inner(name, status)").eq("professional_page_id", pageId).maybeSingle(); if (error) throw error;
+        if (!membership || membership.status !== "active" || membership.partners.status !== "active") return res.json({ active: false });
+        const { data: commissions, error: commissionError } = await supabase.from("partner_commissions").select("id, amount_gross, commission_amount, status, created_at, beneficiary_user_id, support_transaction_id").eq("partner_id", membership.partner_id).order("created_at", { ascending: false }).limit(100); if (commissionError) throw commissionError;
+        const rows = commissions || []; const sum = (status) => rows.filter(r => status.includes(r.status)).reduce((n,r)=>n + Number(r.commission_amount || 0), 0);
+        const affiliateResult = await supabase.from("partner_affiliations").select("user_id", { count: "exact", head: true }).eq("partner_id", membership.partner_id);
+        res.json({ active: true, partner: membership.partners.name, metrics: { total: sum(["pending","available","paid"]), available: sum(["available"]), paid: sum(["paid"]), affiliates: affiliateResult.count || 0, donations: rows.length, donationGross: rows.reduce((n,r)=>n+Number(r.amount_gross||0),0) }, commissions: rows });
+    } catch (error) { res.status(500).json({ error: error?.message || "Dashboard indisponible." }); }
+});
+
+app.post("/api/admin/partners", async (req, res) => {
+    try { const auth = await authenticateSuperAdmin(req); if (auth.error) return res.status(auth.error.status).json({ error: auth.error.message }); const name = String(req.body?.name || "").trim(); if (name.length < 2) return res.status(400).json({ error: "Nom partenaire invalide." }); const { data, error } = await supabase.from("partners").insert({ name }).select().single(); if (error) throw error; res.status(201).json({ partner: data }); } catch (error) { res.status(500).json({ error: error?.message || "Création impossible." }); }
+});
+app.get("/api/admin/partners", async (req, res) => {
+    try { const auth = await authenticateSuperAdmin(req); if (auth.error) return res.status(auth.error.status).json({ error: auth.error.message }); const { data, error } = await supabase.from("partners").select("id,name,status,commission_rate,created_at,partner_codes(code,status,expires_at),partner_discount_codes(code,discount_percent,status,expires_at)").order("created_at", { ascending:false }); if (error) throw error; res.json({ partners:data||[] }); } catch (error) { res.status(500).json({ error:error?.message||"Chargement impossible." }); }
+});
+app.post("/api/admin/partners/:id/codes", async (req, res) => {
+    try { const auth=await authenticateSuperAdmin(req); if(auth.error)return res.status(auth.error.status).json({error:auth.error.message}); const code=normalizeDiscountCode(req.body?.code); const kind=String(req.body?.kind||""); const expiresAt=req.body?.expires_at||null; if(!/^[A-Z0-9_-]{3,60}$/.test(code)||!['partner','discount'].includes(kind))return res.status(400).json({error:'Code invalide.'}); const table=kind==='partner'?'partner_codes':'partner_discount_codes'; const payload=kind==='partner'?{partner_id:req.params.id,code,expires_at:expiresAt}:{partner_id:req.params.id,code,discount_percent:20,expires_at:expiresAt}; const {data,error}=await supabase.from(table).insert(payload).select().single();if(error)throw error;res.status(201).json({code:data}); }catch(error){res.status(500).json({error:error?.code==='23505'?'Ce code existe déjà.':error?.message||'Création impossible.'});}
 });
 
 if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {
