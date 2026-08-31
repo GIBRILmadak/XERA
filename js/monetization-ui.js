@@ -145,42 +145,71 @@ function createSupportModal() {
     modal.id = 'support-modal-global';
     modal.className = 'modal';
     modal.innerHTML = `
-        <div class="modal-content support-modal-content">
-            <div class="modal-header">
-                <h2>Soutenir <span id="support-creator-name"></span></h2>
-                <button class="close-btn" onclick="closeGlobalSupportModal()">
+        <div class="modal-content support-modal-content" role="dialog" aria-modal="true" aria-labelledby="support-modal-title">
+            <div class="modal-header support-modal-header">
+                <div class="support-modal-title-group">
+                    <span class="support-heart-mark" aria-hidden="true"><i class="fas fa-heart"></i></span>
+                    <div>
+                        <p class="support-modal-eyebrow">SOUTIEN DIRECT</p>
+                        <h2 id="support-modal-title">Soutenir <span id="support-creator-name"></span></h2>
+                    </div>
+                </div>
+                <button class="close-btn" type="button" onclick="closeGlobalSupportModal()" aria-label="Fermer la fenêtre de soutien">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="modal-body">
-                <p class="support-desc">Choisissez un montant pour montrer votre soutien</p>
+            <div class="modal-body support-modal-body">
+                <p class="support-desc">Choisissez le montant qui vous ressemble. Votre soutien est envoyé de façon sécurisée.</p>
                 <div class="amount-options" id="global-amount-options">
-                    <button class="amount-btn" data-amount="1" onclick="selectGlobalSupportAmount(1)">$1</button>
-                    <button class="amount-btn" data-amount="3" onclick="selectGlobalSupportAmount(3)">$3</button>
-                    <button class="amount-btn" data-amount="5" onclick="selectGlobalSupportAmount(5)">$5</button>
-                    <button class="amount-btn" data-amount="10" onclick="selectGlobalSupportAmount(10)">$10</button>
-                    <button class="amount-btn" data-amount="25" onclick="selectGlobalSupportAmount(25)">$25</button>
-                    <button class="amount-btn" data-amount="50" onclick="selectGlobalSupportAmount(50)">$50</button>
+                    <button class="amount-btn" type="button" data-amount="1" onclick="selectGlobalSupportAmount(1)">$1</button>
+                    <button class="amount-btn" type="button" data-amount="3" onclick="selectGlobalSupportAmount(3)">$3</button>
+                    <button class="amount-btn" type="button" data-amount="5" onclick="selectGlobalSupportAmount(5)">$5</button>
+                    <button class="amount-btn" type="button" data-amount="10" onclick="selectGlobalSupportAmount(10)">$10</button>
+                    <button class="amount-btn" type="button" data-amount="25" onclick="selectGlobalSupportAmount(25)">$25</button>
+                    <button class="amount-btn" type="button" data-amount="50" onclick="selectGlobalSupportAmount(50)">$50</button>
                 </div>
                 <div class="custom-amount">
-                    <label>Montant personnalisé ($)</label>
-                    <input type="number" id="global-custom-amount" min="1" max="1000" step="1" placeholder="Entrez un montant" oninput="handleGlobalCustomAmount()">
+                    <label for="global-custom-amount">Ou choisissez votre montant</label>
+                    <div class="support-amount-input-wrap">
+                        <span aria-hidden="true">$</span>
+                        <input type="number" id="global-custom-amount" min="1" max="1000" step="1" inputmode="numeric" placeholder="Montant personnalisé" oninput="handleGlobalCustomAmount()">
+                    </div>
                 </div>
                 <div class="support-summary">
                     <div class="summary-row">
-                        <span>Montant</span>
+                        <span><i class="fas fa-hand-holding-heart" aria-hidden="true"></i> Votre soutien</span>
                         <span id="global-summary-amount">$0.00</span>
                     </div>
                 </div>
-                <label class="support-payment-method" for="global-support-payment-method">Moyen de paiement</label>
-                <select id="global-support-payment-method" class="form-input">
+                <fieldset class="support-payment-picker">
+                    <legend>Moyen de paiement</legend>
+                    <p>Choisissez votre méthode préférée. KPay confirmera les options disponibles.</p>
+                    <div class="support-payment-cards" role="radiogroup" aria-label="Moyen de paiement">
+                        <button class="support-payment-card is-selected" type="button" data-payment-method="card" role="radio" aria-checked="true" onclick="selectGlobalSupportPaymentMethod('card')">
+                            <span class="support-payment-icon support-payment-icon-card"><i class="fas fa-credit-card"></i></span>
+                            <span class="support-payment-card-copy"><strong>Carte</strong><small>Visa · Mastercard</small></span>
+                            <span class="support-payment-check" aria-hidden="true"><i class="fas fa-check"></i></span>
+                        </button>
+                        <button class="support-payment-card" type="button" data-payment-method="mobile_money" role="radio" aria-checked="false" onclick="selectGlobalSupportPaymentMethod('mobile_money')">
+                            <span class="support-payment-icon support-payment-icon-mobile"><i class="fas fa-mobile-alt"></i></span>
+                            <span class="support-payment-card-copy"><strong>Mobile Money</strong><small>Paiement par téléphone</small></span>
+                            <span class="support-payment-check" aria-hidden="true"><i class="fas fa-check"></i></span>
+                        </button>
+                        <button class="support-payment-card" type="button" data-payment-method="paypal" role="radio" aria-checked="false" onclick="selectGlobalSupportPaymentMethod('paypal')">
+                            <span class="support-payment-icon support-payment-icon-paypal"><i class="fab fa-paypal"></i></span>
+                            <span class="support-payment-card-copy"><strong>PayPal</strong><small>Compte PayPal sécurisé</small></span>
+                            <span class="support-payment-check" aria-hidden="true"><i class="fas fa-check"></i></span>
+                        </button>
+                    </div>
+                </fieldset>
+                <select id="global-support-payment-method" class="support-payment-native-select" aria-label="Moyen de paiement">
                     <option value="card">Carte bancaire (Visa / Mastercard)</option>
                     <option value="mobile_money">Mobile Money</option>
                     <option value="paypal">PayPal</option>
                 </select>
-                <p class="support-payment-help">KPay affichera ce moyen lorsqu’il est disponible dans votre pays.</p>
+                <p class="support-payment-help"><i class="fas fa-shield-alt" aria-hidden="true"></i> Paiement sécurisé et traité par KPay.</p>
                 <button class="btn-primary btn-full" id="global-support-submit" onclick="processGlobalSupport()" disabled>
-                    <i class="fas fa-heart"></i> Envoyer le soutien
+                    <span class="support-submit-icon"><i class="fas fa-heart"></i></span> Envoyer le soutien <i class="fas fa-arrow-right support-submit-arrow" aria-hidden="true"></i>
                 </button>
             </div>
         </div>
@@ -193,6 +222,10 @@ function createSupportModal() {
         if (e.target === modal) {
             closeGlobalSupportModal();
         }
+    });
+
+    modal.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeGlobalSupportModal();
     });
 }
 
@@ -233,12 +266,27 @@ function openSupportModal(creatorId, creatorName, sourceElement = null) {
         btn.classList.remove('selected');
     });
     document.getElementById('global-custom-amount').value = '';
+    selectGlobalSupportPaymentMethod('card');
     updateGlobalSupportSummary();
     
     const modal = document.getElementById('support-modal-global');
     if (modal) {
         modal.classList.add('active');
     }
+}
+
+// Le select natif reste la source de vérité pour le checkout ; les cartes
+// apportent uniquement une sélection visuelle plus agréable et accessible.
+function selectGlobalSupportPaymentMethod(method) {
+    const validMethod = ['card', 'mobile_money', 'paypal'].includes(method) ? method : 'card';
+    const nativeSelect = document.getElementById('global-support-payment-method');
+    if (nativeSelect) nativeSelect.value = validMethod;
+
+    document.querySelectorAll('#support-modal-global .support-payment-card').forEach((card) => {
+        const isSelected = card.dataset.paymentMethod === validMethod;
+        card.classList.toggle('is-selected', isSelected);
+        card.setAttribute('aria-checked', String(isSelected));
+    });
 }
 
 // Fermer la modale globale

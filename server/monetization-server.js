@@ -2001,15 +2001,23 @@ function setResponseHeader(res, name, value) {
     }
 }
 
-function sendCheckoutErrorResponse(res, error, fallbackMessage) {
+function sendCheckoutErrorResponse(res, error, fallbackMessage, context = {}) {
     const sourceCode = String(error?.code || "").trim() || "UNKNOWN";
+    const requestId = context.requestId || crypto.randomUUID();
+    const stage = String(context.stage || "checkout");
     let category = "checkout_failure";
+    console.error("[Checkout failure]", {
+        requestId, stage, category, code: error?.code || null,
+        message: error?.message || String(error), details: error?.details || null, hint: error?.hint || null,
+    });
+    setResponseHeader(res, "X-Xera1-Request-Id", requestId);
+    setResponseHeader(res, "X-Xera1-Error-Stage", stage);
 
     if (isMissingRelationError(error) || isMissingColumnError(error)) {
         category = "schema_missing";
         setResponseHeader(res, "X-Xera1-Error-Category", category);
         setResponseHeader(res, "X-Xera1-Error-Code", sourceCode);
-        return res.status(503).send(getWalletSchemaErrorMessage());
+        return res.status(503).send(`${getWalletSchemaErrorMessage()} [référence ${requestId}]`);
     }
 
     if (isForeignKeyViolation(error)) {
@@ -2040,13 +2048,11 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage) {
     setResponseHeader(res, "X-Xera1-Error-Category", category);
     setResponseHeader(res, "X-Xera1-Error-Code", sourceCode);
 
-    if (String(process.env.NODE_ENV || "").toLowerCase() !== "production") {
-        return res
-            .status(500)
-            .send(getReadableServerErrorMessage(error, fallbackMessage));
-    }
-
-    return res.status(500).send(fallbackMessage);
+    const message = String(error?.message || "");
+    const safeKpayMessage = message.startsWith("KPay API error:")
+        ? "Le prestataire KPay a refusé l'initialisation. Vérifiez les clés KPay et la configuration de l'application KPay."
+        : fallbackMessage;
+    return res.status(500).send(`${safeKpayMessage} [référence ${requestId}]`);
 }
 
 function extractPayoutSettings(row) {
@@ -4522,6 +4528,8 @@ app.post(
 );
 
 async function handleKPaySupportCheckout(req, res) {
+    const supportRequestId = crypto.randomUUID();
+    let supportCheckoutStage = "validation";
     try {
         if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
             return res.status(500).send("KPay keys not configured");
@@ -4642,6 +4650,7 @@ async function handleKPaySupportCheckout(req, res) {
             rawReturnPath,
             buildProfileReturnPath(toUserId),
         );
+        supportCheckoutStage = "pending_transaction";
         const pendingPayment = await createPendingSupportPayment({
             fromUserId,
             toUserId,
@@ -4693,6 +4702,7 @@ async function handleKPaySupportCheckout(req, res) {
         });
 
         // 1. Initialiser le paiement via KPay
+        supportCheckoutStage = "kpay_initialization";
         const kpayRes = await initiateKPayPayment(
             checkoutAmount,
             pendingPayment.checkoutRefId,
@@ -4703,6 +4713,7 @@ async function handleKPaySupportCheckout(req, res) {
             currency,
         );
 
+        supportCheckoutStage = "payment_reference";
         await storeKPayPaymentReference(pendingPayment, kpayRes);
 
         if (!kpayRes.gatewayUrl) {
@@ -4713,8 +4724,10 @@ async function handleKPaySupportCheckout(req, res) {
         setResponseHeader(res, "Location", kpayRes.gatewayUrl);
         res.status(302).send();
     } catch (error) {
-        console.error("KPay support checkout error:", error);
-        return sendCheckoutErrorResponse(res, error, "Erreur KPay");
+        return sendCheckoutErrorResponse(res, error, "Impossible d'initialiser le soutien.", {
+            requestId: supportRequestId,
+            stage: supportCheckoutStage,
+        });
     }
 }
 
