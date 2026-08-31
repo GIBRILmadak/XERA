@@ -1370,7 +1370,10 @@ async function redirectToSupportCheckout({
                 : window.location.origin;
         const checkoutUrl = `${apiBase}/api/kpay/support-checkout`;
 
-        const normalizedMessage = String(message || "").replace(/\s+/g, " ").trim().slice(0, 200);
+        const normalizedMessage = String(message || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 200);
         const params = new URLSearchParams();
         params.set("kind", "support");
         params.set("to_user_id", safeCreatorId);

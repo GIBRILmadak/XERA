@@ -6,16 +6,16 @@
 let monetizationUiInitialized = false;
 
 function handleSupportButtonClick(e) {
-    const supportBtn = e.target.closest('.support-btn-active');
+    const supportBtn = e.target.closest(".support-btn-active");
     if (!supportBtn) return;
 
     const creatorId = supportBtn.dataset.creatorId;
-    const creatorName = supportBtn.dataset.creatorName || 'Créateur';
+    const creatorName = supportBtn.dataset.creatorName || "Créateur";
 
     if (!creatorId) return;
 
     e.preventDefault();
-    if (typeof e.stopImmediatePropagation === 'function') {
+    if (typeof e.stopImmediatePropagation === "function") {
         e.stopImmediatePropagation();
     }
     e.stopPropagation();
@@ -24,9 +24,9 @@ function handleSupportButtonClick(e) {
 
 function resolveSupportCreatorName(creatorName, sourceElement = null) {
     const resolvedName = String(
-        creatorName || sourceElement?.dataset?.creatorName || '',
+        creatorName || sourceElement?.dataset?.creatorName || "",
     ).trim();
-    return resolvedName || 'Créateur';
+    return resolvedName || "Créateur";
 }
 
 // Initialiser la monétisation sur la page
@@ -35,50 +35,53 @@ function initMonetizationUI() {
     monetizationUiInitialized = true;
 
     // Injecter le CSS si pas déjà présent
-    if (!document.getElementById('monetization-css')) {
-        const link = document.createElement('link');
-        link.id = 'monetization-css';
-        link.rel = 'stylesheet';
-        link.href = 'css/monetization.css';
+    if (!document.getElementById("monetization-css")) {
+        const link = document.createElement("link");
+        link.id = "monetization-css";
+        link.rel = "stylesheet";
+        link.href = "css/monetization.css";
         document.head.appendChild(link);
     }
-    
+
     // Ajouter les écouteurs pour les boutons de soutien
-    document.addEventListener('click', handleSupportButtonClick, true);
+    document.addEventListener("click", handleSupportButtonClick, true);
 }
 
 // Générer le HTML pour le badge de plan
-function generatePlanBadgeHTML(user, context = 'profile') {
-    if (!user || !user.plan || user.plan === 'free') return '';
-    if (String(user.plan_status || '').toLowerCase() !== 'active') return '';
-    if (typeof isPlanActiveForUser === 'function' && !isPlanActiveForUser(user)) {
-        return '';
+function generatePlanBadgeHTML(user, context = "profile") {
+    if (!user || !user.plan || user.plan === "free") return "";
+    if (String(user.plan_status || "").toLowerCase() !== "active") return "";
+    if (
+        typeof isPlanActiveForUser === "function" &&
+        !isPlanActiveForUser(user)
+    ) {
+        return "";
     }
-    if (context !== 'profile') {
-        return '';
+    if (context !== "profile") {
+        return "";
     }
-    
+
     const planColors = {
-        standard: '#3498db',
-        medium: '#9b59b6',
-        pro: '#f39c12'
+        standard: "#3498db",
+        medium: "#9b59b6",
+        pro: "#f39c12",
     };
-    
+
     const planLabels = {
-        standard: 'Standard',
-        medium: 'Medium',
-        pro: 'Pro'
+        standard: "Standard",
+        medium: "Medium",
+        pro: "Pro",
     };
-    
-    const color = planColors[user.plan] || '#95a5a6';
+
+    const color = planColors[user.plan] || "#95a5a6";
     const label = planLabels[user.plan] || user.plan;
     const hasMonetization =
         user.is_monetized === true ||
-        (typeof isGiftedPro === 'function' && isGiftedPro(user));
+        (typeof isGiftedPro === "function" && isGiftedPro(user));
     const verified = hasMonetization
         ? '<i class="fas fa-check-circle" title="Monétisation activée"></i>'
-        : '';
-    
+        : "";
+
     return `
         <span class="user-plan-badge" style="
             display: inline-flex;
@@ -102,19 +105,19 @@ function generatePlanBadgeHTML(user, context = 'profile') {
 }
 
 // Générer le bouton de soutien
-function generateSupportButtonHTML(user, context = 'profile') {
+function generateSupportButtonHTML(user, context = "profile") {
     const canSupport = canReceiveSupport(user);
-    const size = context === 'profile' ? 'large' : 'large';
-    
+    const size = context === "profile" ? "large" : "large";
+
     if (!canSupport) {
-        return '';
+        return "";
     }
 
     const buttonClass = `support-btn support-btn-active support-btn-profile ${size}`;
     const labelHtml = '<span class="support-btn-label">Soutenir</span>';
-    const creatorId = String(user.id || '');
-    const creatorName = escapeSupportHtmlAttr(user.name || 'Créateur');
-    const supportContext = escapeSupportHtmlAttr(context || 'profile');
+    const creatorId = String(user.id || "");
+    const creatorName = escapeSupportHtmlAttr(user.name || "Créateur");
+    const supportContext = escapeSupportHtmlAttr(context || "profile");
 
     return `
         <button class="${buttonClass}" 
@@ -130,20 +133,20 @@ function generateSupportButtonHTML(user, context = 'profile') {
 }
 
 function escapeSupportHtmlAttr(value) {
-    return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
 }
 
 // Générer une modale de soutien
 function createSupportModal() {
-    if (document.getElementById('support-modal-global')) return;
-    
-    const modal = document.createElement('div');
-    modal.id = 'support-modal-global';
-    modal.className = 'modal';
+    if (document.getElementById("support-modal-global")) return;
+
+    const modal = document.createElement("div");
+    modal.id = "support-modal-global";
+    modal.className = "modal";
     modal.innerHTML = `
         <div class="modal-content support-modal-content" role="dialog" aria-modal="true" aria-labelledby="support-modal-title">
             <div class="modal-header support-modal-header">
@@ -218,28 +221,28 @@ function createSupportModal() {
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
-    
+
     // Fermer en cliquant à l'extérieur
-    modal.addEventListener('click', (e) => {
+    modal.addEventListener("click", (e) => {
         if (e.target === modal) {
             closeGlobalSupportModal();
         }
     });
 
-    modal.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeGlobalSupportModal();
+    modal.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeGlobalSupportModal();
     });
 }
 
 // Variables globales pour la modale
 let globalSupportState = {
     creatorId: null,
-    creatorName: '',
+    creatorName: "",
     amount: 0,
-    message: '',
-    returnPath: '',
+    message: "",
+    returnPath: "",
 };
 
 // Ouvrir la modale de soutien globale
@@ -250,98 +253,110 @@ function openSupportModal(creatorId, creatorName, sourceElement = null) {
         creatorName,
         sourceElement,
     );
-    
+
     globalSupportState = {
         creatorId,
         creatorName: resolvedCreatorName,
         amount: 0,
-        message: '',
+        message: "",
         returnPath:
-            typeof buildSupportReturnPath === 'function'
+            typeof buildSupportReturnPath === "function"
                 ? buildSupportReturnPath(sourceElement)
                 : `${window.location.pathname}${window.location.search}${window.location.hash}`,
     };
-    
-    const messageInput = document.getElementById('global-support-message');
+
+    const messageInput = document.getElementById("global-support-message");
     if (messageInput) {
-        messageInput.value = '';
+        messageInput.value = "";
     }
 
-    const creatorNameEl = document.getElementById('support-creator-name');
+    const creatorNameEl = document.getElementById("support-creator-name");
     if (creatorNameEl) {
         creatorNameEl.textContent = resolvedCreatorName;
     }
-    
+
     // Réinitialiser la sélection
-    document.querySelectorAll('#global-amount-options .amount-btn').forEach(btn => {
-        btn.classList.remove('selected');
-    });
-    document.getElementById('global-custom-amount').value = '';
-    selectGlobalSupportPaymentMethod('card');
+    document
+        .querySelectorAll("#global-amount-options .amount-btn")
+        .forEach((btn) => {
+            btn.classList.remove("selected");
+        });
+    document.getElementById("global-custom-amount").value = "";
+    selectGlobalSupportPaymentMethod("card");
     updateGlobalSupportSummary();
-    
-    const modal = document.getElementById('support-modal-global');
+
+    const modal = document.getElementById("support-modal-global");
     if (modal) {
-        modal.classList.add('active');
+        modal.classList.add("active");
     }
 }
 
 // Le select natif reste la source de vérité pour le checkout ; les cartes
 // apportent uniquement une sélection visuelle plus agréable et accessible.
 function selectGlobalSupportPaymentMethod(method) {
-    const validMethod = ['card', 'mobile_money', 'paypal'].includes(method) ? method : 'card';
-    const nativeSelect = document.getElementById('global-support-payment-method');
+    const validMethod = ["card", "mobile_money", "paypal"].includes(method)
+        ? method
+        : "card";
+    const nativeSelect = document.getElementById(
+        "global-support-payment-method",
+    );
     if (nativeSelect) nativeSelect.value = validMethod;
 
-    document.querySelectorAll('#support-modal-global .support-payment-card').forEach((card) => {
-        const isSelected = card.dataset.paymentMethod === validMethod;
-        card.classList.toggle('is-selected', isSelected);
-        card.setAttribute('aria-checked', String(isSelected));
-    });
+    document
+        .querySelectorAll("#support-modal-global .support-payment-card")
+        .forEach((card) => {
+            const isSelected = card.dataset.paymentMethod === validMethod;
+            card.classList.toggle("is-selected", isSelected);
+            card.setAttribute("aria-checked", String(isSelected));
+        });
 }
 
 // Fermer la modale globale
 function closeGlobalSupportModal() {
-    const modal = document.getElementById('support-modal-global');
+    const modal = document.getElementById("support-modal-global");
     if (modal) {
-        modal.classList.remove('active');
+        modal.classList.remove("active");
     }
     globalSupportState.amount = 0;
-    globalSupportState.message = '';
-    const messageInput = document.getElementById('global-support-message');
+    globalSupportState.message = "";
+    const messageInput = document.getElementById("global-support-message");
     if (messageInput) {
-        messageInput.value = '';
+        messageInput.value = "";
     }
 }
 
 // Sélectionner un montant prédéfini
 function selectGlobalSupportAmount(amount) {
     globalSupportState.amount = amount;
-    
+
     // Mettre à jour l'UI
-    document.querySelectorAll('#global-amount-options .amount-btn').forEach(btn => {
-        btn.classList.remove('selected');
-        if (parseFloat(btn.dataset.amount) === amount) {
-            btn.classList.add('selected');
-        }
-    });
-    
+    document
+        .querySelectorAll("#global-amount-options .amount-btn")
+        .forEach((btn) => {
+            btn.classList.remove("selected");
+            if (parseFloat(btn.dataset.amount) === amount) {
+                btn.classList.add("selected");
+            }
+        });
+
     // Réinitialiser le custom
-    document.getElementById('global-custom-amount').value = '';
-    
+    document.getElementById("global-custom-amount").value = "";
+
     updateGlobalSupportSummary();
 }
 
 // Gérer le montant personnalisé
 function handleGlobalCustomAmount() {
-    const input = document.getElementById('global-custom-amount');
+    const input = document.getElementById("global-custom-amount");
     const value = parseFloat(input.value) || 0;
-    
+
     // Réinitialiser les boutons
-    document.querySelectorAll('#global-amount-options .amount-btn').forEach(btn => {
-        btn.classList.remove('selected');
-    });
-    
+    document
+        .querySelectorAll("#global-amount-options .amount-btn")
+        .forEach((btn) => {
+            btn.classList.remove("selected");
+        });
+
     globalSupportState.amount = value;
     updateGlobalSupportSummary();
 }
@@ -349,12 +364,12 @@ function handleGlobalCustomAmount() {
 // Mettre à jour le résumé
 function updateGlobalSupportSummary() {
     const amount = globalSupportState.amount || 0;
-    
-    const amountEl = document.getElementById('global-summary-amount');
+
+    const amountEl = document.getElementById("global-summary-amount");
     if (amountEl) amountEl.textContent = formatCurrency(amount);
-    
+
     // Activer/désactiver le bouton
-    const submitBtn = document.getElementById('global-support-submit');
+    const submitBtn = document.getElementById("global-support-submit");
     if (Number.isInteger(amount) && amount >= 1 && amount <= 1000) {
         submitBtn.disabled = false;
     } else {
@@ -365,64 +380,79 @@ function updateGlobalSupportSummary() {
 // Traiter le soutien
 async function processGlobalSupport() {
     const { creatorId, amount } = globalSupportState;
-    const messageInput = document.getElementById('global-support-message');
-    const supportMessage = String(messageInput?.value || '').trim();
+    const messageInput = document.getElementById("global-support-message");
+    const supportMessage = String(messageInput?.value || "").trim();
     globalSupportState.message = supportMessage;
-    
+
     if (!creatorId || amount < 1) {
-        showGlobalNotification('Veuillez sélectionner un montant valide', 'error');
+        showGlobalNotification(
+            "Veuillez sélectionner un montant valide",
+            "error",
+        );
         return;
     }
-    
+
     try {
         // Vérifier si l'utilisateur est connecté
         const currentUser = await checkAuth();
         if (!currentUser) {
-            showGlobalNotification('Veuillez vous connecter pour envoyer un soutien', 'error');
-            window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
+            showGlobalNotification(
+                "Veuillez vous connecter pour envoyer un soutien",
+                "error",
+            );
+            window.location.href =
+                "login.html?redirect=" +
+                encodeURIComponent(window.location.href);
             return;
         }
 
-        const submitBtn = document.getElementById('global-support-submit');
+        const submitBtn = document.getElementById("global-support-submit");
         if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi...';
+            submitBtn.innerHTML =
+                '<i class="fas fa-spinner fa-spin"></i> Envoi...';
         }
 
         const result = await redirectToSupportCheckout({
             creatorId,
             creatorName: globalSupportState.creatorName,
             amount,
-            description: 'Soutien depuis le profil',
+            description: "Soutien depuis le profil",
             message: supportMessage,
             returnPath: globalSupportState.returnPath,
-            paymentMethod: document.getElementById('global-support-payment-method')?.value || 'card',
+            paymentMethod:
+                document.getElementById("global-support-payment-method")
+                    ?.value || "card",
         });
 
         if (result.success) {
             closeGlobalSupportModal();
         } else {
-            showGlobalNotification(result.error || 'Erreur lors du traitement', 'error');
+            showGlobalNotification(
+                result.error || "Erreur lors du traitement",
+                "error",
+            );
         }
     } catch (error) {
-        console.error('Exception traitement soutien:', error);
-        showGlobalNotification('Une erreur est survenue', 'error');
+        console.error("Exception traitement soutien:", error);
+        showGlobalNotification("Une erreur est survenue", "error");
     } finally {
-        const submitBtn = document.getElementById('global-support-submit');
+        const submitBtn = document.getElementById("global-support-submit");
         if (submitBtn) {
             submitBtn.disabled = !(
                 Number.isInteger(amount) &&
                 amount >= 1 &&
                 amount <= 1000
             );
-            submitBtn.innerHTML = '<i class="fas fa-heart"></i> Envoyer le soutien';
+            submitBtn.innerHTML =
+                '<i class="fas fa-heart"></i> Envoyer le soutien';
         }
     }
 }
 
 // Afficher une notification globale
-function showGlobalNotification(message, type = 'info') {
-    const notification = document.createElement('div');
+function showGlobalNotification(message, type = "info") {
+    const notification = document.createElement("div");
     notification.className = `notification notification-${type}`;
     notification.style.cssText = `
         position: fixed;
@@ -438,29 +468,29 @@ function showGlobalNotification(message, type = 'info') {
         z-index: 10000;
         animation: slideIn 0.3s ease;
     `;
-    
+
     const colors = {
-        success: '#27ae60',
-        error: '#e74c3c',
-        info: '#3498db'
+        success: "#27ae60",
+        error: "#e74c3c",
+        info: "#3498db",
     };
-    
+
     notification.style.background = colors[type] || colors.info;
-    notification.style.color = 'white';
-    
+    notification.style.color = "white";
+
     const icons = {
-        success: 'fa-check-circle',
-        error: 'fa-exclamation-circle',
-        info: 'fa-info-circle'
+        success: "fa-check-circle",
+        error: "fa-exclamation-circle",
+        info: "fa-info-circle",
     };
-    
+
     notification.innerHTML = `
         <i class="fas ${icons[type]}"></i>
         <span>${message}</span>
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         notification.remove();
     }, 5000);
@@ -469,22 +499,26 @@ function showGlobalNotification(message, type = 'info') {
 // Intégrer la monétisation dans un profil
 function integrateMonetizationInProfile(profileElement, user) {
     if (!profileElement || !user) return;
-    
+
     // Ajouter le badge de plan
-    const nameElement = profileElement.querySelector('.profile-name, .user-name, h1, h2');
-    if (nameElement && user.plan && user.plan !== 'free') {
-        const badgeHTML = generatePlanBadgeHTML(user, 'profile');
-        if (!nameElement.querySelector('.user-plan-badge')) {
-            nameElement.insertAdjacentHTML('beforeend', badgeHTML);
+    const nameElement = profileElement.querySelector(
+        ".profile-name, .user-name, h1, h2",
+    );
+    if (nameElement && user.plan && user.plan !== "free") {
+        const badgeHTML = generatePlanBadgeHTML(user, "profile");
+        if (!nameElement.querySelector(".user-plan-badge")) {
+            nameElement.insertAdjacentHTML("beforeend", badgeHTML);
         }
     }
-    
+
     // Ajouter le bouton de soutien
-    const actionsElement = profileElement.querySelector('.profile-actions, .user-actions');
+    const actionsElement = profileElement.querySelector(
+        ".profile-actions, .user-actions",
+    );
     if (actionsElement) {
-        const supportHTML = generateSupportButtonHTML(user, 'profile');
-        if (supportHTML && !actionsElement.querySelector('.support-btn')) {
-            actionsElement.insertAdjacentHTML('beforeend', supportHTML);
+        const supportHTML = generateSupportButtonHTML(user, "profile");
+        if (supportHTML && !actionsElement.querySelector(".support-btn")) {
+            actionsElement.insertAdjacentHTML("beforeend", supportHTML);
         }
     }
 }
@@ -492,28 +526,32 @@ function integrateMonetizationInProfile(profileElement, user) {
 // Intégrer la monétisation dans une carte de contenu
 function integrateMonetizationInContentCard(cardElement, user) {
     if (!cardElement || !user) return;
-    
+
     // Ajouter le badge de plan sur le nom de l'auteur
-    const authorElement = cardElement.querySelector('.content-author, .post-author');
-    if (authorElement && user.plan && user.plan !== 'free') {
-        const badgeHTML = generatePlanBadgeHTML(user, 'feed');
-        if (!authorElement.querySelector('.user-plan-badge')) {
-            authorElement.insertAdjacentHTML('beforeend', badgeHTML);
+    const authorElement = cardElement.querySelector(
+        ".content-author, .post-author",
+    );
+    if (authorElement && user.plan && user.plan !== "free") {
+        const badgeHTML = generatePlanBadgeHTML(user, "feed");
+        if (!authorElement.querySelector(".user-plan-badge")) {
+            authorElement.insertAdjacentHTML("beforeend", badgeHTML);
         }
     }
-    
+
     // Ajouter le bouton de soutien dans les actions
-    const actionsElement = cardElement.querySelector('.content-actions, .post-actions');
+    const actionsElement = cardElement.querySelector(
+        ".content-actions, .post-actions",
+    );
     if (actionsElement) {
-        const supportHTML = generateSupportButtonHTML(user, 'feed');
-        if (supportHTML && !actionsElement.querySelector('.support-btn')) {
-            actionsElement.insertAdjacentHTML('beforeend', supportHTML);
+        const supportHTML = generateSupportButtonHTML(user, "feed");
+        if (supportHTML && !actionsElement.querySelector(".support-btn")) {
+            actionsElement.insertAdjacentHTML("beforeend", supportHTML);
         }
     }
 }
 
 // Fonction utilitaire pour récupérer et afficher les infos de monétisation
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
     initMonetizationUI();
     createSupportModal();
 });

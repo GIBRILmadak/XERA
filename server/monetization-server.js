@@ -2896,8 +2896,13 @@ function sanitizeSupportMessage(value, maxLength = 200) {
     return cleaned;
 }
 
-function buildSupportNotificationMessage(senderName, amountUsd, supportMessage) {
-    const safeSenderName = String(senderName || "Quelqu'un").trim() || "Quelqu'un";
+function buildSupportNotificationMessage(
+    senderName,
+    amountUsd,
+    supportMessage,
+) {
+    const safeSenderName =
+        String(senderName || "Quelqu'un").trim() || "Quelqu'un";
     const safeAmount = formatMoneyUsd(amountUsd ?? 0);
     const message = sanitizeSupportMessage(supportMessage, 200);
     if (!message) {
@@ -5624,11 +5629,9 @@ app.post("/api/admin/discount-codes", async (req, res) => {
             discountPercent < 10 ||
             discountPercent > 100
         )
-            return res
-                .status(400)
-                .json({
-                    error: "La réduction doit être comprise entre 10 et 100 %.",
-                });
+            return res.status(400).json({
+                error: "La réduction doit être comprise entre 10 et 100 %.",
+            });
         if (!isValidPlanId(plan))
             return res.status(400).json({ error: "Plan offert invalide." });
         if (!Number.isInteger(benefitDurationDays) || benefitDurationDays < 1)
@@ -5673,11 +5676,9 @@ app.post("/api/admin/discount-codes", async (req, res) => {
             hint: error?.hint,
         });
         if (["42P01", "PGRST205", "42883"].includes(error?.code)) {
-            return res
-                .status(503)
-                .json({
-                    error: "Le schéma des codes de réduction n'est pas installé. Exécutez sql/20260830_subscription_discount_codes.sql dans Supabase, puis réessayez.",
-                });
+            return res.status(503).json({
+                error: "Le schéma des codes de réduction n'est pas installé. Exécutez sql/20260830_subscription_discount_codes.sql dans Supabase, puis réessayez.",
+            });
         }
         return res.status(500).json({
             error:
@@ -6433,11 +6434,9 @@ app.post("/api/monetization/withdrawals", async (req, res) => {
                     updated_at: new Date().toISOString(),
                 })
                 .eq("id", data.id);
-            return res
-                .status(502)
-                .json({
-                    error: payoutError.message || "Retrait KPay impossible.",
-                });
+            return res.status(502).json({
+                error: payoutError.message || "Retrait KPay impossible.",
+            });
         }
     } catch (error) {
         console.error("Monetization withdrawal request error:", error);
@@ -6496,11 +6495,9 @@ app.get("/api/cron/sweep-kpay-payouts", async (req, res) => {
     try {
         return res.json({ success: true, ...(await sweepKPayPayouts()) });
     } catch (error) {
-        return res
-            .status(500)
-            .json({
-                error: error?.message || "Synchronisation KPay impossible.",
-            });
+        return res.status(500).json({
+            error: error?.message || "Synchronisation KPay impossible.",
+        });
     }
 });
 
@@ -8507,11 +8504,9 @@ app.post("/api/partners/activate", async (req, res) => {
             .maybeSingle();
         if (error) throw error;
         if (!partnerCode)
-            return res
-                .status(400)
-                .json({
-                    error: "Ce code partenaire est invalide, expiré ou révoqué.",
-                });
+            return res.status(400).json({
+                error: "Ce code partenaire est invalide, expiré ou révoqué.",
+            });
         const { data: existing } = await supabase
             .from("partner_page_memberships")
             .select("partner_id,status")
@@ -8521,11 +8516,9 @@ app.post("/api/partners/activate", async (req, res) => {
             existing?.status === "active" &&
             existing.partner_id !== partnerCode.partner_id
         )
-            return res
-                .status(409)
-                .json({
-                    error: "Cette Page Pro est déjà rattachée à un autre partenaire.",
-                });
+            return res.status(409).json({
+                error: "Cette Page Pro est déjà rattachée à un autre partenaire.",
+            });
         const { data, error: upsertError } = await supabase
             .from("partner_page_memberships")
             .upsert(
@@ -8543,15 +8536,13 @@ app.post("/api/partners/activate", async (req, res) => {
             .select("id, partner_id, status")
             .single();
         if (upsertError) throw upsertError;
-        await supabase
-            .from("partner_audit_log")
-            .insert({
-                actor_id: auth.user.id,
-                action: "page_partnership_activated",
-                entity_type: "partner_page_membership",
-                entity_id: data.id,
-                metadata: { page_id: pageId, partner_code_id: partnerCode.id },
-            });
+        await supabase.from("partner_audit_log").insert({
+            actor_id: auth.user.id,
+            action: "page_partnership_activated",
+            entity_type: "partner_page_membership",
+            entity_id: data.id,
+            metadata: { page_id: pageId, partner_code_id: partnerCode.id },
+        });
         res.json({ success: true, membership: data });
     } catch (error) {
         res.status(500).json({
@@ -8682,18 +8673,14 @@ app.post("/api/admin/partners", async (req, res) => {
                 details: error.details,
             });
             if (["42P01", "PGRST205"].includes(error.code)) {
-                return res
-                    .status(503)
-                    .json({
-                        error: "Le schéma Partenaires n'est pas encore installé. Exécutez sql/20260830_partner_affiliates.sql dans Supabase, puis rechargez.",
-                    });
+                return res.status(503).json({
+                    error: "Le schéma Partenaires n'est pas encore installé. Exécutez sql/20260830_partner_affiliates.sql dans Supabase, puis rechargez.",
+                });
             }
             if (error.code === "23505")
-                return res
-                    .status(409)
-                    .json({
-                        error: "Un partenaire portant ce nom existe déjà.",
-                    });
+                return res.status(409).json({
+                    error: "Un partenaire portant ce nom existe déjà.",
+                });
             throw error;
         }
         return res.status(201).json({ partner: data });
@@ -8803,15 +8790,13 @@ app.patch(
                 .select()
                 .single();
             if (error) throw error;
-            await supabase
-                .from("partner_audit_log")
-                .insert({
-                    actor_id: auth.user.id,
-                    action: "partner_code_updated",
-                    entity_type: table,
-                    entity_id: data.id,
-                    metadata: { status },
-                });
+            await supabase.from("partner_audit_log").insert({
+                actor_id: auth.user.id,
+                action: "partner_code_updated",
+                entity_type: table,
+                entity_id: data.id,
+                metadata: { status },
+            });
             res.json({ success: true, code: data });
         } catch (error) {
             res.status(500).json({
@@ -8837,15 +8822,13 @@ app.patch("/api/admin/partners/:id", async (req, res) => {
             .select()
             .single();
         if (error) throw error;
-        await supabase
-            .from("partner_audit_log")
-            .insert({
-                actor_id: auth.user.id,
-                action: "partner_updated",
-                entity_type: "partners",
-                entity_id: data.id,
-                metadata: { status },
-            });
+        await supabase.from("partner_audit_log").insert({
+            actor_id: auth.user.id,
+            action: "partner_updated",
+            entity_type: "partners",
+            entity_id: data.id,
+            metadata: { status },
+        });
         res.json({ success: true, partner: data });
     } catch (error) {
         res.status(500).json({
@@ -8897,7 +8880,8 @@ if (isDirectRun) {
 
 module.exports = app;
 module.exports.sanitizeSupportMessage = sanitizeSupportMessage;
-module.exports.buildSupportNotificationMessage = buildSupportNotificationMessage;
+module.exports.buildSupportNotificationMessage =
+    buildSupportNotificationMessage;
 module.exports.sweepExpiredSubscriptions = sweepExpiredSubscriptions;
 module.exports.sweepReturnReminderEmails = sweepReturnReminderEmails;
 module.exports.sendScheduledReturnReminders = sendScheduledReturnReminders;

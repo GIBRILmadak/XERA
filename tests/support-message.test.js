@@ -4,11 +4,10 @@ const {
     buildSupportNotificationMessage,
 } = require("../server/monetization-server");
 
-const sanitized = sanitizeSupportMessage("\n Bravo pour votre travail! \nMerci pour tout ❤️ ");
-assert.equal(
-    sanitized,
-    "Bravo pour votre travail! Merci pour tout ❤️",
+const sanitized = sanitizeSupportMessage(
+    "\n Bravo pour votre travail! \nMerci pour tout ❤️ ",
 );
+assert.equal(sanitized, "Bravo pour votre travail! Merci pour tout ❤️");
 
 const message = buildSupportNotificationMessage(
     "Ava",

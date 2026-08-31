@@ -1443,7 +1443,10 @@ function closeUpgradeModal() {
 async function selectPlan(planId) {
     try {
         if (window.XeraAppServices?.subscriptions?.navigateToCheckout) {
-            await window.XeraAppServices.subscriptions.navigateToCheckout(planId, "monthly");
+            await window.XeraAppServices.subscriptions.navigateToCheckout(
+                planId,
+                "monthly",
+            );
             return;
         }
 
@@ -1556,8 +1559,11 @@ async function processSupport() {
             document.getElementById("customAmount")?.value || 0,
         );
         const amount = selectedSupportAmount || customAmount;
-    const supportMessageInput = document.getElementById("supportMessage");
-    selectedSupportMessage = String(supportMessageInput?.value || "").replace(/\s+/g, " ").trim().slice(0, 200);
+        const supportMessageInput = document.getElementById("supportMessage");
+        selectedSupportMessage = String(supportMessageInput?.value || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 200);
         if (!amount || amount < 1) {
             showError(
                 "Veuillez sélectionner ou entrer un montant valide (minimum $1)",
