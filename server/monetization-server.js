@@ -1339,6 +1339,7 @@ async function createPendingSupportPayment({
     description,
     senderName,
     recipientName,
+    supportMessage = "",
     returnPath,
     callbackEnabled = KPAY_CALLBACK_ENABLED,
     callbackOrigin = CALLBACK_ORIGIN,
@@ -1346,6 +1347,7 @@ async function createPendingSupportPayment({
     const checkoutRefId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
     const breakdown = computeSupportRevenueBreakdown(amountUsd);
+    const sanitizedSupportMessage = sanitizeSupportMessage(supportMessage, 200);
     const metadata = {
         payment_provider: "kpay",
         checkout_ref_id: checkoutRefId,
@@ -1356,6 +1358,7 @@ async function createPendingSupportPayment({
         provider: provider || null,
         wallet_id: walletId || null,
         support_amount_usd: breakdown.gross,
+        support_message: sanitizedSupportMessage || null,
         checkout_amount: checkoutAmount,
         checkout_currency: String(checkoutCurrency || "USD").toUpperCase(),
         callback_return_path: returnPath || null,
@@ -2885,6 +2888,24 @@ function formatMoneyUsd(value) {
     return `$${amount.toFixed(2)}`;
 }
 
+function sanitizeSupportMessage(value, maxLength = 200) {
+    const cleaned = String(value ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, maxLength);
+    return cleaned;
+}
+
+function buildSupportNotificationMessage(senderName, amountUsd, supportMessage) {
+    const safeSenderName = String(senderName || "Quelqu'un").trim() || "Quelqu'un";
+    const safeAmount = formatMoneyUsd(amountUsd ?? 0);
+    const message = sanitizeSupportMessage(supportMessage, 200);
+    if (!message) {
+        return `${safeSenderName} vous a envoyé ${safeAmount} de soutien.`;
+    }
+    return `${safeSenderName} vous a envoyé ${safeAmount} de soutien. Message: "${message}"`;
+}
+
 async function createNotificationRecord({
     userId,
     type,
@@ -3443,6 +3464,12 @@ async function confirmSupportPayment({
 
     const senderName =
         senderProfile?.name || mergedMetadata.sender_name || "Un utilisateur";
+    const supportMessage = sanitizeSupportMessage(
+        pendingPayment?.metadata?.support_message ||
+            mergedMetadata.support_message ||
+            "",
+        200,
+    );
     const partnerCommission = await createPartnerCommissionForSupport({
         transactionId,
         beneficiaryUserId: toUserId,
@@ -3472,7 +3499,11 @@ async function confirmSupportPayment({
     const notification = await createNotificationRecord({
         userId: toUserId,
         type: "support",
-        message: `${senderName} vous a envoye ${formatMoneyUsd(breakdown.gross)} de soutien.`,
+        message: buildSupportNotificationMessage(
+            senderName,
+            breakdown.gross,
+            supportMessage,
+        ),
         link: `/creator-dashboard`,
         actorId: fromUserId,
         metadata: {
@@ -3482,6 +3513,7 @@ async function confirmSupportPayment({
             amount_commission_xera: breakdown.commission,
             currency: "USD",
             sender_id: fromUserId,
+            support_message: supportMessage || null,
         },
     });
 
@@ -3490,6 +3522,34 @@ async function confirmSupportPayment({
             toUserId,
             buildNotificationPushPayload(notification),
         );
+    }
+
+    const creatorEmail = await resolveReminderEmailAddress(toUserId);
+    if (creatorEmail) {
+        await sendReminderEmail({
+            to: creatorEmail,
+            transactional: true,
+            subject: `Nouveau soutien de ${senderName}`,
+            html: buildReminderEmailLayout({
+                eyebrow: "Soutien direct",
+                greeting: `Bonjour,`,
+                headline: `${senderName} a envoyé un soutien`,
+                bodyLines: [
+                    `${senderName} vous a envoyé ${formatMoneyUsd(breakdown.gross)} de soutien.`,
+                    supportMessage
+                        ? `Message: “${supportMessage}”`
+                        : "Merci pour votre présence et votre énergie sur XERA1.",
+                    "Votre revenu est maintenant visible dans votre tableau de bord.",
+                ],
+                ctaLabel: "Voir mon tableau de bord",
+                ctaUrl: `${PRIMARY_ORIGIN.replace(/\/$/, "")}/creator-dashboard`,
+            }).html,
+            text: buildSupportNotificationMessage(
+                senderName,
+                breakdown.gross,
+                supportMessage,
+            ),
+        });
     }
 
     return {
@@ -4753,6 +4813,9 @@ async function handleKPaySupportCheckout(req, res) {
             access_token: accessToken,
             user_id: fallbackUserId,
             description: rawDescription,
+            support_message: supportMessageRaw,
+            donation_message: donationMessageRaw,
+            message: legacyMessageRaw,
             return_path: rawReturnPath,
         } = req.body || {};
         const paymentMethod = String(method || "card").toLowerCase();
@@ -4856,6 +4919,10 @@ async function handleKPaySupportCheckout(req, res) {
         }
 
         const description = sanitizePayoutText(rawDescription, 160);
+        const supportMessage = sanitizeSupportMessage(
+            supportMessageRaw ?? donationMessageRaw ?? legacyMessageRaw,
+            200,
+        );
         const returnPath = sanitizeReturnPath(
             rawReturnPath,
             buildProfileReturnPath(toUserId),
@@ -4875,6 +4942,7 @@ async function handleKPaySupportCheckout(req, res) {
                 `Soutien pour ${recipientProfile.name || "un createur"}`,
             senderName: senderProfile.name || "Utilisateur",
             recipientName: recipientProfile.name || "Createur",
+            supportMessage,
             returnPath,
             callbackEnabled: callbackConfig.callbackEnabled,
             callbackOrigin: callbackConfig.callbackOrigin,
@@ -8828,6 +8896,8 @@ if (isDirectRun) {
 }
 
 module.exports = app;
+module.exports.sanitizeSupportMessage = sanitizeSupportMessage;
+module.exports.buildSupportNotificationMessage = buildSupportNotificationMessage;
 module.exports.sweepExpiredSubscriptions = sweepExpiredSubscriptions;
 module.exports.sweepReturnReminderEmails = sweepReturnReminderEmails;
 module.exports.sendScheduledReturnReminders = sendScheduledReturnReminders;

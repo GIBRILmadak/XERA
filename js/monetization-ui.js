@@ -181,6 +181,10 @@ function createSupportModal() {
                         <span id="global-summary-amount">$0.00</span>
                     </div>
                 </div>
+                <div class="support-message-wrap" style="margin-top:16px;">
+                    <label for="global-support-message" style="display:block;margin-bottom:8px;font-weight:700;color:#1f2937;">Message (optionnel)</label>
+                    <textarea id="global-support-message" rows="3" maxlength="200" placeholder="Ajoutez un message à votre soutien..." style="width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;resize:vertical;background:#fff;color:#111827;font:inherit;"></textarea>
+                </div>
                 <fieldset class="support-payment-picker">
                     <legend>Moyen de paiement</legend>
                     <p>Choisissez votre méthode préférée. KPay confirmera les options disponibles.</p>
@@ -234,6 +238,7 @@ let globalSupportState = {
     creatorId: null,
     creatorName: '',
     amount: 0,
+    message: '',
     returnPath: '',
 };
 
@@ -250,12 +255,18 @@ function openSupportModal(creatorId, creatorName, sourceElement = null) {
         creatorId,
         creatorName: resolvedCreatorName,
         amount: 0,
+        message: '',
         returnPath:
             typeof buildSupportReturnPath === 'function'
                 ? buildSupportReturnPath(sourceElement)
                 : `${window.location.pathname}${window.location.search}${window.location.hash}`,
     };
     
+    const messageInput = document.getElementById('global-support-message');
+    if (messageInput) {
+        messageInput.value = '';
+    }
+
     const creatorNameEl = document.getElementById('support-creator-name');
     if (creatorNameEl) {
         creatorNameEl.textContent = resolvedCreatorName;
@@ -296,6 +307,11 @@ function closeGlobalSupportModal() {
         modal.classList.remove('active');
     }
     globalSupportState.amount = 0;
+    globalSupportState.message = '';
+    const messageInput = document.getElementById('global-support-message');
+    if (messageInput) {
+        messageInput.value = '';
+    }
 }
 
 // Sélectionner un montant prédéfini
@@ -349,6 +365,9 @@ function updateGlobalSupportSummary() {
 // Traiter le soutien
 async function processGlobalSupport() {
     const { creatorId, amount } = globalSupportState;
+    const messageInput = document.getElementById('global-support-message');
+    const supportMessage = String(messageInput?.value || '').trim();
+    globalSupportState.message = supportMessage;
     
     if (!creatorId || amount < 1) {
         showGlobalNotification('Veuillez sélectionner un montant valide', 'error');
@@ -375,6 +394,7 @@ async function processGlobalSupport() {
             creatorName: globalSupportState.creatorName,
             amount,
             description: 'Soutien depuis le profil',
+            message: supportMessage,
             returnPath: globalSupportState.returnPath,
             paymentMethod: document.getElementById('global-support-payment-method')?.value || 'card',
         });

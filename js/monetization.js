@@ -1302,6 +1302,7 @@ async function redirectToSupportCheckout({
     creatorName = "",
     amount,
     description = "",
+    message = "",
     returnPath = "",
     sourceElement = null,
     paymentMethod = "card",
@@ -1369,6 +1370,7 @@ async function redirectToSupportCheckout({
                 : window.location.origin;
         const checkoutUrl = `${apiBase}/api/kpay/support-checkout`;
 
+        const normalizedMessage = String(message || "").replace(/\s+/g, " ").trim().slice(0, 200);
         const params = new URLSearchParams();
         params.set("kind", "support");
         params.set("to_user_id", safeCreatorId);
@@ -1377,6 +1379,11 @@ async function redirectToSupportCheckout({
             "description",
             description || `Soutien pour ${creatorName || "ce créateur"}`,
         );
+        if (normalizedMessage) {
+            params.set("support_message", normalizedMessage);
+            params.set("donation_message", normalizedMessage);
+            params.set("message", normalizedMessage);
+        }
         params.set(
             "return_path",
             returnPath || buildSupportReturnPath(sourceElement),

@@ -1469,10 +1469,16 @@ async function selectPlan(planId) {
 // Modal de soutien
 let selectedSupportAmount = 0;
 let selectedCreatorId = null;
+let selectedSupportMessage = "";
 
 function openSupportModal(creatorId) {
     selectedCreatorId = creatorId;
     selectedSupportAmount = 0;
+    selectedSupportMessage = "";
+    const supportMessageInput = document.getElementById("supportMessage");
+    if (supportMessageInput) {
+        supportMessageInput.value = "";
+    }
 
     const modal = document.getElementById("supportModal");
     const amountOptions = document.getElementById("amountOptions");
@@ -1506,6 +1512,11 @@ function closeSupportModal() {
     }
     selectedSupportAmount = 0;
     selectedCreatorId = null;
+    selectedSupportMessage = "";
+    const supportMessageInput = document.getElementById("supportMessage");
+    if (supportMessageInput) {
+        supportMessageInput.value = "";
+    }
 }
 
 function selectSupportAmount(amount) {
@@ -1545,10 +1556,8 @@ async function processSupport() {
             document.getElementById("customAmount")?.value || 0,
         );
         const amount = selectedSupportAmount || customAmount;
-        const submitBtn = document.querySelector(
-            "#supportModal .btn-primary.btn-full",
-        );
-
+    const supportMessageInput = document.getElementById("supportMessage");
+    selectedSupportMessage = String(supportMessageInput?.value || "").replace(/\s+/g, " ").trim().slice(0, 200);
         if (!amount || amount < 1) {
             showError(
                 "Veuillez sélectionner ou entrer un montant valide (minimum $1)",
@@ -1576,6 +1585,7 @@ async function processSupport() {
             creatorId: selectedCreatorId,
             amount,
             description: "Soutien depuis le dashboard",
+            message: selectedSupportMessage,
         });
 
         if (result.success) {
