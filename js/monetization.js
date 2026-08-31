@@ -209,7 +209,9 @@ function hasMonetizationFlag(user) {
 
 function hasActiveMonetizationPlan(user) {
     const plan = getNormalizedUserPlan(user);
-    return ["medium", "pro", "elite"].includes(plan) && isPlanActiveForUser(user);
+    return (
+        ["medium", "pro", "elite"].includes(plan) && isPlanActiveForUser(user)
+    );
 }
 
 // Vérifier si l'utilisateur peut utiliser la personnalisation avancée du profil (Medium+)
@@ -217,7 +219,9 @@ function hasAdvancedProfileCustomization(user) {
     if (!user) return false;
     const plan = getNormalizedUserPlan(user);
     // Medium, Pro et Elite ont accès à la personnalisation avancée
-    return ["medium", "pro", "elite"].includes(plan) && isPlanActiveForUser(user);
+    return (
+        ["medium", "pro", "elite"].includes(plan) && isPlanActiveForUser(user)
+    );
 }
 
 // Vérifier si l'utilisateur peut utiliser la personnalisation complète du profil (Pro+)
@@ -1303,7 +1307,10 @@ async function redirectToSupportCheckout({
     paymentMethod = "card",
 }) {
     if (supportCheckoutInProgress) {
-        return { success: false, error: "Le paiement est déjà en cours d'initialisation." };
+        return {
+            success: false,
+            error: "Le paiement est déjà en cours d'initialisation.",
+        };
     }
     const normalizedAmount = Number.parseFloat(amount);
     const safeCreatorId = String(creatorId || "").trim();
@@ -1343,8 +1350,13 @@ async function redirectToSupportCheckout({
 
         if (!user || !accessToken || !isCanonicalUuid(user.id)) {
             supportCheckoutInProgress = false;
-            window.location.href = "login.html?redirect=" + encodeURIComponent(window.location.href);
-            return { success: false, error: "Session invalide. Veuillez vous reconnecter." };
+            window.location.href =
+                "login.html?redirect=" +
+                encodeURIComponent(window.location.href);
+            return {
+                success: false,
+                error: "Session invalide. Veuillez vous reconnecter.",
+            };
         }
 
         if (typeof window.showToast === "function") {
@@ -1361,11 +1373,20 @@ async function redirectToSupportCheckout({
         params.set("kind", "support");
         params.set("to_user_id", safeCreatorId);
         params.set("amount_usd", String(normalizedAmount));
-        params.set("description", description || `Soutien pour ${creatorName || "ce créateur"}`);
-        params.set("return_path", returnPath || buildSupportReturnPath(sourceElement));
+        params.set(
+            "description",
+            description || `Soutien pour ${creatorName || "ce créateur"}`,
+        );
+        params.set(
+            "return_path",
+            returnPath || buildSupportReturnPath(sourceElement),
+        );
         params.set("access_token", accessToken);
-        const method = ["card", "mobile_money", "paypal"].includes(String(paymentMethod).toLowerCase())
-            ? String(paymentMethod).toLowerCase() : "card";
+        const method = ["card", "mobile_money", "paypal"].includes(
+            String(paymentMethod).toLowerCase(),
+        )
+            ? String(paymentMethod).toLowerCase()
+            : "card";
         params.set("method", method);
         // The support amount is selected in USD, then converted server-side
         // to CDF for the K-Pay Mobile Money gateway.
@@ -1393,7 +1414,10 @@ async function redirectToSupportCheckout({
 
         // Final fallback: show error
         if (typeof window.showToast === "function") {
-            window.showToast("Erreur lors de l'initialisation du paiement.", "error");
+            window.showToast(
+                "Erreur lors de l'initialisation du paiement.",
+                "error",
+            );
         }
         return { success: false, error: error.message };
     }
