@@ -186,17 +186,17 @@ function createSupportModal() {
                     <p>Choisissez votre méthode préférée. KPay confirmera les options disponibles.</p>
                     <div class="support-payment-cards" role="radiogroup" aria-label="Moyen de paiement">
                         <button class="support-payment-card is-selected" type="button" data-payment-method="card" role="radio" aria-checked="true" onclick="selectGlobalSupportPaymentMethod('card')">
-                            <span class="support-payment-icon support-payment-icon-card"><i class="fas fa-credit-card"></i></span>
+                            <span class="support-payment-icon support-payment-icon-card" aria-hidden="true"><img src="icons/visa.svg" alt=""><img src="icons/mastercard.svg" alt=""></span>
                             <span class="support-payment-card-copy"><strong>Carte</strong><small>Visa · Mastercard</small></span>
                             <span class="support-payment-check" aria-hidden="true"><i class="fas fa-check"></i></span>
                         </button>
                         <button class="support-payment-card" type="button" data-payment-method="mobile_money" role="radio" aria-checked="false" onclick="selectGlobalSupportPaymentMethod('mobile_money')">
-                            <span class="support-payment-icon support-payment-icon-mobile"><i class="fas fa-mobile-alt"></i></span>
+                            <span class="support-payment-icon support-payment-icon-mobile" aria-hidden="true"><img src="icons/mobile%20pay.svg" alt=""></span>
                             <span class="support-payment-card-copy"><strong>Mobile Money</strong><small>Paiement par téléphone</small></span>
                             <span class="support-payment-check" aria-hidden="true"><i class="fas fa-check"></i></span>
                         </button>
                         <button class="support-payment-card" type="button" data-payment-method="paypal" role="radio" aria-checked="false" onclick="selectGlobalSupportPaymentMethod('paypal')">
-                            <span class="support-payment-icon support-payment-icon-paypal"><i class="fab fa-paypal"></i></span>
+                            <span class="support-payment-icon support-payment-icon-paypal" aria-hidden="true"><img src="icons/paypal.svg" alt=""></span>
                             <span class="support-payment-card-copy"><strong>PayPal</strong><small>Compte PayPal sécurisé</small></span>
                             <span class="support-payment-check" aria-hidden="true"><i class="fas fa-check"></i></span>
                         </button>

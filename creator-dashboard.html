@@ -253,10 +253,13 @@
                         <form id="withdrawalRequestForm" class="wallet-form">
                             <label class="wallet-field">
                                 <span>Moyen de retrait</span>
-                                <select id="withdrawalMethod" disabled aria-describedby="withdrawalMethodHelp">
+                                <div class="withdrawal-method-display" aria-hidden="true">
+                                    <img src="icons/mobile%20pay.svg" alt="">
+                                    <span>Mobile Money</span>
+                                    <small>Disponible</small>
+                                </div>
+                                <select id="withdrawalMethod" class="visually-hidden-select" disabled aria-describedby="withdrawalMethodHelp">
                                     <option value="mobile_money">Mobile Money — disponible</option>
-                                    <option value="card">Carte bancaire — indisponible chez KPay</option>
-                                    <option value="paypal">PayPal — indisponible chez KPay</option>
                                 </select>
                                 <small id="withdrawalMethodHelp">Les retraits sont automatiquement envoyés vers votre compte Mobile Money après confirmation KPay.</small>
                             </label>
