@@ -1287,6 +1287,12 @@ function buildSupportReturnPath(sourceElement = null) {
 
 let supportCheckoutInProgress = false;
 
+function isCanonicalUuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        String(value ?? "").trim(),
+    );
+}
+
 async function redirectToSupportCheckout({
     creatorId,
     creatorName = "",
@@ -1300,9 +1306,11 @@ async function redirectToSupportCheckout({
         return { success: false, error: "Le paiement est déjà en cours d'initialisation." };
     }
     const normalizedAmount = Number.parseFloat(amount);
+    const safeCreatorId = String(creatorId || "").trim();
 
-    if (!creatorId) {
-        return { success: false, error: "Créateur introuvable." };
+    if (!safeCreatorId || !isCanonicalUuid(safeCreatorId)) {
+        supportCheckoutInProgress = false;
+        return { success: false, error: "Identifiant du créateur invalide." };
     }
     if (!Number.isFinite(normalizedAmount)) {
         return { success: false, error: "Montant invalide." };
@@ -1333,9 +1341,10 @@ async function redirectToSupportCheckout({
         const user = session?.user;
         const accessToken = session?.access_token;
 
-        if (!user || !accessToken) {
+        if (!user || !accessToken || !isCanonicalUuid(user.id)) {
+            supportCheckoutInProgress = false;
             window.location.href = "login.html?redirect=" + encodeURIComponent(window.location.href);
-            return { success: false, error: "Non connecté" };
+            return { success: false, error: "Session invalide. Veuillez vous reconnecter." };
         }
 
         if (typeof window.showToast === "function") {
@@ -1350,11 +1359,10 @@ async function redirectToSupportCheckout({
 
         const params = new URLSearchParams();
         params.set("kind", "support");
-        params.set("to_user_id", creatorId);
+        params.set("to_user_id", safeCreatorId);
         params.set("amount_usd", String(normalizedAmount));
         params.set("description", description || `Soutien pour ${creatorName || "ce créateur"}`);
         params.set("return_path", returnPath || buildSupportReturnPath(sourceElement));
-        params.set("user_id", user.id);
         params.set("access_token", accessToken);
         const method = ["card", "mobile_money", "paypal"].includes(String(paymentMethod).toLowerCase())
             ? String(paymentMethod).toLowerCase() : "card";

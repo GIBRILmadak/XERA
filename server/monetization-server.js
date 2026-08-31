@@ -2001,6 +2001,12 @@ function setResponseHeader(res, name, value) {
     }
 }
 
+function isUuidString(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        String(value || "").trim(),
+    );
+}
+
 function sendCheckoutErrorResponse(res, error, fallbackMessage, context = {}) {
     const sourceCode = String(error?.code || "").trim() || "UNKNOWN";
     const requestId = context.requestId || crypto.randomUUID();
@@ -4554,13 +4560,18 @@ async function handleKPaySupportCheckout(req, res) {
             return res.status(400).send("Moyen de paiement invalide");
         }
 
+        const normalizedToUserId = String(toUserId || "").trim();
+        if (!normalizedToUserId || !isUuidString(normalizedToUserId)) {
+            return res.status(400).send("Identifiant du créateur invalide.");
+        }
+
         const requestUser = await resolveRequestUser(
             accessToken,
             fallbackUserId,
         );
         const fromUserId = requestUser.id;
-        if (!fromUserId) {
-            return res.status(401).send("Utilisateur non authentifié");
+        if (!fromUserId || !isUuidString(fromUserId)) {
+            return res.status(401).send("Utilisateur non authentifié ou session invalide.");
         }
         await ensurePublicUserRecord(fromUserId, {
             email: requestUser.email,
@@ -4572,10 +4583,7 @@ async function handleKPaySupportCheckout(req, res) {
             badge: requestUser.badge,
         });
 
-        if (!toUserId) {
-            return res.status(400).send("Destinataire manquant");
-        }
-        if (fromUserId === toUserId) {
+        if (fromUserId === normalizedToUserId) {
             return res.status(400).send("Auto-soutien interdit");
         }
 
@@ -4613,7 +4621,7 @@ async function handleKPaySupportCheckout(req, res) {
                 .select(
                     "id, name, followers_count, plan, plan_status, plan_ends_at, is_monetized",
                 )
-                .eq("id", toUserId)
+                .eq("id", normalizedToUserId)
                 .maybeSingle(),
         ]);
         if (senderResult.error) throw senderResult.error;
