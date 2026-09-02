@@ -7,6 +7,18 @@ const SUPABASE_URL =
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+const DEFAULT_IMAGE = "https://xera1.xyz/icons/logo.png";
+
+function absolutePublicUrl(value) {
+    const rawValue = String(value || "").trim();
+    if (!rawValue) return DEFAULT_IMAGE;
+    try {
+        return new URL(rawValue, "https://xera1.xyz").toString();
+    } catch (_) {
+        return DEFAULT_IMAGE;
+    }
+}
+
 module.exports = async (req, res) => {
     const userId = req.query.id;
     const dayNumber = req.query.day;
@@ -17,8 +29,7 @@ module.exports = async (req, res) => {
         "Immutable build certification and on-chain developer reputation. Document your software execution, build in public, and create a cryptographic professional history.";
     let keywords =
         "XERA1, XERA1 protocol, Web3 developer reputation, On-chain build certification, Cryptographic developer resume, Proof of execution, Build in public tool, On-chain attestation, Software builder portfolio";
-    let image =
-        "https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png";
+    let image = DEFAULT_IMAGE;
     let url = `https://xera1.xyz/profile${userId ? "?id=" + userId : ""}`;
 
     if (userId) {
@@ -39,7 +50,7 @@ module.exports = async (req, res) => {
                         /,,/g,
                         ",",
                     );
-                image = user.avatar || image;
+                image = absolutePublicUrl(user.avatar);
 
                 if (dayNumber || postId) {
                     let query = supabase
@@ -58,7 +69,7 @@ module.exports = async (req, res) => {
                     if (content) {
                         title = `${content.title} - J${content.day_number} | ${user.name}`;
                         description = content.description || description;
-                        image = content.media_url || image;
+                        image = absolutePublicUrl(content.media_url || image);
                     }
                 }
             }
@@ -96,6 +107,8 @@ module.exports = async (req, res) => {
         html = injectMeta(html, "description", description, true);
 
         // OG
+        html = injectMeta(html, "og:site_name", "XERA1");
+        html = injectMeta(html, "og:type", "profile");
         html = injectMeta(html, "og:title", title);
         html = injectMeta(html, "og:description", description);
         html = injectMeta(html, "og:image", image);

@@ -3910,6 +3910,15 @@ function isAnnouncementContent(content) {
     );
 }
 
+function canReplyToContent(content) {
+    if (!content) return false;
+    return (
+        isAnnouncementContent(content) ||
+        content.type === "news" ||
+        content.type === "event"
+    );
+}
+
 function loadAnnouncementReplies() {
     try {
         return JSON.parse(localStorage.getItem("rize_annonce_replies")) || {};
@@ -4021,8 +4030,195 @@ function setAnnouncementReplyPanelState(contentId, isOpen) {
         });
 }
 
+function ensureImmersiveReplyDrawer() {
+    let drawer = document.getElementById("immersive-reply-drawer");
+    if (drawer) return drawer;
+
+    drawer = document.createElement("div");
+    drawer.id = "immersive-reply-drawer";
+    drawer.className = "immersive-reply-drawer";
+    drawer.setAttribute("aria-hidden", "true");
+    drawer.innerHTML = `
+        <div class="immersive-reply-drawer__backdrop" data-immersive-reply-close="true"></div>
+        <aside class="immersive-reply-drawer__sheet" role="dialog" aria-modal="true" aria-label="Réponses à l'annonce">
+            <div class="immersive-reply-drawer__header">
+                <div class="immersive-reply-drawer__meta">
+                    <span class="immersive-reply-drawer__eyebrow">Annonce</span>
+                    <h3 class="immersive-reply-drawer__title">Réponses</h3>
+                </div>
+                <button type="button" class="immersive-reply-drawer__close" aria-label="Fermer les réponses">✕</button>
+            </div>
+            <div class="immersive-reply-drawer__composer">
+                <textarea class="reply-input immersive-reply-drawer__input" placeholder="Votre réponse..."></textarea>
+                <div class="reply-actions">
+                    <button type="button" class="btn-primary immersive-reply-drawer__submit">Envoyer</button>
+                </div>
+            </div>
+            <div class="immersive-reply-drawer__list-header">
+                <strong>Réponses</strong>
+                <span class="reply-count immersive-reply-drawer__count" data-reply-count="">0</span>
+            </div>
+            <div class="immersive-reply-drawer__content" data-replies-container=""></div>
+        </aside>
+    `;
+
+    const closeButton = drawer.querySelector(".immersive-reply-drawer__close");
+    const backdrop = drawer.querySelector(".immersive-reply-drawer__backdrop");
+    const submitButton = drawer.querySelector(
+        ".immersive-reply-drawer__submit",
+    );
+    const input = drawer.querySelector(".immersive-reply-drawer__input");
+    const sheet = drawer.querySelector(".immersive-reply-drawer__sheet");
+
+    const closeDrawer = () => {
+        const contentId = drawer.dataset.contentId || "";
+        if (contentId) {
+            toggleProfileAnnouncementReplies(contentId, false);
+        }
+    };
+
+    let startY = 0;
+    let currentY = 0;
+    let dragging = false;
+    sheet?.addEventListener(
+        "touchstart",
+        (event) => {
+            if (
+                window.innerWidth > 767 ||
+                !drawer.classList.contains("is-open")
+            )
+                return;
+            const touch = event.touches[0];
+            startY = touch.clientY;
+            currentY = touch.clientY;
+            dragging = true;
+            sheet.style.transition = "none";
+        },
+        { passive: true },
+    );
+    sheet?.addEventListener(
+        "touchmove",
+        (event) => {
+            if (!dragging || window.innerWidth > 767) return;
+            const touch = event.touches[0];
+            currentY = touch.clientY;
+            const delta = currentY - startY;
+            if (delta > 0) {
+                sheet.style.transform = `translateY(${Math.min(delta, 260)}px)`;
+            }
+        },
+        { passive: true },
+    );
+    sheet?.addEventListener("touchend", () => {
+        if (!dragging || window.innerWidth > 767) return;
+        const delta = currentY - startY;
+        sheet.style.transition =
+            "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)";
+        if (delta > 130) {
+            closeDrawer();
+        } else {
+            sheet.style.transform = "";
+        }
+        dragging = false;
+    });
+
+    closeButton?.addEventListener("click", closeDrawer);
+    backdrop?.addEventListener("click", closeDrawer);
+    submitButton?.addEventListener("click", () => {
+        const contentId = drawer.dataset.contentId || "";
+        if (!contentId) return;
+        submitAnnouncementReply(
+            contentId,
+            drawer.querySelector(".immersive-reply-drawer__sheet"),
+            "",
+            drawer.dataset.title || "votre annonce",
+        );
+    });
+
+    input?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            submitButton?.click();
+        }
+    });
+
+    document.body.appendChild(drawer);
+    return drawer;
+}
+
+function applyImmersiveReplyDrawerState(contentId, isOpen) {
+    if (!contentId) return;
+
+    const drawer = ensureImmersiveReplyDrawer();
+    drawer.dataset.contentId = contentId;
+    drawer.classList.toggle("is-open", isOpen);
+    drawer.setAttribute("aria-hidden", isOpen ? "false" : "true");
+
+    const contentMeta = findContentByReplyId(contentId) || {};
+    const title = contentMeta.title || "votre annonce";
+    const drawerTitle = drawer.querySelector(".immersive-reply-drawer__title");
+    const drawerInput = drawer.querySelector(".immersive-reply-drawer__input");
+    if (drawerTitle) {
+        drawerTitle.textContent = title;
+    }
+    drawer.dataset.title = title;
+    if (drawerInput && !isOpen) {
+        drawerInput.value = "";
+    }
+
+    if (isOpen) {
+        const count = getReplyCount(contentId);
+        const countLabel = drawer.querySelector(
+            ".immersive-reply-drawer__count",
+        );
+        if (countLabel) countLabel.textContent = count;
+        const container = drawer.querySelector(
+            ".immersive-reply-drawer__content",
+        );
+        if (container) {
+            container.innerHTML = renderAnnouncementReplies(contentId);
+        }
+        const replyButton = document.querySelector(
+            `[data-reply-toggle="${CSS.escape(String(contentId))}"]`,
+        );
+        if (replyButton) {
+            replyButton.classList.add("is-open");
+            replyButton.setAttribute("aria-expanded", "true");
+        }
+    } else {
+        const replyButton = document.querySelector(
+            `[data-reply-toggle="${CSS.escape(String(contentId))}"]`,
+        );
+        if (replyButton) {
+            replyButton.classList.remove("is-open");
+            replyButton.setAttribute("aria-expanded", "false");
+        }
+        const label = document.querySelector(
+            `[data-reply-toggle-label="${CSS.escape(String(contentId))}"]`,
+        );
+        if (label) label.textContent = "Répondre";
+    }
+}
+
 function toggleProfileAnnouncementReplies(contentId, forceOpen = null) {
     if (!contentId) return;
+
+    const immersiveOpen =
+        Boolean(document.getElementById("immersive-overlay")) &&
+        document.getElementById("immersive-overlay")?.style.display === "block";
+
+    if (immersiveOpen || window.__immersiveOpen) {
+        const drawer = ensureImmersiveReplyDrawer();
+        const isOpened = drawer.classList.contains("is-open");
+        const shouldOpen =
+            typeof forceOpen === "boolean" ? forceOpen : !isOpened;
+        applyImmersiveReplyDrawerState(contentId, shouldOpen);
+        if (shouldOpen) {
+            refreshRepliesUI(contentId);
+        }
+        return;
+    }
+
     const panel = document.querySelector(
         getReplySelector(contentId, "data-profile-reply-panel"),
     );
@@ -4042,6 +4238,23 @@ function refreshRepliesUI(contentId) {
         .forEach((el) => {
             el.innerHTML = renderAnnouncementReplies(contentId);
         });
+
+    const drawer = document.getElementById("immersive-reply-drawer");
+    if (drawer && drawer.dataset.contentId === String(contentId)) {
+        const drawerContainer = drawer.querySelector(
+            ".immersive-reply-drawer__content",
+        );
+        if (drawerContainer) {
+            drawerContainer.innerHTML = renderAnnouncementReplies(contentId);
+        }
+        const countLabel = drawer.querySelector(
+            ".immersive-reply-drawer__count",
+        );
+        if (countLabel) {
+            countLabel.textContent = getReplyCount(contentId);
+        }
+    }
+
     const count = getReplyCount(contentId);
     document
         .querySelectorAll(getReplySelector(contentId, "data-reply-count"))
@@ -4110,6 +4323,12 @@ async function submitAnnouncementReply(
         inputRef && typeof inputRef !== "string" && inputRef.closest
             ? inputRef
                   .closest(".profile-update-reply-block")
+                  ?.querySelector(".reply-input") ||
+              inputRef
+                  .closest(".immersive-reply-drawer__sheet")
+                  ?.querySelector(".reply-input") ||
+              inputRef
+                  .closest(".immersive-reply-drawer__composer")
                   ?.querySelector(".reply-input")
             : document.getElementById(inputRef);
     const reply =
@@ -6832,7 +7051,12 @@ function installAdminButtonFeedback(container) {
     container.dataset.feedbackInstalled = "true";
     container.addEventListener("click", (event) => {
         const button = event.target.closest("button");
-        if (!button || button.disabled || button.dataset.noPendingFeedback === "true") return;
+        if (
+            !button ||
+            button.disabled ||
+            button.dataset.noPendingFeedback === "true"
+        )
+            return;
         const label = button.textContent.trim();
         button.dataset.originalLabel = label;
         button.disabled = true;
@@ -6842,7 +7066,11 @@ function installAdminButtonFeedback(container) {
         // Functions invoked by inline handlers are asynchronous. Restore if no
         // navigation/re-render happened, while preserving immediate click feedback.
         window.setTimeout(() => {
-            if (!button.isConnected || !button.classList.contains("admin-action-pending")) return;
+            if (
+                !button.isConnected ||
+                !button.classList.contains("admin-action-pending")
+            )
+                return;
             button.disabled = false;
             button.classList.remove("admin-action-pending");
             button.removeAttribute("aria-busy");
@@ -6911,11 +7139,14 @@ async function fetchSuperAdminJson(path, options = {}) {
 
     if (!response.ok) {
         const diagnosticCode = payload?.diagnostic?.code;
-        const diagnosticDetail = payload?.diagnostic?.details || payload?.diagnostic?.hint;
+        const diagnosticDetail =
+            payload?.diagnostic?.details || payload?.diagnostic?.hint;
         const diagnostic = diagnosticCode
             ? ` [diagnostic ${diagnosticCode}${diagnosticDetail ? `: ${diagnosticDetail}` : ""}]`
             : "";
-        throw new Error(`${payload?.error || "Erreur API super-admin."}${diagnostic}`);
+        throw new Error(
+            `${payload?.error || "Erreur API super-admin."}${diagnostic}`,
+        );
     }
 
     return payload;
@@ -7034,13 +7265,18 @@ function renderKpayPaymentHistory(items) {
     const container = document.getElementById("kpay-payments-history");
     if (!container) return;
     if (!Array.isArray(items) || items.length === 0) {
-        container.innerHTML = '<div class="verification-empty">Aucun paiement KPay confirmé.</div>';
+        container.innerHTML =
+            '<div class="verification-empty">Aucun paiement KPay confirmé.</div>';
         return;
     }
-    container.innerHTML = items.map((payment) => {
-        const user = payment.user || {};
-        const amount = Number(payment.amount || 0).toLocaleString("fr-FR", { style: "currency", currency: payment.currency || "USD" });
-        return `<div class="admin-card" style="border:1px solid var(--border-color);border-radius:12px;padding:1rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.75rem;align-items:center">
+    container.innerHTML = items
+        .map((payment) => {
+            const user = payment.user || {};
+            const amount = Number(payment.amount || 0).toLocaleString("fr-FR", {
+                style: "currency",
+                currency: payment.currency || "USD",
+            });
+            return `<div class="admin-card" style="border:1px solid var(--border-color);border-radius:12px;padding:1rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.75rem;align-items:center">
             <div><small style="color:var(--text-secondary)">Utilisateur</small><strong style="display:block">${escapeHtml(user.name || "Utilisateur")}</strong></div>
             <div><small style="color:var(--text-secondary)">Montant reçu</small><strong style="display:block">${amount}</strong></div>
             <div><small style="color:var(--text-secondary)">Plan</small><strong style="display:block">${escapeHtml(String(payment.plan || "—").toUpperCase())} · ${payment.billingCycle === "annual" ? "Annuel" : "Mensuel"}</strong></div>
@@ -7048,23 +7284,36 @@ function renderKpayPaymentHistory(items) {
             <div><small style="color:var(--text-secondary)">Référence KPay</small><strong style="display:block;word-break:break-all">${escapeHtml(payment.transactionRefId || payment.checkoutRefId || "—")}</strong></div>
             <div><span class="admin-badge">${escapeHtml(payment.status || "succeeded")}</span></div>
         </div>`;
-    }).join("");
+        })
+        .join("");
 }
 
 async function renderKpayPaymentsPage() {
     const container = document.getElementById("kpay-payments-page");
     if (!container) return;
     const user = await checkAuth();
-    if (!user || !isSuperAdmin()) { container.innerHTML = '<div class="settings-section"><h2>Accès refusé</h2><p>Cette page est réservée au super-admin.</p></div>'; return; }
+    if (!user || !isSuperAdmin()) {
+        container.innerHTML =
+            '<div class="settings-section"><h2>Accès refusé</h2><p>Cette page est réservée au super-admin.</p></div>';
+        return;
+    }
     container.innerHTML = `<div class="settings-section"><div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap"><div><a href="admin.html" style="color:var(--text-secondary)">← Administration</a><h2 style="margin:.6rem 0 0">Paiements KPay</h2><p style="color:var(--text-secondary)">Historique en lecture seule des paiements confirmés automatiquement par KPay.</p></div><button class="btn-verify" type="button" onclick="fetchKpayPaymentHistory()">Rafraîchir</button></div><div id="kpay-payments-history" style="margin-top:1rem;display:flex;flex-direction:column;gap:.7rem"></div></div>`;
-    installAdminButtonFeedback(container); await fetchKpayPaymentHistory();
+    installAdminButtonFeedback(container);
+    await fetchKpayPaymentHistory();
 }
 
 async function fetchKpayPaymentHistory() {
-    const container = document.getElementById("kpay-payments-history"); if (!container) return;
+    const container = document.getElementById("kpay-payments-history");
+    if (!container) return;
     container.innerHTML = '<div class="loading-spinner"></div>';
-    try { const payload = await fetchSuperAdminJson("/api/admin/subscription-payments?status=succeeded&limit=100"); renderKpayPaymentHistory(payload?.payments || []); }
-    catch (error) { container.innerHTML = `<div class="verification-empty">${escapeHtml(error?.message || "Impossible de charger les paiements.")}</div>`; }
+    try {
+        const payload = await fetchSuperAdminJson(
+            "/api/admin/subscription-payments?status=succeeded&limit=100",
+        );
+        renderKpayPaymentHistory(payload?.payments || []);
+    } catch (error) {
+        container.innerHTML = `<div class="verification-empty">${escapeHtml(error?.message || "Impossible de charger les paiements.")}</div>`;
+    }
 }
 window.renderKpayPaymentsPage = renderKpayPaymentsPage;
 window.fetchKpayPaymentHistory = fetchKpayPaymentHistory;
@@ -7145,13 +7394,63 @@ function renderAdminDiscountCodes(items) {
 }
 
 async function fetchAdminPartners() {
-    const box = document.getElementById("admin-partners-list"); if (!box) return;
-    try { const data = await fetchSuperAdminJson("/api/admin/partners");
-        box.innerHTML = !(data.partners||[]).length ? '<div class="verification-empty">Aucun partenaire.</div>' : data.partners.map(p => `<div class="admin-card" style="padding:.75rem;border:1px solid var(--border-color);border-radius:10px"><strong>${escapeHtml(p.name)}</strong> · ${escapeHtml(p.status)}<br><small>Partenaire: ${(p.partner_codes||[]).map(c=>escapeHtml(c.code)).join(', ')||'—'} · Réduction: ${(p.partner_discount_codes||[]).map(c=>escapeHtml(c.code)).join(', ')||'—'}</small><div style="display:flex;gap:.4rem;margin-top:.5rem"><input id="partner-code-${p.id}" class="form-input" placeholder="Nouveau code"><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','partner')">Code partenaire</button><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','discount')">Code réduction 20%</button></div></div>`).join('');
-    } catch (e) { box.textContent=e.message||'Impossible de charger les partenaires.'; }
+    const box = document.getElementById("admin-partners-list");
+    if (!box) return;
+    try {
+        const data = await fetchSuperAdminJson("/api/admin/partners");
+        box.innerHTML = !(data.partners || []).length
+            ? '<div class="verification-empty">Aucun partenaire.</div>'
+            : data.partners
+                  .map(
+                      (p) =>
+                          `<div class="admin-card" style="padding:.75rem;border:1px solid var(--border-color);border-radius:10px"><strong>${escapeHtml(p.name)}</strong> · ${escapeHtml(p.status)}<br><small>Partenaire: ${(p.partner_codes || []).map((c) => escapeHtml(c.code)).join(", ") || "—"} · Réduction: ${(p.partner_discount_codes || []).map((c) => escapeHtml(c.code)).join(", ") || "—"}</small><div style="display:flex;gap:.4rem;margin-top:.5rem"><input id="partner-code-${p.id}" class="form-input" placeholder="Nouveau code"><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','partner')">Code partenaire</button><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','discount')">Code réduction 20%</button></div></div>`,
+                  )
+                  .join("");
+    } catch (e) {
+        box.textContent = e.message || "Impossible de charger les partenaires.";
+    }
 }
-async function createAdminPartner() { try { const input=document.getElementById('admin-partner-name'); const name=input?.value?.trim(); if(!name) throw new Error('Saisissez le nom du partenaire.'); await fetchSuperAdminJson('/api/admin/partners',{method:'POST',body:JSON.stringify({name})}); input.value=''; window.ToastManager?.success?.('Partenaire créé', 'Le partenaire est maintenant disponible.'); window.showToast?.('Partenaire créé avec succès.', 'success'); await fetchAdminPartners(); } catch(e) { window.ToastManager?.error?.('Erreur',e.message||'Création impossible.'); window.showToast?.(e.message||'Création impossible.', 'error'); } }
-async function createAdminPartnerCode(id, kind) { try { const code=document.getElementById(`partner-code-${id}`).value; await fetchSuperAdminJson(`/api/admin/partners/${encodeURIComponent(id)}/codes`,{method:'POST',body:JSON.stringify({kind,code})}); window.ToastManager?.success?.('Code créé', 'Le code est actif.'); await fetchAdminPartners(); } catch(e) { window.ToastManager?.error?.('Erreur',e.message||'Création impossible.'); window.showToast?.(e.message||'Création impossible.', 'error'); } }
+async function createAdminPartner() {
+    try {
+        const input = document.getElementById("admin-partner-name");
+        const name = input?.value?.trim();
+        if (!name) throw new Error("Saisissez le nom du partenaire.");
+        await fetchSuperAdminJson("/api/admin/partners", {
+            method: "POST",
+            body: JSON.stringify({ name }),
+        });
+        input.value = "";
+        window.ToastManager?.success?.(
+            "Partenaire créé",
+            "Le partenaire est maintenant disponible.",
+        );
+        window.showToast?.("Partenaire créé avec succès.", "success");
+        await fetchAdminPartners();
+    } catch (e) {
+        window.ToastManager?.error?.(
+            "Erreur",
+            e.message || "Création impossible.",
+        );
+        window.showToast?.(e.message || "Création impossible.", "error");
+    }
+}
+async function createAdminPartnerCode(id, kind) {
+    try {
+        const code = document.getElementById(`partner-code-${id}`).value;
+        await fetchSuperAdminJson(
+            `/api/admin/partners/${encodeURIComponent(id)}/codes`,
+            { method: "POST", body: JSON.stringify({ kind, code }) },
+        );
+        window.ToastManager?.success?.("Code créé", "Le code est actif.");
+        await fetchAdminPartners();
+    } catch (e) {
+        window.ToastManager?.error?.(
+            "Erreur",
+            e.message || "Création impossible.",
+        );
+        window.showToast?.(e.message || "Création impossible.", "error");
+    }
+}
 
 async function fetchAdminDiscountCodes() {
     const container = document.getElementById("admin-discount-codes-list");
@@ -9969,13 +10268,14 @@ function renderProfileUpdateCard(
         : "";
 
     const isAnnouncement = isAnnouncementContent(content);
+    const canReply = canReplyToContent(content);
     const replyContentId = content.contentId || content.id || "";
     const replyOwnerId = content.userId || profileUserId || "";
     const replyInputId = replyContentId
         ? `profile-reply-input-${replyContentId}`
         : "";
     const replyCount =
-        isAnnouncement && replyContentId ? getReplyCount(replyContentId) : 0;
+        canReply && replyContentId ? getReplyCount(replyContentId) : 0;
     const viewerCanEncourage =
         !!content.contentId &&
         currentUserId &&
@@ -10000,7 +10300,7 @@ function renderProfileUpdateCard(
 `;
 
     const replyPanelHtml =
-        isAnnouncement && replyContentId
+        canReply && replyContentId
             ? `
             <div class="profile-update-reply-block">
                 <button type="button" class="reply-btn" data-reply-toggle="${escapeHtml(replyContentId)}" aria-expanded="false" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)})">
@@ -10015,7 +10315,7 @@ function renderProfileUpdateCard(
                     <div class="reply-inline">
                         <textarea id="${escapeHtml(replyInputId)}" class="reply-input" placeholder="Votre réponse..."></textarea>
                         <div class="reply-actions">
-                            <button class="btn-primary" onclick="event.stopPropagation(); submitAnnouncementReply(${inlineJsString(replyContentId)}, this, ${inlineJsString(replyOwnerId)}, ${inlineJsString(content.title || "votre annonce")})">Envoyer</button>
+                            <button class="btn-primary" onclick="event.stopPropagation(); submitAnnouncementReply(${inlineJsString(replyContentId)}, this, ${inlineJsString(replyOwnerId)}, ${inlineJsString(content.title || content.description || "votre post")})">Envoyer</button>
                         </div>
                     </div>
                     <div data-replies-container="${escapeHtml(replyContentId)}">
@@ -13690,15 +13990,14 @@ async function renderImmersiveFeed(contents) {
                     ? liveStreamMap.get(content.userId) || null
                     : null;
             const isAnnouncement = isAnnouncementContent(content);
+            const canReply = canReplyToContent(content);
             const timeLabel = timeAgo(content.createdAt || content.created_at);
             const replyContentId = content.contentId || content.id || "";
             const replyInputId = replyContentId
                 ? `immersive-reply-input-${replyContentId}`
                 : "";
             const replyCount =
-                isAnnouncement && replyContentId
-                    ? getReplyCount(replyContentId)
-                    : 0;
+                canReply && replyContentId ? getReplyCount(replyContentId) : 0;
             // Defensive: some cached/local items may still carry the tag payload inside
             // `description` (e.g. "\n\n#hashtags: ..."). Keep immersive copy clean.
             const fullDescription = extractTagsFromDescription(
@@ -13915,7 +14214,7 @@ async function renderImmersiveFeed(contents) {
                 : liveJoinHtml;
 
             const immersiveReplyHtml =
-                isAnnouncement && replyContentId
+                canReply && replyContentId
                     ? `
                 <div class="profile-update-reply-block immersive-reply-block">
                     <button type="button" class="reply-btn reply-btn-immersive" data-reply-toggle="${escapeHtml(replyContentId)}" aria-expanded="false" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)})">
@@ -13930,7 +14229,7 @@ async function renderImmersiveFeed(contents) {
                         <div class="reply-inline">
                             <textarea id="${escapeHtml(replyInputId)}" class="reply-input" placeholder="Votre réponse..."></textarea>
                             <div class="reply-actions">
-                                <button class="btn-primary" onclick="event.stopPropagation(); submitAnnouncementReply(${inlineJsString(replyContentId)}, this, ${inlineJsString(content.userId || "")}, ${inlineJsString(content.title || "votre annonce")})">Envoyer</button>
+                                <button class="btn-primary" onclick="event.stopPropagation(); submitAnnouncementReply(${inlineJsString(replyContentId)}, this, ${inlineJsString(content.userId || "")}, ${inlineJsString(content.title || content.description || "votre publication")})">Envoyer</button>
                             </div>
                         </div>
                         <div data-replies-container="${escapeHtml(replyContentId)}">
@@ -13950,7 +14249,15 @@ async function renderImmersiveFeed(contents) {
                         <div class="immersive-meta-row">
                             ${dayPill}
                             <span class="state-tag">${stateLabel}</span>
-                            ${isAnnouncement ? '<span class="announcement-chip">Annonce</span>' : ""}
+                            ${
+                                isAnnouncement
+                                    ? '<span class="announcement-chip">Annonce</span>'
+                                    : content.type === "news"
+                                      ? '<span class="announcement-chip">Actualité</span>'
+                                      : content.type === "event"
+                                        ? '<span class="announcement-chip">Événement</span>'
+                                        : ""
+                            }
                             ${
                                 timeLabel
                                     ? `<span class="time-ago-label">${timeLabel}</span>`
@@ -19807,8 +20114,13 @@ function shouldShowPostPublishUpsell(user) {
     if (!user || hasActivePaidPlan(user)) return false;
     if (document.getElementById("post-publish-upsell")) return false;
     try {
-        const lastShown = Number(localStorage.getItem("xera:post-publish-upsell:last-shown") || 0);
-        return !lastShown || Date.now() - lastShown >= POST_PUBLISH_UPSELL_COOLDOWN_MS;
+        const lastShown = Number(
+            localStorage.getItem("xera:post-publish-upsell:last-shown") || 0,
+        );
+        return (
+            !lastShown ||
+            Date.now() - lastShown >= POST_PUBLISH_UPSELL_COOLDOWN_MS
+        );
     } catch (error) {
         return true;
     }
@@ -19816,11 +20128,20 @@ function shouldShowPostPublishUpsell(user) {
 
 function showPostPublishUpsell(user) {
     if (!shouldShowPostPublishUpsell(user)) return false;
-    try { localStorage.setItem("xera:post-publish-upsell:last-shown", String(Date.now())); } catch (error) {}
+    try {
+        localStorage.setItem(
+            "xera:post-publish-upsell:last-shown",
+            String(Date.now()),
+        );
+    } catch (error) {}
 
     // The success card is useful, but this is the one post-publication dialog: never stack both.
     document.getElementById("publish-feedback-card")?.remove();
-    const avatar = user.avatar || user.avatar_url || user.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.id || user.name || "xera")}`;
+    const avatar =
+        user.avatar ||
+        user.avatar_url ||
+        user.avatarUrl ||
+        `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.id || user.name || "xera")}`;
     const verified = isCurrentUserVerified() || Boolean(user.badge);
     const overlay = document.createElement("div");
     overlay.id = "post-publish-upsell";
@@ -19844,12 +20165,39 @@ function showPostPublishUpsell(user) {
             <button type="button" class="post-publish-upsell__cta">Débloquer plus de portée</button>
         </section>`;
     const dialog = overlay.querySelector(".post-publish-upsell__dialog");
-    const close = () => { trackPostPublishUpsell("post_publish_upsell_closed"); overlay.classList.remove("is-visible"); setTimeout(() => overlay.remove(), 180); document.removeEventListener("keydown", onKeydown); };
-    const onKeydown = (event) => { if (event.key === "Escape") close(); };
-    overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
-    overlay.querySelector(".post-publish-upsell__close").addEventListener("click", close);
-    overlay.querySelector(".post-publish-upsell__cta").addEventListener("click", () => { try { sessionStorage.setItem("xera:post-publish-upsell:clicked", "1"); } catch (error) {} trackPostPublishUpsell("post_publish_upsell_clicked"); const url = window.XeraRouter?.buildHtmlUrl?.("subscriptionPlans") || "subscription-plans.html"; window.location.href = url; });
-    document.body.appendChild(overlay); document.addEventListener("keydown", onKeydown); requestAnimationFrame(() => { overlay.classList.add("is-visible"); dialog.focus(); });
+    const close = () => {
+        trackPostPublishUpsell("post_publish_upsell_closed");
+        overlay.classList.remove("is-visible");
+        setTimeout(() => overlay.remove(), 180);
+        document.removeEventListener("keydown", onKeydown);
+    };
+    const onKeydown = (event) => {
+        if (event.key === "Escape") close();
+    };
+    overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) close();
+    });
+    overlay
+        .querySelector(".post-publish-upsell__close")
+        .addEventListener("click", close);
+    overlay
+        .querySelector(".post-publish-upsell__cta")
+        .addEventListener("click", () => {
+            try {
+                sessionStorage.setItem("xera:post-publish-upsell:clicked", "1");
+            } catch (error) {}
+            trackPostPublishUpsell("post_publish_upsell_clicked");
+            const url =
+                window.XeraRouter?.buildHtmlUrl?.("subscriptionPlans") ||
+                "subscription-plans.html";
+            window.location.href = url;
+        });
+    document.body.appendChild(overlay);
+    document.addEventListener("keydown", onKeydown);
+    requestAnimationFrame(() => {
+        overlay.classList.add("is-visible");
+        dialog.focus();
+    });
     trackPostPublishUpsell("post_publish_upsell_shown");
     return true;
 }
@@ -19857,7 +20205,8 @@ function showPostPublishUpsell(user) {
 function trackPostPublishUpsellConversion(user) {
     if (!hasActivePaidPlan(user)) return;
     try {
-        if (sessionStorage.getItem("xera:post-publish-upsell:clicked") !== "1") return;
+        if (sessionStorage.getItem("xera:post-publish-upsell:clicked") !== "1")
+            return;
         sessionStorage.removeItem("xera:post-publish-upsell:clicked");
         trackPostPublishUpsell("post_publish_upsell_conversion");
     } catch (error) {}
@@ -21301,8 +21650,11 @@ async function openCreateMenu(
                     });
                     requestAnimationFrame(() => {
                         // Only a confirmed, newly-created post can trigger the optional upsell.
-                        const shownUpsell = !isEdit && showPostPublishUpsell(window.currentUser);
-                        if (!shownUpsell) showPublishFeedbackCard(publishFeedback);
+                        const shownUpsell =
+                            !isEdit &&
+                            showPostPublishUpsell(window.currentUser);
+                        if (!shownUpsell)
+                            showPublishFeedbackCard(publishFeedback);
                     });
                 } else {
                     showBackgroundPublishBanner({

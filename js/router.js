@@ -90,6 +90,8 @@
         "stream.html": "/stream",
         "subscription-plans.html": "/subscription-plans",
         "verification.html": "/verification",
+        "cgu.html": "/cgu",
+        "privacy.html": "/privacy",
         "404.html": "/404",
     };
     const CLEAN_TO_HTML_PATH = Object.fromEntries(
@@ -114,6 +116,8 @@
         stream: "/stream",
         subscriptionPlans: "/subscription-plans",
         verification: "/verification",
+        cgu: "/cgu",
+        privacy: "/privacy",
         notFound: "/404",
     };
 
@@ -133,6 +137,8 @@
         stream: "stream",
         subscriptionplans: "subscriptionPlans",
         verification: "verification",
+        cgu: "cgu",
+        privacy: "privacy",
         notfound: "notFound",
         404: "notFound",
     };

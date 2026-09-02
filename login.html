@@ -20,7 +20,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/search-notification.css">
-    <link rel="stylesheet" href="css/login.css">
+    <link rel="stylesheet" href="css/login.css?v=consent-modal-2">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
 </head>
 <body class="login-body has-mobile-nav">
@@ -272,10 +272,92 @@
                     <a href="#" id="toggle-link">Créer un compte</a>
                 </div>
                 
-                <div class="login-footer">
+                <div class="login-footer" style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
                     <a href="index.html">← Retour à l'accueil</a>
+                    <a href="cgu.html">Conditions d’utilisation</a>
+                    <a href="privacy.html">Confidentialité</a>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div id="account-consent-modal" class="consent-modal" role="dialog" aria-modal="true" aria-labelledby="account-consent-title" aria-describedby="account-consent-description" style="display:none;">
+        <div class="consent-modal__panel">
+            <div class="consent-modal__header">
+                <div>
+                    <p class="consent-modal__eyebrow">Création de compte</p>
+                    <h3 id="account-consent-title">Conditions &amp; Confidentialité</h3>
+                </div>
+                <button type="button" id="account-consent-close" class="consent-modal__close" aria-label="Fermer la fenêtre">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                        <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                </button>
+            </div>
+
+            <p id="account-consent-description" class="consent-modal__description">
+                Prenez un instant pour confirmer votre accord avant de continuer.
+            </p>
+
+            <div class="consent-modal__choices">
+                <label class="consent-choice">
+                    <input id="account-consent-privacy" type="checkbox" />
+                    <span class="consent-choice__indicator" aria-hidden="true">
+                        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.2 11 13 4.5" /></svg>
+                    </span>
+                    <span class="consent-choice__text">J’accepte la <a href="privacy.html" target="_blank" rel="noreferrer">Politique de confidentialité</a> de XERA1.</span>
+                </label>
+
+                <label class="consent-choice">
+                    <input id="account-consent-cgu" type="checkbox" />
+                    <span class="consent-choice__indicator" aria-hidden="true">
+                        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.2 11 13 4.5" /></svg>
+                    </span>
+                    <span class="consent-choice__text">J’ai lu et j’accepte les <a href="cgu.html" target="_blank" rel="noreferrer">Conditions d’utilisation</a> de XERA1.</span>
+                </label>
+            </div>
+
+            <div class="consent-modal__footer">
+                <button type="button" id="account-consent-cancel" class="consent-modal__button consent-modal__button--secondary">Annuler</button>
+                <button type="button" id="account-consent-submit" class="consent-modal__button consent-modal__button--primary" disabled>Continuer</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="password-reset-modal" class="password-reset-modal" role="dialog" aria-modal="true" aria-labelledby="password-reset-title" aria-describedby="password-reset-description" style="display:none;">
+        <div class="password-reset-modal__panel">
+            <div class="password-reset-modal__header">
+                <div>
+                    <p class="password-reset-modal__eyebrow">Accès au compte</p>
+                    <h3 id="password-reset-title">Réinitialiser le mot de passe</h3>
+                </div>
+                <button type="button" id="password-reset-close" class="password-reset-modal__close" aria-label="Fermer la fenêtre">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                        <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                </button>
+            </div>
+
+            <p id="password-reset-description" class="password-reset-modal__description">
+                Saisissez votre adresse email. Si un compte y est associé, vous recevrez un lien sécurisé.
+            </p>
+
+            <form id="password-reset-form" novalidate>
+                <div class="password-reset-modal__field">
+                    <label for="password-reset-email">Adresse email</label>
+                    <input id="password-reset-email" name="email" type="email" autocomplete="email" placeholder="votre@email.com" required />
+                </div>
+                <p id="password-reset-status" class="password-reset-modal__status" role="status" aria-live="polite"></p>
+                <div class="password-reset-modal__footer">
+                    <button type="button" id="password-reset-cancel" class="password-reset-modal__button password-reset-modal__button--secondary">Annuler</button>
+                    <button type="submit" id="password-reset-submit" class="password-reset-modal__button password-reset-modal__button--primary">
+                        <span id="password-reset-submit-text">Envoyer le lien</span>
+                        <svg id="password-reset-loader" class="password-reset-loader" aria-hidden="true" style="display:none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="9" stroke-dasharray="42 16"></circle>
+                        </svg>
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
     

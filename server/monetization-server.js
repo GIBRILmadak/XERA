@@ -491,6 +491,7 @@ function renderOpenGraphSharePage({
     <title>${safeTitle}</title>
     <meta name="description" content="${safeDescription}">
     <link rel="canonical" href="${safeUrl}">
+    <meta property="og:site_name" content="XERA1">
     <meta property="og:title" content="${safeTitle}">
     <meta property="og:description" content="${safeDescription}">
     <meta property="og:type" content="${safeType}">
@@ -579,7 +580,7 @@ async function handleProfileSharePage(req, res) {
             `/profile?user=${encodeURIComponent(user.id)}`,
         );
         const html = renderOpenGraphSharePage({
-            title: `${displayName} | XERA1`,
+            title: `${displayName} sur XERA1`,
             description: summarizeShareDescription(
                 user.bio || user.title,
                 "Découvrez ce profil sur XERA1",

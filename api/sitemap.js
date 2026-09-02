@@ -16,6 +16,8 @@ module.exports = async (req, res) => {
         "/subscription-plans",
         "/credits",
         "/verification",
+        "/cgu",
+        "/privacy",
         "/premium-plans",
         "/create-stream",
         "/creator-dashboard",

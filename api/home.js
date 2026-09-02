@@ -2,14 +2,14 @@ const fs = require("fs");
 const path = require("path");
 
 module.exports = async (req, res) => {
-    let title = "XERA1 | Proof of Building & On-chain Project Certification";
+    let title = "XERA1 — Infrastructure de Proof of Building";
     let description =
-        "XERA1 is the decentralized trust layer for tech startups. Verify startup traction on-chain, build immutable development history, and prove execution to investors. The blockchain alternative to traditional pitches.";
+        "Certifiez votre trajectoire, vos jalons et votre exécution de build.";
     let keywords =
         "XERA1, XERA1 protocol, XERA1 Proof of Building, Proof of Building protocol, xera1.xyz, Proof of Building blockchain, On-chain project certification, Verify startup traction, Investor trust layer, Anti-vaporware protocol, Blockchain startup pitch, Verifiable roadmap, Build in public tools";
     let image =
-        "https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png";
-    let url = "https://xera1.xyz/";
+        "https://xera1.xyz/icons/logo.png";
+    let url = "https://xera1.xyz";
 
     try {
         const filePath = path.join(process.cwd(), "index.html");
@@ -42,6 +42,8 @@ module.exports = async (req, res) => {
         html = html.replace(/<title>.*?<\/title>/is, `<title>${title}</title>`);
         html = injectMeta(html, "keywords", keywords, true);
         html = injectMeta(html, "description", description, true);
+        html = injectMeta(html, "og:site_name", "XERA1");
+        html = injectMeta(html, "og:type", "website");
         html = injectMeta(html, "og:title", title);
         html = injectMeta(html, "og:description", description);
         html = injectMeta(html, "og:image", image);

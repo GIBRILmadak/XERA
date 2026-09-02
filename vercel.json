@@ -26,6 +26,8 @@
             "destination": "/subscription-plans.html"
         },
         { "source": "/verification", "destination": "/verification.html" },
+        { "source": "/cgu", "destination": "/cgu.html" },
+        { "source": "/privacy", "destination": "/privacy.html" },
         { "source": "/404", "destination": "/404.html" }
     ],
     "crons": [
