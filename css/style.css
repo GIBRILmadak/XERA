@@ -9438,23 +9438,22 @@ html.dark-mode .first-project-feed-popup__cta {
 .immersive-reply-drawer__backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(3px);
+    background: rgba(3, 3, 6, 0.72);
 }
 .immersive-reply-drawer__sheet {
     position: relative;
     margin-left: auto;
-    width: min(100%, 440px);
+    width: min(100%, 480px);
     height: 100%;
-    background: rgba(10, 10, 12, 0.96);
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: -30px 0 80px rgba(0, 0, 0, 0.42);
+    background: #0d0d12;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: -30px 0 90px rgba(0, 0, 0, 0.56);
     transform: translateX(104%);
     transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
     display: flex;
     flex-direction: column;
-    padding: 1.1rem 1rem 1.25rem;
+    padding: 1.25rem 1.25rem 1rem;
+    box-sizing: border-box;
 }
 .immersive-reply-drawer.is-open .immersive-reply-drawer__sheet {
     transform: translateX(0);
@@ -9483,64 +9482,105 @@ html.dark-mode .first-project-feed-popup__cta {
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding-bottom: 0.9rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 1.05rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 .immersive-reply-drawer__meta {
     min-width: 0;
 }
 .immersive-reply-drawer__eyebrow {
     display: inline-block;
-    color: rgba(255, 255, 255, 0.66);
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
+    color: #a78bfa;
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
     font-weight: 800;
 }
 .immersive-reply-drawer__title {
     margin: 0.2rem 0 0;
-    font-size: 1.15rem;
+    max-width: 360px;
+    font-size: 1.28rem;
     line-height: 1.2;
     color: var(--text-primary);
     word-break: break-word;
 }
 .immersive-reply-drawer__close {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.04);
-    color: var(--text-primary);
+    background: #171720;
+    color: #b8b8c4;
+    font-size: 1rem;
     cursor: pointer;
     flex-shrink: 0;
+    transition:
+        background 0.18s ease,
+        color 0.18s ease,
+        border-color 0.18s ease;
+}
+.immersive-reply-drawer__close:hover {
+    background: #242431;
+    border-color: rgba(167, 139, 250, 0.5);
+    color: #fff;
 }
 .immersive-reply-drawer__composer {
-    padding-top: 1rem;
+    padding: 1rem 0 1.1rem;
     display: grid;
     gap: 0.65rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .immersive-reply-drawer__input {
     width: 100%;
-    min-height: 90px;
-    border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.03);
+    min-height: 96px;
+    border-radius: 13px;
+    border: 1px solid #292936;
+    background: #15151c;
     color: var(--text-primary);
-    padding: 0.8rem 0.9rem;
+    padding: 0.85rem 0.95rem;
     resize: vertical;
+    box-sizing: border-box;
+    line-height: 1.45;
+    transition:
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        background 0.18s ease;
+}
+.immersive-reply-drawer__input::placeholder {
+    color: #777785;
+}
+.immersive-reply-drawer__input:focus {
+    outline: none;
+    border-color: #7c3aed;
+    background: #181820;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.16);
 }
 .immersive-reply-drawer__list-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 1rem 0 0.6rem;
+    padding: 1.05rem 0 0.7rem;
     color: var(--text-primary);
+}
+.immersive-reply-drawer__list-header strong {
+    font-size: 0.9rem;
+    letter-spacing: 0.01em;
+}
+.immersive-reply-drawer__count {
+    min-width: 24px;
+    padding: 0.2rem 0.45rem;
+    box-sizing: border-box;
+    background: rgba(124, 58, 237, 0.16);
+    color: #c4b5fd;
+    text-align: center;
 }
 .immersive-reply-drawer__content {
     flex: 1;
     overflow-y: auto;
-    padding-right: 0.15rem;
+    min-height: 0;
+    padding: 0.1rem 0.2rem 1rem 0;
+    scrollbar-color: #3f3f50 transparent;
 }
 .immersive-reply-drawer__content .reply-list {
     margin-top: 0;
@@ -9552,27 +9592,30 @@ html.dark-mode .first-project-feed-popup__cta {
 .reply-list {
     display: flex;
     flex-direction: column;
-    gap: 0.65rem;
+    gap: 0.75rem;
     margin-top: 0.25rem;
 }
 .reply-item {
     display: flex;
-    gap: 0.6rem;
+    gap: 0.7rem;
     align-items: flex-start;
 }
 .reply-avatar {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     object-fit: cover;
-    background: #222;
+    background: #20202b;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    flex: 0 0 auto;
 }
 .reply-body {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 0.5rem 0.75rem;
+    background: #15151d;
+    border: 1px solid #292936;
+    border-radius: 4px 13px 13px 13px;
+    padding: 0.7rem 0.8rem;
     flex: 1;
+    min-width: 0;
 }
 .reply-meta {
     display: flex;
@@ -9591,12 +9634,18 @@ html.dark-mode .first-project-feed-popup__cta {
 }
 .reply-body p {
     margin: 0;
-    font-size: 0.95rem;
-    line-height: 1.3;
+    color: #e4e4ea;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
 }
 .reply-empty {
     color: var(--text-secondary);
     font-size: 0.9rem;
+    padding: 2rem 1rem;
+    border: 1px dashed #2b2b38;
+    border-radius: 12px;
+    text-align: center;
 }
 
 /* === TAGS DE CONTEXTE POUR TIMELINE === */
@@ -10357,6 +10406,110 @@ html.dark-mode .first-project-feed-popup__cta {
     }
     100% {
         background-position: -200% 0;
+    }
+}
+
+.discover-pagination-status {
+    min-height: 0;
+    margin: 0 auto;
+    max-width: 720px;
+    overflow: hidden;
+    opacity: 0;
+    transition:
+        opacity 180ms ease,
+        min-height 180ms ease,
+        margin 180ms ease;
+}
+
+.discover-pagination-status.is-visible {
+    min-height: 86px;
+    margin: 18px auto 28px;
+    opacity: 1;
+}
+
+.discover-pagination-sentinel {
+    width: 100%;
+    height: 1px;
+    pointer-events: none;
+}
+
+.discover-pagination-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 10px 0;
+}
+
+.discover-pagination-spinner {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    border: 3px solid #27272a;
+    border-top-color: #7c3aed;
+    border-radius: 50%;
+    animation: discover-pagination-spin 700ms linear infinite;
+}
+
+.discover-pagination-skeletons {
+    display: grid;
+    gap: 8px;
+    width: min(280px, 62vw);
+}
+
+.discover-pagination-skeletons span {
+    display: block;
+    height: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 999px;
+    background: rgba(39, 39, 42, 0.4);
+    animation: discover-pagination-pulse 1.2s ease-in-out infinite;
+}
+
+.discover-pagination-skeletons span:last-child {
+    width: 68%;
+}
+
+.discover-pagination-error,
+.discover-pagination-end {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 52px;
+    padding: 10px 16px;
+    box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    background: #09090b;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    text-align: center;
+}
+
+.discover-pagination-retry {
+    border: 1px solid rgba(124, 58, 237, 0.55);
+    border-radius: 8px;
+    padding: 7px 10px;
+    background: rgba(124, 58, 237, 0.14);
+    color: #c4b5fd;
+    cursor: pointer;
+    font-size: 0.78rem;
+}
+
+.discover-pagination-retry:hover {
+    background: rgba(124, 58, 237, 0.25);
+}
+
+@keyframes discover-pagination-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes discover-pagination-pulse {
+    50% {
+        opacity: 0.45;
     }
 }
 

@@ -1,4 +1,53 @@
 (function () {
+    const stripUrlProtocol = (value) =>
+        String(value || "")
+            .trim()
+            .replace(/^https?:\/\//i, "");
+    const completeHttpsUrl = (value) => {
+        const withoutProtocol = stripUrlProtocol(value);
+        return withoutProtocol ? `https://${withoutProtocol}` : "";
+    };
+
+    const CTA_OPTIONS = {
+        sales: {
+            label: "Sales & Démo",
+            buttons: [
+                "Réserver une Démo",
+                "Demander un Accès Bêta",
+                "Essayer Gratuitement",
+                "Contacter l'Équipe Sales",
+                "Découvrir l'Ecosystème",
+            ],
+        },
+        fundraising: {
+            label: "Investisseurs / Deck",
+            buttons: [
+                "Demander le Pitch Deck",
+                "Accéder aux Metrics",
+                "Contacter les Fondateurs",
+                "Espace Investisseurs",
+            ],
+        },
+        recruitment: {
+            label: "Recrutement",
+            buttons: [
+                "Rejoindre l'Équipe",
+                "Voir les Postes Ouverts",
+                "Postuler en Direct",
+                "Découvrir la Culture",
+            ],
+        },
+        community: {
+            label: "Communauté & Lien Externe",
+            buttons: [
+                "Rejoindre le Discord",
+                "Starred sur GitHub",
+                "Lire la Documentation",
+                "Rejoindre la Communauté",
+            ],
+        },
+    };
+
     function ProSettings({
         pageId,
         onClose,
@@ -40,6 +89,12 @@
             talent_interests: "",
             avatar_url: "",
             banner_url: "",
+            professional_cta: {
+                objective: "sales",
+                label: "Visiter le site officiel",
+                type: "external",
+                url: "",
+            },
         });
 
         React.useEffect(() => {
@@ -57,6 +112,11 @@
                 if (error) throw error;
 
                 const metadata = data.metadata || {};
+                const savedCta = metadata.professional_cta || {};
+                const availableCtaLabels = Object.values(CTA_OPTIONS).flatMap(
+                    (option) => option.buttons,
+                );
+                const savedLabel = savedCta.label || "Visiter le site officiel";
                 setPageData(data);
                 setFormData({
                     name: data.name || "",
@@ -64,7 +124,7 @@
                     bio: data.bio || "",
                     description: data.description || "",
                     industry: data.industry || "",
-                    website_url: data.website_url || "",
+                    website_url: stripUrlProtocol(data.website_url),
                     contact_email: metadata.contact_email || "",
                     contact_phone: metadata.contact_phone || "",
                     country: metadata.country || "",
@@ -86,6 +146,17 @@
                     talent_interests: (data.talent_interests || []).join(", "),
                     avatar_url: data.avatar_url || "",
                     banner_url: data.banner_url || "",
+                    professional_cta: {
+                        objective: savedCta.objective || "sales",
+                        label: availableCtaLabels.includes(savedLabel)
+                            ? savedLabel
+                            : "custom",
+                        custom_label: availableCtaLabels.includes(savedLabel)
+                            ? ""
+                            : savedLabel,
+                        type: savedCta.type || "external",
+                        url: stripUrlProtocol(savedCta.url || data.website_url),
+                    },
                 });
             } catch (err) {
                 console.error("Error fetching pro page:", err);
@@ -102,9 +173,11 @@
 
         const handleInputChange = (e) => {
             const { name, value, type, checked } = e.target;
+            const nextValue =
+                name === "website_url" ? stripUrlProtocol(value) : value;
             setFormData((prev) => ({
                 ...prev,
-                [name]: type === "checkbox" ? checked : value,
+                [name]: type === "checkbox" ? checked : nextValue,
             }));
             if (name === "slug") {
                 setSlugError("");
@@ -116,6 +189,17 @@
             setFormData((prev) => ({
                 ...prev,
                 social_links: { ...prev.social_links, [name]: value },
+            }));
+        };
+
+        const handleCtaChange = (e) => {
+            const { name, value } = e.target;
+            setFormData((prev) => ({
+                ...prev,
+                professional_cta: {
+                    ...prev.professional_cta,
+                    [name]: name === "url" ? stripUrlProtocol(value) : value,
+                },
             }));
         };
 
@@ -187,7 +271,7 @@
                     bio: formData.bio,
                     description: formData.description,
                     industry: formData.industry,
-                    website_url: formData.website_url,
+                    website_url: completeHttpsUrl(formData.website_url),
                     social_links: formData.social_links,
                     hiring_needs: hiringNeedsArr,
                     talent_interests: talentInterestsArr,
@@ -205,9 +289,19 @@
                         privacy_comments: formData.privacy_comments,
                         privacy_messages: formData.privacy_messages,
                         allow_recruitment: formData.allow_recruitment,
+                        professional_cta: {
+                            ...formData.professional_cta,
+                            label:
+                                formData.professional_cta.label === "custom"
+                                    ? formData.professional_cta.custom_label?.trim()
+                                    : formData.professional_cta.label,
+                            url: completeHttpsUrl(
+                                formData.professional_cta.url,
+                            ),
+                        },
                     },
                     updated_at: new Date().toISOString(),
-                };
+                }; 
 
                 const { data, error } = await window.supabase
                     .from("professional_pages")
@@ -502,6 +596,114 @@
                                     className: "form-input",
                                 }),
                             ]),
+                            el("label", { className: "form-group" }, [
+                                el("span", null, "Objectif du bouton d'action"),
+                                el(
+                                    "select",
+                                    {
+                                        name: "objective",
+                                        value: formData.professional_cta
+                                            .objective,
+                                        onChange: handleCtaChange,
+                                        className: "form-input",
+                                    },
+                                    Object.entries(CTA_OPTIONS).map(
+                                        ([value, option]) =>
+                                            el(
+                                                "option",
+                                                { key: value, value },
+                                                option.label,
+                                            ),
+                                    ),
+                                ),
+                            ]),
+                            el("label", { className: "form-group" }, [
+                                el("span", null, "Intitulé du bouton"),
+                                el(
+                                    "select",
+                                    {
+                                        name: "label",
+                                        value: formData.professional_cta.label,
+                                        onChange: handleCtaChange,
+                                        className: "form-input",
+                                    },
+                                    [
+                                        ...Object.values(CTA_OPTIONS)
+                                            .flatMap((option) => option.buttons)
+                                            .map((label) =>
+                                                el(
+                                                    "option",
+                                                    {
+                                                        key: label,
+                                                        value: label,
+                                                    },
+                                                    label,
+                                                ),
+                                            ),
+                                        el(
+                                            "option",
+                                            { value: "custom", key: "custom" },
+                                            "Texte personnalisé",
+                                        ),
+                                    ],
+                                ),
+                            ]),
+                            formData.professional_cta.label === "custom"
+                                ? el("label", { className: "form-group" }, [
+                                      el(
+                                          "span",
+                                          null,
+                                          "Texte personnalisé (25 caractères max)",
+                                      ),
+                                      el("input", {
+                                          name: "custom_label",
+                                          maxLength: 25,
+                                          value:
+                                              formData.professional_cta
+                                                  .custom_label || "",
+                                          onChange: handleCtaChange,
+                                          className: "form-input",
+                                      }),
+                                  ])
+                                : null,
+                            el("label", { className: "form-group" }, [
+                                el("span", null, "Destination"),
+                                el(
+                                    "select",
+                                    {
+                                        name: "type",
+                                        value: formData.professional_cta.type,
+                                        onChange: handleCtaChange,
+                                        className: "form-input",
+                                    },
+                                    [
+                                        el(
+                                            "option",
+                                            { value: "external" },
+                                            "URL externe (Calendly, site, ATS...)",
+                                        ),
+                                        el(
+                                            "option",
+                                            { value: "native" },
+                                            "Capture de contact native XERA1",
+                                        ),
+                                    ],
+                                ),
+                            ]),
+                            formData.professional_cta.type === "external"
+                                ? el("label", { className: "form-group" }, [
+                                      el("span", null, "URL de destination"),
+                                      el("input", {
+                                          name: "url",
+                                          type: "url",
+                                          value: formData.professional_cta.url,
+                                          onChange: handleCtaChange,
+                                          placeholder:
+                                              "https://calendly.com/...",
+                                          className: "form-input",
+                                      }),
+                                  ])
+                                : null,
                             el("label", { className: "form-group" }, [
                                 el("span", null, "Email de contact"),
                                 el("input", {

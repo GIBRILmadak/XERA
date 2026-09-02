@@ -5,7 +5,156 @@
  * Version Onboarding Interactif XXL - Haute Visibilité
  */
 
+const PROFESSIONAL_CTA_OPTIONS = {
+    sales: {
+        label: "Sales & Démo",
+        buttons: [
+            "Réserver une Démo",
+            "Demander un Accès Bêta",
+            "Essayer Gratuitement",
+            "Contacter l'Équipe",
+            "Découvrir l'Ecosystème",
+        ],
+    },
+    fundraising: {
+        label: "Investisseurs / Deck",
+        buttons: [
+            "Demander le Pitch Deck",
+            "Accéder aux Metrics",
+            "Contacter les Fondateurs",
+            "Espace Investisseurs",
+        ],
+    },
+    recruitment: {
+        label: "Recrutement",
+        buttons: [
+            "Rejoindre l'Équipe",
+            "Voir les Postes Ouverts",
+            "Postuler en Direct",
+            "Découvrir la Culture",
+        ],
+    },
+    community: {
+        label: "Communauté & Lien Externe",
+        buttons: [
+            "Rejoindre le Discord",
+            "Starred sur GitHub",
+            "Lire la Documentation",
+            "Rejoindre la Communauté",
+        ],
+    },
+};
+
+function stripUrlProtocol(value) {
+    return String(value || "")
+        .trim()
+        .replace(/^https?:\/\//i, "");
+}
+
+function completeHttpsUrl(value) {
+    const withoutProtocol = stripUrlProtocol(value);
+    return withoutProtocol ? `https://${withoutProtocol}` : "";
+}
+
+function getProfessionalCta(page) {
+    const cta = page?.metadata?.professional_cta || {};
+    const rawUrl = cta.url || page?.website_url || "";
+    const externalUrl =
+        rawUrl && !/^https?:\/\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
+    return {
+        objective: cta.objective || "sales",
+        label: cta.label || "Visiter le site officiel",
+        type: cta.type || "external",
+        url: externalUrl,
+    };
+}
+
+function CompanyPageSkeleton() {
+    return `
+        <section class="company-page-skeleton" role="status" aria-busy="true" aria-label="Chargement de la page professionnelle">
+            <div class="company-skeleton-banner animate-pulse"></div>
+            <div class="company-skeleton-header">
+                <div class="company-skeleton-logo animate-pulse"></div>
+                <div class="company-skeleton-identity">
+                    <div class="company-skeleton-line company-skeleton-kicker animate-pulse"></div>
+                    <div class="company-skeleton-line company-skeleton-title animate-pulse"></div>
+                    <div class="company-skeleton-line company-skeleton-subtitle animate-pulse"></div>
+                    <div class="company-skeleton-actions">
+                        <div class="company-skeleton-button animate-pulse"></div>
+                        <div class="company-skeleton-button company-skeleton-button-secondary animate-pulse"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="company-skeleton-metrics">
+                <div class="company-skeleton-metric animate-pulse"></div>
+                <div class="company-skeleton-metric animate-pulse"></div>
+                <div class="company-skeleton-metric animate-pulse"></div>
+                <div class="company-skeleton-metric animate-pulse"></div>
+            </div>
+            <div class="company-skeleton-content">
+                <div class="company-skeleton-main">
+                    <div class="company-skeleton-section-heading animate-pulse"></div>
+                    <div class="company-skeleton-card animate-pulse"></div>
+                    <div class="company-skeleton-card company-skeleton-card-tall animate-pulse"></div>
+                </div>
+                <div class="company-skeleton-sidebar">
+                    <div class="company-skeleton-section-heading animate-pulse"></div>
+                    <div class="company-skeleton-card animate-pulse"></div>
+                </div>
+            </div>
+        </section>
+    `;
+}
+
+function ensureCompanyPageSkeletonStyles() {
+    if (document.getElementById("company-page-skeleton-styles")) return;
+    const style = document.createElement("style");
+    style.id = "company-page-skeleton-styles";
+    style.textContent = `
+        .company-page-skeleton {
+            width: 100%; max-width: 1240px; margin: 0 auto; padding: 28px clamp(16px, 3vw, 38px) 72px;
+            box-sizing: border-box; color: #fff; background: #09090b; overflow: hidden;
+        }
+        .company-page-skeleton > * { box-sizing: border-box; }
+        .company-skeleton-banner { height: clamp(180px, 25vw, 260px); border: 1px solid rgba(255,255,255,.05); border-radius: 24px 24px 0 0; background: #13131a; }
+        .company-skeleton-header { display: grid; grid-template-columns: 126px minmax(0, 1fr); gap: 22px; align-items: end; min-height: 174px; padding: 0 30px 24px; background: #13131a; border: 1px solid rgba(255,255,255,.05); border-top: 0; }
+        .company-skeleton-logo { width: 126px; height: 126px; margin-top: -62px; border: 5px solid #13131a; border-radius: 22px; background: rgba(255,255,255,.05); }
+        .company-skeleton-identity { display: grid; gap: 9px; padding-bottom: 4px; }
+        .company-skeleton-line, .company-skeleton-button, .company-skeleton-metric, .company-skeleton-section-heading, .company-skeleton-card { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.05); }
+        .company-skeleton-kicker { width: 30%; height: 12px; border-radius: 4px; }
+        .company-skeleton-title { width: min(360px, 72%); height: 32px; border-radius: 7px; }
+        .company-skeleton-subtitle { width: 190px; height: 14px; border-radius: 5px; }
+        .company-skeleton-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 7px; }
+        .company-skeleton-button { width: 160px; height: 48px; border-radius: 16px; }
+        .company-skeleton-button-secondary { width: 130px; }
+        .company-skeleton-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0 22px; }
+        .company-skeleton-metric { height: 82px; border-radius: 14px; background: #13131a; }
+        .company-skeleton-content { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; }
+        .company-skeleton-main, .company-skeleton-sidebar { display: grid; gap: 14px; align-content: start; }
+        .company-skeleton-section-heading { width: 42%; height: 22px; border-radius: 6px; }
+        .company-skeleton-card { width: 100%; height: 150px; border-radius: 22px; background: #13131a; }
+        .company-skeleton-card-tall { height: 210px; }
+        .company-page-skeleton .animate-pulse { animation: company-skeleton-shimmer 1.7s ease-in-out infinite; }
+        @keyframes company-skeleton-shimmer { 0%, 100% { opacity: .48; } 50% { opacity: .9; } }
+        .pro-page-wrapper.pro-page-fade-in { animation: company-page-fade-in .24s ease-out both; }
+        @keyframes company-page-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 700px) {
+            .company-page-skeleton { padding: 0 0 42px; }
+            .company-skeleton-banner { height: 160px; border-radius: 0; }
+            .company-skeleton-header { grid-template-columns: 100px minmax(0, 1fr); gap: 15px; min-height: 160px; padding: 0 15px 24px; }
+            .company-skeleton-logo { width: 100px; height: 100px; margin-top: -50px; }
+            .company-skeleton-title { width: 100%; height: 26px; }
+            .company-skeleton-actions { display: none; }
+            .company-skeleton-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 15px; }
+            .company-skeleton-content { grid-template-columns: 1fr; padding: 0 15px; }
+            .company-skeleton-sidebar { display: none; }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 if (typeof window !== "undefined") {
+    window.CompanyPageSkeleton = CompanyPageSkeleton;
     window.waitForProfessionalManager =
         window.waitForProfessionalManager ||
         async function (timeoutMs = 5000) {
@@ -41,6 +190,7 @@ class XERAProfessionalManager {
         this.proPagesCache = new Map();
         this.initialStateHandled = false;
         this.initialStatePromise = null;
+        this.proPageRenderSequence = 0;
 
         // Initialiser l'état global
         window.userHasProPage = window.userHasProPage || false;
@@ -951,7 +1101,16 @@ class XERAProfessionalManager {
             talent_interests: data.talentInterests || [],
             avatar_url: data.avatarUrl,
             banner_url: data.bannerUrl,
-            website_url: data.websiteUrl || "",
+            website_url: completeHttpsUrl(data.websiteUrl || ""),
+            metadata: {
+                ...(data.metadata || {}),
+                professional_cta: {
+                    ...(data.professionalCta || {}),
+                    url: completeHttpsUrl(
+                        data.professionalCta?.url || data.websiteUrl,
+                    ),
+                },
+            },
         };
 
         console.log("Tentative de création de page avec owner_id:", ownerId);
@@ -993,7 +1152,7 @@ class XERAProfessionalManager {
                 description: updates.description,
                 avatar_url: updates.avatarUrl,
                 banner_url: updates.bannerUrl,
-                website_url: updates.websiteUrl,
+                website_url: completeHttpsUrl(updates.websiteUrl || ""),
                 hiring_needs: updates.hiringNeeds,
                 updated_at: new Date().toISOString(),
             })
@@ -1991,6 +2150,9 @@ class XERAProfessionalManager {
         window.__proPageRenderGuardKey = routeKey;
         window.__proPageRenderGuardAt = now;
 
+        const renderId = ++this.proPageRenderSequence;
+        const isCurrentRender = () => renderId === this.proPageRenderSequence;
+
         const currentPath = window.location.pathname;
         const isProfilePage =
             currentPath.includes("profile.html") ||
@@ -2039,6 +2201,8 @@ class XERAProfessionalManager {
             return;
         }
 
+        if (!isCurrentRender()) return;
+
         // Persister dans l'URL si on reste en mode SPA
         this.syncUrl({ pro: slug, explorer: null });
 
@@ -2046,7 +2210,8 @@ class XERAProfessionalManager {
             document.body.classList.add("is-pro");
         }
 
-        proContainer.innerHTML = `<div style="text-align:center; padding: 100px;"><div class="loading-spinner"></div></div>`;
+        ensureCompanyPageSkeletonStyles();
+        proContainer.innerHTML = CompanyPageSkeleton();
 
         try {
             const { data: page, error } = await this.supabase
@@ -2056,6 +2221,7 @@ class XERAProfessionalManager {
                 .single();
 
             if (error || !page) throw new Error("Page introuvable");
+            if (!isCurrentRender()) return;
 
             // Marquer la page courante pour re-rendu si on met à jour sa vérification
             try {
@@ -2108,12 +2274,16 @@ class XERAProfessionalManager {
                 if (/^(https?:|data:|blob:)/i.test(stored)) return stored;
                 const path = stored.replace(/^\/+/, "").replace(/^media\//, "");
                 try {
-                    return this.supabase.storage.from("media").getPublicUrl(path).data.publicUrl || "";
+                    return (
+                        this.supabase.storage.from("media").getPublicUrl(path)
+                            .data.publicUrl || ""
+                    );
                 } catch (_) {
                     return "";
                 }
             };
-            const avatar = toPublicMediaUrl(page.avatar_url) || "icons/enterprise.svg";
+            const avatar =
+                toPublicMediaUrl(page.avatar_url) || "icons/enterprise.svg";
             // Une bannière absente reste une surface éditoriale : aucune image externe
             // n'est ajoutée à la page professionnelle.
             // Older pages can contain either a complete Storage URL or its object
@@ -2161,6 +2331,8 @@ class XERAProfessionalManager {
                 recommendedProfiles,
                 pageProEntitlementsActive,
             );
+
+            if (!isCurrentRender()) return;
 
             // Injection des styles premium spécifiques
             const proStyleId = "pro-page-premium-styles";
@@ -2663,23 +2835,23 @@ class XERAProfessionalManager {
                         background: rgba(17,24,39,.78); border-color: rgba(255,255,255,.28);
                     }
                     #pro-page .pro-header-info {
-                        grid-template-columns: minmax(0,1fr) auto;
+                        grid-template-columns: minmax(0, 1fr) minmax(280px, .8fr);
                         justify-items: stretch;
                         align-items: end;
                         gap: 22px;
                         padding: 0 30px 24px;
                         text-align: left;
                     }
-                    #pro-page .pro-header-info > div:first-child { display: grid; grid-template-columns: 126px minmax(0,1fr); gap: 22px; align-items: end; }
+                    #pro-page .pro-header-info > div:first-child { display: grid; grid-template-columns: 126px minmax(220px,1fr); min-width: 0; gap: 22px; align-items: end; }
                     #pro-page .pro-avatar-overlap {
                         width: 126px; height: 126px; margin: -62px 0 0;
                         border: 5px solid #101624; border-radius: 22px; background: #101624;
                         box-shadow: 0 12px 28px rgba(0,0,0,.32);
                     }
-                    #pro-page .pro-main-details { padding: 0; margin: 0; text-align: left; }
-                    #pro-page .pro-industry-label { color: var(--pro-violet); font-size: .72rem; text-align: left; margin: 0 0 7px; }
+                    #pro-page .pro-main-details { min-width: 0; padding: 0; margin: 0; text-align: left; }
+                    #pro-page .pro-industry-label { color: var(--pro-violet); font-size: .72rem; text-align: left; margin: 0 0 7px; overflow-wrap: anywhere; }
                     #pro-page .pro-name-row { justify-content: flex-start; gap: 9px; margin-bottom: 6px; }
-                    #pro-page .pro-name-row h2 { color: var(--pro-ink); font-size: clamp(1.65rem, 3.4vw, 2.45rem); letter-spacing: -1.35px; }
+                    #pro-page .pro-name-row h2 { min-width: 0; color: var(--pro-ink); font-size: clamp(1.65rem, 3.4vw, 2.45rem); letter-spacing: -1.35px; overflow-wrap: anywhere; }
                     #pro-page .pro-badge-pill { border-radius: 8px; padding: 5px 9px; background: var(--pro-violet-soft); color: #5130c7; font-size: .7rem; }
                     #pro-page .pro-members-count { margin: 0; text-align: left; color: var(--pro-muted); }
                     #pro-page .pro-secondary-details {
@@ -2688,7 +2860,7 @@ class XERAProfessionalManager {
                     }
                     #pro-page .pro-interests-label { color: var(--pro-muted); text-align: left; letter-spacing: .08em; }
                     #pro-page .pro-interest-list { justify-content: flex-start; margin: 0; }
-                    #pro-page .pro-interest-chip { background: #171f30; border-color: #344057; color: #d5d9e3; border-radius: 9px; padding: 6px 9px; }
+                    #pro-page .pro-interest-chip { max-width: 100%; background: #171f30; border-color: #344057; color: #d5d9e3; border-radius: 9px; padding: 6px 9px; white-space: normal; overflow-wrap: anywhere; }
                     #pro-page .pro-interest-chip:hover { background: #282051; color: #f3efff; border-color: #6e55c7; }
                     #pro-page .pro-secondary-details > .pro-role-label { color: var(--pro-muted); }
                     #pro-page .pro-secondary-details > .pro-role-label span { color: var(--pro-ink); }
@@ -2858,7 +3030,7 @@ class XERAProfessionalManager {
             }
 
             proContainer.innerHTML = `
-                <div class="pro-page-wrapper">
+                <div class="pro-page-wrapper pro-page-fade-in">
                     <!-- HEADER -->
                     <div class="pro-header-card">
                         <div class="pro-banner-container">
@@ -2892,7 +3064,16 @@ class XERAProfessionalManager {
                         </div>
 
                         <div class="pro-actions-row">
-                            ${page.website_url ? `<a href="${page.website_url}" target="_blank" class="btn-pro-primary" style="text-decoration:none;"><i class="fas fa-globe"></i><span class="btn-pro-label-long">Visiter le site officiel</span><span class="btn-pro-label-short">Web</span></a>` : ""}
+                            ${(() => {
+                                const cta = getProfessionalCta(page);
+                                if (!cta.url && cta.type === "external")
+                                    return "";
+                                const action =
+                                    cta.type === "native"
+                                        ? `href="#" onclick="event.preventDefault(); window.openProfessionalCtaModal('${page.id}')"`
+                                        : `href="${this.escapeHtml(cta.url)}" target="_blank" rel="noopener noreferrer"`;
+                                return `<a ${action} class="btn-pro-primary" style="text-decoration:none;"><i class="fas fa-globe"></i><span class="btn-pro-label-long">${this.escapeHtml(cta.label)}</span><span class="btn-pro-label-short">Web</span></a>`;
+                            })()}
                             ${pageFollowHtml}
                             ${
                                 isOwner
@@ -3109,11 +3290,21 @@ class XERAProfessionalManager {
                 });
             }
         } catch (err) {
+            if (!isCurrentRender()) return;
+
+            document.body.classList.add("is-pro");
+            document.querySelectorAll(".page").forEach((pageSection) => {
+                pageSection.classList.toggle(
+                    "active",
+                    pageSection.id === "pro-page",
+                );
+            });
             proContainer.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">⚠️</div>
-                    <h3>${err.message}</h3>
-                    <button class="btn btn-secondary" onclick="navigateTo('discover')" style="margin-top: 20px;">Retour au Discover</button>
+                <div class="empty-state pro-page-not-found" role="alert">
+                    <div class="empty-state-icon" aria-hidden="true">!</div>
+                    <h3>Entreprise introuvable</h3>
+                    <p>Cette Page Professionnelle n'est plus disponible ou n'a pas pu être chargée.</p>
+                    <button class="btn btn-secondary" type="button" onclick="navigateTo('discover')" style="margin-top: 20px;">Retour au feed</button>
                 </div>
             `;
         }
@@ -3693,6 +3884,12 @@ class XERAProfessionalOnboarding {
             bannerUrl: "",
             hiringNeeds: [],
             websiteUrl: "",
+            professionalCta: {
+                objective: "sales",
+                label: "Réserver une Démo",
+                type: "external",
+                url: "",
+            },
         };
         this.overlay = null;
         this.tooltip = null;
@@ -4044,10 +4241,29 @@ class XERAProfessionalOnboarding {
                 content: `<input type="text" id="onboarding-interests" class="form-input" placeholder="Ex: React, AI, Design..." value="${this.data.hiringNeeds.join(", ")}">`,
             },
             {
-                title: "Lien Officiel",
-                desc: "Le point de contact principal pour votre audience.",
+                title: "Action principale",
+                desc: "Choisissez le bouton visible sur votre page professionnelle.",
                 icon: "fa-link",
-                content: `<input type="url" id="onboarding-website" class="form-input" placeholder="https://votreorganisation.com" value="${this.data.websiteUrl || ""}">`,
+                content: `<select id="onboarding-cta-objective" class="form-input">${Object.entries(
+                    PROFESSIONAL_CTA_OPTIONS,
+                )
+                    .map(
+                        ([value, option]) =>
+                            `<option value="${value}" ${this.data.professionalCta.objective === value ? "selected" : ""}>${option.label}</option>`,
+                    )
+                    .join(
+                        "",
+                    )}</select><select id="onboarding-cta-label" class="form-input">${Object.values(
+                    PROFESSIONAL_CTA_OPTIONS,
+                )
+                    .flatMap((option) => option.buttons)
+                    .map(
+                        (label) =>
+                            `<option value="${label}" ${this.data.professionalCta.label === label ? "selected" : ""}>${label}</option>`,
+                    )
+                    .join(
+                        "",
+                    )}<option value="custom">Texte personnalisé</option></select><input type="text" id="onboarding-cta-custom" class="form-input" maxlength="25" placeholder="Texte personnalisé (25 caractères max)"><select id="onboarding-cta-type" class="form-input"><option value="external" ${this.data.professionalCta.type === "external" ? "selected" : ""}>URL externe (Calendly, site, ATS...)</option><option value="native" ${this.data.professionalCta.type === "native" ? "selected" : ""}>Capture de contact native XERA1</option></select><input type="url" id="onboarding-website" class="form-input" placeholder="https://votreorganisation.com" value="${this.data.websiteUrl || ""}">`,
             },
         ];
 
@@ -4124,6 +4340,12 @@ class XERAProfessionalOnboarding {
                 }
             }
         };
+
+        if (this.currentStep === 6) {
+            document.getElementById("onboarding-website").oninput = (event) => {
+                event.target.value = stripUrlProtocol(event.target.value);
+            };
+        }
 
         if (this.currentStep === 1) {
             const searchInput = document.getElementById(
@@ -4273,9 +4495,26 @@ class XERAProfessionalOnboarding {
                 return true;
             case 6:
                 if (
-                    !document.getElementById("onboarding-website").value.trim()
+                    !document
+                        .getElementById("onboarding-website")
+                        .value.trim() &&
+                    document.getElementById("onboarding-cta-type").value ===
+                        "external"
                 ) {
                     alert("Lien officiel requis.");
+                    return false;
+                }
+                const ctaLabel =
+                    document.getElementById("onboarding-cta-label").value ===
+                    "custom"
+                        ? document
+                              .getElementById("onboarding-cta-custom")
+                              .value.trim()
+                        : document.getElementById("onboarding-cta-label").value;
+                if (!ctaLabel || ctaLabel.length > 25) {
+                    alert(
+                        "Choisissez un intitulé valide (25 caractères maximum).",
+                    );
                     return false;
                 }
                 return true;
@@ -4319,8 +4558,26 @@ class XERAProfessionalOnboarding {
                     .filter(Boolean);
                 break;
             case 6:
-                this.data.websiteUrl =
-                    document.getElementById("onboarding-website").value;
+                this.data.websiteUrl = stripUrlProtocol(
+                    document.getElementById("onboarding-website").value,
+                );
+                this.data.professionalCta = {
+                    objective: document.getElementById(
+                        "onboarding-cta-objective",
+                    ).value,
+                    label:
+                        document.getElementById("onboarding-cta-label")
+                            .value === "custom"
+                            ? document
+                                  .getElementById("onboarding-cta-custom")
+                                  .value.trim()
+                            : document.getElementById("onboarding-cta-label")
+                                  .value,
+                    type: document.getElementById("onboarding-cta-type").value,
+                    url: completeHttpsUrl(
+                        document.getElementById("onboarding-website").value,
+                    ),
+                };
                 break;
         }
     }
@@ -4356,6 +4613,48 @@ class XERAProfessionalOnboarding {
         this.tooltip = null;
     }
 }
+
+window.openProfessionalCtaModal = async function (pageId) {
+    const { data: page, error } = await window.supabase
+        .from("professional_pages")
+        .select("name, metadata")
+        .eq("id", pageId)
+        .single();
+    if (error || !page) return;
+
+    const cta = getProfessionalCta(page);
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `<div class="modal-content" style="max-width:460px;"><button type="button" class="modal-close" aria-label="Fermer">&times;</button><h3>${cta.label}</h3><p>Recevez une réponse de ${page.name}.</p><form id="professional-cta-lead-form"><input name="name" required placeholder="Nom complet" class="form-input"><input name="company" required placeholder="Entreprise / Fonds" class="form-input"><input name="email" type="email" required placeholder="Email professionnel" class="form-input"><button type="submit" class="btn-pro-primary">Envoyer ma demande</button></form></div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector(".modal-close").onclick = () => overlay.remove();
+    overlay.onclick = (event) => {
+        if (event.target === overlay) overlay.remove();
+    };
+    overlay.querySelector("form").onsubmit = async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const submit = form.querySelector("button[type=submit]");
+        submit.disabled = true;
+        const values = Object.fromEntries(new FormData(form));
+        const { error: insertError } = await window.supabase
+            .from("professional_cta_leads")
+            .insert({
+                page_id: pageId,
+                objective: cta.objective,
+                name: values.name,
+                company: values.company,
+                email: values.email,
+            });
+        if (insertError) {
+            submit.disabled = false;
+            window.showToast?.("Impossible d'envoyer la demande.", "error");
+            return;
+        }
+        window.showToast?.("Votre demande a bien été envoyée !");
+        overlay.remove();
+    };
+};
 
 // Export pour usage global avec initialisation automatique
 if (typeof window !== "undefined") {

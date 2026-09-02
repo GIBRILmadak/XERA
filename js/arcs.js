@@ -1101,7 +1101,7 @@ async function loadUserArcs(userId) {
         arcsSection.className = "arcs-section";
         // Insert after profile hero (banner/avatar) but before timeline
         const timeline = document.querySelector(".timeline");
-        if (timeline) {
+        if (timeline && timeline.parentNode === container) {
             container.insertBefore(arcsSection, timeline);
         } else {
             container.appendChild(arcsSection);

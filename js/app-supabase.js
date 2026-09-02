@@ -118,6 +118,9 @@ let discoverPaginationState = {
     hasMore: false,
     isLoading: false,
     intersectionObserver: null,
+    sentinel: null,
+    status: null,
+    error: null,
 };
 
 /**
@@ -496,13 +499,12 @@ async function getUserEngagementTotals(userId) {
     try {
         const { data, error } = await supabase
             .from("content")
-            .select("views")
+            .select("views, page_id")
             .eq("user_id", userId);
         if (error) throw error;
-        const totalViews = (data || []).reduce(
-            (sum, item) => sum + (Number(item.views) || 0),
-            0,
-        );
+        const totalViews = (data || [])
+            .filter((item) => !item.page_id)
+            .reduce((sum, item) => sum + (Number(item.views) || 0), 0);
         return { totalViews };
     } catch (error) {
         console.error("getUserEngagementTotals error:", error);
@@ -4203,32 +4205,10 @@ function applyImmersiveReplyDrawerState(contentId, isOpen) {
 function toggleProfileAnnouncementReplies(contentId, forceOpen = null) {
     if (!contentId) return;
 
-    const immersiveOpen =
-        Boolean(document.getElementById("immersive-overlay")) &&
-        document.getElementById("immersive-overlay")?.style.display === "block";
-
-    if (immersiveOpen || window.__immersiveOpen) {
-        const drawer = ensureImmersiveReplyDrawer();
-        const isOpened = drawer.classList.contains("is-open");
-        const shouldOpen =
-            typeof forceOpen === "boolean" ? forceOpen : !isOpened;
-        applyImmersiveReplyDrawerState(contentId, shouldOpen);
-        if (shouldOpen) {
-            refreshRepliesUI(contentId);
-        }
-        return;
-    }
-
-    const panel = document.querySelector(
-        getReplySelector(contentId, "data-profile-reply-panel"),
-    );
-    const shouldOpen =
-        typeof forceOpen === "boolean"
-            ? forceOpen
-            : panel
-              ? panel.hidden
-              : true;
-    setAnnouncementReplyPanelState(contentId, shouldOpen);
+    const drawer = ensureImmersiveReplyDrawer();
+    const isOpened = drawer.classList.contains("is-open");
+    const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : !isOpened;
+    applyImmersiveReplyDrawerState(contentId, shouldOpen);
     if (shouldOpen) refreshRepliesUI(contentId);
 }
 
@@ -4376,9 +4356,9 @@ function openReplyPrompt(contentId) {
 // Récupérer le contenu d'un utilisateur
 function getUserContentLocal(userId) {
     const contents = userContents[userId] || [];
-    const visibleContents = isSuperAdmin()
-        ? contents
-        : contents.filter((c) => !c.isDeleted);
+    const visibleContents = contents.filter(
+        (c) => !c.pageId && !c.page_id && (isSuperAdmin() || !c.isDeleted),
+    );
     // Sort by createdAt descending (newest first) instead of day_number
     // This ensures cards show the actual latest upload
     return visibleContents.sort(
@@ -10274,31 +10254,6 @@ function renderProfileUpdateCard(
     const replyInputId = replyContentId
         ? `profile-reply-input-${replyContentId}`
         : "";
-    const replyCount =
-        canReply && replyContentId ? getReplyCount(replyContentId) : 0;
-    const viewerCanEncourage =
-        !!content.contentId &&
-        currentUserId &&
-        currentUserId !== content.userId;
-    const isEncouraged = encouragedContentIds.has(content.contentId);
-    const courageIcon = isEncouraged
-        ? "icons/courage-green.svg"
-        : "icons/courage-blue.svg";
-    const encourageButtonHtml = viewerCanEncourage
-        ? `
-            <button class="btn btn-secondary courage-btn profile-encourage-btn ${isEncouraged ? "encouraged" : ""}" data-content-id="${content.contentId}" onclick="event.stopPropagation(); toggleCourage('${content.contentId}', this)">
-                <img src="${courageIcon}" width="16" height="16" alt="">
-                <span>Encourager</span>
-                <span class="courage-count profile-encourage-count" data-count="${Number(content.encouragementsCount) || 0}" title="${(Number(content.encouragementsCount) || 0).toLocaleString("fr-FR")}">${formatCompactCount(content.encouragementsCount || 0)}</span>
-            </button>
-`
-        : `
-            <div class="profile-update-stat-pill">
-                <img src="icons/courage-blue.svg" width="16" height="16" alt="">
-                <span>${formatCompactCount(content.encouragementsCount || 0)} encouragement${Number(content.encouragementsCount || 0) > 1 ? "s" : ""}</span>
-            </div>
-`;
-
     const replyPanelHtml =
         canReply && replyContentId
             ? `
@@ -10307,21 +10262,6 @@ function renderProfileUpdateCard(
                     <span data-reply-toggle-label="${escapeHtml(replyContentId)}">Répondre</span>
                     <span class="reply-count" data-reply-count="${escapeHtml(replyContentId)}">${replyCount}</span>
                 </button>
-                <div class="profile-reply-panel" data-profile-reply-panel="${escapeHtml(replyContentId)}" aria-hidden="true" hidden>
-                    <div class="reply-panel-head">
-                        <strong>Réponses</strong>
-                        <button type="button" class="reply-close-btn" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)}, false)">Fermer</button>
-                    </div>
-                    <div class="reply-inline">
-                        <textarea id="${escapeHtml(replyInputId)}" class="reply-input" placeholder="Votre réponse..."></textarea>
-                        <div class="reply-actions">
-                            <button class="btn-primary" onclick="event.stopPropagation(); submitAnnouncementReply(${inlineJsString(replyContentId)}, this, ${inlineJsString(replyOwnerId)}, ${inlineJsString(content.title || content.description || "votre post")})">Envoyer</button>
-                        </div>
-                    </div>
-                    <div data-replies-container="${escapeHtml(replyContentId)}">
-                        ${renderAnnouncementReplies(replyContentId)}
-                    </div>
-                </div>
             </div>
 `
             : "";
@@ -10868,6 +10808,11 @@ function setDiscoverFilter(filter = "all", { render = true } = {}) {
     discoverPaginationState.allItems = [];
     discoverPaginationState.currentPage = 0;
     discoverPaginationState.hasMore = false;
+    discoverPaginationState.error = null;
+    discoverPaginationState.sentinel?.remove();
+    discoverPaginationState.status?.remove();
+    discoverPaginationState.sentinel = null;
+    discoverPaginationState.status = null;
     if (discoverPaginationState.intersectionObserver) {
         discoverPaginationState.intersectionObserver.disconnect();
         discoverPaginationState.intersectionObserver = null;
@@ -12546,6 +12491,72 @@ function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
     }
 }
 
+function ensureDiscoverPaginationUi(grid) {
+    if (!grid?.parentElement) return null;
+    const parent = grid.parentElement;
+
+    if (!discoverPaginationState.status) {
+        const status = document.createElement("div");
+        status.className = "discover-pagination-status";
+        status.setAttribute("aria-live", "polite");
+        parent.appendChild(status);
+        discoverPaginationState.status = status;
+    }
+
+    if (!discoverPaginationState.sentinel) {
+        const sentinel = document.createElement("div");
+        sentinel.className = "discover-pagination-sentinel";
+        sentinel.setAttribute("aria-hidden", "true");
+        parent.appendChild(sentinel);
+        discoverPaginationState.sentinel = sentinel;
+    }
+
+    return discoverPaginationState.status;
+}
+
+function renderDiscoverPaginationStatus(kind = "idle") {
+    const status = discoverPaginationState.status;
+    if (!status) return;
+
+    if (kind === "loading") {
+        status.innerHTML = `
+            <div class="discover-pagination-loading">
+                <span class="discover-pagination-spinner" aria-hidden="true"></span>
+                <div class="discover-pagination-skeletons" aria-hidden="true">
+                    <span></span><span></span>
+                </div>
+            </div>
+        `;
+        status.classList.add("is-visible");
+        return;
+    }
+
+    if (kind === "error") {
+        status.innerHTML = `
+            <div class="discover-pagination-error">
+                <span>Impossible de charger la suite du feed.</span>
+                <button type="button" class="discover-pagination-retry">Réessayer de charger</button>
+            </div>
+        `;
+        status.querySelector("button")?.addEventListener("click", () => {
+            discoverPaginationState.error = null;
+            loadNextDiscoverPage();
+        });
+        status.classList.add("is-visible");
+        return;
+    }
+
+    if (kind === "end") {
+        status.innerHTML =
+            '<div class="discover-pagination-end">Vous êtes à jour — Fin du feed XERA1</div>';
+        status.classList.add("is-visible");
+        return;
+    }
+
+    status.innerHTML = "";
+    status.classList.remove("is-visible");
+}
+
 /**
  * Charge et affiche les prochains éléments du feed de manière progressive
  * Ajoute 20 éléments et les charge un par un
@@ -12585,54 +12596,71 @@ function showFirstProjectFeedPopup() {
         });
 }
 
-function loadNextDiscoverPage() {
-    if (discoverPaginationState.isLoading || !discoverPaginationState.hasMore)
+async function loadNextDiscoverPage() {
+    if (
+        discoverPaginationState.isLoading ||
+        !discoverPaginationState.hasMore ||
+        discoverPaginationState.error
+    )
         return;
 
-    discoverPaginationState.isLoading = true;
     const grid = document.querySelector(".discover-grid");
     if (!grid) return;
 
-    const startIdx =
-        (discoverPaginationState.currentPage + 1) * DISCOVER_ITEMS_PER_PAGE;
-    const endIdx = Math.min(
-        startIdx + DISCOVER_ITEMS_PER_PAGE,
-        discoverPaginationState.allItems.length,
-    );
+    discoverPaginationState.isLoading = true;
+    const status = ensureDiscoverPaginationUi(grid);
+    if (!status) {
+        discoverPaginationState.isLoading = false;
+        return;
+    }
+    renderDiscoverPaginationStatus("loading");
 
-    const itemsToAdd = discoverPaginationState.allItems.slice(startIdx, endIdx);
-    const fragment = document.createDocumentFragment();
+    try {
+        const startIdx =
+            (discoverPaginationState.currentPage + 1) * DISCOVER_ITEMS_PER_PAGE;
+        const endIdx = Math.min(
+            startIdx + DISCOVER_ITEMS_PER_PAGE,
+            discoverPaginationState.allItems.length,
+        );
+        const itemsToAdd = discoverPaginationState.allItems.slice(
+            startIdx,
+            endIdx,
+        );
+        const fragment = document.createDocumentFragment();
 
-    // Ajouter les nouveaux éléments au DOM
-    itemsToAdd.forEach((item, order) => {
-        const { html, key, contentId, type, rowSize, rowPosition } = item;
-        setTimeout(() => {
+        itemsToAdd.forEach((item) => {
+            const { html, key, contentId, type, rowSize, rowPosition } = item;
             const node = createDiscoverElement(html, key, contentId, {
                 markAsNew: false,
             });
             if (node && type) node.dataset.type = type;
             if (node && rowSize) node.dataset.rowSize = rowSize;
             if (node && rowPosition) node.dataset.rowPosition = rowPosition;
-            if (node) grid.appendChild(node);
+            if (node) fragment.appendChild(node);
+        });
 
-            // Initialiser les interactions pour le nouvel élément
-            if (typeof setupDiscoverVideoInteractions === "function") {
-                setupDiscoverVideoInteractions();
-            }
-            if (typeof initDiscoverMoodTracking === "function") {
-                initDiscoverMoodTracking();
-            }
-        }, order * 80); // Charger les éléments un par un avec 80ms d'intervalle
-    });
+        grid.appendChild(fragment);
+        discoverPaginationState.currentPage++;
+        discoverPaginationState.hasMore =
+            endIdx < discoverPaginationState.allItems.length;
+        discoverPaginationState.error = null;
 
-    discoverPaginationState.currentPage++;
-    discoverPaginationState.hasMore =
-        endIdx < discoverPaginationState.allItems.length;
-    discoverPaginationState.isLoading = false;
+        setupDiscoverVideoInteractions();
+        initDiscoverMoodTracking();
 
-    // Recréer l'intersection observer après avoir ajouté les éléments
-    if (discoverPaginationState.hasMore) {
-        setupDiscoverPaginationObserver();
+        if (discoverPaginationState.hasMore) {
+            renderDiscoverPaginationStatus("idle");
+            setupDiscoverPaginationObserver();
+        } else {
+            renderDiscoverPaginationStatus("end");
+            discoverPaginationState.intersectionObserver?.disconnect();
+        }
+    } catch (error) {
+        console.error("Erreur pagination discover:", error);
+        discoverPaginationState.error = error;
+        renderDiscoverPaginationStatus("error");
+    } finally {
+        discoverPaginationState.isLoading = false;
     }
 }
 
@@ -12642,6 +12670,8 @@ function loadNextDiscoverPage() {
 function setupDiscoverPaginationObserver() {
     const grid = document.querySelector(".discover-grid");
     if (!grid) return;
+
+    ensureDiscoverPaginationUi(grid);
 
     // Nettoyer l'ancien observateur
     if (discoverPaginationState.intersectionObserver) {
@@ -12671,9 +12701,10 @@ function setupDiscoverPaginationObserver() {
     );
 
     // Observer le dernier élément du grid
-    const lastChild = grid.lastElementChild;
-    if (lastChild) {
-        discoverPaginationState.intersectionObserver.observe(lastChild);
+    if (discoverPaginationState.sentinel) {
+        discoverPaginationState.intersectionObserver.observe(
+            discoverPaginationState.sentinel,
+        );
     }
 }
 
@@ -12933,13 +12964,17 @@ async function renderDiscoverGrid() {
         // Afficher seulement les 20 premiers éléments
         const initialItems = renderedItems.slice(0, DISCOVER_ITEMS_PER_PAGE);
         reconcileDiscoverGrid(grid, initialItems, waitMessage);
+        ensureDiscoverPaginationUi(grid);
 
         setupDiscoverVideoInteractions();
         initDiscoverMoodTracking();
 
         // Initialiser l'observateur pour la pagination
         if (discoverPaginationState.hasMore) {
+            renderDiscoverPaginationStatus("idle");
             setupDiscoverPaginationObserver();
+        } else {
+            renderDiscoverPaginationStatus("end");
         }
         return;
     }
@@ -14221,21 +14256,6 @@ async function renderImmersiveFeed(contents) {
                         <span data-reply-toggle-label="${escapeHtml(replyContentId)}">Répondre</span>
                         <span class="reply-count" data-reply-count="${escapeHtml(replyContentId)}">${replyCount}</span>
                     </button>
-                    <div class="profile-reply-panel" data-profile-reply-panel="${escapeHtml(replyContentId)}" aria-hidden="true" hidden>
-                        <div class="reply-panel-head">
-                            <strong>Réponses</strong>
-                            <button type="button" class="reply-close-btn" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)}, false)">Fermer</button>
-                        </div>
-                        <div class="reply-inline">
-                            <textarea id="${escapeHtml(replyInputId)}" class="reply-input" placeholder="Votre réponse..."></textarea>
-                            <div class="reply-actions">
-                                <button class="btn-primary" onclick="event.stopPropagation(); submitAnnouncementReply(${inlineJsString(replyContentId)}, this, ${inlineJsString(content.userId || "")}, ${inlineJsString(content.title || content.description || "votre publication")})">Envoyer</button>
-                            </div>
-                        </div>
-                        <div data-replies-container="${escapeHtml(replyContentId)}">
-                            ${renderAnnouncementReplies(replyContentId)}
-                        </div>
-                    </div>
                 </div>
             `
                     : "";
@@ -14283,7 +14303,8 @@ async function renderImmersiveFeed(contents) {
                         </div>
                         
                         <div class="immersive-description-wrapper" data-content-id="${content.contentId}">
-                            <p class="immersive-description" onclick="event.stopPropagation(); expandImmersiveDescription('${content.contentId}', ${inlineJsString(fullDescription)})">${immersiveDescription}</p>
+                            <p class="immersive-description" onclick="event.stopPropagation(); expandImmersiveDescription('${content.contentId}')">${renderRichDescription(immersiveDescription)}</p>
+                            ${hasMoreDescription ? `<button type="button" class="immersive-description-more" onclick="event.stopPropagation(); expandImmersiveDescription('${content.contentId}')">Lire la suite</button>` : ""}
                         </div>
                         ${moodActionsHtml}
                         ${immersiveReplyHtml}
@@ -15598,6 +15619,7 @@ async function renderProfileTimeline(userId) {
                 `,
                     )
                     .eq("arc_id", window.selectedArcId)
+                    .is("page_id", null)
                     .order("created_at", { ascending: false });
             if (arcContentsError) throw arcContentsError;
             if (arcContentsData) {
@@ -16492,6 +16514,9 @@ async function renderProfileIntoContainer(userId) {
     const isSuperAdminProfile =
         userId === "b0f9f893-1706-4721-899c-d26ad79afc86";
     const isProRoute = isPageProRoute();
+    const hasExplicitProPageSlug = Boolean(
+        new URLSearchParams(window.location.search).get("pro"),
+    );
     const isPro =
         user && (!isSuperAdminProfile || isProRoute)
             ? isProAccountType(accountType, accountSubtype)
@@ -16507,7 +16532,12 @@ async function renderProfileIntoContainer(userId) {
         } catch (e) {
             console.warn("Unable to normalize pro profile route:", e);
         }
-    } else if (user && isProRoute && isPro === false) {
+    } else if (
+        user &&
+        isProRoute &&
+        !hasExplicitProPageSlug &&
+        isPro === false
+    ) {
         try {
             window.history.replaceState(
                 {},
@@ -22512,27 +22542,8 @@ function loadAllCarouselImagesSequentially() {
 /**
  * Expand immersive description to show full text and views
  */
-function expandImmersiveDescription(contentId, fullDescription) {
-    const wrapper = document.querySelector(
-        `.immersive-description-wrapper[data-content-id="${contentId}"]`,
-    );
-
-    if (!wrapper) return;
-
-    const descriptionEl = wrapper.querySelector(".immersive-description");
-    if (!descriptionEl) return;
-
-    // Check if already expanded
-    if (descriptionEl.classList.contains("expanded")) {
-        descriptionEl.classList.remove("expanded");
-        const viewsRow = wrapper.querySelector(".expanded-views-row");
-        if (viewsRow) viewsRow.remove();
-        return;
-    }
-
-    // Expand the description
-    descriptionEl.classList.add("expanded");
-    descriptionEl.textContent = fullDescription || "Pas de description";
+function expandImmersiveDescription(contentId) {
+    showContentDetailsModal(contentId);
 }
 
 /**
@@ -22596,46 +22607,44 @@ function showContentDetailsModal(contentId, contentTitle) {
             ? `<div class="stat-item"><span class="stat-label">Jour</span><span class="stat-value">${content.dayNumber}</span></div>`
             : "";
 
-    // Create modal HTML
+    const page =
+        content.pageId &&
+        window.professionalManager?.proPagesCache?.get(content.pageId);
+    const authorName = page?.name || contentUserName;
+    const authorAvatar =
+        page?.avatar_url || contentUserAvatar || "icons/logo-192x192.png";
+    const certificationBadge = page
+        ? '<span class="immersive-details-badge">Page Pro</span>'
+        : "";
+    const metadataItems = [
+        content.dayNumber ? `Jour ${content.dayNumber}` : "",
+        stateLabel,
+        `${views} vues`,
+        `${encouragements} encouragements`,
+    ].filter(Boolean);
+
+    // Create bottom-sheet HTML
     const modalHtml = `
-        <div class="content-details-modal-overlay" onclick="if(event.target === this) closeContentDetailsModal()">
-            <div class="content-details-modal" onclick="event.stopPropagation()">
-                <button class="modal-close-btn" onclick="closeContentDetailsModal()">✕</button>
+        <div class="content-details-modal-overlay immersive-details-overlay" onclick="if(event.target === this) closeContentDetailsModal()">
+            <div class="content-details-modal immersive-details-sheet" role="dialog" aria-modal="true" aria-label="Description complète" onclick="event.stopPropagation()">
+                <div class="immersive-details-handle" aria-hidden="true"></div>
+                <button class="modal-close-btn immersive-details-close" aria-label="Fermer" onclick="closeContentDetailsModal()">✕</button>
                 
                 <div class="modal-header">
                     <h2>${escapeHtml(contentTitle || content.title)}</h2>
                     <p class="modal-user">
-                        <img src="${escapeHtml(contentUserAvatar)}" alt="${escapeHtml(contentUserName)}" class="modal-user-avatar">
-                        <span>${escapeHtml(contentUserName)}</span>
+                        <img src="${escapeHtml(authorAvatar)}" alt="${escapeHtml(authorName)}" class="modal-user-avatar">
+                        <span>${escapeHtml(authorName)} ${certificationBadge}</span>
                         <span class="modal-date">${createdAt}</span>
                     </p>
                 </div>
 
                 <div class="modal-body">
-                    <p class="full-description">${fullDescription ? escapeHtml(fullDescription).replace(/\n/g, "<br>") : "<em>Pas de description</em>"}</p>
+                    <p class="full-description">${fullDescription ? renderRichDescription(fullDescription) : "<em>Pas de description</em>"}</p>
                 </div>
 
                 <div class="modal-stats">
-                    ${dayInfo}
-                    <div class="stat-item">
-                        <span class="stat-label">État</span>
-                        <span class="stat-value">${stateLabel}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Vues</span>
-                        <span class="stat-value">${views}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Encouragements</span>
-                        <span class="stat-value">${encouragements}</span>
-                    </div>
-                </div>
-
-                <div class="modal-actions">
-                    <button class="modal-btn primary" onclick="handleProfileClick('${content.userId}', null, true); closeContentDetailsModal();">
-                        Voir le profil
-                    </button>
-                    <button class="modal-btn" onclick="closeContentDetailsModal();">Fermer</button>
+                    ${metadataItems.map((item) => `<span class="immersive-details-meta-item">${escapeHtml(item)}</span>`).join("")}
                 </div>
             </div>
         </div>
@@ -22649,8 +22658,98 @@ function showContentDetailsModal(contentId, contentTitle) {
         existingModal.remove();
     }
 
-    // Inject modal
+    // Inject modal and lock the background while the sheet is open.
     document.body.insertAdjacentHTML("beforeend", modalHtml);
+    const overlay = document.querySelector(".immersive-details-overlay");
+    const sheet = overlay?.querySelector(".immersive-details-sheet");
+    if (!overlay || !sheet) return;
+
+    if (!document.getElementById("immersive-details-sheet-styles")) {
+        const style = document.createElement("style");
+        style.id = "immersive-details-sheet-styles";
+        style.textContent = `
+            .immersive-details-overlay { display:flex; align-items:flex-end; justify-content:center; padding:0; background:rgba(0,0,0,.72); backdrop-filter:blur(8px); }
+            .immersive-details-sheet { position:relative; width:min(720px, 100%); max-height:min(82vh, 760px); overflow-y:auto; overscroll-behavior:contain; background:#09090b; border:1px solid rgba(255,255,255,.1); border-bottom:0; border-radius:24px 24px 0 0; padding:18px 24px 28px; transform:translateY(100%); opacity:.7; animation:immersive-sheet-in .28s cubic-bezier(.22,1,.36,1) forwards; touch-action:pan-y; }
+            .immersive-details-handle { width:48px; height:4px; margin:0 auto 14px; border-radius:999px; background:#3f3f46; }
+            .immersive-details-close { top:14px; right:16px; }
+            .immersive-details-badge { display:inline-block; margin-left:6px; padding:3px 7px; border-radius:999px; background:#2e1065; color:#c4b5fd; font-size:.7rem; }
+            .immersive-details-sheet .full-description { line-height:1.75; white-space:normal; color:#e4e4e7; }
+            .immersive-details-sheet .rich-link, .immersive-details-sheet .rich-hashtag, .immersive-details-sheet .rich-mention { color:#a78bfa; }
+            .immersive-details-meta-item { display:inline-flex; margin:4px 6px 0 0; padding:6px 9px; border:1px solid rgba(255,255,255,.08); border-radius:8px; color:#a1a1aa; font-size:.78rem; }
+            @keyframes immersive-sheet-in { to { transform:translateY(0); opacity:1; } }
+            @media (min-width:721px) { .immersive-details-sheet { margin-bottom:18px; border-bottom:1px solid rgba(255,255,255,.1); border-radius:24px; } }
+        `;
+        document.head.appendChild(style);
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.dataset.immersiveDetailsOverflow = previousBodyOverflow;
+    document.body.style.overflow = "hidden";
+    let startY = 0;
+    let currentY = 0;
+    let dragging = false;
+    const dismiss = () => closeContentDetailsModal();
+    sheet.addEventListener(
+        "touchstart",
+        (event) => {
+            startY = event.touches[0].clientY;
+            currentY = startY;
+            dragging = sheet.scrollTop <= 0;
+            if (dragging) sheet.style.transition = "none";
+        },
+        { passive: true },
+    );
+    sheet.addEventListener(
+        "touchmove",
+        (event) => {
+            if (!dragging) return;
+            currentY = event.touches[0].clientY;
+            const delta = Math.max(0, currentY - startY);
+            if (delta > 0) {
+                event.preventDefault();
+                sheet.style.transform = `translateY(${delta}px)`;
+            }
+        },
+        { passive: false },
+    );
+    sheet.addEventListener(
+        "touchend",
+        () => {
+            if (!dragging) return;
+            const delta = Math.max(0, currentY - startY);
+            sheet.style.transition = "transform .22s ease, opacity .22s ease";
+            if (delta > 100) {
+                sheet.style.transform = "translateY(100%)";
+                sheet.style.opacity = "0";
+                setTimeout(dismiss, 220);
+            } else {
+                sheet.style.transform = "translateY(0)";
+            }
+            dragging = false;
+        },
+        { passive: true },
+    );
+    sheet.addEventListener(
+        "wheel",
+        (event) => {
+            if (sheet.scrollTop <= 0 && event.deltaY > 0) {
+                event.preventDefault();
+                dismiss();
+            }
+        },
+        { passive: false },
+    );
+    const handleDetailsKeydown = (event) => {
+        if (event.key === "Escape") dismiss();
+    };
+    document.addEventListener("keydown", handleDetailsKeydown);
+    overlay.addEventListener(
+        "details-closed",
+        () => {
+            document.removeEventListener("keydown", handleDetailsKeydown);
+        },
+        { once: true },
+    );
 }
 
 /**
@@ -22659,6 +22758,18 @@ function showContentDetailsModal(contentId, contentTitle) {
 function closeContentDetailsModal() {
     const modal = document.querySelector(".content-details-modal-overlay");
     if (modal) {
-        modal.remove();
+        const sheet = modal.querySelector(".immersive-details-sheet");
+        if (sheet) {
+            sheet.style.transition = "transform .2s ease, opacity .2s ease";
+            sheet.style.transform = "translateY(100%)";
+            sheet.style.opacity = "0";
+            setTimeout(() => modal.remove(), 200);
+        } else {
+            modal.remove();
+        }
+        modal.dispatchEvent(new CustomEvent("details-closed"));
+        document.body.style.overflow =
+            document.body.dataset.immersiveDetailsOverflow || "";
+        delete document.body.dataset.immersiveDetailsOverflow;
     }
 }

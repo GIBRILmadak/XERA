@@ -232,6 +232,85 @@ app.post(
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+app.post("/api/account/delete", async (req, res) => {
+    try {
+        const authorization = String(req.headers.authorization || "");
+        const token = authorization.startsWith("Bearer ")
+            ? authorization.slice("Bearer ".length).trim()
+            : "";
+        if (!token) {
+            return res
+                .status(401)
+                .json({ error: "Missing authorization token" });
+        }
+
+        const { data: authData, error: authError } =
+            await supabase.auth.getUser(token);
+        const authenticatedUser = authData?.user;
+        if (authError || !authenticatedUser?.id) {
+            return res.status(401).json({ error: "Invalid session token" });
+        }
+
+        const userId = authenticatedUser.id;
+        const requestedUserId = String(req.body?.userId || "").trim();
+        if (requestedUserId && requestedUserId !== userId) {
+            return res
+                .status(403)
+                .json({ error: "Forbidden account deletion target" });
+        }
+
+        const allowedReasons = new Set([
+            "inactive",
+            "technical",
+            "privacy",
+            "experience",
+            "other",
+        ]);
+        const reason = allowedReasons.has(String(req.body?.reason || ""))
+            ? String(req.body.reason)
+            : "other";
+        const detail = String(req.body?.detail || "")
+            .trim()
+            .slice(0, 1200);
+
+        // Keep deletion feedback separate and best-effort so it never blocks deletion.
+        try {
+            await supabase.from("feedback_inbox").insert({
+                mood: null,
+                comment:
+                    `account-delete:${reason}${detail ? ` | detail:${detail}` : ""}`.slice(
+                        0,
+                        400,
+                    ),
+                sender_user_id: userId,
+                receiver_id: null,
+            });
+        } catch (feedbackError) {
+            console.warn(
+                "Account delete feedback insert failed:",
+                feedbackError?.message || feedbackError,
+            );
+        }
+
+        const { error: profileDeleteError } = await supabase
+            .from("users")
+            .delete()
+            .eq("id", userId);
+        if (profileDeleteError) throw profileDeleteError;
+
+        const { error: authDeleteError } =
+            await supabase.auth.admin.deleteUser(userId);
+        if (authDeleteError) throw authDeleteError;
+
+        return res.json({ ok: true });
+    } catch (error) {
+        console.error("Account delete error:", error);
+        return res.status(500).json({
+            error: error?.message || "Unable to delete account",
+        });
+    }
+});
+
 // Routes OAuth
 app.use("/api/auth", (req, res, next) => {
     return require("./oauth-handler")(req, res, next);
