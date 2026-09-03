@@ -10267,17 +10267,24 @@ function renderProfileUpdateCard(
             </div>
 `
             : "";
+    const targetContentId = content.contentId || content.id || "";
+    const safeEncouragedSet =
+        encouragedContentIds && typeof encouragedContentIds.has === "function"
+            ? encouragedContentIds
+            : new Set();
     const viewerCanEncourage =
-        !!content.contentId &&
+        !!targetContentId &&
         currentUserId &&
         currentUserId !== content.userId;
-    const isEncouraged = encouragedContentIds.has(content.contentId);
+    const isEncouraged = targetContentId
+        ? safeEncouragedSet.has(targetContentId)
+        : false;
     const courageIcon = isEncouraged
         ? "icons/courage-green.svg"
         : "icons/courage-blue.svg";
     const encourageButtonHtml = viewerCanEncourage
         ? `
-            <button class="btn btn-secondary courage-btn profile-encourage-btn ${isEncouraged ? "encouraged" : ""}" data-content-id="${content.contentId}" onclick="event.stopPropagation(); toggleCourage('${content.contentId}', this)">
+            <button class="btn btn-secondary courage-btn profile-encourage-btn ${isEncouraged ? "encouraged" : ""}" data-content-id="${escapeHtml(targetContentId)}" onclick="event.stopPropagation(); toggleCourage('${escapeHtml(targetContentId)}', this)">
                 <img src="${courageIcon}" width="16" height="16" alt="">
                 <span>Encourager</span>
                 <span class="courage-count profile-encourage-count" data-count="${Number(content.encouragementsCount) || 0}" title="${(Number(content.encouragementsCount) || 0).toLocaleString("fr-FR")}">${formatCompactCount(content.encouragementsCount || 0)}</span>
@@ -12899,9 +12906,10 @@ async function renderDiscoverGrid() {
         const content = item.content || null;
         if (!userId || !content) return "";
         const isFollowed = followedSet.has(userId);
-        const isEncouraged = content
-            ? encouragedContentIds.has(content.contentId)
-            : false;
+        const isEncouraged =
+            content && content.contentId && encouragedContentIds && typeof encouragedContentIds.has === "function"
+                ? encouragedContentIds.has(content.contentId)
+                : false;
         return renderUserCard(userId, isFollowed, isEncouraged, content, {
             isPreferred: Boolean(item.__discoverPreferred),
         });
@@ -14241,7 +14249,9 @@ async function renderImmersiveFeed(contents) {
                 mediaHtml = `<div class="immersive-text-card">${collabCornerHtml}<p>${textBody}</p></div>`;
             }
 
-            const isEncouraged = encouragedContentIds.has(content.contentId);
+            const targetContentId = content.contentId || content.id || "";
+            const safeEncouragedSet = (encouragedContentIds && typeof encouragedContentIds.has === "function") ? encouragedContentIds : new Set();
+            const isEncouraged = targetContentId ? safeEncouragedSet.has(targetContentId) : false;
             const courageIcon = isEncouraged
                 ? "icons/courage-green.svg"
                 : "icons/courage-blue.svg";
