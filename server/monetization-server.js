@@ -41,20 +41,29 @@ const {
     USD_TO_CDF_RATE = "2300",
     CALLBACK_BASE_URL = "",
     KPAY_USE_CALLBACK = "1",
-
-    KPAY_PUBLIC_KEY = process.env.KPAY_PUBLIC_KEY || "",
-    KPAY_SECRET_KEY = process.env.KPAY_SECRET_KEY || "",
-
-    KPAY_GATEWAY_MODE = process.env.KPAY_GATEWAY_MODE || "1",
-    KPAY_CHECKOUT_URL = process.env.KPAY_CHECKOUT_URL ||
-        "https://admin.kpay.site",
-    KPAY_CALLBACK_SECRET = process.env.KPAY_CALLBACK_SECRET || "",
-    KPAY_WEBHOOK_SECRET = process.env.KPAY_WEBHOOK_SECRET || "",
-    KPAY_PAYOUTS_ENABLED = process.env.KPAY_PAYOUTS_ENABLED || "0",
-    KPAY_PAYOUT_CURRENCIES = process.env.KPAY_PAYOUT_CURRENCIES || "{}",
-    SUPER_ADMIN_ID = process.env.SUPER_ADMIN_ID ||
-        "b0f9f893-1706-4721-899c-d26ad79afc86",
 } = process.env;
+
+function readEnvVar(...names) {
+    for (const name of names) {
+        if (!name) continue;
+        const val = process.env[name];
+        if (val !== undefined && val !== null && String(val).trim() !== "") {
+            return String(val).trim();
+        }
+    }
+    return "";
+}
+
+const KPAY_PUBLIC_KEY = readEnvVar("KPAY_PUBLIC_KEY", "CLÉ PUBLIQUE KPAY", "CLE_PUBLIQUE_KPAY", "CLE PUBLIQUE KPAY") || process.env.KPAY_PUBLIC_KEY || "";
+const KPAY_SECRET_KEY = readEnvVar("KPAY_SECRET_KEY", "CLÉ SECRÈTE KPAY", "CLE_SECRETE_KPAY", "CLE SECRETE KPAY") || process.env.KPAY_SECRET_KEY || "";
+
+const KPAY_GATEWAY_MODE = process.env.KPAY_GATEWAY_MODE || "1";
+const KPAY_CHECKOUT_URL = process.env.KPAY_CHECKOUT_URL || "https://admin.kpay.site";
+const KPAY_CALLBACK_SECRET = readEnvVar("KPAY_CALLBACK_SECRET", "KPAY_CALLBACK_SECRET") || process.env.KPAY_CALLBACK_SECRET || "";
+const KPAY_WEBHOOK_SECRET = readEnvVar("KPAY_WEBHOOK_SECRET", "SECRET DU WEBHOOK KPAY", "SECRET_DU_WEBHOOK_KPAY", "SECRET WEBHOOK KPAY") || process.env.KPAY_WEBHOOK_SECRET || "";
+const KPAY_PAYOUTS_ENABLED = readEnvVar("KPAY_PAYOUTS_ENABLED", "KPAY_PAYOUTS_ACTIVÉ", "KPAY_PAYOUTS_ACTIVE") || process.env.KPAY_PAYOUTS_ENABLED || "0";
+const KPAY_PAYOUT_CURRENCIES = readEnvVar("KPAY_PAYOUT_CURRENCIES") || process.env.KPAY_PAYOUT_CURRENCIES || "{}";
+const SUPER_ADMIN_ID = process.env.SUPER_ADMIN_ID || "b0f9f893-1706-4721-899c-d26ad79afc86";
 
 // Validate configuration for production
 const isProduction =
