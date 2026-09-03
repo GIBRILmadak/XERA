@@ -3,9 +3,7 @@ const {
     normalizeC2PAInspectionResult,
     extractAIFlagFromContent,
 } = require("../js/c2pa-utils.js");
-const {
-    resolvePageProMessageTarget,
-} = require("../js/pro-message-targets.js");
+const { resolvePageProMessageTarget } = require("../js/pro-message-targets.js");
 
 const manifestStore = {
     active_manifest: "manifest-1",

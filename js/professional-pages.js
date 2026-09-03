@@ -4657,13 +4657,11 @@ window.openProfessionalCtaModal = async function (pageId) {
     };
 };
 
-window.resolvePageProMessageTarget = function resolvePageProMessageTarget(page = {}) {
+window.resolvePageProMessageTarget = function resolvePageProMessageTarget(
+    page = {},
+) {
     const ownerId =
-        page.owner_id ||
-        page.ownerId ||
-        page.user_id ||
-        page.userId ||
-        null;
+        page.owner_id || page.ownerId || page.user_id || page.userId || null;
     const companySlug = page.slug || page.pageSlug || page.companySlug || null;
 
     return {
@@ -4687,16 +4685,19 @@ window.startCompanyMessageFromPage = async function startCompanyMessageFromPage(
         const targetPage = await window.supabase
             .from("professional_pages")
             .select("id, owner_id, slug, name")
-            .or(
-                pageId ? `id.eq.${pageId}` : `slug.eq.${pageSlug}`,
-            )
+            .or(pageId ? `id.eq.${pageId}` : `slug.eq.${pageSlug}`)
             .maybeSingle();
 
         const page = targetPage?.data || null;
-        const resolved = window.resolvePageProMessageTarget(page || { id: pageId, slug: pageSlug, name: pageName });
+        const resolved = window.resolvePageProMessageTarget(
+            page || { id: pageId, slug: pageSlug, name: pageName },
+        );
 
         if (!resolved.userId) {
-            window.showToast?.("Impossible d’ouvrir cette discussion.", "error");
+            window.showToast?.(
+                "Impossible d’ouvrir cette discussion.",
+                "error",
+            );
             return;
         }
 
@@ -4711,7 +4712,10 @@ window.startCompanyMessageFromPage = async function startCompanyMessageFromPage(
         window.location.href = url.toString();
     } catch (error) {
         console.error("Start company message failed:", error);
-        window.showToast?.("Conversation indisponible pour cette Page Pro.", "error");
+        window.showToast?.(
+            "Conversation indisponible pour cette Page Pro.",
+            "error",
+        );
     }
 };
 

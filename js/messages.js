@@ -1187,11 +1187,16 @@
 
         const { data, error } = await supabase
             .from("professional_pages")
-            .select("id, owner_id, slug, name, avatar_url, banner_url, description, metadata")
+            .select(
+                "id, owner_id, slug, name, avatar_url, banner_url, description, metadata",
+            )
             .in("owner_id", missing);
 
         if (error) {
-            console.warn("Professional pages lookup for messages failed:", error);
+            console.warn(
+                "Professional pages lookup for messages failed:",
+                error,
+            );
             return;
         }
 
@@ -1234,10 +1239,12 @@
         const user =
             state.usersById.get(conversation.otherUserId || "") || null;
         const companyPage =
-            conversation.otherUserId && state.companyPagesByOwnerId.has(conversation.otherUserId)
+            conversation.otherUserId &&
+            state.companyPagesByOwnerId.has(conversation.otherUserId)
                 ? state.companyPagesByOwnerId.get(conversation.otherUserId)
                 : null;
-        const pageName = companyPage?.name || conversation.otherName || "Conversation";
+        const pageName =
+            companyPage?.name || conversation.otherName || "Conversation";
         const companyAvatar = companyPage?.avatar_url
             ? companyPage.avatar_url
             : companyPage?.avatar ||
@@ -1245,8 +1252,14 @@
               "icons/enterprise.svg";
         return {
             id: conversation.otherUserId || user?.id || null,
-            name: companyPage ? pageName : user?.name || conversation.otherName || "Conversation",
-            avatar: companyPage ? companyAvatar : user?.avatar || conversation.otherAvatar || "https://placehold.co/80x80?text=%F0%9F%92%AC",
+            name: companyPage
+                ? pageName
+                : user?.name || conversation.otherName || "Conversation",
+            avatar: companyPage
+                ? companyAvatar
+                : user?.avatar ||
+                  conversation.otherAvatar ||
+                  "https://placehold.co/80x80?text=%F0%9F%92%AC",
             accountSubtype:
                 user?.account_subtype ||
                 user?.accountSubtype ||
