@@ -1124,25 +1124,48 @@ function urlBase64ToUint8Array(base64String) {
 // Envoyer l'abonnement push au backend
 async function sendSubscriptionToServer(subscription) {
     if (!currentUser || !subscription) return;
+    if (!subscription.endpoint || typeof subscription.endpoint !== "string") {
+        console.warn("Abonnement push invalide, enregistrement ignoré.");
+        return;
+    }
+
+    const requestConfig = {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            userId: currentUser.id,
+            subscription,
+            timezone: (() => {
+                try {
+                    return (
+                        Intl.DateTimeFormat().resolvedOptions().timeZone ||
+                        "UTC"
+                    );
+                } catch (e) {
+                    return "UTC";
+                }
+            })(),
+            reminderEnabled: true,
+        }),
+        credentials: "include",
+    };
+
     try {
-        let timezone = "UTC";
-        try {
-            timezone =
-                Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-        } catch (e) {
-            timezone = "UTC";
+        if (
+            requestConfig.method &&
+            requestConfig.method.toUpperCase() !== "POST"
+        ) {
+            throw new Error("Méthode HTTP invalide pour l'abonnement push.");
         }
-        await fetch(PUSH_SUBSCRIBE_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                userId: currentUser.id,
-                subscription,
-                timezone,
-                reminderEnabled: true,
-            }),
-            credentials: "include",
-        });
+
+        const response = await fetch(PUSH_SUBSCRIBE_URL, requestConfig);
+        if (!response || !response.ok) {
+            const text = await response.text().catch(() => "");
+            throw new Error(
+                text ||
+                    `HTTP ${response?.status || "inconnu"} lors de l'inscription push`,
+            );
+        }
     } catch (error) {
         console.warn("Impossible d'enregistrer l'abonnement push", error);
     }

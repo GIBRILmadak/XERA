@@ -559,6 +559,216 @@ function buildSeries(metrics, daysInMonth, liveHours = []) {
     return { success, failure, pause, live };
 }
 
+async function getAccountAnalysis(userId) {
+    const readTable = async (table, columns, configure = () => {}) => {
+        try {
+            let query = supabase.from(table).select(columns);
+            query = configure(query) || query;
+            const result = await query;
+            return result.error ? [] : result.data || [];
+        } catch (error) {
+            console.warn(`Analytics: table ${table} indisponible`, error);
+            return [];
+        }
+    };
+
+    const [
+        content,
+        followers,
+        encouragements,
+        transactions,
+        notifications,
+        sessions,
+        pages,
+    ] = await Promise.all([
+        readTable(
+            "content",
+            "id, views, type, title, description, media_url, created_at",
+            (query) => query.eq("user_id", userId),
+        ),
+        readTable("followers", "follower_id, following_id", (query) =>
+            query.eq("following_id", userId),
+        ),
+        readTable(
+            "content_encouragements",
+            "id, content_id, created_at",
+            (query) => query.eq("user_id", userId),
+        ),
+        readTable(
+            "transactions",
+            "amount_net_creator, amount_gross, type, status, created_at",
+            (query) => query.eq("to_user_id", userId),
+        ),
+        readTable("notifications", "id, type, created_at", (query) =>
+            query.eq("user_id", userId),
+        ),
+        readTable("streaming_sessions", "id, started_at, ended_at", (query) =>
+            query.eq("user_id", userId),
+        ),
+        readTable("professional_pages", "id, name, created_at", (query) =>
+            query.eq("owner_id", userId),
+        ),
+    ]);
+
+    const publishedContent = content.filter((item) => item.type !== "draft");
+    const successfulDonations = transactions.filter(
+        (item) => item.status === "succeeded" && item.type === "support",
+    );
+    const totalViews = content.reduce(
+        (sum, item) => sum + Number(item.views || 0),
+        0,
+    );
+    const totalDonations = successfulDonations.reduce(
+        (sum, item) => sum + Number(item.amount_net_creator || 0),
+        0,
+    );
+    const totalHours = sessions.reduce((sum, item) => {
+        if (!item.started_at || !item.ended_at) return sum;
+        const duration =
+            new Date(item.ended_at).getTime() -
+            new Date(item.started_at).getTime();
+        return duration > 0 ? sum + duration / 3600000 : sum;
+    }, 0);
+    const activeDays = new Set(
+        content
+            .map((item) => String(item.created_at || "").slice(0, 10))
+            .filter(Boolean),
+    ).size;
+    const mediaContent = content.filter((item) => getAnalyticsMedia(item));
+    const topContent = [...mediaContent]
+        .sort((a, b) => Number(b.views || 0) - Number(a.views || 0))
+        .slice(0, 5);
+    const maxViews = Math.max(
+        ...topContent.map((item) => Number(item.views || 0)),
+        1,
+    );
+
+    return {
+        followers: followers.length,
+        contentCount: publishedContent.length,
+        totalViews,
+        averageViews: publishedContent.length
+            ? Math.round(totalViews / publishedContent.length)
+            : 0,
+        encouragements: encouragements.length,
+        donations: totalDonations,
+        donationCount: successfulDonations.length,
+        notifications: notifications.length,
+        liveSessions: sessions.length,
+        liveHours: Math.round(totalHours * 10) / 10,
+        professionalPages: pages.length,
+        activeDays,
+        topContent: topContent.map((item) => ({
+            ...item,
+            percent: Math.round((Number(item.views || 0) / maxViews) * 100),
+        })),
+    };
+}
+
+function getAnalyticsMedia(content) {
+    if (!content) return null;
+    const mediaUrls = Array.isArray(content.media_urls)
+        ? content.media_urls
+        : typeof content.media_urls === "string"
+          ? (() => {
+                try {
+                    const parsed = JSON.parse(content.media_urls);
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch (error) {
+                    return [];
+                }
+            })()
+          : [];
+    const url = mediaUrls.find(Boolean) || content.media_url || "";
+    if (!url && !content.thumbnail_url) return null;
+    return {
+        url: url || content.thumbnail_url,
+        thumbnail: content.thumbnail_url || url,
+        isVideo: /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(url),
+    };
+}
+
+function renderAccountAnalysis(analysis, containerId = "analytics-dashboard") {
+    const dashboard = document.getElementById(containerId);
+    if (!dashboard) return;
+    const shell = dashboard.querySelector(".analytics-prestige-container");
+    if (!shell) return;
+    const formatNumber = (value) => Number(value || 0).toLocaleString("fr-FR");
+    const formatCurrency = (value) =>
+        new Intl.NumberFormat("fr-FR", {
+            style: "currency",
+            currency: "USD",
+        }).format(value || 0);
+    const topContent = analysis.topContent.length
+        ? analysis.topContent
+              .map((item, index) => {
+                  const media = getAnalyticsMedia(item);
+                  const mediaHtml = media.isVideo
+                      ? `<video class="account-content-media" src="${escapeAnalyticsHtml(media.url)}" poster="${escapeAnalyticsHtml(media.thumbnail)}" muted playsinline preload="metadata"></video>`
+                      : `<img class="account-content-media" src="${escapeAnalyticsHtml(media.url)}" alt="${escapeAnalyticsHtml(item.title || "Contenu populaire")}" loading="lazy" decoding="async">`;
+                  return `
+            <article class="account-top-content-card">
+                <div class="account-content-media-wrap">
+                    ${mediaHtml}
+                    <span class="account-content-rank">0${index + 1}</span>
+                    <span class="account-content-type">${escapeAnalyticsHtml(item.type || "media")}</span>
+                </div>
+                <div class="account-top-content-card-copy">
+                    <strong>${escapeAnalyticsHtml(item.title || item.description || "Contenu sans titre")}</strong>
+                    <span>${formatNumber(item.views)} vues</span>
+                    <span class="account-content-bar"><i style="width:${item.percent}%"></i></span>
+                </div>
+            </article>`;
+              })
+              .join("")
+        : `<p class="account-empty-state">Publiez du contenu pour faire apparaître vos meilleures performances.</p>`;
+
+    let section = dashboard.querySelector(".account-analysis-section");
+    if (!section) {
+        section = document.createElement("section");
+        section.className = "account-analysis-section";
+        const momentumGrid = shell.querySelector(".momentum-grid");
+        shell.insertBefore(section, momentumGrid || shell.firstChild);
+    }
+    section.innerHTML = `
+        <div class="account-analysis-heading">
+            <div><span class="analytics-eyebrow">Vue d'ensemble</span><h2>La santé de votre compte</h2><p>Une lecture complète de votre activité, votre audience et votre impact.</p></div>
+            <span class="account-analysis-live"><i></i> Données du compte</span>
+        </div>
+        <div class="account-kpi-grid">
+            <article class="account-kpi account-kpi-coral"><span class="account-kpi-icon">◒</span><div><span>Audience</span><strong>${formatNumber(analysis.followers)}</strong><small>abonnés</small></div></article>
+            <article class="account-kpi account-kpi-blue"><span class="account-kpi-icon">◈</span><div><span>Portée cumulée</span><strong>${formatNumber(analysis.totalViews)}</strong><small>${formatNumber(analysis.averageViews)} vues / publication</small></div></article>
+            <article class="account-kpi account-kpi-green"><span class="account-kpi-icon">♥</span><div><span>Dons reçus</span><strong>${formatCurrency(analysis.donations)}</strong><small>${formatNumber(analysis.donationCount)} soutien${analysis.donationCount !== 1 ? "s" : ""}</small></div></article>
+            <article class="account-kpi account-kpi-ink"><span class="account-kpi-icon">↗</span><div><span>Régularité</span><strong>${formatNumber(analysis.activeDays)}</strong><small>jours actifs détectés</small></div></article>
+        </div>
+        <div class="account-analysis-columns">
+            <article class="account-insight-panel account-breakdown-panel"><div class="account-panel-heading"><div><span class="account-panel-label">Écosystème</span><h3>Les signaux de votre présence</h3></div><span class="account-panel-total">${formatNumber(analysis.contentCount)} contenus</span></div>
+                <div class="account-breakdown-list">
+                    <div><span><b class="signal-dot signal-coral"></b>Publications</span><strong>${formatNumber(analysis.contentCount)}</strong></div>
+                    <div><span><b class="signal-dot signal-blue"></b>Encouragements donnés</span><strong>${formatNumber(analysis.encouragements)}</strong></div>
+                    <div><span><b class="signal-dot signal-green"></b>Sessions live</span><strong>${formatNumber(analysis.liveSessions)} <small>${analysis.liveHours} h</small></strong></div>
+                    <div><span><b class="signal-dot signal-ink"></b>Pages professionnelles</span><strong>${formatNumber(analysis.professionalPages)}</strong></div>
+                    <div><span><b class="signal-dot signal-gold"></b>Notifications reçues</span><strong>${formatNumber(analysis.notifications)}</strong></div>
+                </div>
+            </article>
+            <article class="account-insight-panel account-top-content-panel"><div class="account-panel-heading"><div><span class="account-panel-label">Performance éditoriale</span><h3>Vos contenus les plus vus</h3></div><span class="account-panel-total">Top 5</span></div><div class="account-top-content-list">${topContent}</div></article>
+        </div>`;
+}
+
+function escapeAnalyticsHtml(value) {
+    return String(value ?? "").replace(
+        /[&<>"']/g,
+        (character) =>
+            ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+            })[character],
+    );
+}
+
 function renderDashboardShell(
     months,
     selectedKey,
@@ -848,6 +1058,8 @@ async function renderAnalyticsDashboard(user, options = {}) {
     const currentKey = monthKey(nowInfo.year, nowInfo.monthIndex);
 
     renderDashboardShell(months, currentKey, containerId);
+    const accountAnalysis = await getAccountAnalysis(userId);
+    renderAccountAnalysis(accountAnalysis, containerId);
 
     const { safeId, selectId, shareBtnId, downloadBtnId } =
         getAnalyticsDomIds(containerId);

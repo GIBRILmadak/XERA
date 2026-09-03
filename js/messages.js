@@ -19,6 +19,7 @@
         conversationsById: new Map(),
         messagesByConversation: new Map(),
         usersById: new Map(),
+        companyPagesByOwnerId: new Map(),
         seenMessageIds: new Set(),
         realtimeChannel: null,
         pollingTimer: null,
@@ -415,6 +416,25 @@
         return `<img src="${roleMeta.icon}" alt="${roleMeta.label}" title="Type de compte: ${roleMeta.label}" class="dm-role-badge dm-role-badge--${roleMeta.role}" />`;
     }
 
+    function isCompanyProfile(profile) {
+        return !!(
+            profile?.type === "company" ||
+            profile?.kind === "company" ||
+            profile?.isPage === true ||
+            profile?.pageId ||
+            profile?.companyId ||
+            profile?.slug ||
+            profile?.pageSlug ||
+            profile?.accountSubtype === "company" ||
+            profile?.account_subtype === "company"
+        );
+    }
+
+    function renderCompanyBadge(profile) {
+        if (!isCompanyProfile(profile)) return "";
+        return '<span class="dm-company-badge" title="Page professionnelle certifiée">PRO</span>';
+    }
+
     function renderNameWithBadges(profile) {
         const safeName = escapeHtml(profile?.name || "Conversation");
         const userId = profile?.id || null;
@@ -431,11 +451,32 @@
         }
 
         const roleBadgeHtml = renderRoleBadge(profile);
-        if (!roleBadgeHtml) return verificationHtml;
-        return `<span class="dm-user-inline">${verificationHtml}${roleBadgeHtml}</span>`;
+        const companyBadgeHtml = renderCompanyBadge(profile);
+        const badges = `${roleBadgeHtml || ""}${companyBadgeHtml || ""}`;
+        if (!badges) return verificationHtml;
+        return `<span class="dm-user-inline">${verificationHtml}${badges}</span>`;
     }
 
-    function buildProfileHref(userId) {
+    function buildCompanyProfileHref(profile) {
+        const slug = profile?.slug || profile?.pageSlug || profile?.companySlug;
+        if (!slug) return buildProfileHref(profile?.id || null);
+        if (typeof window.professionalManager?.renderProPage === "function") {
+            return `profile.html?pro=${encodeURIComponent(slug)}`;
+        }
+        return `profile.html?pro=${encodeURIComponent(slug)}`;
+    }
+
+    function buildProfileHref(userIdOrProfile) {
+        const profile =
+            typeof userIdOrProfile === "object" && userIdOrProfile
+                ? userIdOrProfile
+                : { id: userIdOrProfile };
+
+        if (isCompanyProfile(profile)) {
+            return buildCompanyProfileHref(profile);
+        }
+
+        const userId = profile?.id || null;
         if (typeof window.buildProfileUrl === "function") {
             return window.buildProfileUrl(userId);
         }
@@ -451,33 +492,50 @@
         return `profile?user=${encodeURIComponent(userId)}`;
     }
 
-    function openUserProfile(userId) {
-        if (!userId) return;
+    function openUserProfile(userIdOrProfile) {
+        const profile =
+            typeof userIdOrProfile === "object" && userIdOrProfile
+                ? userIdOrProfile
+                : { id: userIdOrProfile };
+        const profileHref = buildProfileHref(profile);
+        if (!profileHref) return;
         if (
             typeof window.navigateToUserProfile === "function" &&
-            document.getElementById("profile")
+            document.getElementById("profile") &&
+            !isCompanyProfile(profile)
         ) {
-            Promise.resolve(window.navigateToUserProfile(userId)).catch(
+            Promise.resolve(window.navigateToUserProfile(profile.id)).catch(
                 (error) => {
                     console.error(
                         "Navigate profile from messages failed:",
                         error,
                     );
-                    window.location.href = buildProfileHref(userId);
+                    window.location.href = profileHref;
                 },
             );
             return;
         }
-        window.location.href = buildProfileHref(userId);
+        window.location.href = profileHref;
     }
 
     function handleMessageUserLinkClick(event) {
         const link = event.target.closest("[data-message-user-link='1']");
         if (!link) return false;
         const userId = link.getAttribute("data-user-id");
-        if (!userId) return false;
+        const kind = link.getAttribute("data-profile-kind") || "";
+        const slug = link.getAttribute("data-company-slug") || "";
+        if (!userId && !slug) return false;
         event.preventDefault();
         event.stopPropagation();
+        if (kind === "company" && slug) {
+            window.location.href = buildCompanyProfileHref({
+                id: userId,
+                slug,
+                type: "company",
+                isPage: true,
+            });
+            return true;
+        }
         openUserProfile(userId);
         return true;
     }
@@ -541,28 +599,59 @@
             <div class="messages-page" id="messages-shell">
                 <aside class="threads-panel" id="threads-panel">
                     <div class="messages-head">
-                        <h3>Messages</h3>
-                        <button type="button" id="messages-refresh-btn" class="btn-ghost messages-refresh-btn">Actualiser</button>
+                        <div class="messages-head-title-wrap">
+                            <div class="messages-brand-mark">X</div>
+                            <h3>Messages</h3>
+                        </div>
+                        <button type="button" id="messages-refresh-btn" class="btn-ghost messages-refresh-btn" aria-label="Actualiser">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </button>
                     </div>
+
+                    <div class="messages-search-bar">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="search" placeholder="Rechercher des conversations" aria-label="Rechercher des conversations" />
+                    </div>
+
+                    <div class="messages-tabs" aria-label="Filtres de messages">
+                        <button type="button" class="messages-tab-btn active">Tous</button>
+                        <button type="button" class="messages-tab-btn">Non lus</button>
+                        <button type="button" class="messages-tab-btn">Projets</button>
+                    </div>
+
                     <div class="threads-list" id="threads-list"></div>
                 </aside>
+
                 <section class="chat-panel" id="chat-panel">
                     <div class="chat-header" id="chat-header">
-                        <button type="button" class="messages-back-btn" id="messages-back-btn" aria-label="Retour">←</button>
+                        <button type="button" class="messages-back-btn" id="messages-back-btn" aria-label="Retour"><i class="fa-solid fa-arrow-left"></i></button>
                         <div class="chat-header-meta">
+                            <div class="chat-user-status-row">
+                                <img src="https://placehold.co/40x40/2b2b33/fff?text=U" class="chat-header-avatar" alt="Avatar" />
+                                <span class="chat-status-dot online"></span>
+                            </div>
                             <div id="chat-header-name">Sélectionnez une conversation</div>
                             <div id="chat-header-sub"></div>
                         </div>
                         <div class="chat-header-actions" id="chat-header-actions">
-                            <button type="button" class="chat-header-action" id="chat-delete-btn" hidden>
-                                Supprimer
+                            <button type="button" class="chat-header-icon-btn" id="chat-search-btn" aria-label="Rechercher dans la discussion">
+                                <i class="fa-solid fa-magnifying-glass"></i>
                             </button>
-                            <button type="button" class="chat-header-action chat-header-action-danger" id="chat-block-btn" hidden>
-                                Bloquer
+                            <button type="button" class="chat-header-icon-btn" id="chat-profile-btn" aria-label="Profil">
+                                <i class="fa-solid fa-user"></i>
                             </button>
+                            <div class="chat-header-menu-wrap">
+                                <button type="button" class="chat-header-icon-btn" id="chat-menu-btn" aria-label="Options de discussion">
+                                    <i class="fa-solid fa-ellipsis"></i>
+                                </button>
+                                <div class="chat-header-menu" id="chat-header-menu" hidden>
+                                    <button type="button" class="chat-menu-item" id="chat-delete-btn">Supprimer la discussion</button>
+                                    <button type="button" class="chat-menu-item danger" id="chat-block-btn">Bloquer</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="chat-messages" id="chat-messages">
+                    <div class="chat-messages chat-thread-container" id="chat-messages">
                         <div class="loading-state">Choisissez une conversation pour commencer.</div>
                     </div>
                     <form class="chat-input-row" id="chat-input-form">
@@ -576,7 +665,7 @@
                             <div class="chat-attachment-preview" id="chat-attachment-preview" hidden></div>
                             <div class="chat-compose-controls">
                                 <button type="button" class="chat-attach-btn" id="chat-attach-btn" aria-label="Joindre une image ou une vidéo" title="Joindre une image ou une vidéo">
-                                    +
+                                    <i class="fa-solid fa-paperclip"></i>
                                 </button>
                                 <textarea
                                     id="chat-input"
@@ -586,7 +675,9 @@
                                     placeholder="Écrire un message..."
                                     rows="1"
                                 ></textarea>
-                                <button type="submit" class="btn-verify" id="chat-send-btn">Envoyer</button>
+                                <button type="submit" class="chat-send-btn" id="chat-send-btn" aria-label="Envoyer le message">
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                </button>
                             </div>
                             <div class="chat-compose-hint" id="chat-compose-hint">
                                 Entrée pour envoyer • Maj+Entrée pour une nouvelle ligne
@@ -679,6 +770,8 @@
         const deleteBtn = document.getElementById("chat-delete-btn");
         if (deleteBtn) {
             deleteBtn.addEventListener("click", () => {
+                const menu = document.getElementById("chat-header-menu");
+                if (menu) menu.hidden = true;
                 void handleDeleteConversationAction();
             });
         }
@@ -686,9 +779,27 @@
         const blockBtn = document.getElementById("chat-block-btn");
         if (blockBtn) {
             blockBtn.addEventListener("click", () => {
+                const menu = document.getElementById("chat-header-menu");
+                if (menu) menu.hidden = true;
                 void handleBlockUserAction();
             });
         }
+
+        const menuBtn = document.getElementById("chat-menu-btn");
+        const headerMenu = document.getElementById("chat-header-menu");
+        if (menuBtn && headerMenu) {
+            menuBtn.addEventListener("click", (event) => {
+                event.stopPropagation();
+                headerMenu.hidden = !headerMenu.hidden;
+            });
+        }
+        document.addEventListener("click", (event) => {
+            const menuWrap = document.querySelector(".chat-header-menu-wrap");
+            if (menuWrap && !menuWrap.contains(event.target)) {
+                const menu = document.getElementById("chat-header-menu");
+                if (menu) menu.hidden = true;
+            }
+        });
 
         const chat = document.getElementById("chat-messages");
         if (chat) {
@@ -966,12 +1077,17 @@
             .join("::");
     }
 
-    function buildMessageHtml(message, currentUserId, senderProfile) {
+    function buildMessageHtml(
+        message,
+        currentUserId,
+        senderProfile,
+        hideSender = false,
+    ) {
         const mine = message.sender_id === currentUserId;
         const bubbleClass = mine ? "chat-bubble mine" : "chat-bubble";
         const messageTime = formatMessageTime(message.created_at);
         const senderHtml =
-            !mine && senderProfile?.id
+            !mine && senderProfile?.id && !hideSender
                 ? `
                     <div class="chat-sender-row">
                         <a href="${escapeHtml(buildProfileHref(senderProfile.id))}" class="chat-user-link" data-message-user-link="1" data-user-id="${escapeHtml(senderProfile.id)}">
@@ -1063,6 +1179,29 @@
         });
     }
 
+    async function fetchProfessionalPagesForOwners(ownerIds) {
+        const missing = Array.from(
+            new Set((ownerIds || []).filter(Boolean)),
+        ).filter((id) => !state.companyPagesByOwnerId.has(id));
+        if (!missing.length) return;
+
+        const { data, error } = await supabase
+            .from("professional_pages")
+            .select("id, owner_id, slug, name, avatar_url, banner_url, description, metadata")
+            .in("owner_id", missing);
+
+        if (error) {
+            console.warn("Professional pages lookup for messages failed:", error);
+            return;
+        }
+
+        (data || []).forEach((page) => {
+            if (page?.owner_id) {
+                state.companyPagesByOwnerId.set(page.owner_id, page);
+            }
+        });
+    }
+
     async function fetchUnreadCount(conversationId, lastReadAt) {
         if (!conversationId) return 0;
         const currentUserId = getCurrentUserId();
@@ -1088,22 +1227,37 @@
             id: null,
             name: "Conversation",
             avatar: "https://placehold.co/80x80?text=%F0%9F%92%AC",
+            type: "user",
+            isPage: false,
         };
         if (!conversation) return fallback;
         const user =
             state.usersById.get(conversation.otherUserId || "") || null;
+        const companyPage =
+            conversation.otherUserId && state.companyPagesByOwnerId.has(conversation.otherUserId)
+                ? state.companyPagesByOwnerId.get(conversation.otherUserId)
+                : null;
+        const pageName = companyPage?.name || conversation.otherName || "Conversation";
+        const companyAvatar = companyPage?.avatar_url
+            ? companyPage.avatar_url
+            : companyPage?.avatar ||
+              conversation.otherAvatar ||
+              "icons/enterprise.svg";
         return {
             id: conversation.otherUserId || user?.id || null,
-            name: user?.name || conversation.otherName || "Conversation",
-            avatar:
-                user?.avatar ||
-                conversation.otherAvatar ||
-                "https://placehold.co/80x80?text=%F0%9F%92%AC",
+            name: companyPage ? pageName : user?.name || conversation.otherName || "Conversation",
+            avatar: companyPage ? companyAvatar : user?.avatar || conversation.otherAvatar || "https://placehold.co/80x80?text=%F0%9F%92%AC",
             accountSubtype:
                 user?.account_subtype ||
                 user?.accountSubtype ||
                 conversation.otherAccountSubtype ||
                 null,
+            type: companyPage ? "company" : "user",
+            isPage: !!companyPage,
+            slug: companyPage?.slug || null,
+            pageId: companyPage?.id || null,
+            companyId: companyPage?.id || null,
+            companySlug: companyPage?.slug || null,
         };
     }
 
@@ -1144,7 +1298,7 @@
                 const unread = Number(conversation.unreadCount) || 0;
                 const profileNameHtml = renderNameWithBadges(profile);
                 const profileNameNode = profile.id
-                    ? `<span class="thread-user-link" data-message-user-link="1" data-user-id="${escapeHtml(profile.id)}">${profileNameHtml}</span>`
+                    ? `<span class="thread-user-link" data-message-user-link="1" data-user-id="${escapeHtml(profile.id)}" data-profile-kind="${escapeHtml(profile.type || "user")}" data-company-slug="${escapeHtml(profile.slug || "")}">${profileNameHtml}</span>`
                     : `<span class="thread-user-label">${profileNameHtml}</span>`;
 
                 return `
@@ -1178,23 +1332,17 @@
         const relationship = getSelectedRelationshipState();
 
         if (deleteBtn) {
-            if (!conversation) {
-                deleteBtn.hidden = true;
-                deleteBtn.disabled = true;
-            } else {
-                deleteBtn.hidden = false;
-                deleteBtn.disabled = false;
-                deleteBtn.title = "Masquer cette discussion de votre liste";
-            }
+            deleteBtn.disabled = !conversation;
+            deleteBtn.title = conversation
+                ? "Masquer cette discussion de votre liste"
+                : "Aucune discussion sélectionnée";
         }
 
         if (blockBtn) {
             if (!conversation || !profile?.id) {
-                blockBtn.hidden = true;
                 blockBtn.disabled = true;
                 blockBtn.textContent = "Bloquer";
             } else {
-                blockBtn.hidden = false;
                 blockBtn.disabled =
                     relationship.loading || relationship.blockedByMe;
                 blockBtn.textContent = relationship.blockedByMe
@@ -1228,7 +1376,7 @@
         if (nameEl) {
             if (profile.id) {
                 nameEl.innerHTML = `
-                    <a href="${escapeHtml(buildProfileHref(profile.id))}" class="chat-user-link" data-message-user-link="1" data-user-id="${escapeHtml(profile.id)}">
+                    <a href="${escapeHtml(buildProfileHref(profile))}" class="chat-user-link" data-message-user-link="1" data-user-id="${escapeHtml(profile.id)}" data-profile-kind="${escapeHtml(profile.type || "user")}" data-company-slug="${escapeHtml(profile.slug || "")}">
                         ${renderNameWithBadges(profile)}
                     </a>
                 `;
@@ -1236,8 +1384,12 @@
                 nameEl.textContent = profile.name;
             }
         }
+        const chatHeaderAvatar = document.querySelector(".chat-header-avatar");
+        if (chatHeaderAvatar && profile.avatar) {
+            chatHeaderAvatar.src = profile.avatar;
+            chatHeaderAvatar.alt = profile.name || "Avatar";
+        }
         if (subEl) {
-            // By default keep the sub element hidden unless there's meaningful info to show
             subEl.hidden = true;
             subEl.textContent = "";
             if (relationship.blockedByMe || relationship.blockedMe) {
@@ -1245,6 +1397,9 @@
                 subEl.hidden = false;
             } else if (conversation.unreadCount) {
                 subEl.textContent = `${conversation.unreadCount} nouveau(x) message(s)`;
+                subEl.hidden = false;
+            } else {
+                subEl.textContent = "En ligne";
                 subEl.hidden = false;
             }
         }
@@ -1421,20 +1576,33 @@
         );
 
         const fragment = document.createDocumentFragment();
+        const previousBySender = new Map();
         messages.forEach((message) => {
             const messageId = String(message.id || "");
             const renderSignature = getMessageRenderSignature(message);
             const existing = existingNodes.get(messageId);
             let node = existing;
+            const previousSenderId =
+                previousBySender.get(message.sender_id) ?? null;
+            const hideSender =
+                previousSenderId &&
+                previousSenderId === message.sender_id &&
+                message.sender_id !== currentUserId;
 
             if (!node || node.dataset.renderSignature !== renderSignature) {
-                node = createMessageNode(message, currentUserId, senderProfile);
+                node = createMessageNode(
+                    message,
+                    currentUserId,
+                    senderProfile,
+                    hideSender,
+                );
             }
 
             if (node) {
                 node.dataset.renderSignature = renderSignature;
                 fragment.appendChild(node);
             }
+            previousBySender.set(message.sender_id, message.sender_id);
         });
 
         chat.replaceChildren(fragment);
@@ -1557,6 +1725,7 @@
                 )
                 .filter(Boolean);
             await fetchUsers(otherUserIds);
+            await fetchProfessionalPagesForOwners(otherUserIds);
 
             const lastMessageByConversation = new Map();
             lastMessagesRows.forEach((row) => {

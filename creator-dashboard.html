@@ -3,13 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>Monétisation Créateur - XERA1</title>
+    <title>Espace dons créateur - XERA1</title>
+    <script>
+        (function () {
+            var savedTheme = localStorage.getItem("rize-theme");
+            document.documentElement.classList.toggle(
+                "light-mode",
+                savedTheme === "light",
+            );
+        })();
+    </script>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/search-notification.css">
     <link rel="stylesheet" href="css/monetization.css?v=20260319-4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="has-mobile-nav monetization-dashboard-page">
+<body class="has-mobile-nav monetization-dashboard-page donations-dashboard-page">
     <nav>
         <a
             class="logo"
@@ -110,17 +119,18 @@
             <!-- Header -->
             <header class="dashboard-header">
                 <div class="header-content">
-                    <h1><i class="fas fa-wallet"></i> Monétisation Créateur</h1>
-                    <p>Suivez vos revenus, votre portefeuille XERA1 et vos retraits Mobile Money</p>
+                    <p class="dashboard-kicker">TABLEAU DE BORD CRÉATEUR</p>
+                    <h1><i class="fas fa-heart"></i> Espace dons</h1>
+                    <p>Suivez les soutiens reçus de votre communauté et gérez vos retraits Mobile Money.</p>
                     <div class="dashboard-identity" id="dashboardIdentity"></div>
                 </div>
                 <div class="header-stats">
                     <div class="stat-card stat-total">
-                        <span class="stat-label">Net crédité</span>
+                            <span class="stat-label">Dons reçus</span>
                         <span class="stat-value" id="totalRevenue">$0.00</span>
                     </div>
                     <div class="stat-card stat-total">
-                        <span class="stat-label">Solde disponible</span>
+                            <span class="stat-label">Disponible au retrait</span>
                         <span class="stat-value" id="availableBalanceHeader">$0.00</span>
                     </div>
                 </div>
@@ -133,7 +143,7 @@
                         <i class="fas fa-lock"></i>
                     </div>
                     <div class="status-info">
-                        <h3>Statut de monétisation</h3>
+                        <h3>Réception des dons</h3>
                         <p id="statusText">Vérification...</p>
                     </div>
                     <div class="status-actions" id="statusActions">
@@ -147,7 +157,7 @@
                     <div>
                         <h2><i class="fas fa-piggy-bank"></i> Portefeuille et retraits</h2>
                         <p class="section-subtitle">
-                            Seuls les revenus deja credites restent disponibles au retrait sur XERA1 jusqu'a votre demande.
+                            Les dons crédités restent disponibles ici jusqu'à votre demande de retrait.
                         </p>
                     </div>
                     <button type="button" class="btn-secondary" id="walletRefreshBtn" onclick="refreshWalletData()">
@@ -209,13 +219,7 @@
                                 <div class="wallet-form-grid">
                                     <label class="wallet-field">
                                         <span>Fournisseur</span>
-                                        <select id="payoutProvider" required>
-                                            <option value="airtel_money">Airtel Money</option>
-                                            <option value="orange_money">Orange Money</option>
-                                            <option value="mpesa">M-Pesa</option>
-                                            <option value="afrimoney">Afrimoney</option>
-                                            <option value="other">Autre</option>
-                                        </select>
+                                        <select id="payoutProvider" required></select>
                                     </label>
                                     <label class="wallet-field">
                                         <span>Titulaire</span>
@@ -283,10 +287,10 @@
                 </div>
             </section>
 
-            <!-- Revenue Overview -->
+            <!-- Donation Overview -->
             <section class="revenue-section">
                 <div class="section-header">
-                    <h2><i class="fas fa-wallet"></i> Aperçu des revenus</h2>
+                    <h2><i class="fas fa-chart-line"></i> Aperçu des dons</h2>
                     <div class="period-filter">
                         <button class="filter-btn active" data-period="all">Tout</button>
                         <button class="filter-btn" data-period="30">30 jours</button>
@@ -301,20 +305,9 @@
                             <i class="fas fa-heart"></i>
                         </div>
                         <div class="card-content">
-                            <span class="card-label">Soutiens reçus</span>
+                            <span class="card-label">Dons reçus</span>
                             <span class="card-value" id="supportRevenue">$0.00</span>
                             <span class="card-count" id="supportCount">0 transactions</span>
-                        </div>
-                    </div>
-
-                    <div class="revenue-card">
-                        <div class="card-icon video">
-                            <i class="fas fa-video"></i>
-                        </div>
-                        <div class="card-content">
-                            <span class="card-label">Revenus vidéos</span>
-                            <span class="card-value" id="videoRevenue">$0.00</span>
-                            <span class="card-count" id="videoStats">0 vues éligibles</span>
                         </div>
                     </div>
 
@@ -323,7 +316,7 @@
                             <i class="fas fa-piggy-bank"></i>
                         </div>
                         <div class="card-content">
-                            <span class="card-label">Total reçu</span>
+                            <span class="card-label">Total net reçu</span>
                             <span class="card-value" id="netRevenue">$0.00</span>
                             <span class="card-count">Montant credite</span>
                         </div>
@@ -331,53 +324,14 @@
                 </div>
             </section>
 
-            <!-- Video Stats -->
-            <section class="video-stats-section" id="videoStatsSection" style="display: none;">
-                <div class="section-header">
-                    <h2><i class="fas fa-play-circle"></i> Statistiques vidéo</h2>
-                    <span class="rpm-badge">$0.40 / 1000 vues</span>
-                </div>
-
-                <div class="video-stats-grid">
-                    <div class="stat-box">
-                        <i class="fas fa-eye"></i>
-                        <span class="stat-number" id="totalViews">0</span>
-                        <span class="stat-desc">Vues totales</span>
-                    </div>
-                    <div class="stat-box">
-                        <i class="fas fa-check-circle"></i>
-                        <span class="stat-number" id="eligibleViews">0</span>
-                        <span class="stat-desc">Vues éligibles (>60s)</span>
-                    </div>
-                    <div class="stat-box">
-                        <i class="fas fa-film"></i>
-                        <span class="stat-number" id="videoCount">0</span>
-                        <span class="stat-desc">Vidéos monétisées</span>
-                    </div>
-                    <div class="stat-box">
-                        <i class="fas fa-dollar-sign"></i>
-                        <span class="stat-number" id="estimatedRevenue">$0.00</span>
-                        <span class="stat-desc">Revenus estimés</span>
-                    </div>
-                </div>
-
-                <div class="video-cta">
-                    <p>Seules les vidéos de plus de 60 secondes génèrent des revenus.</p>
-                    <button id="createVideoBtn" type="button" class="btn-primary">
-                        <i class="fas fa-plus"></i> Créer une vidéo
-                    </button>
-                </div>
-            </section>
-
             <!-- Transactions History -->
             <section class="transactions-section">
                 <div class="section-header">
-                    <h2><i class="fas fa-list-alt"></i> Historique des transactions</h2>
+                        <h2><i class="fas fa-list-alt"></i> Historique des dons</h2>
                     <div class="filter-actions">
                         <select id="transactionTypeFilter">
                             <option value="all">Tous les types</option>
                             <option value="support">Soutiens</option>
-                            <option value="video_rpm">Revenus vidéo</option>
                         </select>
                     </div>
                 </div>
@@ -389,7 +343,7 @@
                                 <th>Date</th>
                                 <th>Type</th>
                                 <th>Montant brut</th>
-                                <th>Commission (20%)</th>
+                                <th>Frais XERA1</th>
                                 <th>Net reçu</th>
                                 <th>Statut</th>
                             </tr>
@@ -404,33 +358,6 @@
 
                 <div class="pagination" id="pagination">
                     <!-- Pagination dynamique -->
-                </div>
-            </section>
-
-            <!-- Payouts Section -->
-            <section class="payouts-section" id="payoutsSection">
-                <div class="section-header">
-                    <h2><i class="fas fa-money-check-alt"></i> Paiements vidéo</h2>
-                </div>
-
-                <div class="payouts-table-wrapper">
-                    <table class="payouts-table" id="payoutsTable">
-                        <thead>
-                            <tr>
-                                <th>Période</th>
-                                <th>Vues</th>
-                                <th>Taux RPM</th>
-                                <th>Montant brut</th>
-                                <th>Net reçu</th>
-                                <th>Statut</th>
-                            </tr>
-                        </thead>
-                        <tbody id="payoutsBody">
-                            <tr class="empty-row">
-                                <td colspan="6">Aucun paiement pour le moment</td>
-                            </tr>
-                        </tbody>
-                    </table>
                 </div>
             </section>
 
@@ -464,66 +391,6 @@
             </section>
 
         </main>
-
-        <!-- Upgrade Modal -->
-        <div class="modal" id="upgradeModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>Passer à un plan supérieur</h2>
-                    <button class="close-btn" onclick="closeUpgradeModal()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <div class="plans-comparison">
-                        <div class="plan-card">
-                            <h3>Standard</h3>
-                            <div class="plan-price">$2.99<span>/mois</span></div>
-                            <ul class="plan-features">
-                                <li><i class="fas fa-check"></i> Badge bleu</li>
-                                <li><i class="fas fa-check"></i> Historique complet et public</li>
-                                <li><i class="fas fa-check"></i> Priorité Discover</li>
-                                <li><i class="fas fa-check"></i> Avatar/Bannière GIF</li>
-                                <li><i class="fas fa-check"></i> Notifications live auto</li>
-                            </ul>
-                            <button class="btn-plan" onclick="selectPlan('standard')">
-                                Choisir Standard
-                            </button>
-                        </div>
-
-                        <div class="plan-card recommended">
-                            <div class="recommended-badge">Recommandé</div>
-                            <h3>Medium</h3>
-                            <div class="plan-price">$7.99<span>/mois</span></div>
-                            <ul class="plan-features">
-                                <li><i class="fas fa-check"></i> Tous les avantages Standard</li>
-                                <li><i class="fas fa-check"></i> Badge Medium</li>
-                                <li><i class="fas fa-check"></i> Monétisation + dons</li>
-                                <li><i class="fas fa-check"></i> Notifications live auto</li>
-                            </ul>
-                            <button class="btn-plan btn-primary" onclick="selectPlan('medium')">
-                                Choisir Medium
-                            </button>
-                        </div>
-
-                        <div class="plan-card">
-                            <h3>Pro</h3>
-                            <div class="plan-price">$14.99<span>/mois</span></div>
-                            <ul class="plan-features">
-                                <li><i class="fas fa-check"></i> Tous les avantages Medium</li>
-                                <li><i class="fas fa-check"></i> Badge Gold</li>
-                                <li><i class="fas fa-check"></i> Analytics avancés</li>
-                                <li><i class="fas fa-check"></i> Lives en HD</li>
-                                <li><i class="fas fa-check"></i> Lives privés followers</li>
-                            </ul>
-                            <button class="btn-plan" onclick="selectPlan('pro')">
-                                Choisir Pro
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
         <!-- Support Modal (pour les tests) -->
         <div class="modal" id="supportModal">
@@ -568,6 +435,7 @@
     <script src="js/supabase-config.js"></script>
     <script src="js/monetization-utils.js"></script>
     <script src="js/monetization.js?v=20260319-2"></script>
+    <script src="js/kpay-mobile-money.js"></script>
     <script src="js/creator-dashboard.js?v=20260319-3"></script>
     <script src="js/ui-motion.js" defer></script>
 </body>

@@ -4,6 +4,15 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Analytics | XERA1</title>
+        <script>
+            (function () {
+                var savedTheme = localStorage.getItem("rize-theme");
+                document.documentElement.classList.toggle(
+                    "light-mode",
+                    savedTheme === "light",
+                );
+            })();
+        </script>
         <link
             href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap"
             rel="stylesheet"
@@ -15,7 +24,7 @@
         <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     </head>
-    <body class="analytics-page">
+    <body class="analytics-page account-intelligence-page">
         <nav>
             <a
                 class="logo"

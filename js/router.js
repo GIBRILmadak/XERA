@@ -81,6 +81,7 @@
         "index.html": "/",
         "login.html": "/login",
         "profile.html": "/profile",
+        "messages.html": "/messages",
         "analytics.html": "/analytics",
         "admin.html": "/admin",
         "badges-admin.html": "/badges-admin",
@@ -106,6 +107,7 @@
         discover: "/",
         login: "/login",
         profile: "/profile",
+        messages: "/messages",
         pagepro: "/pagepro",
         analytics: "/analytics",
         admin: "/admin",
@@ -127,6 +129,7 @@
         discover: "discover",
         login: "login",
         profile: "profile",
+        messages: "messages",
         pagepro: "pagepro",
         analytics: "analytics",
         admin: "admin",
@@ -386,13 +389,7 @@
         if (typeof target !== "string" || !target) return;
 
         if (target === "messages") {
-            navigate("discover", {
-                ...options,
-                query: {
-                    ...(options.query || {}),
-                    messages: "1",
-                },
-            });
+            navigate("messages", options);
             return;
         }
 
@@ -439,9 +436,7 @@
             return;
         }
 
-        navigate("discover", {
-            query: { messages: "1" },
-        });
+        navigate("messages");
     }
 
     function fallbackToggleNotificationPanel() {

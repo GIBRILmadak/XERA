@@ -10254,6 +10254,8 @@ function renderProfileUpdateCard(
     const replyInputId = replyContentId
         ? `profile-reply-input-${replyContentId}`
         : "";
+    const replyCount =
+        canReply && replyContentId ? getReplyCount(replyContentId) : 0;
     const replyPanelHtml =
         canReply && replyContentId
             ? `
@@ -10265,6 +10267,28 @@ function renderProfileUpdateCard(
             </div>
 `
             : "";
+    const viewerCanEncourage =
+        !!content.contentId &&
+        currentUserId &&
+        currentUserId !== content.userId;
+    const isEncouraged = encouragedContentIds.has(content.contentId);
+    const courageIcon = isEncouraged
+        ? "icons/courage-green.svg"
+        : "icons/courage-blue.svg";
+    const encourageButtonHtml = viewerCanEncourage
+        ? `
+            <button class="btn btn-secondary courage-btn profile-encourage-btn ${isEncouraged ? "encouraged" : ""}" data-content-id="${content.contentId}" onclick="event.stopPropagation(); toggleCourage('${content.contentId}', this)">
+                <img src="${courageIcon}" width="16" height="16" alt="">
+                <span>Encourager</span>
+                <span class="courage-count profile-encourage-count" data-count="${Number(content.encouragementsCount) || 0}" title="${(Number(content.encouragementsCount) || 0).toLocaleString("fr-FR")}">${formatCompactCount(content.encouragementsCount || 0)}</span>
+            </button>
+`
+        : `
+            <div class="profile-update-stat-pill">
+                <img src="icons/courage-blue.svg" width="16" height="16" alt="">
+                <span>${formatCompactCount(content.encouragementsCount || 0)} encouragement${Number(content.encouragementsCount || 0) > 1 ? "s" : ""}</span>
+            </div>
+`;
 
     let managementHtml = "";
     if (currentUser && currentUser.id === profileUserId) {

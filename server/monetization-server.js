@@ -852,13 +852,33 @@ const SUPPORTED_MOBILE_MONEY_PROVIDERS = new Set([
     "orange_money",
     "mpesa",
     "afrimoney",
+    "mtn_momo",
+    "moov_money",
+    "flooz",
+    "wave",
+    "free_money",
+    "tigo_pesa",
+    "telecel_cash",
+    "ecocash",
+    "inwi_money",
+    "e_mola",
     "other",
 ]);
 const MOBILE_MONEY_PROVIDER_LABELS = {
     airtel_money: "Airtel Money",
     orange_money: "Orange Money",
-    mpesa: "M-Pesa",
+    mpesa: "M-Pesa / Vodacom M-Pesa",
     afrimoney: "Afrimoney",
+    mtn_momo: "MTN MoMo",
+    moov_money: "Moov Money",
+    flooz: "Flooz",
+    wave: "Wave",
+    free_money: "Free Money",
+    tigo_pesa: "Tigo Pesa",
+    telecel_cash: "Telecel Cash",
+    ecocash: "EcoCash",
+    inwi_money: "inwi money",
+    e_mola: "e-Mola",
     other: "Autre",
 };
 
@@ -8693,7 +8713,7 @@ app.get("/api/partners/dashboard", async (req, res) => {
         const [{ data: payoutSetting }, { data: payouts }] = await Promise.all([
             supabase
                 .from("partner_payout_settings")
-                .select("account_name,wallet_number,status")
+                .select("provider,account_name,wallet_number,status")
                 .eq("partner_id", membership.partner_id)
                 .maybeSingle(),
             supabase
@@ -8727,6 +8747,73 @@ app.get("/api/partners/dashboard", async (req, res) => {
     } catch (error) {
         res.status(500).json({
             error: error?.message || "Dashboard indisponible.",
+        });
+    }
+});
+
+app.post("/api/partners/payout-settings", async (req, res) => {
+    try {
+        const auth = await authenticateRequest(req);
+        if (auth.error)
+            return res
+                .status(auth.error.status)
+                .json({ error: auth.error.message });
+
+        const pageId = String(req.body?.professional_page_id || "");
+        const provider = normalizeMobileMoneyProvider(req.body?.provider);
+        const accountName = sanitizePayoutText(req.body?.account_name, 80);
+        const walletNumber = sanitizeWalletNumber(req.body?.wallet_number);
+        if (!pageId || !provider || !accountName || walletNumber.length < 8) {
+            return res.status(400).json({
+                error: "Réseau, titulaire et numéro Mobile Money valides requis.",
+            });
+        }
+
+        const { data: page, error: pageError } = await supabase
+            .from("professional_pages")
+            .select("id")
+            .eq("id", pageId)
+            .eq("owner_id", auth.user.id)
+            .maybeSingle();
+        if (pageError) throw pageError;
+        if (!page)
+            return res
+                .status(403)
+                .json({ error: "Vous ne gérez pas cette Page Pro." });
+
+        const { data: membership, error: membershipError } = await supabase
+            .from("partner_page_memberships")
+            .select("partner_id,status,partners!inner(status)")
+            .eq("professional_page_id", pageId)
+            .maybeSingle();
+        if (membershipError) throw membershipError;
+        if (
+            !membership ||
+            membership.status !== "active" ||
+            membership.partners.status !== "active"
+        )
+            return res.status(403).json({ error: "Partenariat actif requis." });
+
+        const { data, error } = await supabase
+            .from("partner_payout_settings")
+            .upsert(
+                {
+                    partner_id: membership.partner_id,
+                    provider,
+                    account_name: accountName,
+                    wallet_number: walletNumber,
+                    status: "active",
+                    updated_at: new Date().toISOString(),
+                },
+                { onConflict: "partner_id" },
+            )
+            .select("provider,account_name,wallet_number,status")
+            .single();
+        if (error) throw error;
+        return res.json({ success: true, payoutSetting: data });
+    } catch (error) {
+        return res.status(500).json({
+            error: error?.message || "Enregistrement du retrait impossible.",
         });
     }
 });

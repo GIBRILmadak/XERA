@@ -3074,6 +3074,7 @@ class XERAProfessionalManager {
                                         : `href="${this.escapeHtml(cta.url)}" target="_blank" rel="noopener noreferrer"`;
                                 return `<a ${action} class="btn-pro-primary" style="text-decoration:none;"><i class="fas fa-globe"></i><span class="btn-pro-label-long">${this.escapeHtml(cta.label)}</span><span class="btn-pro-label-short">Web</span></a>`;
                             })()}
+                            <button class="btn-pro-secondary" type="button" onclick="window.startCompanyMessageFromPage && window.startCompanyMessageFromPage('${this.escapeHtml(page.id)}','${this.escapeHtml(page.slug || "")}','${this.escapeHtml(page.name || "Page Pro")}')"><i class="fas fa-comment-dots"></i><span class="btn-pro-label-long">Contacter</span><span class="btn-pro-label-short">Message</span></button>
                             ${pageFollowHtml}
                             ${
                                 isOwner
@@ -4654,6 +4655,64 @@ window.openProfessionalCtaModal = async function (pageId) {
         window.showToast?.("Votre demande a bien été envoyée !");
         overlay.remove();
     };
+};
+
+window.resolvePageProMessageTarget = function resolvePageProMessageTarget(page = {}) {
+    const ownerId =
+        page.owner_id ||
+        page.ownerId ||
+        page.user_id ||
+        page.userId ||
+        null;
+    const companySlug = page.slug || page.pageSlug || page.companySlug || null;
+
+    return {
+        userId: ownerId,
+        companySlug,
+        kind: "company",
+    };
+};
+
+window.startCompanyMessageFromPage = async function startCompanyMessageFromPage(
+    pageId,
+    pageSlug,
+    pageName,
+) {
+    try {
+        if (!window.supabase) {
+            window.showToast?.("Connexion Supabase indisponible.", "error");
+            return;
+        }
+
+        const targetPage = await window.supabase
+            .from("professional_pages")
+            .select("id, owner_id, slug, name")
+            .or(
+                pageId ? `id.eq.${pageId}` : `slug.eq.${pageSlug}`,
+            )
+            .maybeSingle();
+
+        const page = targetPage?.data || null;
+        const resolved = window.resolvePageProMessageTarget(page || { id: pageId, slug: pageSlug, name: pageName });
+
+        if (!resolved.userId) {
+            window.showToast?.("Impossible d’ouvrir cette discussion.", "error");
+            return;
+        }
+
+        if (typeof window.openMessagesWithUser === "function") {
+            window.openMessagesWithUser(resolved.userId);
+            return;
+        }
+
+        const url = new URL("index.html", window.location.href);
+        url.searchParams.set("messages", "1");
+        url.searchParams.set("dm", resolved.userId);
+        window.location.href = url.toString();
+    } catch (error) {
+        console.error("Start company message failed:", error);
+        window.showToast?.("Conversation indisponible pour cette Page Pro.", "error");
+    }
 };
 
 // Export pour usage global avec initialisation automatique

@@ -3,6 +3,9 @@ const {
     normalizeC2PAInspectionResult,
     extractAIFlagFromContent,
 } = require("../js/c2pa-utils.js");
+const {
+    resolvePageProMessageTarget,
+} = require("../js/pro-message-targets.js");
 
 const manifestStore = {
     active_manifest: "manifest-1",
@@ -52,3 +55,18 @@ assert.equal(
     true,
 );
 assert.equal(extractAIFlagFromContent({ metadata: { is_ai: false } }), false);
+
+const pageTarget = resolvePageProMessageTarget({
+    id: "page_123",
+    owner_id: "user_456",
+    slug: "acme",
+    name: "Acme",
+});
+assert.equal(pageTarget.userId, "user_456");
+assert.equal(pageTarget.companySlug, "acme");
+assert.equal(pageTarget.kind, "company");
+assert.deepEqual(resolvePageProMessageTarget({}), {
+    userId: null,
+    companySlug: null,
+    kind: "company",
+});
