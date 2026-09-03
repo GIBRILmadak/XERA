@@ -2337,6 +2337,45 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage, context = {}) {
     const safeKpayMessage = message.startsWith("KPay API error:")
         ? "Le prestataire KPay a refusé l'initialisation. Vérifiez les clés KPay et la configuration de l'application KPay."
         : fallbackMessage;
+
+    const returnPath = context.returnPath || "/";
+    const acceptsHtml = String(res.req?.headers?.accept || "").includes("text/html");
+
+    if (acceptsHtml) {
+        setResponseHeader(res, "Content-Type", "text/html; charset=utf-8");
+        const safeTitle = escapeHtmlText("Service de Paiement KPay");
+        const safeBody = escapeHtmlText(safeKpayMessage);
+        const safeRef = escapeHtmlText(requestId);
+        const safeReturn = escapeHtmlText(returnPath);
+        return res.status(500).send(`<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${safeTitle} - XERA</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; text-align: center; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 32px; max-width: 480px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+        .icon { font-size: 48px; margin-bottom: 16px; }
+        h1 { font-size: 20px; font-weight: 700; margin: 0 0 12px 0; color: #f43f5e; }
+        p { font-size: 14px; color: #94a3b8; line-height: 1.6; margin: 0 0 24px 0; }
+        .btn { display: inline-block; background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; transition: background 0.2s; }
+        .btn:hover { background: #4f46e5; }
+        .ref { margin-top: 20px; font-size: 11px; color: #64748b; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">⚠️</div>
+        <h1>${safeTitle}</h1>
+        <p>${safeBody}</p>
+        <a href="${safeReturn}" class="btn">Retour à l'application</a>
+        <div class="ref">Réf: ${safeRef}</div>
+    </div>
+</body>
+</html>`);
+    }
+
     return res.status(500).send(`${safeKpayMessage} [référence ${requestId}]`);
 }
 
@@ -4815,7 +4854,12 @@ async function handleKPaySubscriptionCheckout(req, res) {
         }
 
         if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
-            return res.status(500).send("KPay keys not configured");
+            return sendCheckoutErrorResponse(
+                res,
+                new Error("Clés KPay non configurées sur le serveur."),
+                "Le service de paiement KPay n'est pas encore configuré sur Vercel. Les variables KPAY_PUBLIC_KEY et KPAY_SECRET_KEY doivent être définies dans l'environnement Vercel.",
+                { returnPath },
+            );
         }
 
         const pendingPayment = await createPendingSubscriptionPayment({
@@ -4889,7 +4933,7 @@ async function handleKPaySubscriptionCheckout(req, res) {
         res.status(302).send();
     } catch (error) {
         console.error("KPay checkout error:", error);
-        return sendCheckoutErrorResponse(res, error, "Erreur KPay");
+        return sendCheckoutErrorResponse(res, error, "Erreur KPay", { returnPath });
     }
 }
 
@@ -4903,7 +4947,12 @@ async function handleKPaySupportCheckout(req, res) {
     let supportCheckoutStage = "validation";
     try {
         if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
-            return res.status(500).send("KPay keys not configured");
+            return sendCheckoutErrorResponse(
+                res,
+                new Error("Clés KPay non configurées sur le serveur."),
+                "Le service de paiement KPay n'est pas encore configuré sur Vercel. Les variables KPAY_PUBLIC_KEY et KPAY_SECRET_KEY doivent être définies dans l'environnement Vercel.",
+                { returnPath: rawReturnPath || "/" },
+            );
         }
 
         const callbackConfig = getKPayCallbackConfig(req);
