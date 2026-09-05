@@ -39,7 +39,6 @@ window.initialDataSlowMessage = "";
 let discoverDataRetryTimer = null;
 let discoverDataRetryInFlight = false;
 let firstProjectFeedPopupShown = false;
-
 function withTimeout(promise, timeoutMs, label = "Operation") {
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
@@ -4357,7 +4356,7 @@ function openReplyPrompt(contentId) {
 function getUserContentLocal(userId) {
     const contents = userContents[userId] || [];
     const visibleContents = contents.filter(
-        (c) => !c.pageId && !c.page_id && (isSuperAdmin() || !c.isDeleted),
+        (c) => isSuperAdmin() || !c.isDeleted,
     );
     // Sort by createdAt descending (newest first) instead of day_number
     // This ensures cards show the actual latest upload
@@ -8581,7 +8580,7 @@ async function applyGiftPlanToUser(userId, planValue) {
             .eq("id", userId)
             .maybeSingle();
         const existingBadge = String(profile?.badge || "").toLowerCase();
-        if (protectedBadges.has(existingBadge)) {
+        if (plan !== "pro" && protectedBadges.has(existingBadge)) {
             badgeToApply = profile?.badge || badgeValue;
         }
         followersCount = Number(profile?.followers_count || 0);
@@ -8591,7 +8590,7 @@ async function applyGiftPlanToUser(userId, planValue) {
     }
 
     const isMonetized =
-        (plan === "medium" || plan === "pro") && followersCount >= 1000;
+        plan === "pro" || (plan === "medium" && followersCount >= 1000);
     if (isSuperAdmin()) {
         try {
             const serverUser = await requestAdminGiftPlan(userId, plan);
@@ -8614,6 +8613,15 @@ async function applyGiftPlanToUser(userId, planValue) {
         badge: badgeToApply,
         is_monetized: isMonetized,
         updated_at: new Date().toISOString(),
+        advanced_profile_customization: false,
+        priority_recommendations: false,
+        full_profile_customization: false,
+        hd_streaming: false,
+        private_live: false,
+        advanced_collab_tools: false,
+        realtime_analytics: false,
+        data_export: false,
+        maximum_visibility: false,
     };
 
     // Application automatique des avantages locaux (fallback ou direct)
@@ -8982,6 +8990,16 @@ async function addVerifiedUserId(type, userId, planValue = null) {
     if (!cleanId) return;
 
     try {
+        const shouldApplyPlan = isSuperAdmin() && normalizeGiftPlan(planValue);
+        if (shouldApplyPlan) {
+            const giftedUser = await applyGiftPlanToUser(cleanId, planValue);
+            if (!giftedUser) {
+                throw new Error(
+                    "Le plan n'a pas pu être attribué au bénéficiaire.",
+                );
+            }
+        }
+
         const { error } = await supabase.from("verified_badges").upsert(
             {
                 user_id: cleanId,
@@ -8999,11 +9017,6 @@ async function addVerifiedUserId(type, userId, planValue = null) {
             .eq("type", type)
             .eq("status", "pending");
 
-        const shouldApplyPlan = isSuperAdmin() && normalizeGiftPlan(planValue);
-        if (shouldApplyPlan) {
-            await applyGiftPlanToUser(cleanId, planValue);
-        }
-
         await fetchVerifiedBadges();
         if (
             window.currentProfileViewed === cleanId &&
@@ -9014,8 +9027,10 @@ async function addVerifiedUserId(type, userId, planValue = null) {
 
         if (window.ToastManager) {
             ToastManager.success(
-                "Badge appliqué",
-                "La vérification a été accordée.",
+                shouldApplyPlan ? "Plan attribué" : "Badge appliqué",
+                shouldApplyPlan
+                    ? "Le plan et ses avantages ont été activés pour le bénéficiaire."
+                    : "La vérification a été accordée.",
             );
         }
     } catch (error) {
@@ -11317,6 +11332,33 @@ async function handleDiscoverQuickAction(contentId, action, userId = null) {
 }
 window.handleDiscoverQuickAction = handleDiscoverQuickAction;
 
+async function getPublicProfessionalPageOwnerIds() {
+    try {
+        const { data, error } = await supabase
+            .from("professional_pages")
+            .select("owner_id")
+            .not("owner_id", "is", null);
+        if (error) throw error;
+        return new Set(
+            (data || []).map((page) => page.owner_id).filter(Boolean),
+        );
+    } catch (error) {
+        console.warn(
+            "Impossible de charger les propriétaires des Pages Pro publiques:",
+            error,
+        );
+        return new Set();
+    }
+}
+function isVerifiedProfessionalPagePost(item) {
+    const pageId = item?.content?.pageId || item?.content?.page_id;
+    return Boolean(
+        pageId &&
+        typeof window.isVerifiedPageId === "function" &&
+        window.isVerifiedPageId(pageId),
+    );
+}
+
 function buildMoodDiscoverMix(
     discoverArcCards,
     liveStreams = [],
@@ -11352,13 +11394,21 @@ function buildMoodDiscoverMix(
         content: entry.content,
         arcId: entry.arcId || null,
         arcKey: entry.arcKey || null,
-        verified: isVerifiedDiscoverUser(entry.user),
+        verified:
+            isVerifiedDiscoverUser(entry.user) ||
+            isVerifiedProfessionalPagePost({ content: entry.content }),
         tags: Array.isArray(entry.content.tags) ? entry.content.tags : [],
     }));
 
     allItems.push(...liveItems);
 
-    if (!currentUser || allItems.length < 3) return allItems;
+    if (!currentUser || allItems.length < 3) {
+        return [...allItems].sort(
+            (left, right) =>
+                Number(isVerifiedProfessionalPagePost(right)) -
+                Number(isVerifiedProfessionalPagePost(left)),
+        );
+    }
 
     const prefs = loadImmersivePrefs();
     const authorScoreMap = buildAuthorScoreMapFromContents();
@@ -11382,10 +11432,13 @@ function buildMoodDiscoverMix(
             topQueries,
             viewerRole,
         });
+        const weightedScore = isVerifiedProfessionalPagePost(item)
+            ? score * 10
+            : score;
         return {
             item,
             normalized,
-            score,
+            score: weightedScore,
             preferenceScore,
         };
     });
@@ -12460,7 +12513,6 @@ function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
                     existing.dataset.contentId &&
                     existing.dataset.contentId !== contentId) ||
                 type === "live"; // live cards change often (viewers, status)
-
             const node = shouldReplace
                 ? createDiscoverElement(html, key, contentId, {
                       markAsNew: !existing,
@@ -12821,13 +12873,18 @@ async function renderDiscoverGrid() {
     }
     if (renderSequence !== discoverRenderSequence) return;
 
+    const professionalPageOwnerIds = await getPublicProfessionalPageOwnerIds();
+
     // Tri de base par récence puis mélange pondéré vérifiés/non-vérifiés
     usersToDisplay = sortUsersByLatestRecency(usersToDisplay).filter((user) =>
-        shouldShowProfileToViewerSync(
-            user,
-            currentUser?.id || null,
-            followedSet,
-        ),
+        professionalPageOwnerIds.has(user.id) &&
+        getUserContentLocal(user.id).some((content) => content?.pageId)
+            ? true
+            : shouldShowProfileToViewerSync(
+                  user,
+                  currentUser?.id || null,
+                  followedSet,
+              ),
     );
     liveStreams = liveStreams.filter((stream) => {
         const host = getUser(stream.user_id);
@@ -20256,6 +20313,96 @@ function showPostPublishUpsell(user) {
     return true;
 }
 
+const PAGE_POST_UPSELL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+async function showProfessionalPagePostUpsell(pageId) {
+    if (!pageId || document.getElementById("page-post-publish-upsell")) {
+        return false;
+    }
+
+    let page;
+    try {
+        const { data, error } = await supabase
+            .from("professional_pages")
+            .select("id, name, slug, avatar_url")
+            .eq("id", pageId)
+            .single();
+        if (error) throw error;
+        page = data;
+    } catch (error) {
+        console.warn(
+            "Impossible de charger la Page Pro pour la suggestion:",
+            error,
+        );
+        return false;
+    }
+
+    if (!page || window.isVerifiedPageId?.(page.id)) return false;
+
+    const storageKey = `xera:page-post-upsell:last-shown:${page.id}`;
+    try {
+        const lastShown = Number(localStorage.getItem(storageKey) || 0);
+        if (
+            lastShown &&
+            Date.now() - lastShown < PAGE_POST_UPSELL_COOLDOWN_MS
+        ) {
+            return false;
+        }
+        localStorage.setItem(storageKey, String(Date.now()));
+    } catch (error) {}
+
+    document.getElementById("publish-feedback-card")?.remove();
+    const avatar = page.avatar_url || "icons/enterprise.svg";
+    const overlay = document.createElement("div");
+    overlay.id = "page-post-publish-upsell";
+    overlay.className = "post-publish-upsell page-post-publish-upsell";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "page-post-publish-upsell-title");
+    overlay.innerHTML = `
+        <section class="post-publish-upsell__dialog page-post-publish-upsell__dialog" tabindex="-1">
+            <button type="button" class="post-publish-upsell__close" aria-label="Fermer">✕</button>
+            <div class="post-publish-upsell__avatar-wrap">
+                <img class="post-publish-upsell__avatar" src="${escapeHtml(avatar)}" alt="Logo de ${escapeHtml(page.name || "votre Page Pro")}">
+                <span class="page-post-publish-upsell__status"><i class="fas fa-bolt"></i></span>
+            </div>
+            <p class="post-publish-upsell__eyebrow">Publication en ligne</p>
+            <h2 id="page-post-publish-upsell-title">Donnez à ${escapeHtml(page.name || "votre Page Pro")} une portée supérieure.</h2>
+            <p>Votre actualité est publiée. La vérification Page Pro peut lui offrir jusqu’à <strong>10 fois plus de visibilité</strong> dans Discover et les recommandations.</p>
+            <div class="page-post-publish-upsell__proof"><i class="fas fa-chart-line"></i><span>Badge officiel, confiance renforcée et portée amplifiée.</span></div>
+            <button type="button" class="post-publish-upsell__cta">Renforcer la visibilité</button>
+        </section>`;
+
+    const dialog = overlay.querySelector(".post-publish-upsell__dialog");
+    const close = () => {
+        overlay.classList.remove("is-visible");
+        window.setTimeout(() => overlay.remove(), 180);
+        document.removeEventListener("keydown", onKeydown);
+    };
+    const onKeydown = (event) => {
+        if (event.key === "Escape") close();
+    };
+    overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) close();
+    });
+    overlay
+        .querySelector(".post-publish-upsell__close")
+        .addEventListener("click", close);
+    overlay
+        .querySelector(".post-publish-upsell__cta")
+        .addEventListener("click", () => {
+            const destination = `subscription-plans.html?plan=page_verification&context=page-verification&page_id=${encodeURIComponent(page.id)}`;
+            window.location.href = destination;
+        });
+    document.body.appendChild(overlay);
+    document.addEventListener("keydown", onKeydown);
+    requestAnimationFrame(() => {
+        overlay.classList.add("is-visible");
+        dialog.focus();
+    });
+    return true;
+}
+
 function trackPostPublishUpsellConversion(user) {
     if (!hasActivePaidPlan(user)) return;
     try {
@@ -21702,12 +21849,19 @@ async function openCreateMenu(
                             "Votre contenu est maintenant en ligne sur XERA.",
                         autoHideMs: 3200,
                     });
-                    requestAnimationFrame(() => {
-                        // Only a confirmed, newly-created post can trigger the optional upsell.
+                    requestAnimationFrame(async () => {
+                        // Only a confirmed, newly-created Page Pro post gets the Page Pro upsell.
+                        const shownPageUpsell =
+                            !isEdit &&
+                            contentData.pageId &&
+                            (await showProfessionalPagePostUpsell(
+                                contentData.pageId,
+                            ));
                         const shownUpsell =
+                            !shownPageUpsell &&
                             !isEdit &&
                             showPostPublishUpsell(window.currentUser);
-                        if (!shownUpsell)
+                        if (!shownUpsell && !shownPageUpsell)
                             showPublishFeedbackCard(publishFeedback);
                     });
                 } else {

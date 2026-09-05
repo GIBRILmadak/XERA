@@ -5,66 +5,25 @@
  * Version Onboarding Interactif XXL - Haute Visibilité
  */
 
-const PROFESSIONAL_CTA_OPTIONS = {
-    sales: {
-        label: "Sales & Démo",
-        buttons: [
-            "Réserver une Démo",
-            "Demander un Accès Bêta",
-            "Essayer Gratuitement",
-            "Contacter l'Équipe",
-            "Découvrir l'Ecosystème",
-        ],
-    },
-    fundraising: {
-        label: "Investisseurs / Deck",
-        buttons: [
-            "Demander le Pitch Deck",
-            "Accéder aux Metrics",
-            "Contacter les Fondateurs",
-            "Espace Investisseurs",
-        ],
-    },
-    recruitment: {
-        label: "Recrutement",
-        buttons: [
-            "Rejoindre l'Équipe",
-            "Voir les Postes Ouverts",
-            "Postuler en Direct",
-            "Découvrir la Culture",
-        ],
-    },
-    community: {
-        label: "Communauté & Lien Externe",
-        buttons: [
-            "Rejoindre le Discord",
-            "Starred sur GitHub",
-            "Lire la Documentation",
-            "Rejoindre la Communauté",
-        ],
-    },
-};
-
-function stripUrlProtocol(value) {
-    return String(value || "")
-        .trim()
-        .replace(/^https?:\/\//i, "");
-}
-
-function completeHttpsUrl(value) {
-    const withoutProtocol = stripUrlProtocol(value);
-    return withoutProtocol ? `https://${withoutProtocol}` : "";
+function isPhoneDestination(value) {
+    const raw = String(value || "").trim();
+    return raw.length >= 6 && /^[\d\s()+./-]+$/.test(raw);
 }
 
 function getProfessionalCta(page) {
     const cta = page?.metadata?.professional_cta || {};
     const rawUrl = cta.url || page?.website_url || "";
-    const externalUrl =
-        rawUrl && !/^https?:\/\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
+    const destination = String(rawUrl).trim();
+    const phone = isPhoneDestination(destination);
+    const externalUrl = phone
+        ? `tel:${destination.replace(/[^\d+]/g, "")}`
+        : destination && !/^[a-z][a-z\d+.-]*:/i.test(destination)
+          ? `https://${destination}`
+          : destination;
     return {
         objective: cta.objective || "sales",
         label: cta.label || "Visiter le site officiel",
-        type: cta.type || "external",
+        type: phone ? "phone" : "external",
         url: externalUrl,
     };
 }
@@ -1101,14 +1060,14 @@ class XERAProfessionalManager {
             talent_interests: data.talentInterests || [],
             avatar_url: data.avatarUrl,
             banner_url: data.bannerUrl,
-            website_url: completeHttpsUrl(data.websiteUrl || ""),
+            website_url: String(data.websiteUrl || "").trim(),
             metadata: {
                 ...(data.metadata || {}),
                 professional_cta: {
                     ...(data.professionalCta || {}),
-                    url: completeHttpsUrl(
-                        data.professionalCta?.url || data.websiteUrl,
-                    ),
+                    url: String(
+                        data.professionalCta?.url || data.websiteUrl || "",
+                    ).trim(),
                 },
             },
         };
@@ -1152,7 +1111,7 @@ class XERAProfessionalManager {
                 description: updates.description,
                 avatar_url: updates.avatarUrl,
                 banner_url: updates.bannerUrl,
-                website_url: completeHttpsUrl(updates.websiteUrl || ""),
+                website_url: String(updates.websiteUrl || "").trim(),
                 hiring_needs: updates.hiringNeeds,
                 updated_at: new Date().toISOString(),
             })
@@ -3066,13 +3025,14 @@ class XERAProfessionalManager {
                         <div class="pro-actions-row">
                             ${(() => {
                                 const cta = getProfessionalCta(page);
-                                if (!cta.url && cta.type === "external")
-                                    return "";
-                                const action =
-                                    cta.type === "native"
-                                        ? `href="#" onclick="event.preventDefault(); window.openProfessionalCtaModal('${page.id}')"`
-                                        : `href="${this.escapeHtml(cta.url)}" target="_blank" rel="noopener noreferrer"`;
-                                return `<a ${action} class="btn-pro-primary" style="text-decoration:none;"><i class="fas fa-globe"></i><span class="btn-pro-label-long">${this.escapeHtml(cta.label)}</span><span class="btn-pro-label-short">Web</span></a>`;
+                                if (!cta.url) return "";
+                                const target =
+                                    cta.type === "phone"
+                                        ? ""
+                                        : ` target="_blank" rel="noopener noreferrer"`;
+                                const icon =
+                                    cta.type === "phone" ? "phone" : "globe";
+                                return `<a href="${this.escapeHtml(cta.url)}"${target} class="btn-pro-primary" style="text-decoration:none;"><i class="fas fa-${icon}"></i><span>${this.escapeHtml(cta.label)}</span></a>`;
                             })()}
                             <button class="btn-pro-secondary" type="button" onclick="window.startCompanyMessageFromPage && window.startCompanyMessageFromPage('${this.escapeHtml(page.id)}','${this.escapeHtml(page.slug || "")}','${this.escapeHtml(page.name || "Page Pro")}')"><i class="fas fa-comment-dots"></i><span class="btn-pro-label-long">Contacter</span><span class="btn-pro-label-short">Message</span></button>
                             ${pageFollowHtml}
@@ -3886,9 +3846,7 @@ class XERAProfessionalOnboarding {
             hiringNeeds: [],
             websiteUrl: "",
             professionalCta: {
-                objective: "sales",
-                label: "Réserver une Démo",
-                type: "external",
+                label: "Nous contacter",
                 url: "",
             },
         };
@@ -4243,28 +4201,9 @@ class XERAProfessionalOnboarding {
             },
             {
                 title: "Action principale",
-                desc: "Choisissez le bouton visible sur votre page professionnelle.",
+                desc: "Personnalisez un bouton qui ouvre un lien ou appelle un numéro.",
                 icon: "fa-link",
-                content: `<select id="onboarding-cta-objective" class="form-input">${Object.entries(
-                    PROFESSIONAL_CTA_OPTIONS,
-                )
-                    .map(
-                        ([value, option]) =>
-                            `<option value="${value}" ${this.data.professionalCta.objective === value ? "selected" : ""}>${option.label}</option>`,
-                    )
-                    .join(
-                        "",
-                    )}</select><select id="onboarding-cta-label" class="form-input">${Object.values(
-                    PROFESSIONAL_CTA_OPTIONS,
-                )
-                    .flatMap((option) => option.buttons)
-                    .map(
-                        (label) =>
-                            `<option value="${label}" ${this.data.professionalCta.label === label ? "selected" : ""}>${label}</option>`,
-                    )
-                    .join(
-                        "",
-                    )}<option value="custom">Texte personnalisé</option></select><input type="text" id="onboarding-cta-custom" class="form-input" maxlength="25" placeholder="Texte personnalisé (25 caractères max)"><select id="onboarding-cta-type" class="form-input"><option value="external" ${this.data.professionalCta.type === "external" ? "selected" : ""}>URL externe (Calendly, site, ATS...)</option><option value="native" ${this.data.professionalCta.type === "native" ? "selected" : ""}>Capture de contact native XERA1</option></select><input type="url" id="onboarding-website" class="form-input" placeholder="https://votreorganisation.com" value="${this.data.websiteUrl || ""}">`,
+                content: `<input type="text" id="onboarding-cta-label" class="form-input" maxlength="40" placeholder="Ex: Nous contacter, Réserver" value="${this.data.professionalCta.label || ""}"><input type="text" id="onboarding-website" class="form-input" placeholder="https://... ou +243 800 000 000" value="${this.data.professionalCta.url || this.data.websiteUrl || ""}">`,
             },
         ];
 
@@ -4341,12 +4280,6 @@ class XERAProfessionalOnboarding {
                 }
             }
         };
-
-        if (this.currentStep === 6) {
-            document.getElementById("onboarding-website").oninput = (event) => {
-                event.target.value = stripUrlProtocol(event.target.value);
-            };
-        }
 
         if (this.currentStep === 1) {
             const searchInput = document.getElementById(
@@ -4496,22 +4429,14 @@ class XERAProfessionalOnboarding {
                 return true;
             case 6:
                 if (
-                    !document
-                        .getElementById("onboarding-website")
-                        .value.trim() &&
-                    document.getElementById("onboarding-cta-type").value ===
-                        "external"
+                    !document.getElementById("onboarding-website").value.trim()
                 ) {
-                    alert("Lien officiel requis.");
+                    alert("Un lien ou un numéro est requis.");
                     return false;
                 }
-                const ctaLabel =
-                    document.getElementById("onboarding-cta-label").value ===
-                    "custom"
-                        ? document
-                              .getElementById("onboarding-cta-custom")
-                              .value.trim()
-                        : document.getElementById("onboarding-cta-label").value;
+                const ctaLabel = document
+                    .getElementById("onboarding-cta-label")
+                    .value.trim();
                 if (!ctaLabel || ctaLabel.length > 25) {
                     alert(
                         "Choisissez un intitulé valide (25 caractères maximum).",
@@ -4559,25 +4484,14 @@ class XERAProfessionalOnboarding {
                     .filter(Boolean);
                 break;
             case 6:
-                this.data.websiteUrl = stripUrlProtocol(
-                    document.getElementById("onboarding-website").value,
-                );
+                this.data.websiteUrl = document
+                    .getElementById("onboarding-website")
+                    .value.trim();
                 this.data.professionalCta = {
-                    objective: document.getElementById(
-                        "onboarding-cta-objective",
-                    ).value,
-                    label:
-                        document.getElementById("onboarding-cta-label")
-                            .value === "custom"
-                            ? document
-                                  .getElementById("onboarding-cta-custom")
-                                  .value.trim()
-                            : document.getElementById("onboarding-cta-label")
-                                  .value,
-                    type: document.getElementById("onboarding-cta-type").value,
-                    url: completeHttpsUrl(
-                        document.getElementById("onboarding-website").value,
-                    ),
+                    label: document
+                        .getElementById("onboarding-cta-label")
+                        .value.trim(),
+                    url: this.data.websiteUrl,
                 };
                 break;
         }

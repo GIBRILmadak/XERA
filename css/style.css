@@ -1153,7 +1153,9 @@ nav {
 }
 
 .hero-title {
-    font-family: var(--font-heading);
+    font-family:
+        "Didot", "Bodoni Moda", "Bodoni MT", "Iowan Old Style", Georgia, serif;
+    font-weight: 600;
     font-size: clamp(2.4rem, 3vw + 1rem, 3.4rem);
     margin-bottom: 1rem;
     line-height: 1.05;
@@ -10713,6 +10715,52 @@ html.dark-mode .first-project-feed-popup__cta {
 .discover-card:hover {
     transform: translateY(-8px);
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    .page-post-publish-upsell__dialog {
+        border-color: rgba(148, 108, 255, 0.38);
+        background:
+            radial-gradient(
+                circle at 85% 0%,
+                rgba(148, 108, 255, 0.18),
+                transparent 34%
+            ),
+            linear-gradient(145deg, #171522 0%, #0c0d13 68%);
+    }
+    .page-post-publish-upsell__dialog .post-publish-upsell__avatar {
+        border-radius: 16px;
+    }
+    .page-post-publish-upsell__status {
+        position: absolute;
+        right: -4px;
+        bottom: -4px;
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border: 3px solid #11121a;
+        border-radius: 50%;
+        background: #946cff;
+        color: #fff;
+        font-size: 0.78rem;
+    }
+    .page-post-publish-upsell__dialog strong {
+        color: #d9ccff;
+    }
+    .page-post-publish-upsell__proof {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 18px 0 22px;
+        padding: 12px 14px;
+        border: 1px solid rgba(148, 108, 255, 0.24);
+        border-radius: 12px;
+        background: rgba(148, 108, 255, 0.09);
+        color: #d5d1e6;
+        font-size: 0.84rem;
+        line-height: 1.4;
+    }
+    .page-post-publish-upsell__proof i {
+        color: #b59bff;
+    }
 }
 
 .discover-card:active {

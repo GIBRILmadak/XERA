@@ -5551,9 +5551,10 @@ app.post("/api/admin/gift-plan", async (req, res) => {
         const badgeForPlan =
             normalizedPlan === "pro" ? "verified_gold" : "verified";
         const existingBadge = String(profile.badge || "").toLowerCase();
-        const badgeToApply = PROTECTED_BADGES.has(existingBadge)
-            ? profile.badge
-            : badgeForPlan;
+        const badgeToApply =
+            normalizedPlan !== "pro" && PROTECTED_BADGES.has(existingBadge)
+                ? profile.badge
+                : badgeForPlan;
         const followersCount = Number(profile.followers_count || 0);
         const isMonetized =
             normalizedPlan === "pro"

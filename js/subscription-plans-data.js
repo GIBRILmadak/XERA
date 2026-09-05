@@ -236,7 +236,7 @@
                 }),
                 Object.freeze({
                     iconClass: "fas fa-check",
-                    text: "Visibilité accrue dans Discover et recommandations",
+                    text: "Jusqu'à 10 fois plus de visibilité sur les posts dans Discover et les recommandations",
                 }),
                 Object.freeze({
                     iconClass: "fas fa-check",

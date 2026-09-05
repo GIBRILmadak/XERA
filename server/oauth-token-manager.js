@@ -1,4 +1,4 @@
-const crypto = require("crypto");
+vaconst crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
 const { OAUTH_CONFIGS } = require("./oauth-configs");
 
