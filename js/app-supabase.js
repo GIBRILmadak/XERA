@@ -1380,10 +1380,10 @@ async function shareProfileLink(userId) {
     if (!userId) return;
     const user = getUser(userId);
     const url = buildProfileShareUrl(userId);
-    const title = user ? `Profil de ${user.name} | XERA` : "Profil XERA";
+    const title = user ? `Profil de ${user.name} | XERA1` : "Profil XERA1";
     const text = user
-        ? `Découvre le profil de ${user.name} sur XERA.`
-        : "Découvre ce profil sur XERA.";
+        ? `Découvre le profil de ${user.name} sur XERA1.`
+        : "Découvre ce profil sur XERA1.";
 
     if (navigator.share) {
         try {
@@ -16451,7 +16451,7 @@ ${showPublicStats ? influenceSectionHtml : ""}
                         <img src="${user.avatar && (user.avatar.startsWith("http") || user.avatar.startsWith("data:")) ? withCacheBust(user.avatar) : "https://placehold.co/150"}" class="profile-avatar-img" alt="Avatar de ${user.name}" onclick="navigateToUserProfile('${userId}')" style="cursor: pointer;">
                     </div>
                     <div class="profile-name-block">
-                        <span class="profile-section-kicker">Profil XERA</span>
+                        <span class="profile-section-kicker">Profil XERA1</span>
                         <h2>${renderUsernameForProfile(user.name, user.id)}${monetizationBadgeHtml}</h2>
                         ${profileRoleBadgeHtml}
                         <p class="profile-title"><strong>${profileTitleHtml}</strong></p>
@@ -18225,7 +18225,7 @@ async function openSettings(userId) {
                                 <div class="profile-customization-preview-banner"></div>
                                 <div class="profile-customization-preview-grid">
                                     <div class="profile-customization-preview-card">
-                                        <span class="profile-section-kicker">Profil XERA</span>
+                                        <span class="profile-section-kicker">Profil XERA1</span>
                                         <strong>${escapeHtml(user.name || "Utilisateur")}</strong>
                                     </div>
                                     <div class="profile-customization-preview-card is-signal">
