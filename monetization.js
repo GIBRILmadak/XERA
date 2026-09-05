@@ -22,11 +22,21 @@ export const USD_TO_CDF_RATE_VALUE = Math.max(
     Number.parseFloat(process.env.USD_TO_CDF_RATE) || 2300,
 );
 export const CALLBACK_BASE_URL = process.env.CALLBACK_BASE_URL || "";
-export const KPAY_USE_CALLBACK = process.env.KPAY_USE_CALLBACK || "1";
-export const KPAY_PUBLIC_KEY = process.env.KPAY_PUBLIC_KEY || "kpay_test_...";
-export const KPAY_SECRET_KEY = process.env.KPAY_SECRET_KEY || "sk_test_...";
+function readEnvVar(...names) {
+    for (const name of names) {
+        if (!name) continue;
+        const val = process.env[name];
+        if (val !== undefined && val !== null && String(val).trim() !== "") {
+            return String(val).trim();
+        }
+    }
+    return "";
+}
+
+export const KPAY_PUBLIC_KEY = readEnvVar("KPAY_PUBLIC_KEY", "CLÉ PUBLIQUE KPAY", "CLE_PUBLIQUE_KPAY", "CLE PUBLIQUE KPAY") || process.env.KPAY_PUBLIC_KEY || "";
+export const KPAY_SECRET_KEY = readEnvVar("KPAY_SECRET_KEY", "CLÉ SECRÈTE KPAY", "CLE_SECRETE_KPAY", "CLE SECRETE KPAY") || process.env.KPAY_SECRET_KEY || "";
 export const KPAY_CHECKOUT_URL = process.env.KPAY_CHECKOUT_URL || "https://admin.kpay.site";
-export const KPAY_CALLBACK_SECRET = process.env.KPAY_CALLBACK_SECRET || "...";
+export const KPAY_CALLBACK_SECRET = readEnvVar("KPAY_CALLBACK_SECRET", "KPAY_CALLBACK_SECRET") || process.env.KPAY_CALLBACK_SECRET || "";
 export const SUPER_ADMIN_ID =
     process.env.SUPER_ADMIN_ID || "b0f9f893-1706-4721-899c-d26ad79afc86";
 
