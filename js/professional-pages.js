@@ -2847,13 +2847,22 @@ class XERAProfessionalManager {
                     #pro-page .feature-info p, #pro-page .feature-arrow { color: var(--pro-muted); }
                     #pro-page .pro-info-carousel { padding: 0 30px 24px; margin: 0; }
                     #pro-page .pro-info-carousel > section { background: #161e2d; border-color: var(--pro-line); border-radius: 14px; color: var(--pro-ink); }
-                    #pro-page .pro-content-layout { grid-template-columns: minmax(0, 1fr) 310px; align-items: start; gap: 26px; }
+                    #pro-page .pro-content-layout { grid-template-columns: minmax(0, 1fr) 310px; align-items: start; gap: 26px; min-width: 0; }
                     #pro-page .pro-main-col { display: grid; gap: 22px; }
-                    #pro-page .pro-page-sidebar { position: sticky; top: 92px; gap: 12px; }
+                    #pro-page .pro-main-col,
+                    #pro-page .pro-page-sidebar,
+                    #pro-page .pro-card-premium,
+                    #pro-page .pro-about-card { min-width: 0; }
+                    #pro-page .pro-page-sidebar { position: static; align-self: start; gap: 12px; }
                     #pro-page .pro-card-premium, #pro-page .sidebar-card-premium, #pro-page .pro-creation-card {
                         background: #121826; color: var(--pro-ink); border-color: var(--pro-line); border-radius: 16px;
                         box-shadow: 0 8px 22px rgba(0,0,0,.2);
                     }
+                    #pro-page .pro-about-card { width: 100%; max-width: 100%; box-sizing: border-box; }
+                    #pro-page .pro-about-copy { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+                    #pro-page .pro-page-wrapper,
+                    #pro-page .pro-page-wrapper * { box-sizing: border-box; }
+                    #pro-page img { max-width: 100%; }
                     #pro-page .pro-creation-card { padding: 16px; border-top: 3px solid var(--pro-violet); }
                     #pro-page .pro-creation-input-shell { background: #0d1320; border-color: #273146; border-radius: 12px; margin-bottom: 11px; }
                     #pro-page .pro-creation-input-shell button { color: var(--pro-muted); }
@@ -2980,12 +2989,12 @@ class XERAProfessionalManager {
                 `;
 
             try {
-                const floatingCreate = document.getElementById(
-                    "floating-create-container",
-                );
-                if (floatingCreate) floatingCreate.style.display = "none";
+              const floatingCreate = document.getElementById(
+                "floating-create-container",
+              );
+              if (floatingCreate) floatingCreate.style.display = "none";
             } catch (e) {
-                // ignore if proContainer not present or DOM restricted
+              // ignore if proContainer not present or DOM restricted
             }
 
             proContainer.innerHTML = `
@@ -3024,26 +3033,26 @@ class XERAProfessionalManager {
 
                         <div class="pro-actions-row">
                             ${(() => {
-                                const cta = getProfessionalCta(page);
-                                if (!cta.url) return "";
-                                const target =
-                                    cta.type === "phone"
-                                        ? ""
-                                        : ` target="_blank" rel="noopener noreferrer"`;
-                                const icon =
-                                    cta.type === "phone" ? "phone" : "globe";
-                                return `<a href="${this.escapeHtml(cta.url)}"${target} class="btn-pro-primary" style="text-decoration:none;"><i class="fas fa-${icon}"></i><span>${this.escapeHtml(cta.label)}</span></a>`;
+                              const cta = getProfessionalCta(page);
+                              if (!cta.url) return "";
+                              const target =
+                                cta.type === "phone"
+                                  ? ""
+                                  : ` target="_blank" rel="noopener noreferrer"`;
+                              const icon =
+                                cta.type === "phone" ? "phone" : "globe";
+                              return `<a href="${this.escapeHtml(cta.url)}"${target} class="btn-pro-primary" style="text-decoration:none;"><i class="fas fa-${icon}"></i><span>${this.escapeHtml(cta.label)}</span></a>`;
                             })()}
                             <button class="btn-pro-secondary" type="button" onclick="window.startCompanyMessageFromPage && window.startCompanyMessageFromPage('${this.escapeHtml(page.id)}','${this.escapeHtml(page.slug || "")}','${this.escapeHtml(page.name || "Page Pro")}')"><i class="fas fa-comment-dots"></i><span class="btn-pro-label-long">Contacter</span><span class="btn-pro-label-short">Message</span></button>
                             ${pageFollowHtml}
                             ${
-                                isOwner
-                                    ? `
+                              isOwner
+                                ? `
                                 <button class="btn-pro-secondary" onclick="window.professionalManager.openTeamManagement('${page.id}')"><i class="fas fa-users-cog"></i><span class="btn-pro-label-long">Gérer l'équipe</span><span class="btn-pro-label-short">Équipe</span></button>
                                 <a href="commissions.html" class="btn-pro-secondary" style="text-decoration:none"><i class="fas fa-chart-line"></i><span class="btn-pro-label-long">Commissions</span><span class="btn-pro-label-short">Com.</span></a>
                                 <button class="btn-pro-secondary" onclick="window.professionalManager.openPageSettings('${page.id}')"><i class="fas fa-cog"></i><span class="btn-pro-label-long">Réglages Page</span><span class="btn-pro-label-short">Réglages</span></button>
                             `
-                                    : ""
+                                : ""
                             }
                         </div>
                         <div class="pro-public-stats" aria-label="Aperçu de la page">
@@ -3053,19 +3062,19 @@ class XERAProfessionalManager {
                             <div class="pro-stat-item"><strong>${page.hiring_needs?.length || 0}</strong><span>Spécialités</span></div>
                         </div>
                         ${
-                            isOwner
-                                ? `<div class="pro-info-carousel">
+                          isOwner
+                            ? `<div class="pro-info-carousel">
                             ${recommendedProfilesHtml}
                             ${officialComparisonHtml}
                         </div>`
-                                : ""
+                            : ""
                         }
                     </div>
 
                     <!-- QUICK ACTIONS -->
                     ${
-                        isOwner
-                            ? `<div class="pro-features-grid">
+                      isOwner
+                        ? `<div class="pro-features-grid">
                         <div class="feature-card-pro" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">
                             <div class="feature-icon-box"><i class="fas fa-handshake"></i></div>
                             <div class="feature-info">
@@ -3091,7 +3100,7 @@ class XERAProfessionalManager {
                             <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
                         </div>
                             </div>`
-                            : ""
+                        : ""
                     }
 
                     <div class="pro-content-layout">
@@ -3099,8 +3108,8 @@ class XERAProfessionalManager {
                         <div class="pro-main-col">
                             <!-- CREATION BAR -->
                             ${
-                                isOwner
-                                    ? `
+                              isOwner
+                                ? `
                                 <div class="pro-creation-card">
                                     <div class="pro-creation-input-shell">
                                         <img src="${avatar}" alt="Logo">
@@ -3122,7 +3131,7 @@ class XERAProfessionalManager {
                                     </div>
                                 </div>
                             `
-                                    : ""
+                                : ""
                             }
 
                             <!-- ARCS -->
@@ -3132,10 +3141,10 @@ class XERAProfessionalManager {
                             </div>
                             <div class="org-arcs-grid" style="display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 40px;">
                                 ${
-                                    orgArcs && orgArcs.length > 0
-                                        ? orgArcs
-                                              .map(
-                                                  (arc) => `
+                                  orgArcs && orgArcs.length > 0
+                                    ? orgArcs
+                                        .map(
+                                          (arc) => `
                                             <div class="arc-card-pro-premium" onclick="selectArc('${arc.id}', '${page.owner_id}')" style="cursor: pointer;">
                                                 <div style="font-size: 0.65rem; text-transform: uppercase; font-weight: 800; color: #8b5cf6; margin-bottom: 5px; letter-spacing: 1px;">ARC OFFICIEL</div>
                                                 <h4 style="margin: 0 0 10px 0; font-size: 1.1rem; font-weight: 700;">${arc.title}</h4>
@@ -3146,9 +3155,9 @@ class XERAProfessionalManager {
                                                 </div>
                                             </div>
                                         `,
-                                              )
-                                              .join("")
-                                        : `
+                                        )
+                                        .join("")
+                                    : `
                                         <div class="pro-empty-state">
                                             <div class="pro-empty-icon"><i class="fas fa-folder-open"></i></div>
                                             <div class="pro-empty-text">L'organisation n'a pas encore de projet public.<br>Ajoutez votre premier projet pour commencer.</div>
@@ -3168,18 +3177,18 @@ class XERAProfessionalManager {
 
                             <!-- ABOUT -->
                             <h3 class="pro-section-title" style="margin-bottom: 20px;">À propos</h3>
-                            <div class="pro-card-premium" style="margin-bottom: 40px;">
-                                <p style="white-space: pre-wrap; line-height: 1.7; color: var(--text-secondary); font-size: 0.95rem; margin: 0;">${page.description || "Bienvenue sur notre page professionnelle."}</p>
+                            <div class="pro-card-premium pro-about-card" style="margin-bottom: 40px;">
+                                <p class="pro-about-copy" style="white-space: pre-wrap; line-height: 1.7; color: var(--text-secondary); font-size: 0.95rem; margin: 0;">${page.description || "Bienvenue sur notre page professionnelle."}</p>
                             </div>
 
                             <!-- TEAM -->
                             <h3 class="pro-section-title" style="margin-bottom: 20px;">Équipe Certifiée</h3>
                             <div class="employees-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin-bottom: 40px;">
                                 ${
-                                    employees.length > 0
-                                        ? employees
-                                              .map(
-                                                  (emp) => `
+                                  employees.length > 0
+                                    ? employees
+                                        .map(
+                                          (emp) => `
                                             <div class="pro-card-premium" style="text-align: center; cursor: pointer; padding: 25px; transition: all 0.2s;" onclick="navigateToUserProfile('${emp.user_id}')">
                                                 <img src="${emp.user?.avatar || "https://placehold.co/100"}" style="width: 70px; height: 70px; border-radius: 50%; margin-bottom: 15px; object-fit: cover; border: 2px solid rgba(255,255,255,0.05);">
                                                 <div style="font-weight: 700; margin-bottom: 4px; font-size: 0.95rem;">${emp.user?.name}</div>
@@ -3187,9 +3196,9 @@ class XERAProfessionalManager {
                                                 ${emp.department ? `<div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 4px; opacity: 0.8;">${emp.department}</div>` : ""}
                                             </div>
                                         `,
-                                              )
-                                              .join("")
-                                        : `<p style="color: var(--text-secondary); font-style: italic; font-size: 0.9rem;">Aucun membre certifié pour le moment.</p>`
+                                        )
+                                        .join("")
+                                    : `<p style="color: var(--text-secondary); font-style: italic; font-size: 0.9rem;">Aucun membre certifié pour le moment.</p>`
                                 }
                             </div>
                         </div>
