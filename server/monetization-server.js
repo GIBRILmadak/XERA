@@ -5,6 +5,12 @@ const { createClient } = require("@supabase/supabase-js");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const webpush = require("web-push");
 const crypto = require("crypto");
+const {
+    validatePartnerAccess,
+    resolvePartnerPromoCode,
+    applyPartnerDiscount,
+    calculatePartnerCommission,
+} = require("./partner-logic");
 const { buildBotPostDraft } = require("./bot-post-generator");
 const { normalizeReturnPathForBrowser } = require("./payment-return-paths");
 const {
@@ -54,16 +60,55 @@ function readEnvVar(...names) {
     return "";
 }
 
-const KPAY_PUBLIC_KEY = readEnvVar("KPAY_PUBLIC_KEY", "CLÉ PUBLIQUE KPAY", "CLE_PUBLIQUE_KPAY", "CLE PUBLIQUE KPAY") || process.env.KPAY_PUBLIC_KEY || "";
-const KPAY_SECRET_KEY = readEnvVar("KPAY_SECRET_KEY", "CLÉ SECRÈTE KPAY", "CLE_SECRETE_KPAY", "CLE SECRETE KPAY") || process.env.KPAY_SECRET_KEY || "";
+const KPAY_PUBLIC_KEY =
+    readEnvVar(
+        "KPAY_PUBLIC_KEY",
+        "CLÉ PUBLIQUE KPAY",
+        "CLE_PUBLIQUE_KPAY",
+        "CLE PUBLIQUE KPAY",
+    ) ||
+    process.env.KPAY_PUBLIC_KEY ||
+    "";
+const KPAY_SECRET_KEY =
+    readEnvVar(
+        "KPAY_SECRET_KEY",
+        "CLÉ SECRÈTE KPAY",
+        "CLE_SECRETE_KPAY",
+        "CLE SECRETE KPAY",
+    ) ||
+    process.env.KPAY_SECRET_KEY ||
+    "";
 
 const KPAY_GATEWAY_MODE = process.env.KPAY_GATEWAY_MODE || "1";
-const KPAY_CHECKOUT_URL = process.env.KPAY_CHECKOUT_URL || "https://admin.kpay.site";
-const KPAY_CALLBACK_SECRET = readEnvVar("KPAY_CALLBACK_SECRET", "KPAY_CALLBACK_SECRET") || process.env.KPAY_CALLBACK_SECRET || "";
-const KPAY_WEBHOOK_SECRET = readEnvVar("KPAY_WEBHOOK_SECRET", "SECRET DU WEBHOOK KPAY", "SECRET_DU_WEBHOOK_KPAY", "SECRET WEBHOOK KPAY") || process.env.KPAY_WEBHOOK_SECRET || "";
-const KPAY_PAYOUTS_ENABLED = readEnvVar("KPAY_PAYOUTS_ENABLED", "KPAY_PAYOUTS_ACTIVÉ", "KPAY_PAYOUTS_ACTIVE") || process.env.KPAY_PAYOUTS_ENABLED || "0";
-const KPAY_PAYOUT_CURRENCIES = readEnvVar("KPAY_PAYOUT_CURRENCIES") || process.env.KPAY_PAYOUT_CURRENCIES || "{}";
-const SUPER_ADMIN_ID = process.env.SUPER_ADMIN_ID || "b0f9f893-1706-4721-899c-d26ad79afc86";
+const KPAY_CHECKOUT_URL =
+    process.env.KPAY_CHECKOUT_URL || "https://admin.kpay.site";
+const KPAY_CALLBACK_SECRET =
+    readEnvVar("KPAY_CALLBACK_SECRET", "KPAY_CALLBACK_SECRET") ||
+    process.env.KPAY_CALLBACK_SECRET ||
+    "";
+const KPAY_WEBHOOK_SECRET =
+    readEnvVar(
+        "KPAY_WEBHOOK_SECRET",
+        "SECRET DU WEBHOOK KPAY",
+        "SECRET_DU_WEBHOOK_KPAY",
+        "SECRET WEBHOOK KPAY",
+    ) ||
+    process.env.KPAY_WEBHOOK_SECRET ||
+    "";
+const KPAY_PAYOUTS_ENABLED =
+    readEnvVar(
+        "KPAY_PAYOUTS_ENABLED",
+        "KPAY_PAYOUTS_ACTIVÉ",
+        "KPAY_PAYOUTS_ACTIVE",
+    ) ||
+    process.env.KPAY_PAYOUTS_ENABLED ||
+    "0";
+const KPAY_PAYOUT_CURRENCIES =
+    readEnvVar("KPAY_PAYOUT_CURRENCIES") ||
+    process.env.KPAY_PAYOUT_CURRENCIES ||
+    "{}";
+const SUPER_ADMIN_ID =
+    process.env.SUPER_ADMIN_ID || "b0f9f893-1706-4721-899c-d26ad79afc86";
 
 // Validate configuration for production
 const isProduction =
@@ -1019,6 +1064,39 @@ async function findActivePartnerDiscountCode(rawCode) {
     const code = normalizeDiscountCode(rawCode);
     if (!code) return null;
     const nowIso = new Date().toISOString();
+
+    const { data: promoData, error: promoError } = await supabase
+        .from("promo_codes")
+        .select(
+            "id, code, discount_percentage, applicable_plan, partner_id, valid_until, is_active, partners!inner(id, status, partner_access_code, start_date, end_date)",
+        )
+        .eq("code", code)
+        .eq("is_active", true)
+        .eq("partners.status", "active")
+        .or(`valid_until.is.null,valid_until.gte.${nowIso}`)
+        .maybeSingle();
+
+    if (promoError && promoError.code !== "42P01") throw promoError;
+    if (promoData) {
+        const partner = promoData.partners;
+        const validation = validatePartnerAccess({
+            partner,
+            now: new Date(nowIso),
+            accessCode: partner?.partner_access_code,
+        });
+        if (!validation.valid) return null;
+        return {
+            id: promoData.id,
+            code: promoData.code,
+            partner_id: promoData.partner_id,
+            discount_percent: Number(promoData.discount_percentage || 20),
+            status: "active",
+            expires_at: promoData.valid_until,
+            partners: partner,
+            applicable_plan: promoData.applicable_plan,
+        };
+    }
+
     const { data, error } = await supabase
         .from("partner_discount_codes")
         .select(
@@ -1030,8 +1108,46 @@ async function findActivePartnerDiscountCode(rawCode) {
         .lte("starts_at", nowIso)
         .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
         .maybeSingle();
-    if (error) throw error;
+    if (error && error.code !== "42P01") throw error;
     return data || null;
+}
+
+async function persistPartnerAssignment({ userId, partnerId }) {
+    if (!userId || !partnerId) return null;
+    const nowIso = new Date().toISOString();
+    await Promise.all([
+        supabase
+            .from("users")
+            .update({ referred_by_partner_id: partnerId, updated_at: nowIso })
+            .eq("id", userId),
+        supabase
+            .from("user_subscriptions")
+            .update({ referred_by_partner_id: partnerId, updated_at: nowIso })
+            .eq("user_id", userId)
+            .eq("status", "active"),
+    ]);
+    return { userId, partnerId };
+}
+
+async function getAssignedPartnerForUser(userId) {
+    if (!userId) return null;
+    const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("id, referred_by_partner_id")
+        .eq("id", userId)
+        .maybeSingle();
+    if (profileError && profileError.code !== "42P01") throw profileError;
+    if (profile?.referred_by_partner_id) return profile.referred_by_partner_id;
+
+    const { data: activeSub, error: subError } = await supabase
+        .from("user_subscriptions")
+        .select("referred_by_partner_id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (subError && subError.code !== "42P01") throw subError;
+    return activeSub?.referred_by_partner_id || null;
 }
 
 async function createPartnerAffiliationFromSubscription({
@@ -1060,7 +1176,10 @@ async function createPartnerAffiliationFromSubscription({
         )
         .select("id")
         .maybeSingle();
-    if (error) throw error;
+    if (error && error.code !== "42P01") throw error;
+    if (partnerId) {
+        await persistPartnerAssignment({ userId, partnerId });
+    }
     return data || null;
 }
 
@@ -1071,51 +1190,64 @@ async function createPartnerCommissionForSupport({
     netCreator,
 }) {
     const nowIso = new Date().toISOString();
-    const { data: affiliation, error: affiliationError } = await supabase
-        .from("partner_affiliations")
-        .select(
-            "id, partner_id, partners!inner(status, commission_rate), partner_discount_codes!inner(status, expires_at)",
-        )
-        .eq("user_id", beneficiaryUserId)
-        .eq("status", "active")
-        .lte("eligible_from", nowIso)
-        .gte("eligible_until", nowIso)
-        .eq("partners.status", "active")
-        .eq("partner_discount_codes.status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-    if (affiliationError) throw affiliationError;
-    if (!affiliation) return null;
-    if (
-        affiliation.partner_discount_codes?.expires_at &&
-        new Date(affiliation.partner_discount_codes.expires_at).getTime() <
-            Date.now()
-    )
+    const partnerId = await getAssignedPartnerForUser(beneficiaryUserId);
+    if (!partnerId) {
         return null;
-    const rate = Number(affiliation.partners?.commission_rate || 0.05);
-    const commission = Math.round(Number(gross) * rate * 100) / 100;
+    }
+
+    const { data: partner, error: partnerError } = await supabase
+        .from("partners")
+        .select("id, status, start_date, end_date, commission_rate")
+        .eq("id", partnerId)
+        .maybeSingle();
+    if (partnerError && partnerError.code !== "42P01") throw partnerError;
+    if (!partner) return null;
+
+    const validation = validatePartnerAccess({
+        partner,
+        now: new Date(nowIso),
+        accessCode: partner.partner_access_code,
+    });
+    if (!validation.valid) return null;
+
+    const rate = Number(partner.commission_rate || 0.05);
+    const commission = calculatePartnerCommission(gross, rate);
+
     const { data, error } = await supabase
-        .from("partner_commissions")
+        .from("commissions")
         .insert({
-            partner_id: affiliation.partner_id,
-            affiliation_id: affiliation.id,
-            support_transaction_id: transactionId,
-            beneficiary_user_id: beneficiaryUserId,
-            amount_gross: gross,
-            commission_amount: commission,
-            beneficiary_net_amount: Math.max(
-                0,
-                Math.round((Number(netCreator) - commission) * 100) / 100,
-            ),
-            currency: "USD",
-            status: "available",
-            available_at: new Date().toISOString(),
+            partner_id: partnerId,
+            source_user_id: beneficiaryUserId,
+            donation_id: transactionId,
+            amount_earned: commission,
+            created_at: nowIso,
         })
         .select("id")
         .maybeSingle();
-    // A unique constraint makes repeated payment webhooks idempotent.
-    if (error && error.code !== "23505") throw error;
+    if (error && error.code !== "23505") {
+        const legacy = await supabase
+            .from("partner_commissions")
+            .insert({
+                partner_id: partnerId,
+                affiliation_id: null,
+                support_transaction_id: transactionId,
+                beneficiary_user_id: beneficiaryUserId,
+                amount_gross: gross,
+                commission_amount: commission,
+                beneficiary_net_amount: Math.max(
+                    0,
+                    Math.round((Number(netCreator) - commission) * 100) / 100,
+                ),
+                currency: "USD",
+                status: "available",
+                available_at: nowIso,
+            })
+            .select("id")
+            .maybeSingle();
+        if (legacy.error && legacy.error.code !== "23505") throw legacy.error;
+        return legacy.data ? { ...legacy.data, commission } : null;
+    }
+
     return data ? { ...data, commission } : null;
 }
 
@@ -2348,7 +2480,9 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage, context = {}) {
         : fallbackMessage;
 
     const returnPath = context.returnPath || "/";
-    const acceptsHtml = String(res.req?.headers?.accept || "").includes("text/html");
+    const acceptsHtml = String(res.req?.headers?.accept || "").includes(
+        "text/html",
+    );
 
     if (acceptsHtml) {
         setResponseHeader(res, "Content-Type", "text/html; charset=utf-8");
@@ -4817,13 +4951,46 @@ async function handleKPaySubscriptionCheckout(req, res) {
                     .send(
                         "Ce code partenaire est valable uniquement pour l'abonnement Pro.",
                     );
+            if (partnerDiscount) {
+                const partnerValidation = validatePartnerAccess({
+                    partner: partnerDiscount.partners,
+                    now: new Date(),
+                    accessCode: partnerDiscount.partners?.partner_access_code,
+                });
+                if (!partnerValidation.valid) {
+                    return res
+                        .status(400)
+                        .send("Partenariat expiré ou code invalide");
+                }
+                const promoValidation = resolvePartnerPromoCode({
+                    promo: {
+                        ...partnerDiscount,
+                        partner: partnerDiscount.partners,
+                        code: partnerDiscount.code,
+                        discount_percentage: partnerDiscount.discount_percent,
+                        valid_until: partnerDiscount.expires_at,
+                        applied_plan: "PRO",
+                        is_active: partnerDiscount.status === "active",
+                    },
+                    requestedPlan: "PRO",
+                    now: new Date(),
+                });
+                if (!promoValidation.valid) {
+                    return res
+                        .status(400)
+                        .send(
+                            promoValidation.reason ||
+                                "Code promo partenaire invalide",
+                        );
+                }
+            }
         }
         const discountPercent = Number(
             discount?.discount_percent ||
                 partnerDiscount?.discount_percent ||
                 0,
         );
-        const discountedUsd = applyDiscount(
+        const discountedUsd = applyPartnerDiscount(
             computeKPayAmount(planId, billingCycle, "USD"),
             discountPercent,
         );
@@ -4942,7 +5109,9 @@ async function handleKPaySubscriptionCheckout(req, res) {
         res.status(302).send();
     } catch (error) {
         console.error("KPay checkout error:", error);
-        return sendCheckoutErrorResponse(res, error, "Erreur KPay", { returnPath });
+        return sendCheckoutErrorResponse(res, error, "Erreur KPay", {
+            returnPath,
+        });
     }
 }
 
