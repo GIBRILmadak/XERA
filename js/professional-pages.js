@@ -2986,6 +2986,335 @@ class XERAProfessionalManager {
                         #pro-page .pro-stat-item:nth-child(2) { border-right: 0; }
                         #pro-page .pro-stat-item:nth-child(-n+2) { border-bottom: 1px solid var(--pro-line); }
                     }
+
+                    /* Derniere garde responsive : le contenu doit toujours pouvoir
+                       retrecir avant de forcer une largeur au viewport. */
+                    #pro-page .pro-page-wrapper,
+                    #pro-page .pro-page-wrapper * { min-width: 0; }
+                    #pro-page .pro-page-wrapper h1,
+                    #pro-page .pro-page-wrapper h2,
+                    #pro-page .pro-page-wrapper h3,
+                    #pro-page .pro-page-wrapper h4,
+                    #pro-page .pro-page-wrapper p,
+                    #pro-page .pro-page-wrapper span,
+                    #pro-page .pro-page-wrapper a,
+                    #pro-page .pro-page-wrapper button {
+                        overflow-wrap: anywhere;
+                    }
+                    #pro-page .pro-actions-row {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+                    }
+                    #pro-page .pro-actions-row > * {
+                        width: 100%;
+                        min-width: 0;
+                    }
+                    #pro-page .pro-actions-row .btn-icon {
+                        flex: 0 0 auto;
+                    }
+                    #pro-page .pro-public-stats {
+                        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                    }
+                    #pro-page .pro-stat-item {
+                        min-width: 0;
+                        overflow-wrap: anywhere;
+                    }
+                    #pro-page .pro-info-carousel > section,
+                    #pro-page .pro-card-premium,
+                    #pro-page .sidebar-card-premium,
+                    #pro-page .arc-card-pro-premium,
+                    #pro-page .feature-card-pro {
+                        overflow-wrap: anywhere;
+                    }
+                    #pro-page .feature-card-pro {
+                        min-height: 0;
+                        height: auto;
+                        align-items: start;
+                    }
+                    #pro-page .feature-info {
+                        min-height: 0;
+                    }
+                    #pro-page .feature-info p {
+                        display: block;
+                        overflow: visible;
+                        text-overflow: clip;
+                        -webkit-line-clamp: unset;
+                        -webkit-box-orient: initial;
+                    }
+                    #pro-page .pro-info-carousel > section,
+                    #pro-page .pro-public-stats,
+                    #pro-page .pro-stat-item,
+                    #pro-page .org-arcs-grid,
+                    #pro-page .employees-grid {
+                        height: auto;
+                        grid-auto-rows: max-content;
+                    }
+                    #pro-page .pro-empty-state {
+                        min-height: 0;
+                    }
+                    #pro-page {
+                        max-width: 100%;
+                        overflow-x: clip;
+                    }
+                    #pro-page .pro-page-container,
+                    #pro-page .pro-page-wrapper,
+                    #pro-page .pro-content-layout,
+                    #pro-page .pro-main-col,
+                    #pro-page .pro-page-sidebar,
+                    #pro-page #company-updates-container {
+                        width: 100%;
+                        max-width: 100%;
+                        min-width: 0;
+                    }
+                    #pro-page .pro-posts-carousel {
+                        width: 100%;
+                        max-width: 100%;
+                        min-width: 0;
+                        overflow-x: auto;
+                        overflow-y: hidden;
+                        align-items: stretch;
+                    }
+                    #pro-page .pro-posts-carousel .pro-feed-card {
+                        flex: 0 1 min(640px, 100%);
+                        width: min(640px, 100%);
+                        max-width: 100%;
+                        min-width: 0;
+                    }
+                    #pro-page .pro-feed-card img,
+                    #pro-page .pro-feed-card video {
+                        display: block;
+                        width: 100%;
+                        max-width: 100%;
+                        height: auto;
+                    }
+                    #pro-page .pro-feed-card > div,
+                    #pro-page .pro-feed-card h3,
+                    #pro-page .pro-feed-card p,
+                    #pro-page .pro-feed-card .profile-update-stats {
+                        min-width: 0;
+                        max-width: 100%;
+                        overflow-wrap: anywhere;
+                    }
+                    #pro-page .pro-feed-card > div > div:first-of-type,
+                    #pro-page .pro-card-footer,
+                    #pro-page .pro-event-details {
+                        flex-wrap: wrap;
+                        gap: 12px;
+                    }
+                    #pro-page .pro-card-footer > *,
+                    #pro-page .pro-event-details > * {
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-info-carousel {
+                        width: 100%;
+                        max-width: 100%;
+                        min-width: 0;
+                        overflow-x: auto;
+                        overflow-y: hidden;
+                    }
+                    #pro-page .pro-info-carousel > section {
+                        flex: 0 1 min(420px, 100%);
+                        width: min(420px, 100%);
+                        max-width: 100%;
+                        min-width: min(280px, 100%);
+                    }
+                    #pro-page .pro-creation-input-shell button {
+                        min-width: 0;
+                        overflow-wrap: anywhere;
+                    }
+                    #pro-page .employees-grid {
+                        grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)) !important;
+                    }
+                    .talent-explorer-page,
+                    .talent-explorer-page * { min-width: 0; box-sizing: border-box; }
+                    .talent-explorer-page h1,
+                    .talent-explorer-page p,
+                    .talent-explorer-page span,
+                    .talent-explorer-page button { overflow-wrap: anywhere; }
+                    .talent-explorer-page .talent-explorer-header > div[style*="justify-content: space-between"] {
+                        flex-wrap: wrap;
+                        gap: 20px;
+                    }
+                    .talent-explorer-page .talent-search-box {
+                        flex-wrap: wrap;
+                    }
+                    .talent-explorer-page .talent-search-box input {
+                        min-width: 0;
+                    }
+
+                    @media (max-width: 700px) {
+                        #pro-page .pro-page-wrapper { padding-bottom: 28px; }
+                        #pro-page .pro-actions-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                        #pro-page .pro-public-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                        #pro-page .pro-posts-carousel .pro-feed-card {
+                            flex-basis: 100%;
+                            width: 100%;
+                        }
+                        #pro-page .pro-feed-card > div { padding: 18px !important; }
+                        #pro-page .pro-feed-card h3 { font-size: clamp(1.05rem, 5vw, 1.35rem) !important; }
+                        #pro-page .pro-feed-card .pro-post-description { max-height: none; }
+                        #pro-page .pro-info-carousel > section { flex-basis: min(100%, 360px); }
+                        .talent-explorer-page { padding: 12px !important; }
+                        .talent-explorer-page .talent-explorer-header { padding: 22px !important; border-radius: 22px !important; margin-bottom: 22px !important; }
+                        .talent-explorer-page .talent-explorer-header h1 { font-size: clamp(1.75rem, 8vw, 2.35rem) !important; }
+                        .talent-explorer-page .talent-explorer-header p { font-size: 1rem !important; }
+                        .talent-explorer-page .talent-search-box { gap: 8px !important; }
+                        .talent-explorer-page .talent-search-box i { padding: 12px !important; }
+                        .talent-explorer-page .talent-search-box input { flex: 1 1 calc(100% - 54px) !important; font-size: 1rem !important; }
+                        .talent-explorer-page .talent-search-box button { flex: 1 1 100%; min-height: 46px; padding: 12px 20px !important; }
+                    }
+                    @media (max-width: 420px) {
+                        #pro-page .pro-actions-row { grid-template-columns: 1fr; }
+                        #pro-page .pro-public-stats { grid-template-columns: 1fr; }
+                        #pro-page .pro-stat-item { border-right: 0 !important; border-bottom: 1px solid var(--pro-line); }
+                        #pro-page .pro-stat-item:last-child { border-bottom: 0; }
+                        #pro-page .pro-name-row { align-items: flex-start; flex-direction: column; }
+                        #pro-page .pro-name-row h2 { font-size: 1.35rem; }
+                        #pro-page .pro-page-follow-count { justify-content: center; }
+                        #pro-page .pro-info-carousel { padding-left: 12px; padding-right: 12px; }
+                        #pro-page .pro-info-carousel > section { min-width: 100%; }
+                    }
+
+                    /* Regles finales: une seule source de verite pour les dimensions.
+                       Les carrousels sont les seuls blocs autorises a defiler. */
+                    body.is-pro { overflow-x: hidden; }
+                    #pro-page,
+                    #pro-page .pro-page-container,
+                    #pro-page .pro-page-wrapper {
+                        width: 100%;
+                        max-width: 100%;
+                        min-width: 0;
+                    }
+                    #pro-page .pro-page-wrapper {
+                        padding-inline: clamp(12px, 3vw, 38px);
+                        padding-bottom: clamp(32px, 6vw, 72px);
+                    }
+                    #pro-page .pro-header-card,
+                    #pro-page .pro-content-layout,
+                    #pro-page .pro-main-col,
+                    #pro-page .pro-page-sidebar,
+                    #pro-page .pro-card-premium,
+                    #pro-page .sidebar-card-premium,
+                    #pro-page .pro-creation-card,
+                    #pro-page .arc-card-pro-premium,
+                    #pro-page .feature-card-pro {
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-banner-container,
+                    #pro-page .pro-banner-img { max-width: 100%; }
+                    #pro-page .pro-header-info > div:first-child,
+                    #pro-page .pro-main-details,
+                    #pro-page .pro-secondary-details {
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-name-row,
+                    #pro-page .pro-interest-list,
+                    #pro-page .pro-actions-row {
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-name-row h2,
+                    #pro-page .pro-industry-label,
+                    #pro-page .pro-members-count,
+                    #pro-page .pro-role-label,
+                    #pro-page .pro-interest-chip,
+                    #pro-page .pro-about-copy,
+                    #pro-page .arc-card-pro-premium h4,
+                    #pro-page .arc-card-pro-premium p,
+                    #pro-page .employees-grid .pro-card-premium div {
+                        overflow-wrap: anywhere;
+                        word-break: break-word;
+                    }
+                    #pro-page .pro-content-layout {
+                        grid-template-columns: minmax(0, 1fr) minmax(240px, 310px);
+                    }
+                    #pro-page .pro-actions-row {
+                        grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+                        align-items: stretch;
+                    }
+                    #pro-page .pro-actions-row > a,
+                    #pro-page .pro-actions-row > button {
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-public-stats {
+                        grid-template-columns: repeat(4, minmax(0, 1fr));
+                    }
+                    #pro-page .pro-stat-item {
+                        min-width: 0;
+                        overflow-wrap: anywhere;
+                    }
+                    #pro-page .pro-posts-carousel,
+                    #pro-page .pro-info-carousel {
+                        width: 100%;
+                        max-width: 100%;
+                        min-width: 0;
+                        overscroll-behavior-x: contain;
+                        scrollbar-gutter: stable;
+                    }
+                    #pro-page .pro-posts-carousel .pro-feed-card {
+                        flex: 0 0 min(640px, 100%);
+                        width: min(640px, 100%);
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-info-carousel > section {
+                        flex: 0 0 clamp(260px, 34vw, 420px);
+                        width: clamp(260px, 34vw, 420px);
+                        max-width: 100%;
+                        min-width: 0;
+                        height: auto;
+                    }
+                    #pro-page .pro-feed-card img,
+                    #pro-page .pro-feed-card video,
+                    #pro-page .pro-card-premium img,
+                    #pro-page .arc-card-pro-premium img {
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-card-footer,
+                    #pro-page .pro-event-details,
+                    #pro-page .pro-feed-card > div > div:first-of-type {
+                        display: flex;
+                        flex-wrap: wrap;
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-card-footer > *,
+                    #pro-page .pro-event-details > * { min-width: 0; max-width: 100%; }
+
+                    @media (max-width: 1040px) {
+                        #pro-page .pro-content-layout { grid-template-columns: 1fr; }
+                        #pro-page .pro-page-sidebar { order: 2; }
+                    }
+                    @media (max-width: 900px) {
+                        #pro-page .pro-page-wrapper { padding-inline: 18px; }
+                        #pro-page .pro-header-info { grid-template-columns: 1fr; }
+                        #pro-page .pro-secondary-details { border-left: 0; border-top: 1px solid var(--pro-line); padding: 16px 0 0; }
+                        #pro-page .pro-features-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                        #pro-page .pro-public-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                        #pro-page .pro-stat-item:nth-child(2n) { border-right: 0; }
+                        #pro-page .pro-stat-item:nth-child(-n+2) { border-bottom: 1px solid var(--pro-line); }
+                    }
+                    @media (max-width: 620px) {
+                        #pro-page .pro-page-wrapper { padding-inline: 0; }
+                        #pro-page .pro-header-card { border-radius: 0 0 20px 20px; border-inline: 0; }
+                        #pro-page .pro-content-layout { padding-inline: 14px; }
+                        #pro-page .pro-actions-row { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-inline: 17px; }
+                        #pro-page .pro-info-carousel { padding-inline: 14px; }
+                        #pro-page .pro-info-carousel > section { flex-basis: 100%; width: 100%; }
+                        #pro-page .pro-features-grid { grid-template-columns: 1fr; }
+                    }
+                    @media (max-width: 420px) {
+                        #pro-page .pro-actions-row { grid-template-columns: 1fr; }
+                        #pro-page .pro-public-stats { grid-template-columns: 1fr; }
+                        #pro-page .pro-stat-item { border-right: 0 !important; border-bottom: 1px solid var(--pro-line); }
+                        #pro-page .pro-stat-item:last-child { border-bottom: 0; }
+                        #pro-page .pro-header-info > div:first-child { grid-template-columns: 72px minmax(0, 1fr); gap: 12px; }
+                        #pro-page .pro-avatar-overlap { width: 72px; height: 72px; margin-top: -36px; }
+                        #pro-page .pro-name-row h2 { font-size: 1.28rem; }
+                    }
                 `;
 
             try {
