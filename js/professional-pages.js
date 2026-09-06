@@ -3231,6 +3231,30 @@ class XERAProfessionalManager {
                     #pro-page .pro-content-layout {
                         grid-template-columns: minmax(0, 1fr) minmax(240px, 310px);
                     }
+                    #pro-page .org-arcs-grid,
+                    #pro-page .employees-grid,
+                    #pro-page .talent-grid-standalone {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)) !important;
+                        gap: clamp(12px, 2vw, 20px) !important;
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .org-arcs-grid,
+                    #pro-page #company-updates-container,
+                    #pro-page .employees-grid {
+                        max-height: 65vh;
+                        overflow-y: auto;
+                        overflow-x: hidden;
+                        overscroll-behavior-y: contain;
+                        scrollbar-gutter: stable;
+                        padding: 2px;
+                    }
+                    #pro-page #company-updates-container:has(.pro-posts-carousel) {
+                        max-height: none;
+                        overflow: visible;
+                        padding: 0;
+                    }
                     #pro-page .pro-actions-row {
                         grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
                         align-items: stretch;
@@ -3468,7 +3492,7 @@ class XERAProfessionalManager {
                                 <h3 class="pro-section-title">Projets d'Organisation (ARCs)</h3>
                                 ${isOwner ? `<button class="btn-pill-small" onclick="window.professionalManager.openCreateOrgArc('${page.id}')">+ Nouveau Projet</button>` : ""}
                             </div>
-                            <div class="org-arcs-grid" style="display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 40px;">
+                            <div class="org-arcs-grid" style="margin-bottom: 40px;">
                                 ${
                                   orgArcs && orgArcs.length > 0
                                     ? orgArcs
@@ -3512,7 +3536,7 @@ class XERAProfessionalManager {
 
                             <!-- TEAM -->
                             <h3 class="pro-section-title" style="margin-bottom: 20px;">Équipe Certifiée</h3>
-                            <div class="employees-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin-bottom: 40px;">
+                            <div class="employees-grid" style="margin-bottom: 40px;">
                                 ${
                                   employees.length > 0
                                     ? employees

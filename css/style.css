@@ -65,8 +65,44 @@ body {
     line-height: 1.5;
     overflow-x: hidden;
     width: 100%;
+    min-width: 0;
     position: relative;
     -webkit-text-size-adjust: 100%; /* Empêche le redimensionnement du texte sur mobile */
+}
+
+/* Garde-fous partagés pour les layouts flexibles et les médias responsives. */
+img,
+video,
+svg,
+canvas {
+    max-width: 100%;
+    height: auto;
+    object-fit: cover;
+}
+
+main,
+section,
+article,
+aside,
+header,
+footer,
+nav,
+[style*="display: flex"],
+[style*="display: grid"] {
+    min-width: 0;
+}
+
+body.is-pro,
+body.is-pro #pro-page,
+body.is-pro #pro-page * {
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+@media (max-width: 767px) {
+    body.is-pro #pro-page {
+        font-size: 0.875rem;
+    }
 }
 
 /* Empêche le zoom automatique sur les champs de saisie mobile (iOS) */
