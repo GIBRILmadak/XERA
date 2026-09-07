@@ -9226,7 +9226,8 @@ app.post("/api/admin/partners", async (req, res) => {
                 error: "Le partenaire a été créé, mais ses codes ne sont pas disponibles. Exécutez la migration partenaire complète dans Supabase.",
                 diagnostic: {
                     code: codeError?.code || discountError?.code || null,
-                    details: codeError?.details || discountError?.details || null,
+                    details:
+                        codeError?.details || discountError?.details || null,
                 },
             });
         }
