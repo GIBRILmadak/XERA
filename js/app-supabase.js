@@ -6777,8 +6777,8 @@ function getSuperAdminPanelHtml() {
 
             <div class="verification-admin-block" style="margin-top:1.5rem;">
                 <h4>Partenariats</h4>
-                <p style="color:var(--text-secondary);font-size:.9rem;">Créez le partenaire, puis ses deux codes indépendants : activation Page Pro et réduction Pro (20 %).</p>
-                <div style="display:flex;gap:.5rem;flex-wrap:wrap"><input id="admin-partner-name" class="form-input" placeholder="Nom du partenaire"><button class="btn-verify" type="button" onclick="createAdminPartner()">Créer partenaire</button><button class="btn-verify" type="button" onclick="fetchAdminPartners()">Rafraîchir</button></div>
+                <p style="color:var(--text-secondary);font-size:.9rem;">Définissez les deux codes et la période pendant laquelle le partenariat sera actif. Le code réduction est fixé à 20 %.</p>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end"><label>Partenaire<input id="admin-partner-name" class="form-input" placeholder="Y Combinator"></label><label>Code partenaire<input id="admin-partner-access-code" class="form-input" maxlength="60" placeholder="YCOMBINATOR2026"></label><label>Code réduction 20 %<input id="admin-partner-discount-code" class="form-input" maxlength="60" placeholder="YCOMBINATOR"></label><label>Début<input id="admin-partner-start-date" class="form-input" type="datetime-local"></label><label>Fin<input id="admin-partner-end-date" class="form-input" type="datetime-local"></label><button class="btn-verify" type="button" onclick="createAdminPartner()">Créer partenaire</button><button class="btn-verify" type="button" onclick="fetchAdminPartners()">Rafraîchir</button></div>
                 <div id="admin-partners-list" style="margin-top:.9rem;display:flex;flex-direction:column;gap:.5rem"></div>
             </div>
 
@@ -7382,7 +7382,7 @@ async function fetchAdminPartners() {
             : data.partners
                   .map(
                       (p) =>
-                          `<div class="admin-card" style="padding:.75rem;border:1px solid var(--border-color);border-radius:10px"><strong>${escapeHtml(p.name)}</strong> · ${escapeHtml(p.status)}<br><small>Partenaire: ${(p.partner_codes || []).map((c) => escapeHtml(c.code)).join(", ") || "—"} · Réduction: ${(p.partner_discount_codes || []).map((c) => escapeHtml(c.code)).join(", ") || "—"}</small><div style="display:flex;gap:.4rem;margin-top:.5rem"><input id="partner-code-${p.id}" class="form-input" placeholder="Nouveau code"><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','partner')">Code partenaire</button><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','discount')">Code réduction 20%</button></div></div>`,
+                          `<div class="admin-card" style="padding:.75rem;border:1px solid var(--border-color);border-radius:10px"><strong>${escapeHtml(p.name)}</strong> · ${escapeHtml(p.status)}<br><small>Partenaire: <b>${(p.partner_codes || []).map((c) => escapeHtml(c.code)).join(", ") || "—"}</b> · Réduction 20 %: <b>${(p.partner_discount_codes || []).map((c) => escapeHtml(c.code)).join(", ") || "—"}</b><br>Valide du ${formatAdminPaymentDate(p.start_date)} au ${formatAdminPaymentDate(p.end_date)}</small><div style="display:flex;gap:.4rem;margin-top:.5rem"><input id="partner-code-${p.id}" class="form-input" placeholder="Nouveau code"><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','partner')">Code partenaire</button><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','discount')">Code réduction 20%</button></div></div>`,
                   )
                   .join("");
     } catch (e) {
@@ -7394,11 +7394,40 @@ async function createAdminPartner() {
         const input = document.getElementById("admin-partner-name");
         const name = input?.value?.trim();
         if (!name) throw new Error("Saisissez le nom du partenaire.");
+        const accessCode = document
+            .getElementById("admin-partner-access-code")
+            ?.value.trim();
+        const discountCode = document
+            .getElementById("admin-partner-discount-code")
+            ?.value.trim();
+        const startDate = document.getElementById("admin-partner-start-date")?.value;
+        const endDate = document.getElementById("admin-partner-end-date")?.value;
+        if (!accessCode || !discountCode || !startDate || !endDate) {
+            throw new Error("Saisissez les deux codes et les dates du partenariat.");
+        }
+        if (new Date(endDate) <= new Date(startDate)) {
+            throw new Error("La date de fin doit être après la date de début.");
+        }
         await fetchSuperAdminJson("/api/admin/partners", {
             method: "POST",
-            body: JSON.stringify({ name }),
+            body: JSON.stringify({
+                name,
+                access_code: accessCode,
+                discount_code: discountCode,
+                start_date: new Date(startDate).toISOString(),
+                end_date: new Date(endDate).toISOString(),
+            }),
         });
         input.value = "";
+        [
+            "admin-partner-access-code",
+            "admin-partner-discount-code",
+            "admin-partner-start-date",
+            "admin-partner-end-date",
+        ].forEach((id) => {
+            const field = document.getElementById(id);
+            if (field) field.value = "";
+        });
         window.ToastManager?.success?.(
             "Partenaire créé",
             "Le partenaire est maintenant disponible.",
@@ -7750,8 +7779,9 @@ async function fetchFeedbackInbox() {
             .select("id, created_at, mood, comment, sender_user_id")
             .eq("receiver_id", SUPER_ADMIN_ID)
             .order("created_at", { ascending: false })
-            .limit(200);
+            .limit(1000);
         if (error) throw error;
+        container.dataset.feedbackExpanded = "false";
         renderFeedbackInboxList(data || []);
     } catch (err) {
         console.error("Erreur chargement feedback:", err);
@@ -7766,7 +7796,9 @@ function renderFeedbackInboxList(items) {
         container.innerHTML = `<p style="color: var(--text-secondary);">Aucun feedback pour le moment.</p>`;
         return;
     }
-    container.innerHTML = items
+    const isExpanded = container.dataset.feedbackExpanded === "true";
+    const visibleItems = isExpanded ? items : items.slice(0, 3);
+    const feedbackCards = visibleItems
         .map((fb) => {
             const mood = typeof fb.mood === "number" ? fb.mood : null;
             const moodLabel =
@@ -7803,6 +7835,23 @@ function renderFeedbackInboxList(items) {
             `;
         })
         .join("");
+    const remainingCount = items.length - visibleItems.length;
+    const toggleLabel = isExpanded
+        ? "Afficher seulement les 3 derniers"
+        : `Afficher les ${remainingCount} autres feedbacks`;
+    const toggleButton =
+        items.length > 3
+            ? `<button type="button" class="btn-verify admin-feedback-toggle" style="align-self:flex-start;">${toggleLabel}</button>`
+            : "";
+
+    container.innerHTML = feedbackCards + toggleButton;
+    const toggle = container.querySelector(".admin-feedback-toggle");
+    if (toggle) {
+        toggle.addEventListener("click", () => {
+            container.dataset.feedbackExpanded = String(!isExpanded);
+            renderFeedbackInboxList(items);
+        });
+    }
 }
 
 async function fetchVerificationRequests() {

@@ -298,7 +298,6 @@ class XERAProfessionalManager {
             .neq("id", page.owner_id)
             .order("updated_at", { ascending: false })
             .limit(100);
-
         if (error) {
             console.warn("Momentum Engine error:", error);
             return [];
@@ -963,6 +962,7 @@ class XERAProfessionalManager {
         const proSlug = params.get("pro");
         const userId = params.get("user");
         const explorer = params.get("explorer");
+        const team = params.get("team");
 
         if (userId && window.location.pathname.includes("pagepro")) {
             const page = await this.getPageByOwnerId(userId);
@@ -978,6 +978,10 @@ class XERAProfessionalManager {
         }
 
         if (proSlug) {
+            if (team === "1") {
+                await this.renderCertifiedTeamDirectory(proSlug);
+                return true;
+            }
             await this.renderProPage(proSlug);
             return true;
         }
@@ -1357,8 +1361,8 @@ class XERAProfessionalManager {
     /**
      * Récupère toutes les certifications d'une page
      */
-    async getPageCertifications(pageId) {
-        const { data, error } = await this.supabase
+    async getPageCertifications(pageId, includeInactive = false) {
+        let query = this.supabase
             .from("professional_certifications")
             .select(
                 `
@@ -1367,12 +1371,20 @@ class XERAProfessionalManager {
                     id,
                     name,
                     avatar,
+                    title,
+                    bio,
                     account_subtype
                 )
             `,
             )
             .eq("page_id", pageId);
 
+        if (!includeInactive) {
+            query = query.eq("status", "active");
+        }
+        query = query.order("created_at", { ascending: false });
+
+        const { data, error } = await query;
         if (error) throw error;
         return data || [];
     }
@@ -1447,7 +1459,7 @@ class XERAProfessionalManager {
         container.innerHTML = `<div style="text-align:center; padding: 40px;"><div class="loading-spinner"></div></div>`;
 
         if (tabName === "members") {
-            const certs = await this.getPageCertifications(pageId);
+            const certs = await this.getPageCertifications(pageId, true);
             if (certs.length === 0) {
                 container.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-secondary);">Aucun membre certifié pour le moment.</p>`;
                 return;
@@ -3147,6 +3159,56 @@ class XERAProfessionalManager {
                     #pro-page .employees-grid {
                         grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)) !important;
                     }
+                    #pro-page .certified-team-view-all {
+                        display: flex; align-items: center; justify-content: center; gap: 10px;
+                        width: 100%; min-height: 48px; margin: -22px 0 40px; padding: 12px 18px;
+                        border: 1px solid #6650a9; border-radius: 12px; background: #211947;
+                        color: #eeeaff; font-weight: 800; cursor: pointer; transition: .2s ease;
+                    }
+                    #pro-page .certified-team-view-all:hover { background: #302365; border-color: #9d83ff; transform: translateY(-1px); }
+                    .certified-directory-loading { display: grid; place-items: center; min-height: 55vh; }
+                    .certified-directory { max-width: 1120px; margin: 0 auto; padding: 32px 20px 72px; color: #f5f3ff; }
+                    .certified-directory-topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+                    .certified-directory-back { display: inline-flex; align-items: center; gap: 9px; border: 0; background: transparent; color: #b9b0d9; font-weight: 700; cursor: pointer; padding: 8px 0; }
+                    .certified-directory-back:hover { color: #fff; }
+                    .certified-directory-kicker { color: #a992ff; font-size: .72rem; font-weight: 900; letter-spacing: .14em; }
+                    .certified-directory-hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 30px; border: 1px solid #2b354b; border-radius: 24px; background: linear-gradient(135deg, #151d2c, #101522); box-shadow: 0 18px 45px rgba(0,0,0,.22); }
+                    .certified-directory-brand { display: flex; align-items: center; gap: 18px; min-width: 0; }
+                    .certified-directory-brand img { width: 76px; height: 76px; flex: 0 0 76px; object-fit: cover; border-radius: 20px; border: 1px solid #46516b; }
+                    .certified-directory-brand p { margin: 0 0 6px; color: #a992ff; font-size: .72rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+                    .certified-directory-brand h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 3vw, 2.5rem); line-height: 1.05; }
+                    .certified-directory-brand span { color: #aab2c3; }
+                    .certified-directory-total { min-width: 140px; padding-left: 24px; border-left: 1px solid #35405a; }
+                    .certified-directory-total strong { display: block; color: #c2b3ff; font-size: 2rem; }
+                    .certified-directory-total span { color: #aab2c3; font-size: .82rem; }
+                    .certified-directory-search { display: flex; align-items: center; gap: 12px; margin: 24px 0; padding: 0 18px; min-height: 58px; border: 1px solid #3a4660; border-radius: 14px; background: #0e1420; box-shadow: 0 12px 30px rgba(0,0,0,.14); }
+                    .certified-directory-search i { color: #a992ff; }
+                    .certified-directory-search input { width: 100%; border: 0; outline: 0; background: transparent; color: #fff; font-size: 1rem; }
+                    .certified-directory-search input::placeholder { color: #7f899d; }
+                    .certified-directory-results-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
+                    .certified-directory-results-head h2 { margin: 0; font-size: 1.1rem; }
+                    .certified-directory-results-head span { color: #8993a7; font-size: .86rem; }
+                    .certified-directory-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+                    .certified-directory-card { display: flex; align-items: center; gap: 13px; min-width: 0; padding: 16px; border: 1px solid #2b354b; border-radius: 16px; background: #151d2c; color: #f5f3ff; text-align: left; cursor: pointer; transition: .2s ease; }
+                    .certified-directory-card:hover { border-color: #8068d1; background: #1b2540; transform: translateY(-2px); }
+                    .certified-directory-card img { width: 54px; height: 54px; flex: 0 0 54px; border-radius: 50%; object-fit: cover; border: 2px solid #55468b; }
+                    .certified-directory-card-copy { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 3px; }
+                    .certified-directory-card-copy strong, .certified-directory-card-copy span, .certified-directory-card-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                    .certified-directory-card-copy span { color: #c3b5ff; font-size: .84rem; font-weight: 700; }
+                    .certified-directory-card-copy small { color: #98a2b5; }
+                    .certified-directory-card > i { color: #8d78e3; font-size: .8rem; }
+                    .certified-directory-empty { display: grid; place-items: center; gap: 10px; min-height: 260px; padding: 30px; border: 1px dashed #39445c; border-radius: 18px; color: #9ba5b8; text-align: center; }
+                    .certified-directory-empty i { color: #8d78e3; font-size: 1.6rem; }
+                    @media (max-width: 700px) {
+                        #pro-page .employees-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+                        #pro-page .employees-grid .pro-card-premium { padding: 15px 8px !important; }
+                        #pro-page .employees-grid .pro-card-premium img { width: 58px !important; height: 58px !important; }
+                        .certified-directory { padding: 20px 16px 48px; }
+                        .certified-directory-topbar { align-items: flex-start; flex-direction: column-reverse; gap: 8px; }
+                        .certified-directory-hero { align-items: flex-start; flex-direction: column; padding: 22px 18px; }
+                        .certified-directory-total { width: 100%; padding: 14px 0 0; border-left: 0; border-top: 1px solid #35405a; }
+                        .certified-directory-grid { grid-template-columns: 1fr; }
+                    }
                     .talent-explorer-page,
                     .talent-explorer-page * { min-width: 0; box-sizing: border-box; }
                     .talent-explorer-page h1,
@@ -3579,6 +3641,7 @@ class XERAProfessionalManager {
                                     ${
                                         employees.length > 0
                                             ? employees
+                                                  .slice(0, 6)
                                                   .map(
                                                       (emp) => `
                                                 <div class="pro-card-premium" style="text-align: center; cursor: pointer; padding: 25px; transition: all 0.2s;" onclick="navigateToUserProfile('${emp.user_id}')">
@@ -3593,6 +3656,11 @@ class XERAProfessionalManager {
                                             : `<p style="color: var(--text-secondary); font-style: italic; font-size: 0.9rem;">Aucun membre certifié pour le moment.</p>`
                                     }
                                 </div>
+                                ${
+                                    employees.length > 6
+                                        ? `<button type="button" class="certified-team-view-all" onclick="window.professionalManager.openCertifiedTeamDirectory('${this.escapeHtml(page.slug)}')"><i class="fas fa-users"></i><span>Voir les ${employees.length} profils certifiés</span><i class="fas fa-arrow-right" aria-hidden="true"></i></button>`
+                                        : ""
+                                }
                             </div>
 
                             <!-- SIDEBAR -->
@@ -3674,6 +3742,126 @@ class XERAProfessionalManager {
                     </div>
                 </div>
             `;
+        }
+    }
+
+    async openCertifiedTeamDirectory(slug) {
+        this.syncUrl({ pro: slug, team: "1", explorer: null });
+        await this.renderCertifiedTeamDirectory(slug);
+    }
+
+    async closeCertifiedTeamDirectory(slug) {
+        this.syncUrl({ team: null });
+        await this.renderProPage(slug);
+    }
+
+    async renderCertifiedTeamDirectory(slug, initialQuery = "") {
+        const container = document.querySelector(".pro-page-container");
+        if (!container) return;
+
+        container.innerHTML = `<div class="certified-directory-loading"><div class="loading-spinner"></div></div>`;
+
+        try {
+            const { data: page, error: pageError } = await this.supabase
+                .from("professional_pages")
+                .select("id, name, slug, avatar_url, industry, description")
+                .eq("slug", slug)
+                .single();
+
+            if (pageError || !page) throw new Error("Page introuvable");
+            const employees = await this.getPageCertifications(page.id);
+            const pageAvatar = this.escapeHtml(
+                page.avatar_url || "icons/enterprise.svg",
+            );
+            const safePageName = this.escapeHtml(page.name || "Page Pro");
+            const normalizeSearchText = (value) =>
+                String(value || "")
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .toLowerCase();
+            const renderResults = (searchTerm = "") => {
+                const normalizedQuery = normalizeSearchText(searchTerm).trim();
+                const matches = (employees || []).filter((cert) => {
+                    const searchable = normalizeSearchText(
+                        [
+                            cert.user?.name,
+                            cert.title,
+                            cert.type,
+                            cert.department,
+                            cert.user?.title,
+                            cert.user?.account_subtype,
+                            cert.user?.bio,
+                        ].join(" "),
+                    );
+                    return (
+                        !normalizedQuery || searchable.includes(normalizedQuery)
+                    );
+                });
+                const results = document.getElementById(
+                    "certified-directory-results",
+                );
+                const count = document.getElementById(
+                    "certified-directory-count",
+                );
+                if (!results || !count) return;
+                count.textContent = `${matches.length} profil${matches.length > 1 ? "s" : ""}`;
+                results.innerHTML = matches.length
+                    ? matches
+                          .map((cert) => {
+                              const name = this.escapeHtml(
+                                  cert.user?.name || "Profil certifié",
+                              );
+                              const avatar = this.escapeHtml(
+                                  cert.user?.avatar ||
+                                      "https://placehold.co/120",
+                              );
+                              const role = this.escapeHtml(
+                                  cert.title ||
+                                      cert.user?.title ||
+                                      cert.type ||
+                                      "Membre certifié",
+                              );
+                              const talent = this.escapeHtml(
+                                  cert.user?.title ||
+                                      cert.user?.account_subtype ||
+                                      cert.department ||
+                                      "Talent XERA1",
+                              );
+                              return `<button type="button" class="certified-directory-card" onclick="navigateToUserProfile('${this.escapeHtml(cert.user_id)}')">
+                                  <img src="${avatar}" alt="Avatar de ${name}">
+                                  <span class="certified-directory-card-copy"><strong>${name}</strong><span>${role}</span><small>${talent}</small></span>
+                                  <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                              </button>`;
+                          })
+                          .join("")
+                    : `<div class="certified-directory-empty"><i class="fas fa-user-slash"></i><strong>Aucun profil trouvé</strong><span>Essayez un nom, un rôle ou une compétence.</span></div>`;
+            };
+
+            container.innerHTML = `
+                <section class="certified-directory" aria-labelledby="certified-directory-title">
+                    <div class="certified-directory-topbar"><button type="button" class="certified-directory-back" aria-label="Retour à la page professionnelle"><i class="fas fa-arrow-left"></i><span>Retour à la page</span></button><span class="certified-directory-kicker">RÉSEAU CERTIFIÉ</span></div>
+                    <header class="certified-directory-hero"><div class="certified-directory-brand"><img src="${pageAvatar}" alt="Logo de ${safePageName}"><div><p>Équipe vérifiée</p><h1 id="certified-directory-title">Profils certifiés par ${safePageName}</h1><span>${this.escapeHtml(page.industry || "Talents professionnels vérifiés")}</span></div></div><div class="certified-directory-total"><strong>${employees.length}</strong><span>profils certifiés</span></div></header>
+                    <div class="certified-directory-search"><i class="fas fa-search" aria-hidden="true"></i><input id="certified-directory-search" type="search" value="${this.escapeHtml(initialQuery)}" placeholder="Rechercher un nom, un rôle ou une compétence..." aria-label="Rechercher dans les profils certifiés"></div>
+                    <div class="certified-directory-results-head"><h2>Annuaire de l'équipe</h2><span id="certified-directory-count"></span></div>
+                    <div id="certified-directory-results" class="certified-directory-grid"></div>
+                </section>
+            `;
+
+            container
+                .querySelector(".certified-directory-back")
+                ?.addEventListener("click", () =>
+                    this.closeCertifiedTeamDirectory(slug),
+                );
+            const searchInput = document.getElementById(
+                "certified-directory-search",
+            );
+            searchInput?.addEventListener("input", (event) =>
+                renderResults(event.target.value),
+            );
+            renderResults(initialQuery);
+        } catch (error) {
+            console.error("Erreur chargement de l'annuaire certifié:", error);
+            container.innerHTML = `<div class="certified-directory-empty"><strong>Impossible de charger l'équipe certifiée.</strong><button type="button" class="btn btn-secondary" onclick="window.professionalManager.closeCertifiedTeamDirectory('${this.escapeHtml(slug)}')">Retour à la page</button></div>`;
         }
     }
 

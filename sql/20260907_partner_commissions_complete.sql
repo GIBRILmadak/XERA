@@ -5,6 +5,19 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+CREATE TABLE IF NOT EXISTS public.partners (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  partner_access_code TEXT,
+  start_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  end_date TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'active',
+  commission_rate NUMERIC(5,4) NOT NULL DEFAULT 0.05,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 ALTER TABLE public.partners
   ADD COLUMN IF NOT EXISTS access_code TEXT,
   ADD COLUMN IF NOT EXISTS discount_code TEXT,

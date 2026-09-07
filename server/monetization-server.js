@@ -1100,7 +1100,7 @@ async function findActivePartnerDiscountCode(rawCode) {
     const { data, error } = await supabase
         .from("partner_discount_codes")
         .select(
-            "id, code, partner_id, discount_percent, status, starts_at, expires_at, partners!inner(status)",
+            "id, code, partner_id, discount_percent, status, starts_at, expires_at, partners!inner(status,start_date,end_date,partner_access_code)",
         )
         .eq("code", code)
         .eq("status", "active")
@@ -1109,7 +1109,13 @@ async function findActivePartnerDiscountCode(rawCode) {
         .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
         .maybeSingle();
     if (error && error.code !== "42P01") throw error;
-    return data || null;
+    if (!data) return null;
+    const validation = validatePartnerAccess({
+        partner: data.partners,
+        accessCode: data.partners.partner_access_code,
+        now: new Date(nowIso),
+    });
+    return validation.valid ? data : null;
 }
 
 async function persistPartnerAssignment({ userId, partnerId }) {
@@ -1197,7 +1203,7 @@ async function createPartnerCommissionForSupport({
 
     const { data: partner, error: partnerError } = await supabase
         .from("partners")
-        .select("id, status, start_date, end_date, commission_rate")
+        .select("id, status, start_date, end_date, partner_access_code, access_code, commission_rate")
         .eq("id", partnerId)
         .maybeSingle();
     if (partnerError && partnerError.code !== "42P01") throw partnerError;
@@ -1206,7 +1212,7 @@ async function createPartnerCommissionForSupport({
     const validation = validatePartnerAccess({
         partner,
         now: new Date(nowIso),
-        accessCode: partner.partner_access_code,
+        accessCode: partner.partner_access_code || partner.access_code,
     });
     if (!validation.valid) return null;
 
@@ -8845,7 +8851,7 @@ app.post("/api/partners/activate", async (req, res) => {
         const { data: partnerCode, error } = await supabase
             .from("partner_codes")
             .select(
-                "id, partner_id, status, expires_at, partners!inner(status)",
+                "id, partner_id, status, expires_at, partners!inner(status,start_date,end_date)",
             )
             .eq("code", code)
             .eq("status", "active")
@@ -8853,6 +8859,17 @@ app.post("/api/partners/activate", async (req, res) => {
             .or(`expires_at.is.null,expires_at.gte.${now}`)
             .maybeSingle();
         if (error) throw error;
+        if (partnerCode) {
+            const validation = validatePartnerAccess({
+                partner: partnerCode.partners,
+                accessCode: code,
+                now: new Date(now),
+            });
+            if (!validation.valid)
+                return res.status(400).json({
+                    error: "Ce code partenaire est hors période de validité.",
+                });
+        }
         if (!partnerCode)
             return res.status(400).json({
                 error: "Ce code partenaire est invalide, expiré ou révoqué.",
@@ -8919,17 +8936,18 @@ app.get("/api/partners/dashboard", async (req, res) => {
         const { data: membership, error } = await supabase
             .from("partner_page_memberships")
             .select(
-                "id, partner_id, partner_code_id, status, partners!inner(name, status)",
+                "id, partner_id, partner_code_id, status, partners!inner(name, status, discount_code, discount_rate)",
             )
             .eq("professional_page_id", pageId)
             .maybeSingle();
         if (error) throw error;
+        if (!membership)
+            return res.json({ active: false, reason: "not_activated" });
         if (
-            !membership ||
             membership.status !== "active" ||
             membership.partners.status !== "active"
         )
-            return res.json({ active: false });
+            return res.json({ active: false, reason: "expired_or_revoked" });
         const { data: activeCode } = await supabase
             .from("partner_codes")
             .select("status,expires_at")
@@ -8942,6 +8960,23 @@ app.get("/api/partners/dashboard", async (req, res) => {
                 new Date(activeCode.expires_at).getTime() < Date.now())
         )
             return res.json({ active: false, reason: "expired_or_revoked" });
+        const { data: discountCode } = await supabase
+            .from("partner_discount_codes")
+            .select("code,discount_percent,status,starts_at,expires_at")
+            .eq("partner_id", membership.partner_id)
+            .eq("status", "active")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        const resolvedDiscountCode =
+            discountCode ||
+            (membership.partners.discount_code
+                ? {
+                      code: membership.partners.discount_code,
+                      discount_percent: membership.partners.discount_rate || 20,
+                      status: "active",
+                  }
+                : null);
         const { data: commissions, error: commissionError } = await supabase
             .from("partner_commissions")
             .select(
@@ -8980,6 +9015,7 @@ app.get("/api/partners/dashboard", async (req, res) => {
         res.json({
             active: true,
             partner: membership.partners.name,
+            discountCode: resolvedDiscountCode,
             payoutSetting: payoutSetting || null,
             metrics: {
                 total: sum(["pending", "available", "paid"]),
@@ -9078,9 +9114,33 @@ app.post("/api/admin/partners", async (req, res) => {
         const name = String(req.body?.name || "").trim();
         if (name.length < 2)
             return res.status(400).json({ error: "Nom partenaire invalide." });
+        const accessCode = normalizeDiscountCode(req.body?.access_code);
+        const discountCode = normalizeDiscountCode(req.body?.discount_code);
+        const startDate = new Date(req.body?.start_date);
+        const endDate = new Date(req.body?.end_date);
+        if (!/^[A-Z0-9_-]{3,60}$/.test(accessCode))
+            return res.status(400).json({ error: "Code partenaire invalide." });
+        if (!/^[A-Z0-9_-]{3,60}$/.test(discountCode))
+            return res.status(400).json({ error: "Code réduction invalide." });
+        if (
+            Number.isNaN(startDate.getTime()) ||
+            Number.isNaN(endDate.getTime()) ||
+            endDate <= startDate
+        )
+            return res.status(400).json({ error: "Période de partenariat invalide." });
         const { data, error } = await supabase
             .from("partners")
-            .insert({ name })
+            .insert({
+                name,
+                status: "active",
+                commission_rate: 0.05,
+                start_date: startDate.toISOString(),
+                end_date: endDate.toISOString(),
+                partner_access_code: accessCode,
+                access_code: accessCode,
+                discount_code: discountCode,
+                discount_rate: 20,
+            })
             .select()
             .single();
         if (error) {
@@ -9089,9 +9149,10 @@ app.post("/api/admin/partners", async (req, res) => {
                 message: error.message,
                 details: error.details,
             });
-            if (["42P01", "PGRST205"].includes(error.code)) {
+            if (["42P01", "42703", "PGRST204", "PGRST205"].includes(error.code)) {
                 return res.status(503).json({
-                    error: "Le schéma Partenaires n'est pas encore installé. Exécutez sql/20260830_partner_affiliates.sql dans Supabase, puis rechargez.",
+                    error: "Le schéma Partenaires est incomplet. Exécutez sql/20260907_partner_commissions_complete.sql dans Supabase, puis rechargez.",
+                    diagnostic: { code: error.code, details: error.details || null },
                 });
             }
             if (error.code === "23505")
@@ -9099,6 +9160,32 @@ app.post("/api/admin/partners", async (req, res) => {
                     error: "Un partenaire portant ce nom existe déjà.",
                 });
             throw error;
+        }
+        const { error: codeError } = await supabase.from("partner_codes").upsert(
+            { partner_id: data.id, code: accessCode, expires_at: endDate.toISOString() },
+            { onConflict: "code" },
+        );
+        const { error: discountError } = await supabase
+            .from("partner_discount_codes")
+            .upsert(
+                {
+                    partner_id: data.id,
+                    code: discountCode,
+                    discount_percent: 20,
+                    status: "active",
+                    starts_at: startDate.toISOString(),
+                    expires_at: endDate.toISOString(),
+                },
+                { onConflict: "code" },
+            );
+        if (codeError || discountError) {
+            console.error("/api/admin/partners code setup failed:", {
+                codeError: codeError?.message,
+                discountError: discountError?.message,
+            });
+            return res.status(503).json({
+                error: "Le partenaire a été créé, mais ses codes ne sont pas disponibles. Exécutez la migration partenaire complète dans Supabase.",
+            });
         }
         return res.status(201).json({ partner: data });
     } catch (error) {
@@ -9123,7 +9210,7 @@ app.get("/api/admin/partners", async (req, res) => {
         const { data, error } = await supabase
             .from("partners")
             .select(
-                "id,name,status,commission_rate,created_at,partner_codes(id,code,status,expires_at),partner_discount_codes(id,code,discount_percent,status,expires_at)",
+                "id,name,status,commission_rate,start_date,end_date,created_at,partner_codes(id,code,status,expires_at),partner_discount_codes(id,code,discount_percent,status,starts_at,expires_at)",
             )
             .order("created_at", { ascending: false });
         if (error) throw error;
@@ -9151,14 +9238,27 @@ app.post("/api/admin/partners/:id/codes", async (req, res) => {
             return res.status(400).json({ error: "Code invalide." });
         const table =
             kind === "partner" ? "partner_codes" : "partner_discount_codes";
+        const { data: partner, error: partnerError } = await supabase
+            .from("partners")
+            .select("start_date,end_date,status")
+            .eq("id", req.params.id)
+            .maybeSingle();
+        if (partnerError) throw partnerError;
+        if (!partner || partner.status !== "active")
+            return res.status(404).json({ error: "Partenaire introuvable ou inactif." });
         const payload =
             kind === "partner"
-                ? { partner_id: req.params.id, code, expires_at: expiresAt }
+                ? {
+                      partner_id: req.params.id,
+                      code,
+                      expires_at: partner.end_date || expiresAt,
+                  }
                 : {
                       partner_id: req.params.id,
                       code,
                       discount_percent: 20,
-                      expires_at: expiresAt,
+                      starts_at: partner.start_date,
+                      expires_at: partner.end_date || expiresAt,
                   };
         const { data, error } = await supabase
             .from(table)

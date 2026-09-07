@@ -11433,6 +11433,59 @@ html.dark-mode .first-project-feed-popup__cta {
     padding: clamp(24px, 4vw, 40px);
     border-top: 2px solid var(--commissions-violet);
 }
+.commissions-expired {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+    gap: 18px;
+    align-items: stretch;
+}
+.commissions-expired .commissions-context,
+.commissions-expired-panel {
+    padding: clamp(24px, 4vw, 40px);
+}
+.commissions-expired .commissions-context {
+    border: 1px solid rgba(248, 113, 113, 0.28);
+    border-radius: 8px;
+    background: linear-gradient(145deg, rgba(127, 29, 29, 0.3), var(--commissions-surface));
+}
+.commissions-expired h1 {
+    max-width: 680px;
+}
+.commissions-expired-panel {
+    border-top: 2px solid #f87171;
+}
+.commissions-expired-icon {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    margin: 20px 0 14px;
+    border: 1px solid rgba(248, 113, 113, 0.5);
+    border-radius: 50%;
+    background: rgba(248, 113, 113, 0.12);
+    color: #fca5a5;
+    font-size: 1.35rem;
+    font-weight: 900;
+}
+.commissions-contact-card {
+    margin-top: 28px;
+    padding: 18px;
+    border: 1px solid var(--commissions-border);
+    border-radius: 6px;
+    background: rgba(11, 17, 28, 0.68);
+}
+.commissions-contact-card p {
+    margin: 8px 0 14px;
+}
+.commissions-contact-list {
+    display: grid;
+    gap: 8px;
+}
+.commissions-contact-list a {
+    color: var(--commissions-amber);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
 .commissions-code-panel h2 {
     margin-bottom: 9px;
 }
@@ -11466,6 +11519,34 @@ html.dark-mode .first-project-feed-popup__cta {
     margin-top: 9px;
     font-family: var(--font-body);
     letter-spacing: 0.06em;
+}
+.commissions-discount-panel {
+    border-color: rgba(232, 184, 106, 0.38);
+    background: linear-gradient(135deg, rgba(232, 184, 106, 0.1), rgba(17, 19, 16, 0.96));
+}
+.commissions-discount-code-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 1rem 0 0.5rem;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid rgba(232, 184, 106, 0.4);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.2);
+}
+.commissions-discount-code-row strong {
+    color: var(--commissions-amber);
+    font-size: 1.2rem;
+    letter-spacing: 0.08em;
+    overflow-wrap: anywhere;
+}
+.commissions-copy-code {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+.commissions-discount-panel > small {
+    color: var(--commissions-muted);
 }
 .commissions-page .btn-primary {
     width: 100%;
@@ -11773,11 +11854,25 @@ html.dark-mode .first-project-feed-popup__cta {
     .commissions-balance,
     .commissions-history,
     .commissions-payout,
-    .commissions-code-panel {
+    .commissions-code-panel,
+    .commissions-discount-panel {
         padding: 22px 18px;
+    }
+    .commissions-discount-code-row {
+        align-items: stretch;
+        flex-direction: column;
+    }
+    .commissions-copy-code {
+        width: 100%;
     }
     .commissions-balance-mark {
         font-size: 3.6rem;
+    }
+}
+
+@media (max-width: 760px) {
+    .commissions-expired {
+        grid-template-columns: 1fr;
     }
 }
 
