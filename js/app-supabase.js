@@ -7441,6 +7441,10 @@ async function createAdminPartner() {
         window.showToast?.("Partenaire créé avec succès.", "success");
         await fetchAdminPartners();
     } catch (e) {
+        const partnersList = document.getElementById("admin-partners-list");
+        if (partnersList) {
+            partnersList.innerHTML = `<div class="verification-empty">${escapeHtml(e.message || "Création impossible.")}</div>`;
+        }
         window.ToastManager?.error?.(
             "Erreur",
             e.message || "Création impossible.",
