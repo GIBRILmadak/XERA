@@ -9130,10 +9130,20 @@ app.post("/api/admin/partners", async (req, res) => {
         const name = String(req.body?.name || "").trim();
         if (name.length < 2)
             return res.status(400).json({ error: "Nom partenaire invalide." });
-        const accessCode = normalizeDiscountCode(req.body?.access_code);
-        const discountCode = normalizeDiscountCode(req.body?.discount_code);
-        const startDate = new Date(req.body?.start_date);
-        const endDate = new Date(req.body?.end_date);
+        const accessCode = normalizeDiscountCode(
+            req.body?.access_code ||
+                `PART-${crypto.randomBytes(6).toString("hex").toUpperCase()}`,
+        );
+        const discountCode = normalizeDiscountCode(
+            req.body?.discount_code ||
+                `XERA-${crypto.randomBytes(5).toString("hex").toUpperCase()}`,
+        );
+        const startDate = req.body?.start_date
+            ? new Date(req.body.start_date)
+            : new Date();
+        const endDate = req.body?.end_date
+            ? new Date(req.body.end_date)
+            : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000);
         if (!/^[A-Z0-9_-]{3,60}$/.test(accessCode))
             return res.status(400).json({ error: "Code partenaire invalide." });
         if (!/^[A-Z0-9_-]{3,60}$/.test(discountCode))
@@ -9219,6 +9229,22 @@ app.post("/api/admin/partners", async (req, res) => {
         return res.status(201).json({ partner: data });
     } catch (error) {
         console.error("/api/admin/partners error:", error);
+        if (["42P01", "42703", "23502", "23514", "PGRST204", "PGRST205"].includes(error?.code)) {
+            return res.status(503).json({
+                error: "Le schéma Partenaires Supabase est incomplet ou incompatible. Exécutez sql/20260907_partner_commissions_complete.sql, puis réessayez.",
+                diagnostic: {
+                    code: error.code,
+                    details: error.details || null,
+                    hint: error.hint || null,
+                },
+            });
+        }
+        if (error?.code === "23505") {
+            return res.status(409).json({
+                error: "Le nom ou l'un des codes existe déjà. Utilisez des valeurs uniques.",
+                diagnostic: { code: error.code, details: error.details || null },
+            });
+        }
         return res.status(500).json({
             error: error?.message || "Création impossible.",
             diagnostic: {
