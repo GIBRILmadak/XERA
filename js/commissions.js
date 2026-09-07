@@ -85,9 +85,12 @@
         const message = document.getElementById("commissions-copy-message");
         try {
             await navigator.clipboard.writeText(button.dataset.code || "");
-            if (message) message.textContent = "Code copié dans le presse-papiers.";
+            if (message)
+                message.textContent = "Code copié dans le presse-papiers.";
         } catch {
-            if (message) message.textContent = "Copie impossible. Sélectionnez le code manuellement.";
+            if (message)
+                message.textContent =
+                    "Copie impossible. Sélectionnez le code manuellement.";
         }
     }
 

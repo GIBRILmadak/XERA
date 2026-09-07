@@ -1203,7 +1203,9 @@ async function createPartnerCommissionForSupport({
 
     const { data: partner, error: partnerError } = await supabase
         .from("partners")
-        .select("id, status, start_date, end_date, partner_access_code, access_code, commission_rate")
+        .select(
+            "id, status, start_date, end_date, partner_access_code, access_code, commission_rate",
+        )
         .eq("id", partnerId)
         .maybeSingle();
     if (partnerError && partnerError.code !== "42P01") throw partnerError;
@@ -9127,7 +9129,9 @@ app.post("/api/admin/partners", async (req, res) => {
             Number.isNaN(endDate.getTime()) ||
             endDate <= startDate
         )
-            return res.status(400).json({ error: "Période de partenariat invalide." });
+            return res
+                .status(400)
+                .json({ error: "Période de partenariat invalide." });
         const { data, error } = await supabase
             .from("partners")
             .insert({
@@ -9149,10 +9153,15 @@ app.post("/api/admin/partners", async (req, res) => {
                 message: error.message,
                 details: error.details,
             });
-            if (["42P01", "42703", "PGRST204", "PGRST205"].includes(error.code)) {
+            if (
+                ["42P01", "42703", "PGRST204", "PGRST205"].includes(error.code)
+            ) {
                 return res.status(503).json({
                     error: "Le schéma Partenaires est incomplet. Exécutez sql/20260907_partner_commissions_complete.sql dans Supabase, puis rechargez.",
-                    diagnostic: { code: error.code, details: error.details || null },
+                    diagnostic: {
+                        code: error.code,
+                        details: error.details || null,
+                    },
                 });
             }
             if (error.code === "23505")
@@ -9161,10 +9170,16 @@ app.post("/api/admin/partners", async (req, res) => {
                 });
             throw error;
         }
-        const { error: codeError } = await supabase.from("partner_codes").upsert(
-            { partner_id: data.id, code: accessCode, expires_at: endDate.toISOString() },
-            { onConflict: "code" },
-        );
+        const { error: codeError } = await supabase
+            .from("partner_codes")
+            .upsert(
+                {
+                    partner_id: data.id,
+                    code: accessCode,
+                    expires_at: endDate.toISOString(),
+                },
+                { onConflict: "code" },
+            );
         const { error: discountError } = await supabase
             .from("partner_discount_codes")
             .upsert(
@@ -9245,7 +9260,9 @@ app.post("/api/admin/partners/:id/codes", async (req, res) => {
             .maybeSingle();
         if (partnerError) throw partnerError;
         if (!partner || partner.status !== "active")
-            return res.status(404).json({ error: "Partenaire introuvable ou inactif." });
+            return res
+                .status(404)
+                .json({ error: "Partenaire introuvable ou inactif." });
         const payload =
             kind === "partner"
                 ? {

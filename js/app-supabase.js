@@ -7400,10 +7400,16 @@ async function createAdminPartner() {
         const discountCode = document
             .getElementById("admin-partner-discount-code")
             ?.value.trim();
-        const startDate = document.getElementById("admin-partner-start-date")?.value;
-        const endDate = document.getElementById("admin-partner-end-date")?.value;
+        const startDate = document.getElementById(
+            "admin-partner-start-date",
+        )?.value;
+        const endDate = document.getElementById(
+            "admin-partner-end-date",
+        )?.value;
         if (!accessCode || !discountCode || !startDate || !endDate) {
-            throw new Error("Saisissez les deux codes et les dates du partenariat.");
+            throw new Error(
+                "Saisissez les deux codes et les dates du partenariat.",
+            );
         }
         if (new Date(endDate) <= new Date(startDate)) {
             throw new Error("La date de fin doit être après la date de début.");
