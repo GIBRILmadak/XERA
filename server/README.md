@@ -41,7 +41,7 @@ Notifications push (nouvelle infra)
     - VAPID_PUBLIC_KEY=<clé_publique>
     - VAPID_PRIVATE_KEY=<clé_privée>
     - PUSH_CONTACT_EMAIL=mailto:votre_email (optionnel)
-- Exécuter le SQL `sql/push-subscriptions.sql` sur la base Supabase pour créer la table `push_subscriptions`.
+- Exécuter le SQL `sql/push-subscriptions.sql` sur la base Supabase pour créer la table `push_subscriptions`. Sans cette migration, l'API ignore proprement l'inscription push jusqu'à l'installation du schéma.
 - Démarrer l'API (`npm run api`) : le backend s'abonne en temps réel à `public.notifications` et envoie un push à chaque insertion.
 
 Rappels programmés (10h / 18h)

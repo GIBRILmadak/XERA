@@ -7524,6 +7524,9 @@ app.post("/api/push/subscribe", async (req, res) => {
         res.json({ ok: true, timezone: safeTimezone });
     } catch (err) {
         console.error("push subscribe error", err);
+        if (["42P01", "42703", "PGRST204", "PGRST205"].includes(err?.code)) {
+            return res.json({ ok: true, skipped: true, reason: "push_schema_missing" });
+        }
         res.status(400).json({ error: err.message });
     }
 });
@@ -7622,6 +7625,9 @@ app.post("/api/notifications/badge-reset", async (req, res) => {
         return res.json({ ok: true });
     } catch (err) {
         console.error("badge reset error", err);
+        if (["42P01", "42703", "PGRST204", "PGRST205"].includes(err?.code)) {
+            return res.json({ ok: true, skipped: true, reason: "notifications_schema_missing" });
+        }
         return res.status(500).json({ error: err.message || "failed" });
     }
 });
