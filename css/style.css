@@ -11239,6 +11239,548 @@ html.dark-mode .first-project-feed-popup__cta {
     transform: translate(-50%, -50%) scale(1);
 }
 
+/* === XERA1 PARTNER CONSOLE === */
+.commissions-page {
+    --commissions-bg: #0b0f17;
+    --commissions-surface: #111827;
+    --commissions-surface-raised: #151e2d;
+    --commissions-border: rgba(148, 163, 184, 0.16);
+    --commissions-muted: #94a3b8;
+    --commissions-soft: #cbd5e1;
+    --commissions-violet: #8b5cf6;
+    --commissions-emerald: #34d399;
+    --commissions-amber: #f59e0b;
+    background: var(--commissions-bg);
+    color: #f8fafc;
+    min-height: 100vh;
+}
+
+.commissions-page::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.28;
+    background-image:
+        linear-gradient(rgba(148, 163, 184, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: linear-gradient(to bottom, black, transparent 75%);
+}
+
+.commissions-shell {
+    position: relative;
+    width: min(1120px, calc(100% - 48px));
+    margin: 0 auto;
+    padding: 32px 0 72px;
+}
+
+.commissions-header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 20px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--commissions-border);
+}
+
+.commissions-back,
+.commissions-brand {
+    color: var(--commissions-soft);
+    text-decoration: none;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.commissions-back {
+    justify-self: start;
+}
+.commissions-back span {
+    color: var(--commissions-violet);
+    font-size: 1rem;
+    margin-right: 7px;
+}
+.commissions-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #f8fafc;
+    letter-spacing: 0;
+}
+.commissions-brand b {
+    color: var(--commissions-muted);
+    font-weight: 500;
+    margin-left: 6px;
+}
+.commissions-brand-mark {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--commissions-violet);
+    color: #c4b5fd;
+    font-size: 0.9rem;
+}
+.commissions-status {
+    justify-self: end;
+    color: var(--commissions-muted);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+}
+.commissions-status span,
+.commissions-live-status span {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: var(--commissions-emerald);
+    box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.1);
+}
+
+.commissions-root {
+    padding-top: 68px;
+    animation: commissionsReveal 0.55s ease both;
+}
+.commissions-eyebrow,
+.commissions-panel-kicker {
+    display: block;
+    margin-bottom: 12px;
+    color: #a78bfa;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+.commissions-root h1,
+.commissions-root h2,
+.commissions-root h3,
+.commissions-root p {
+    margin: 0;
+}
+.commissions-root h1 {
+    max-width: 650px;
+    font-family: var(--font-heading);
+    font-size: clamp(2.1rem, 4vw, 3.7rem);
+    line-height: 1.03;
+    letter-spacing: -0.04em;
+}
+.commissions-root h1 span {
+    color: var(--commissions-muted);
+    font-weight: 500;
+}
+.commissions-root h2 {
+    font-family: var(--font-heading);
+    font-size: 1.35rem;
+    letter-spacing: -0.02em;
+}
+.commissions-root h3 {
+    font-family: var(--font-heading);
+    font-size: 1.08rem;
+}
+.commissions-root p {
+    color: var(--commissions-muted);
+    line-height: 1.7;
+}
+
+.commissions-activation {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+    gap: clamp(40px, 8vw, 110px);
+    align-items: center;
+}
+.commissions-context > p {
+    max-width: 520px;
+    margin-top: 22px;
+    font-size: 1rem;
+}
+.commissions-steps {
+    display: grid;
+    gap: 22px;
+    margin: 48px 0 0;
+    padding: 0;
+    list-style: none;
+}
+.commissions-steps li {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+.commissions-steps li > span {
+    color: var(--commissions-violet);
+    font: 700 0.72rem/1 var(--font-body);
+    letter-spacing: 0.08em;
+    padding-top: 3px;
+}
+.commissions-steps strong {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 0.9rem;
+}
+.commissions-steps small {
+    color: var(--commissions-muted);
+    font-size: 0.78rem;
+}
+
+.commissions-panel {
+    background: var(--commissions-surface);
+    border: 1px solid var(--commissions-border);
+    border-radius: 8px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
+}
+.commissions-code-panel {
+    padding: clamp(24px, 4vw, 40px);
+    border-top: 2px solid var(--commissions-violet);
+}
+.commissions-code-panel h2 {
+    margin-bottom: 9px;
+}
+.commissions-code-panel > p {
+    margin-bottom: 28px;
+    font-size: 0.88rem;
+}
+.commissions-code-label,
+.commissions-payout-form label {
+    display: grid;
+    gap: 8px;
+    color: var(--commissions-soft);
+    font-size: 0.73rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+.commissions-page .form-input {
+    min-height: 50px;
+    border-radius: 5px;
+    border-color: var(--commissions-border);
+    background: #0b111c;
+    box-shadow: none;
+    color: #f8fafc;
+}
+.commissions-page .form-input:focus {
+    border-color: var(--commissions-violet);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+    transform: none;
+}
+.commissions-code-panel .form-input {
+    margin-top: 9px;
+    font-family: var(--font-body);
+    letter-spacing: 0.06em;
+}
+.commissions-page .btn-primary {
+    width: 100%;
+    justify-content: space-between;
+    margin-top: 16px;
+    padding: 0.9rem 1rem;
+    border: 1px solid #a78bfa;
+    border-radius: 5px;
+    background: var(--commissions-violet);
+    color: #fff;
+    box-shadow: none;
+}
+.commissions-page .btn-primary:hover {
+    background: #7c3aed;
+    transform: translateY(-1px);
+}
+.commissions-page .btn-primary:focus-visible,
+.commissions-back:focus-visible {
+    outline: 3px solid rgba(167, 139, 250, 0.45);
+    outline-offset: 4px;
+}
+.commissions-feedback {
+    min-height: 1.4em;
+    margin-top: 14px !important;
+    color: var(--commissions-amber) !important;
+    font-size: 0.78rem;
+}
+
+.commissions-dashboard-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    margin-bottom: 28px;
+}
+.commissions-dashboard-heading p {
+    margin-top: 12px;
+    font-size: 0.88rem;
+}
+.commissions-live-status {
+    align-self: flex-start;
+    padding: 8px 11px;
+    border: 1px solid rgba(52, 211, 153, 0.22);
+    color: var(--commissions-emerald);
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+.commissions-balance {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 156px;
+    margin-bottom: 14px;
+    padding: 28px 32px;
+    border: 1px solid rgba(52, 211, 153, 0.24);
+    border-radius: 8px;
+    background: #10241f;
+}
+.commissions-balance .commissions-eyebrow {
+    color: var(--commissions-emerald);
+}
+.commissions-balance strong {
+    display: block;
+    font: 700 clamp(2.2rem, 5vw, 3.4rem)/1 var(--font-heading);
+    letter-spacing: -0.04em;
+}
+.commissions-balance small {
+    display: block;
+    margin-top: 9px;
+    color: #9dd9c2;
+    font-size: 0.76rem;
+}
+.commissions-balance-mark {
+    color: rgba(52, 211, 153, 0.35);
+    font: 700 5rem/1 var(--font-heading);
+}
+.commissions-metrics {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    margin-bottom: 42px;
+    border: 1px solid var(--commissions-border);
+    background: var(--commissions-border);
+}
+.commissions-metrics {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 1px;
+    margin-bottom: 42px;
+    border: 1px solid var(--commissions-border);
+    background: var(--commissions-border);
+}
+.commissions-metric {
+    min-width: 0;
+    padding: 18px;
+    background: var(--commissions-surface);
+}
+.commissions-metric small {
+    display: block;
+    margin-bottom: 9px;
+    color: var(--commissions-muted);
+    font-size: 0.68rem;
+}
+.commissions-metric strong {
+    display: block;
+    overflow: hidden;
+    color: #f8fafc;
+    font-size: 1.13rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.commissions-section-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.commissions-history,
+.commissions-payout {
+    padding: 28px;
+}
+.commissions-history-count {
+    color: var(--commissions-muted);
+    font-size: 0.72rem;
+}
+.commissions-table-wrap {
+    overflow-x: auto;
+}
+.commissions-history table {
+    width: 100%;
+    min-width: 600px;
+    border-collapse: collapse;
+    text-align: left;
+}
+.commissions-history th {
+    padding: 0 16px 13px;
+    border-bottom: 1px solid var(--commissions-border);
+    color: var(--commissions-muted);
+    font-size: 0.67rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.commissions-history td {
+    padding: 17px 16px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    color: var(--commissions-soft);
+    font-size: 0.83rem;
+}
+.commissions-history th:first-child,
+.commissions-history td:first-child {
+    padding-left: 0;
+}
+.commissions-history th:last-child,
+.commissions-history td:last-child {
+    padding-right: 0;
+}
+.commissions-status-tag {
+    display: inline-block;
+    padding: 4px 8px;
+    border: 1px solid rgba(245, 158, 11, 0.24);
+    color: var(--commissions-amber);
+    font-size: 0.7rem;
+}
+.commissions-status-tag.is-paid {
+    border-color: rgba(52, 211, 153, 0.24);
+    color: var(--commissions-emerald);
+}
+.commissions-status-tag.is-pending {
+    border-color: rgba(245, 158, 11, 0.24);
+    color: var(--commissions-amber);
+}
+.commissions-payout {
+    margin-top: 16px;
+}
+.commissions-panel-icon {
+    color: var(--commissions-violet);
+    font-size: 1.3rem;
+}
+.commissions-payout > p {
+    max-width: 660px;
+    margin-bottom: 24px;
+    font-size: 0.84rem;
+}
+.commissions-payout-form {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+.commissions-payout-form .btn {
+    grid-column: 1 / 2;
+    margin-top: 8px;
+}
+.commissions-payout-form small {
+    align-self: center;
+    color: var(--commissions-emerald);
+    font-size: 0.76rem;
+}
+.commissions-state {
+    max-width: 600px;
+    padding: 40px;
+    border-left: 2px solid var(--commissions-violet);
+    background: var(--commissions-surface);
+}
+.commissions-state h2 {
+    margin-bottom: 10px;
+}
+.commissions-state--error {
+    border-color: var(--commissions-amber);
+}
+.commissions-loading {
+    color: var(--commissions-muted);
+    font-size: 0.85rem;
+}
+.commissions-loading-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: var(--commissions-violet);
+    animation: commissionsPulse 1.2s infinite ease-in-out;
+}
+
+@keyframes commissionsReveal {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+@keyframes commissionsPulse {
+    0%,
+    100% {
+        opacity: 0.35;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+@media (max-width: 760px) {
+    .commissions-shell {
+        width: min(100% - 32px, 560px);
+        padding-top: 20px;
+    }
+    .commissions-header {
+        grid-template-columns: 1fr auto;
+        padding-bottom: 20px;
+    }
+    .commissions-brand {
+        grid-row: 1;
+        grid-column: 2;
+    }
+    .commissions-status {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        justify-self: start;
+    }
+    .commissions-root {
+        padding-top: 42px;
+    }
+    .commissions-activation {
+        grid-template-columns: 1fr;
+        gap: 40px;
+    }
+    .commissions-root h1 {
+        font-size: 2.45rem;
+    }
+    .commissions-steps {
+        margin-top: 30px;
+    }
+    .commissions-dashboard-heading {
+        display: block;
+    }
+    .commissions-live-status {
+        display: inline-block;
+        margin-top: 18px;
+    }
+    .commissions-metrics {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .commissions-metric:last-child {
+        grid-column: auto;
+    }
+    .commissions-payout-form {
+        grid-template-columns: 1fr;
+    }
+    .commissions-payout-form .btn {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 420px) {
+    .commissions-shell {
+        width: min(100% - 24px, 560px);
+    }
+    .commissions-brand b {
+        display: none;
+    }
+    .commissions-balance,
+    .commissions-history,
+    .commissions-payout,
+    .commissions-code-panel {
+        padding: 22px 18px;
+    }
+    .commissions-balance-mark {
+        font-size: 3.6rem;
+    }
+}
+
 .feedback-header h3 {
     margin: 0.1rem 0 0.3rem;
     font-size: 1.35rem;

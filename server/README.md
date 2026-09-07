@@ -24,6 +24,12 @@ Endpoints actifs
     - body minimal: `{ userId, subscription }`
     - body recommandé: `{ userId, subscription, timezone, reminderEnabled }`
 
+Partenariats et commissions
+
+- Exécuter `sql/20260907_partner_commissions_complete.sql` dans l'éditeur SQL Supabase après les migrations existantes.
+- Cette migration crée les tables de codes partenaires, affiliations, pages rattachées, commissions, retraits et audit utilisées par l'API.
+- En local, lancer `npm run api` pour exposer les routes `/api/partners/*` sur le port `5050`. `npm start` lance le serveur optimisé statique, qui ne fournit pas encore ces routes partenaires.
+
 Note
 
 - Toute la logique de paiement historique a été retirée. On réintroduira un provider plus tard.

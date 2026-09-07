@@ -42,7 +42,7 @@
             banner_url: "",
             professional_cta: {
                 objective: "sales",
-                label: "Visiter le site officiel",
+                label: "Visiter le site",
                 type: "external",
                 url: "",
             },
@@ -64,7 +64,7 @@
 
                 const metadata = data.metadata || {};
                 const savedCta = metadata.professional_cta || {};
-                const savedLabel = savedCta.label || "Visiter le site officiel";
+                const savedLabel = savedCta.label || "Visiter le site";
                 setPageData(data);
                 setFormData({
                     name: data.name || "",

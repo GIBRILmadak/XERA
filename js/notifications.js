@@ -5,7 +5,16 @@
 let notificationChannel = null;
 let notifications = [];
 const NOTIF_PERMISSION_KEY = "xera1-notif-permission-requested";
-const PUSH_SUBSCRIBE_URL = "/api/push/subscribe";
+function getPushSubscribeUrl() {
+    if (typeof window === "undefined") return "/api/push/subscribe";
+
+    const isLocalHost = ["localhost", "127.0.0.1"].includes(
+        window.location.hostname,
+    );
+    return isLocalHost
+        ? `${window.location.protocol}//${window.location.hostname}:5050/api/push/subscribe`
+        : "/api/push/subscribe";
+}
 const VAPID_PUBLIC_KEY =
     (typeof window !== "undefined" && window.VAPID_PUBLIC_KEY) ||
     "BKWmLmM6lYCuTb/YPmxIdeWJvMNjI1QDi0Kc36PiTKmEfybk4wky7VxsM6H/lK3dUXl1WQNXAB1zCbiTNGckdhM=";
@@ -1158,7 +1167,7 @@ async function sendSubscriptionToServer(subscription) {
             throw new Error("Méthode HTTP invalide pour l'abonnement push.");
         }
 
-        const response = await fetch(PUSH_SUBSCRIBE_URL, requestConfig);
+        const response = await fetch(getPushSubscribeUrl(), requestConfig);
         if (!response || !response.ok) {
             const text = await response.text().catch(() => "");
             throw new Error(

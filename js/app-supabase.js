@@ -10288,9 +10288,7 @@ function renderProfileUpdateCard(
             ? encouragedContentIds
             : new Set();
     const viewerCanEncourage =
-        !!targetContentId &&
-        currentUserId &&
-        currentUserId !== content.userId;
+        !!targetContentId && currentUserId && currentUserId !== content.userId;
     const isEncouraged = targetContentId
         ? safeEncouragedSet.has(targetContentId)
         : false;
@@ -12964,7 +12962,10 @@ async function renderDiscoverGrid() {
         if (!userId || !content) return "";
         const isFollowed = followedSet.has(userId);
         const isEncouraged =
-            content && content.contentId && encouragedContentIds && typeof encouragedContentIds.has === "function"
+            content &&
+            content.contentId &&
+            encouragedContentIds &&
+            typeof encouragedContentIds.has === "function"
                 ? encouragedContentIds.has(content.contentId)
                 : false;
         return renderUserCard(userId, isFollowed, isEncouraged, content, {
@@ -14307,8 +14308,14 @@ async function renderImmersiveFeed(contents) {
             }
 
             const targetContentId = content.contentId || content.id || "";
-            const safeEncouragedSet = (encouragedContentIds && typeof encouragedContentIds.has === "function") ? encouragedContentIds : new Set();
-            const isEncouraged = targetContentId ? safeEncouragedSet.has(targetContentId) : false;
+            const safeEncouragedSet =
+                encouragedContentIds &&
+                typeof encouragedContentIds.has === "function"
+                    ? encouragedContentIds
+                    : new Set();
+            const isEncouraged = targetContentId
+                ? safeEncouragedSet.has(targetContentId)
+                : false;
             const courageIcon = isEncouraged
                 ? "icons/courage-green.svg"
                 : "icons/courage-blue.svg";

@@ -4,9 +4,10 @@ const dotenv = require("dotenv");
 const path = require("path");
 const { createClient } = require("@supabase/supabase-js");
 const webpush = require("web-push");
-const oauthHandler = require("./oauth-handler");
 
 dotenv.config();
+
+const oauthHandler = require("./oauth-handler");
 
 const {
     APP_BASE_URL = "http://localhost:3000",

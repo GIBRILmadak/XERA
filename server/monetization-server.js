@@ -1213,6 +1213,25 @@ async function createPartnerCommissionForSupport({
     const rate = Number(partner.commission_rate || 0.05);
     const commission = calculatePartnerCommission(gross, rate);
 
+    const partnerCommissionPayload = {
+        partner_id: partnerId,
+        donation_id: transactionId,
+        support_transaction_id: transactionId,
+        beneficiary_user_id: beneficiaryUserId,
+        source_user_id: beneficiaryUserId,
+        donation_amount: gross,
+        amount_gross: gross,
+        commission_amount: commission,
+        beneficiary_net_amount: Math.max(
+            0,
+            Math.round((Number(netCreator) - commission) * 100) / 100,
+        ),
+        currency: "USD",
+        status: "available",
+        available_at: nowIso,
+        created_at: nowIso,
+    };
+
     const { data, error } = await supabase
         .from("commissions")
         .insert({
@@ -1224,23 +1243,26 @@ async function createPartnerCommissionForSupport({
         })
         .select("id")
         .maybeSingle();
+    if (!error || error.code === "23505") {
+        const { error: dashboardCommissionError } = await supabase
+            .from("partner_commissions")
+            .upsert(partnerCommissionPayload, {
+                onConflict: "partner_id,donation_id",
+            });
+        if (
+            dashboardCommissionError &&
+            !["42P01", "PGRST205"].includes(dashboardCommissionError.code)
+        ) {
+            throw dashboardCommissionError;
+        }
+        return data ? { ...data, commission } : { commission };
+    }
+
     if (error && error.code !== "23505") {
         const legacy = await supabase
             .from("partner_commissions")
-            .insert({
-                partner_id: partnerId,
-                affiliation_id: null,
-                support_transaction_id: transactionId,
-                beneficiary_user_id: beneficiaryUserId,
-                amount_gross: gross,
-                commission_amount: commission,
-                beneficiary_net_amount: Math.max(
-                    0,
-                    Math.round((Number(netCreator) - commission) * 100) / 100,
-                ),
-                currency: "USD",
-                status: "available",
-                available_at: nowIso,
+            .upsert(partnerCommissionPayload, {
+                onConflict: "partner_id,donation_id",
             })
             .select("id")
             .maybeSingle();

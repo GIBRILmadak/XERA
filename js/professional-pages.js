@@ -22,7 +22,7 @@ function getProfessionalCta(page) {
           : destination;
     return {
         objective: cta.objective || "sales",
-        label: cta.label || "Visiter le site officiel",
+        label: cta.label || "Visiter le site",
         type: phone ? "phone" : "external",
         url: externalUrl,
     };
@@ -30,38 +30,40 @@ function getProfessionalCta(page) {
 
 function CompanyPageSkeleton() {
     return `
-        <section class="company-page-skeleton" role="status" aria-busy="true" aria-label="Chargement de la page professionnelle">
-            <div class="company-skeleton-banner animate-pulse"></div>
-            <div class="company-skeleton-header">
-                <div class="company-skeleton-logo animate-pulse"></div>
-                <div class="company-skeleton-identity">
-                    <div class="company-skeleton-line company-skeleton-kicker animate-pulse"></div>
-                    <div class="company-skeleton-line company-skeleton-title animate-pulse"></div>
-                    <div class="company-skeleton-line company-skeleton-subtitle animate-pulse"></div>
-                    <div class="company-skeleton-actions">
-                        <div class="company-skeleton-button animate-pulse"></div>
-                        <div class="company-skeleton-button company-skeleton-button-secondary animate-pulse"></div>
+        <div class="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <section class="company-page-skeleton" role="status" aria-busy="true" aria-label="Chargement de la page professionnelle">
+                <div class="company-skeleton-banner animate-pulse"></div>
+                <div class="company-skeleton-header">
+                    <div class="company-skeleton-logo animate-pulse"></div>
+                    <div class="company-skeleton-identity">
+                        <div class="company-skeleton-line company-skeleton-kicker animate-pulse"></div>
+                        <div class="company-skeleton-line company-skeleton-title animate-pulse"></div>
+                        <div class="company-skeleton-line company-skeleton-subtitle animate-pulse"></div>
+                        <div class="company-skeleton-actions">
+                            <div class="company-skeleton-button animate-pulse"></div>
+                            <div class="company-skeleton-button company-skeleton-button-secondary animate-pulse"></div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="company-skeleton-metrics">
-                <div class="company-skeleton-metric animate-pulse"></div>
-                <div class="company-skeleton-metric animate-pulse"></div>
-                <div class="company-skeleton-metric animate-pulse"></div>
-                <div class="company-skeleton-metric animate-pulse"></div>
-            </div>
-            <div class="company-skeleton-content">
-                <div class="company-skeleton-main">
-                    <div class="company-skeleton-section-heading animate-pulse"></div>
-                    <div class="company-skeleton-card animate-pulse"></div>
-                    <div class="company-skeleton-card company-skeleton-card-tall animate-pulse"></div>
+                <div class="company-skeleton-metrics">
+                    <div class="company-skeleton-metric animate-pulse"></div>
+                    <div class="company-skeleton-metric animate-pulse"></div>
+                    <div class="company-skeleton-metric animate-pulse"></div>
+                    <div class="company-skeleton-metric animate-pulse"></div>
                 </div>
-                <div class="company-skeleton-sidebar">
-                    <div class="company-skeleton-section-heading animate-pulse"></div>
-                    <div class="company-skeleton-card animate-pulse"></div>
+                <div class="company-skeleton-content">
+                    <div class="company-skeleton-main">
+                        <div class="company-skeleton-section-heading animate-pulse"></div>
+                        <div class="company-skeleton-card animate-pulse"></div>
+                        <div class="company-skeleton-card company-skeleton-card-tall animate-pulse"></div>
+                    </div>
+                    <div class="company-skeleton-sidebar">
+                        <div class="company-skeleton-section-heading animate-pulse"></div>
+                        <div class="company-skeleton-card animate-pulse"></div>
+                    </div>
                 </div>
-            </div>
-        </section>
+            </section>
+        </div>
     `;
 }
 
@@ -2190,10 +2192,9 @@ class XERAProfessionalManager {
             const isOwner =
                 window.currentUser && page.owner_id === window.currentUser.id;
             const pageFollowState = await this.getPageFollowState(page.id);
-            const pageFollowCountHtml = `<span class="pro-page-follow-count"><strong id="page-follow-count-${page.id}">${pageFollowState.count}</strong> abonnés</span>`;
             const pageFollowHtml = isOwner
-                ? pageFollowCountHtml
-                : `${pageFollowCountHtml}<button id="page-follow-btn-${page.id}" class="btn-pro-primary pro-page-follow-btn${pageFollowState.isFollowing ? " is-following" : ""}" onclick="window.professionalManager.togglePageFollow('${page.id}')"><img src="icons/${pageFollowState.isFollowing ? "subscribed" : "subscribe"}.svg" class="btn-icon" style="width: 20px; height: 20px;"> ${pageFollowState.isFollowing ? "Abonné" : "S'abonner"}</button>`;
+                ? ""
+                : `<button id="page-follow-btn-${page.id}" class="btn-pro-primary pro-page-follow-btn${pageFollowState.isFollowing ? " is-following" : ""}" onclick="window.professionalManager.togglePageFollow('${page.id}')"><img src="icons/${pageFollowState.isFollowing ? "subscribed" : "subscribe"}.svg" class="btn-icon" style="width: 20px; height: 20px;"> ${pageFollowState.isFollowing ? "Abonné" : "S'abonner"}</button>`;
             if (typeof window.fetchVerifiedBadges === "function") {
                 await window
                     .fetchVerifiedBadges()
@@ -2304,7 +2305,16 @@ class XERAProfessionalManager {
             styleElement.textContent = `
                     #pro-page { padding-top: 76px !important; }
                     #pro-page .pro-page-container,
-                    #pro-page .profile-container { padding-top: 0 !important; }
+                    #pro-page .profile-container {
+                        padding-top: 0 !important;
+                    }
+                    #pro-page .pro-page-container {
+                        width: 100% !important;
+                        max-width: none !important;
+                        margin-inline: auto !important;
+                        padding-inline: 0 !important;
+                        box-sizing: border-box;
+                    }
 
                     nav { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important; }
 
@@ -2760,8 +2770,8 @@ class XERAProfessionalManager {
                         --pro-line: #293244;
                         --pro-violet: #946cff;
                         --pro-violet-soft: #211947;
-                        max-width: 1240px;
-                        padding: 28px clamp(16px, 3vw, 38px) 72px;
+                        max-width: 100%;
+                        padding: 28px 0 72px;
                         background: transparent;
                         color: var(--pro-ink);
                         font-family: inherit;
@@ -2803,7 +2813,7 @@ class XERAProfessionalManager {
                     }
                     #pro-page .pro-header-info > div:first-child { display: grid; grid-template-columns: 126px minmax(220px,1fr); min-width: 0; gap: 22px; align-items: end; }
                     #pro-page .pro-avatar-overlap {
-                        width: 126px; height: 126px; margin: -62px 0 0;
+                        width: 126px; height: 126px; margin: -72px 0 0;
                         border: 5px solid #101624; border-radius: 22px; background: #101624;
                         box-shadow: 0 12px 28px rgba(0,0,0,.32);
                     }
@@ -2824,12 +2834,17 @@ class XERAProfessionalManager {
                     #pro-page .pro-secondary-details > .pro-role-label { color: var(--pro-muted); }
                     #pro-page .pro-secondary-details > .pro-role-label span { color: var(--pro-ink); }
                     #pro-page .pro-actions-row {
-                        display: flex; flex-wrap: wrap; justify-content: flex-start;
-                        padding: 0 30px 26px; margin: 0; gap: 10px;
+                        display: flex;
+                        flex-wrap: wrap;
+                        justify-content: flex-start;
+                        padding: 0 30px 26px;
+                        margin: 0;
+                        gap: 12px;
                         border-top: 1px solid var(--pro-line);
                         padding-top: 20px;
                     }
-                    #pro-page .pro-actions-row > * { width: auto; }
+                    #pro-page .pro-actions-row > * { width: auto; flex: 0 0 auto; }
+                    #pro-page .btn-pro-label-short { display: none !important; }
                     #pro-page .btn-pro-primary, #pro-page .btn-pro-secondary {
                         width: auto; min-height: 42px; border-radius: 10px; padding: 10px 15px;
                         font-size: .86rem; box-sizing: border-box; text-decoration: none;
@@ -2885,6 +2900,9 @@ class XERAProfessionalManager {
                     #pro-page .pro-main-col > h3.pro-section-title { margin: 0 !important; }
                     #pro-page .pro-main-col > .pro-card-premium { margin: -7px 0 0 !important; }
                     #pro-page :is(button,a):focus-visible { outline: 3px solid rgba(109,61,245,.35); outline-offset: 3px; }
+                    @media (min-width: 901px) {
+                        #pro-page .pro-avatar-overlap { transform: translateY(-70px); }
+                    }
                     @media (max-width: 900px) {
                         #pro-page .pro-header-info { grid-template-columns: 1fr; padding: 0 22px 20px; }
                         #pro-page .pro-secondary-details { border-left: 0; border-top: 1px solid var(--pro-line); padding: 16px 0 0; }
@@ -2894,11 +2912,11 @@ class XERAProfessionalManager {
                     }
                     @media (max-width: 620px) {
                         #pro-page .pro-page-wrapper { padding: 0 0 42px; }
-                        #pro-page .pro-header-card { border-radius: 0 0 20px 20px; border-left: 0; border-right: 0; }
-                        #pro-page .pro-banner-container { height: 150px; border-radius: 0; }
+                        #pro-page .pro-header-card { border-radius: 16px; }
+                        #pro-page .pro-banner-container { height: 150px; border-radius: 15px 15px 0 0; }
                         #pro-page .pro-header-info { padding: 0 17px 17px; }
                         #pro-page .pro-header-info > div:first-child { grid-template-columns: 82px minmax(0,1fr); gap: 14px; }
-                        #pro-page .pro-avatar-overlap { width: 82px; height: 82px; margin-top: -41px; border-radius: 17px; }
+                        #pro-page .pro-avatar-overlap { width: 82px; height: 82px; margin-top: -47px; border-radius: 17px; }
                         #pro-page .pro-name-row h2 { font-size: 1.48rem; }
                         #pro-page .pro-actions-row { padding: 16px 17px 20px; gap: 8px; }
                         #pro-page .btn-pro-primary, #pro-page .btn-pro-secondary { flex: 1 1 auto; justify-content: center; padding: 10px; }
@@ -3002,12 +3020,15 @@ class XERAProfessionalManager {
                         overflow-wrap: anywhere;
                     }
                     #pro-page .pro-actions-row {
-                        display: grid;
-                        grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 12px;
                     }
                     #pro-page .pro-actions-row > * {
-                        width: 100%;
+                        width: auto;
+                        flex: 0 1 auto;
                         min-width: 0;
+                        max-width: 100%;
                     }
                     #pro-page .pro-actions-row .btn-icon {
                         flex: 0 0 auto;
@@ -3179,16 +3200,28 @@ class XERAProfessionalManager {
                     /* Regles finales: une seule source de verite pour les dimensions.
                        Les carrousels sont les seuls blocs autorises a defiler. */
                     body.is-pro { overflow-x: hidden; }
-                    #pro-page,
-                    #pro-page .pro-page-container,
-                    #pro-page .pro-page-wrapper {
+                    #pro-page {
                         width: 100%;
-                        max-width: 100%;
+                        max-width: none;
+                        margin-inline: auto;
+                        min-width: 0;
+                    }
+                    #pro-page .pro-page-container {
+                        width: 100%;
+                        max-width: none;
+                        margin-inline: auto;
                         min-width: 0;
                     }
                     #pro-page .pro-page-wrapper {
-                        padding-inline: clamp(12px, 3vw, 38px);
+                        width: min(100%, 1180px);
+                        max-width: 1180px;
+                        min-width: 0;
+                    }
+                    #pro-page .pro-page-wrapper {
+                        margin-inline: auto;
+                        padding-inline: clamp(16px, 3vw, 32px);
                         padding-bottom: clamp(32px, 6vw, 72px);
+                        box-sizing: border-box;
                     }
                     #pro-page .pro-header-card,
                     #pro-page .pro-content-layout,
@@ -3256,8 +3289,10 @@ class XERAProfessionalManager {
                         padding: 0;
                     }
                     #pro-page .pro-actions-row {
-                        grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
-                        align-items: stretch;
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 12px;
+                        align-items: center;
                     }
                     #pro-page .pro-actions-row > a,
                     #pro-page .pro-actions-row > button {
@@ -3322,9 +3357,9 @@ class XERAProfessionalManager {
                         #pro-page .pro-stat-item:nth-child(-n+2) { border-bottom: 1px solid var(--pro-line); }
                     }
                     @media (max-width: 620px) {
-                        #pro-page .pro-page-wrapper { padding-inline: 0; }
-                        #pro-page .pro-header-card { border-radius: 0 0 20px 20px; border-inline: 0; }
-                        #pro-page .pro-content-layout { padding-inline: 14px; }
+                        #pro-page .pro-page-wrapper { padding-inline: 16px; }
+                        #pro-page .pro-header-card { border-radius: 18px; border-inline: 1px solid var(--pro-line); }
+                        #pro-page .pro-content-layout { padding-inline: 0; }
                         #pro-page .pro-actions-row { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-inline: 17px; }
                         #pro-page .pro-info-carousel { padding-inline: 14px; }
                         #pro-page .pro-info-carousel > section { flex-basis: 100%; width: 100%; }
@@ -3336,241 +3371,248 @@ class XERAProfessionalManager {
                         #pro-page .pro-stat-item { border-right: 0 !important; border-bottom: 1px solid var(--pro-line); }
                         #pro-page .pro-stat-item:last-child { border-bottom: 0; }
                         #pro-page .pro-header-info > div:first-child { grid-template-columns: 72px minmax(0, 1fr); gap: 12px; }
-                        #pro-page .pro-avatar-overlap { width: 72px; height: 72px; margin-top: -36px; }
+                        #pro-page .pro-avatar-overlap { width: 72px; height: 72px; margin-top: -42px; }
                         #pro-page .pro-name-row h2 { font-size: 1.28rem; }
                     }
                 `;
 
             try {
-              const floatingCreate = document.getElementById(
-                "floating-create-container",
-              );
-              if (floatingCreate) floatingCreate.style.display = "none";
+                const floatingCreate = document.getElementById(
+                    "floating-create-container",
+                );
+                if (floatingCreate) floatingCreate.style.display = "none";
             } catch (e) {
-              // ignore if proContainer not present or DOM restricted
+                // ignore if proContainer not present or DOM restricted
             }
 
             proContainer.innerHTML = `
-                <div class="pro-page-wrapper pro-page-fade-in">
-                    <!-- HEADER -->
-                    <div class="pro-header-card">
-                        <div class="pro-banner-container">
-                            ${banner ? `<img src="${this.escapeHtml(banner)}" class="pro-banner-img" alt="${bannerAlt}" onerror="this.remove(); this.parentElement.classList.add('pro-banner-unavailable');">` : ""}
-                            ${isOwner ? `<div class="pro-edit-banner-btn" onclick="window.professionalManager.openPageSettings('${page.id}')"><i class="fas fa-edit"></i></div>` : ""}
-                        </div>
+                <div class="min-h-screen bg-[#0b0f17] text-slate-100">
+                    <main class="w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+                    <div class="pro-page-wrapper pro-page-fade-in">
+                        <!-- HEADER -->
+                        <div class="pro-header-card">
+                            <div class="pro-banner-container">
+                                ${banner ? `<img src="${this.escapeHtml(banner)}" class="pro-banner-img" alt="${bannerAlt}" onerror="this.remove(); this.parentElement.classList.add('pro-banner-unavailable');">` : ""}
+                                ${isOwner ? `<div class="pro-edit-banner-btn" onclick="window.professionalManager.openPageSettings('${page.id}')"><i class="fas fa-edit"></i></div>` : ""}
+                            </div>
 
-                        <div class="pro-header-info">
-                            <div style="flex: 1;">
-                                <div class="pro-avatar-overlap">
-                                    <img src="${avatar}" alt="Avatar">
-                                </div>
-                                <div class="pro-main-details">
-                                    <div class="pro-industry-label">${page.industry}</div>
-                                    <div class="pro-name-row">
-                                        <h2>${typeof window.wrapUsernameLabel === "function" ? window.wrapUsernameLabel(page.name) : page.name}</h2>
-                                        ${pageVerifiedBadgeHtml}
+                            <div class="pro-header-info">
+                                <div style="flex: 1;">
+                                    <div class="pro-avatar-overlap">
+                                        <img src="${avatar}" alt="Avatar">
                                     </div>
-                                    <div class="pro-members-count"><strong>${employees.length}</strong> Membres certifiés</div>
-                                    ${pageVerificationCtaHtml}
+                                    <div class="pro-main-details">
+                                        <div class="pro-industry-label">${page.industry}</div>
+                                        <div class="pro-name-row">
+                                            <h2>${typeof window.wrapUsernameLabel === "function" ? window.wrapUsernameLabel(page.name) : page.name}</h2>
+                                            ${pageVerifiedBadgeHtml}
+                                        </div>
+                                        <div class="pro-members-count"><strong>${employees.length}</strong> Membres certifiés</div>
+                                        ${pageVerificationCtaHtml}
+                                    </div>
+                                </div>
+
+                                <div class="pro-secondary-details">
+                                    <div class="pro-interests-label">Centres d'intérêt</div>
+                                    <div class="pro-interest-list">
+                                        ${page.hiring_needs?.map((need) => `<span class="pro-interest-chip">${need}</span>`).join("") || `<span class="pro-interest-chip">Aucun</span>`}
+                                    </div>
+                                    <div class="pro-role-label">Rôle actuel: <span>Page Professionnelle</span></div>
                                 </div>
                             </div>
 
-                            <div class="pro-secondary-details">
-                                <div class="pro-interests-label">Centres d'intérêt</div>
-                                <div class="pro-interest-list">
-                                    ${page.hiring_needs?.map((need) => `<span class="pro-interest-chip">${need}</span>`).join("") || `<span class="pro-interest-chip">Aucun</span>`}
-                                </div>
-                                <div class="pro-role-label">Rôle actuel: <span>Page Professionnelle</span></div>
+                            <div class="pro-actions-row flex flex-wrap items-center gap-3">
+                                ${(() => {
+                                    const cta = getProfessionalCta(page);
+                                    if (!cta.url) return "";
+                                    const target =
+                                        cta.type === "phone"
+                                            ? ""
+                                            : ` target="_blank" rel="noopener noreferrer"`;
+                                    const icon =
+                                        cta.type === "phone"
+                                            ? "phone"
+                                            : "globe";
+                                    return `<a href="${this.escapeHtml(cta.url)}"${target} class="btn-pro-primary" style="text-decoration:none;"><i class="fas fa-${icon}"></i><span>${this.escapeHtml(cta.label)}</span></a>`;
+                                })()}
+                                <button class="btn-pro-secondary" type="button" onclick="window.startCompanyMessageFromPage && window.startCompanyMessageFromPage('${this.escapeHtml(page.id)}','${this.escapeHtml(page.slug || "")}','${this.escapeHtml(page.name || "Page Pro")}')"><i class="fas fa-comment-dots"></i><span class="btn-pro-label-long">Contacter</span><span class="btn-pro-label-short">Message</span></button>
+                                ${pageFollowHtml}
+                                ${
+                                    isOwner
+                                        ? `
+                                    <button class="btn-pro-secondary" onclick="window.professionalManager.openTeamManagement('${page.id}')"><i class="fas fa-users-cog"></i><span class="btn-pro-label-long">Gérer l'équipe</span><span class="btn-pro-label-short">Équipe</span></button>
+                                    <a href="commissions.html" class="btn-pro-secondary" style="text-decoration:none"><i class="fas fa-chart-line"></i><span class="btn-pro-label-long">Commissions</span><span class="btn-pro-label-short">Com.</span></a>
+                                    <button class="btn-pro-secondary" onclick="window.professionalManager.openPageSettings('${page.id}')"><i class="fas fa-cog"></i><span class="btn-pro-label-long">Réglages Page</span><span class="btn-pro-label-short">Réglages</span></button>
+                                `
+                                        : ""
+                                }
                             </div>
-                        </div>
-
-                        <div class="pro-actions-row">
-                            ${(() => {
-                              const cta = getProfessionalCta(page);
-                              if (!cta.url) return "";
-                              const target =
-                                cta.type === "phone"
-                                  ? ""
-                                  : ` target="_blank" rel="noopener noreferrer"`;
-                              const icon =
-                                cta.type === "phone" ? "phone" : "globe";
-                              return `<a href="${this.escapeHtml(cta.url)}"${target} class="btn-pro-primary" style="text-decoration:none;"><i class="fas fa-${icon}"></i><span>${this.escapeHtml(cta.label)}</span></a>`;
-                            })()}
-                            <button class="btn-pro-secondary" type="button" onclick="window.startCompanyMessageFromPage && window.startCompanyMessageFromPage('${this.escapeHtml(page.id)}','${this.escapeHtml(page.slug || "")}','${this.escapeHtml(page.name || "Page Pro")}')"><i class="fas fa-comment-dots"></i><span class="btn-pro-label-long">Contacter</span><span class="btn-pro-label-short">Message</span></button>
-                            ${pageFollowHtml}
+                            <div class="pro-public-stats" aria-label="Aperçu de la page">
+                                <div class="pro-stat-item"><strong>${employees.length}</strong><span>Membres certifiés</span></div>
+                                <div class="pro-stat-item"><strong>${pageFollowState.count}</strong><span>Abonnés</span></div>
+                                <div class="pro-stat-item"><strong>${orgArcs?.length || 0}</strong><span>Projets publics</span></div>
+                                <div class="pro-stat-item"><strong>${page.hiring_needs?.length || 0}</strong><span>Spécialités</span></div>
+                            </div>
                             ${
-                              isOwner
-                                ? `
-                                <button class="btn-pro-secondary" onclick="window.professionalManager.openTeamManagement('${page.id}')"><i class="fas fa-users-cog"></i><span class="btn-pro-label-long">Gérer l'équipe</span><span class="btn-pro-label-short">Équipe</span></button>
-                                <a href="commissions.html" class="btn-pro-secondary" style="text-decoration:none"><i class="fas fa-chart-line"></i><span class="btn-pro-label-long">Commissions</span><span class="btn-pro-label-short">Com.</span></a>
-                                <button class="btn-pro-secondary" onclick="window.professionalManager.openPageSettings('${page.id}')"><i class="fas fa-cog"></i><span class="btn-pro-label-long">Réglages Page</span><span class="btn-pro-label-short">Réglages</span></button>
-                            `
-                                : ""
-                            }
-                        </div>
-                        <div class="pro-public-stats" aria-label="Aperçu de la page">
-                            <div class="pro-stat-item"><strong>${employees.length}</strong><span>Membres certifiés</span></div>
-                            <div class="pro-stat-item"><strong>${pageFollowState.count}</strong><span>Abonnés</span></div>
-                            <div class="pro-stat-item"><strong>${orgArcs?.length || 0}</strong><span>Projets publics</span></div>
-                            <div class="pro-stat-item"><strong>${page.hiring_needs?.length || 0}</strong><span>Spécialités</span></div>
-                        </div>
-                        ${
-                          isOwner
-                            ? `<div class="pro-info-carousel">
-                            ${recommendedProfilesHtml}
-                            ${officialComparisonHtml}
-                        </div>`
-                            : ""
-                        }
-                    </div>
-
-                    <!-- QUICK ACTIONS -->
-                    ${
-                      isOwner
-                        ? `<div class="pro-features-grid">
-                        <div class="feature-card-pro" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">
-                            <div class="feature-icon-box"><i class="fas fa-handshake"></i></div>
-                            <div class="feature-info">
-                                <h4>Publier une actualité</h4>
-                                <p>Partagez une nouvelle officielle avec votre communauté.</p>
-                            </div>
-                            <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
-                        </div>
-                        <div class="feature-card-pro" onclick="window.professionalManager.openCompanyPostMenu('${page.id}')">
-                            <div class="feature-icon-box"><i class="fas fa-share-alt"></i></div>
-                            <div class="feature-info">
-                                <h4>Partager des posts</h4>
-                                <p>Partagez vos dernières actualités et restez connecté avec votre réseau.</p>
-                            </div>
-                            <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
-                        </div>
-                        <div class="feature-card-pro" onclick="window.professionalManager.openPageSettings('${page.id}')">
-                            <div class="feature-icon-box"><i class="fas fa-sync"></i></div>
-                            <div class="feature-info">
-                                <h4>Mettre à jour</h4>
-                                <p>Gardez votre profil à jour pour que les recruteurs vous trouvent facilement.</p>
-                            </div>
-                            <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
-                        </div>
+                                isOwner
+                                    ? `<div class="pro-info-carousel">
+                                ${recommendedProfilesHtml}
+                                ${officialComparisonHtml}
                             </div>`
-                        : ""
-                    }
-
-                    <div class="pro-content-layout">
-                        <!-- MAIN CONTENT -->
-                        <div class="pro-main-col">
-                            <!-- CREATION BAR -->
-                            ${
-                              isOwner
-                                ? `
-                                <div class="pro-creation-card">
-                                    <div class="pro-creation-input-shell">
-                                        <img src="${avatar}" alt="Logo">
-                                        <button onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">Commencer une actualité officielle...</button>
-                                    </div>
-                                    <div class="pro-creation-tabs">
-                                        <div class="pro-tab-item news" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">
-                                            <i class="fas fa-newspaper"></i>
-                                            <span>Actualité</span>
-                                        </div>
-                                        <div class="pro-tab-item event" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'event')">
-                                            <i class="fas fa-calendar-alt"></i>
-                                            <span>Événement</span>
-                                        </div>
-                                        <div class="pro-tab-item project" onclick="window.professionalManager.openCreateOrgArc('${page.id}')">
-                                            <i class="fas fa-project-diagram"></i>
-                                            <span>Projet</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            `
-                                : ""
+                                    : ""
                             }
-
-                            <!-- ARCS -->
-                            <div class="pro-section-header">
-                                <h3 class="pro-section-title">Projets d'Organisation (ARCs)</h3>
-                                ${isOwner ? `<button class="btn-pill-small" onclick="window.professionalManager.openCreateOrgArc('${page.id}')">+ Nouveau Projet</button>` : ""}
-                            </div>
-                            <div class="org-arcs-grid" style="margin-bottom: 40px;">
-                                ${
-                                  orgArcs && orgArcs.length > 0
-                                    ? orgArcs
-                                        .map(
-                                          (arc) => `
-                                            <div class="arc-card-pro-premium" onclick="selectArc('${arc.id}', '${page.owner_id}')" style="cursor: pointer;">
-                                                <div style="font-size: 0.65rem; text-transform: uppercase; font-weight: 800; color: #8b5cf6; margin-bottom: 5px; letter-spacing: 1px;">ARC OFFICIEL</div>
-                                                <h4 style="margin: 0 0 10px 0; font-size: 1.1rem; font-weight: 700;">${arc.title}</h4>
-                                                <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 15px;">${arc.description || "Aucune description."}</p>
-                                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem;">
-                                                    <span class="badge" style="background: rgba(255,255,255,0.05); color: #fff; padding: 4px 12px; border-radius: 6px;">${arc.status === "in_progress" ? "En cours" : "Terminé"}</span>
-                                                    <span style="font-weight: 700; color: #8b5cf6;">Voir la trajectoire →</span>
-                                                </div>
-                                            </div>
-                                        `,
-                                        )
-                                        .join("")
-                                    : `
-                                        <div class="pro-empty-state">
-                                            <div class="pro-empty-icon"><i class="fas fa-folder-open"></i></div>
-                                            <div class="pro-empty-text">L'organisation n'a pas encore de projet public.<br>Ajoutez votre premier projet pour commencer.</div>
-                                        </div>
-                                        `
-                                }
-                            </div>
-
-                            <!-- UPDATES -->
-                            <div class="pro-section-header">
-                                <h3 class="pro-section-title">Actualités de l'entreprise</h3>
-                                ${isOwner ? `<button class="btn-pill-small" onclick="window.professionalManager.openCompanyPostMenu('${page.id}')">+ Publier une update</button>` : ""}
-                            </div>
-                            <div id="company-updates-container" style="margin-bottom: 40px;">
-                                <div class="loading-spinner"></div>
-                            </div>
-
-                            <!-- ABOUT -->
-                            <h3 class="pro-section-title" style="margin-bottom: 20px;">À propos</h3>
-                            <div class="pro-card-premium pro-about-card" style="margin-bottom: 40px;">
-                                <p class="pro-about-copy" style="white-space: pre-wrap; line-height: 1.7; color: var(--text-secondary); font-size: 0.95rem; margin: 0;">${page.description || "Bienvenue sur notre page professionnelle."}</p>
-                            </div>
-
-                            <!-- TEAM -->
-                            <h3 class="pro-section-title" style="margin-bottom: 20px;">Équipe Certifiée</h3>
-                            <div class="employees-grid" style="margin-bottom: 40px;">
-                                ${
-                                  employees.length > 0
-                                    ? employees
-                                        .map(
-                                          (emp) => `
-                                            <div class="pro-card-premium" style="text-align: center; cursor: pointer; padding: 25px; transition: all 0.2s;" onclick="navigateToUserProfile('${emp.user_id}')">
-                                                <img src="${emp.user?.avatar || "https://placehold.co/100"}" style="width: 70px; height: 70px; border-radius: 50%; margin-bottom: 15px; object-fit: cover; border: 2px solid rgba(255,255,255,0.05);">
-                                                <div style="font-weight: 700; margin-bottom: 4px; font-size: 0.95rem;">${emp.user?.name}</div>
-                                                <div style="font-size: 0.8rem; color: #8b5cf6; font-weight: 600;">${emp.title}</div>
-                                                ${emp.department ? `<div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 4px; opacity: 0.8;">${emp.department}</div>` : ""}
-                                            </div>
-                                        `,
-                                        )
-                                        .join("")
-                                    : `<p style="color: var(--text-secondary); font-style: italic; font-size: 0.9rem;">Aucun membre certifié pour le moment.</p>`
-                                }
-                            </div>
                         </div>
 
-                        <!-- SIDEBAR -->
-                        <div class="pro-page-sidebar">
-                            <h3 class="pro-section-title" style="margin-bottom: 16px; font-size: 1.05rem;">Informations</h3>
-                            <div class="sidebar-card-premium">
-                                <div style="margin-bottom: 20px;">
-                                    <small style="color: var(--text-secondary); text-transform: uppercase; font-weight: 700; font-size: 0.65rem; letter-spacing: 1px;">Domaines d'activité</small>
-                                    <div style="margin-top: 8px; font-weight: 600; font-size: 0.9rem; line-height: 1.4;">${page.industry}</div>
+                        <!-- QUICK ACTIONS -->
+                        ${
+                            isOwner
+                                ? `<div class="pro-features-grid">
+                            <div class="feature-card-pro" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">
+                                <div class="feature-icon-box"><i class="fas fa-handshake"></i></div>
+                                <div class="feature-info">
+                                    <h4>Publier une actualité</h4>
+                                    <p>Partagez une nouvelle officielle avec votre communauté.</p>
                                 </div>
-                                <div>
-                                    <small style="color: var(--text-secondary); text-transform: uppercase; font-weight: 700; font-size: 0.65rem; letter-spacing: 1px;">Créée le</small>
-                                    <div style="margin-top: 8px; font-weight: 600; font-size: 0.9rem;">${new Date(page.created_at).toLocaleDateString()}</div>
+                                <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
+                            </div>
+                            <div class="feature-card-pro" onclick="window.professionalManager.openCompanyPostMenu('${page.id}')">
+                                <div class="feature-icon-box"><i class="fas fa-share-alt"></i></div>
+                                <div class="feature-info">
+                                    <h4>Partager des posts</h4>
+                                    <p>Partagez vos dernières actualités et restez connecté avec votre réseau.</p>
+                                </div>
+                                <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
+                            </div>
+                            <div class="feature-card-pro" onclick="window.professionalManager.openPageSettings('${page.id}')">
+                                <div class="feature-icon-box"><i class="fas fa-sync"></i></div>
+                                <div class="feature-info">
+                                    <h4>Mettre à jour</h4>
+                                    <p>Gardez votre profil à jour pour que les recruteurs vous trouvent facilement.</p>
+                                </div>
+                                <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
+                            </div>
+                                </div>`
+                                : ""
+                        }
+
+                        <div class="pro-content-layout">
+                            <!-- MAIN CONTENT -->
+                            <div class="pro-main-col">
+                                <!-- CREATION BAR -->
+                                ${
+                                    isOwner
+                                        ? `
+                                    <div class="pro-creation-card">
+                                        <div class="pro-creation-input-shell">
+                                            <img src="${avatar}" alt="Logo">
+                                            <button onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">Commencer une actualité officielle...</button>
+                                        </div>
+                                        <div class="pro-creation-tabs">
+                                            <div class="pro-tab-item news" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">
+                                                <i class="fas fa-newspaper"></i>
+                                                <span>Actualité</span>
+                                            </div>
+                                            <div class="pro-tab-item event" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'event')">
+                                                <i class="fas fa-calendar-alt"></i>
+                                                <span>Événement</span>
+                                            </div>
+                                            <div class="pro-tab-item project" onclick="window.professionalManager.openCreateOrgArc('${page.id}')">
+                                                <i class="fas fa-project-diagram"></i>
+                                                <span>Projet</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `
+                                        : ""
+                                }
+
+                                <!-- ARCS -->
+                                <div class="pro-section-header">
+                                    <h3 class="pro-section-title">Projets d'Organisation (ARCs)</h3>
+                                    ${isOwner ? `<button class="btn-pill-small" onclick="window.professionalManager.openCreateOrgArc('${page.id}')">+ Nouveau Projet</button>` : ""}
+                                </div>
+                                <div class="org-arcs-grid" style="margin-bottom: 40px;">
+                                    ${
+                                        orgArcs && orgArcs.length > 0
+                                            ? orgArcs
+                                                  .map(
+                                                      (arc) => `
+                                                <div class="arc-card-pro-premium" onclick="selectArc('${arc.id}', '${page.owner_id}')" style="cursor: pointer;">
+                                                    <div style="font-size: 0.65rem; text-transform: uppercase; font-weight: 800; color: #8b5cf6; margin-bottom: 5px; letter-spacing: 1px;">ARC OFFICIEL</div>
+                                                    <h4 style="margin: 0 0 10px 0; font-size: 1.1rem; font-weight: 700;">${arc.title}</h4>
+                                                    <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 15px;">${arc.description || "Aucune description."}</p>
+                                                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem;">
+                                                        <span class="badge" style="background: rgba(255,255,255,0.05); color: #fff; padding: 4px 12px; border-radius: 6px;">${arc.status === "in_progress" ? "En cours" : "Terminé"}</span>
+                                                        <span style="font-weight: 700; color: #8b5cf6;">Voir la trajectoire →</span>
+                                                    </div>
+                                                </div>
+                                            `,
+                                                  )
+                                                  .join("")
+                                            : `
+                                            <div class="pro-empty-state">
+                                                <div class="pro-empty-icon"><i class="fas fa-folder-open"></i></div>
+                                                <div class="pro-empty-text">L'organisation n'a pas encore de projet public.<br>Ajoutez votre premier projet pour commencer.</div>
+                                            </div>
+                                            `
+                                    }
+                                </div>
+
+                                <!-- UPDATES -->
+                                <div class="pro-section-header">
+                                    <h3 class="pro-section-title">Actualités de l'entreprise</h3>
+                                    ${isOwner ? `<button class="btn-pill-small" onclick="window.professionalManager.openCompanyPostMenu('${page.id}')">+ Publier une update</button>` : ""}
+                                </div>
+                                <div id="company-updates-container" style="margin-bottom: 40px;">
+                                    <div class="loading-spinner"></div>
+                                </div>
+
+                                <!-- ABOUT -->
+                                <h3 class="pro-section-title" style="margin-bottom: 20px;">À propos</h3>
+                                <div class="pro-card-premium pro-about-card" style="margin-bottom: 40px;">
+                                    <p class="pro-about-copy" style="white-space: pre-wrap; line-height: 1.7; color: var(--text-secondary); font-size: 0.95rem; margin: 0;">${page.description || "Bienvenue sur notre page professionnelle."}</p>
+                                </div>
+
+                                <!-- TEAM -->
+                                <h3 class="pro-section-title" style="margin-bottom: 20px;">Équipe Certifiée</h3>
+                                <div class="employees-grid" style="margin-bottom: 40px;">
+                                    ${
+                                        employees.length > 0
+                                            ? employees
+                                                  .map(
+                                                      (emp) => `
+                                                <div class="pro-card-premium" style="text-align: center; cursor: pointer; padding: 25px; transition: all 0.2s;" onclick="navigateToUserProfile('${emp.user_id}')">
+                                                    <img src="${emp.user?.avatar || "https://placehold.co/100"}" style="width: 70px; height: 70px; border-radius: 50%; margin-bottom: 15px; object-fit: cover; border: 2px solid rgba(255,255,255,0.05);">
+                                                    <div style="font-weight: 700; margin-bottom: 4px; font-size: 0.95rem;">${emp.user?.name}</div>
+                                                    <div style="font-size: 0.8rem; color: #8b5cf6; font-weight: 600;">${emp.title}</div>
+                                                    ${emp.department ? `<div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 4px; opacity: 0.8;">${emp.department}</div>` : ""}
+                                                </div>
+                                            `,
+                                                  )
+                                                  .join("")
+                                            : `<p style="color: var(--text-secondary); font-style: italic; font-size: 0.9rem;">Aucun membre certifié pour le moment.</p>`
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- SIDEBAR -->
+                            <div class="pro-page-sidebar">
+                                <h3 class="pro-section-title" style="margin-bottom: 16px; font-size: 1.05rem;">Informations</h3>
+                                <div class="sidebar-card-premium">
+                                    <div style="margin-bottom: 20px;">
+                                        <small style="color: var(--text-secondary); text-transform: uppercase; font-weight: 700; font-size: 0.65rem; letter-spacing: 1px;">Domaines d'activité</small>
+                                        <div style="margin-top: 8px; font-weight: 600; font-size: 0.9rem; line-height: 1.4;">${page.industry}</div>
+                                    </div>
+                                    <div>
+                                        <small style="color: var(--text-secondary); text-transform: uppercase; font-weight: 700; font-size: 0.65rem; letter-spacing: 1px;">Créée le</small>
+                                        <div style="margin-top: 8px; font-weight: 600; font-size: 0.9rem;">${new Date(page.created_at).toLocaleDateString()}</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    </div>
+                </main>
                 </div>
             `;
 
@@ -3623,11 +3665,13 @@ class XERAProfessionalManager {
                 );
             });
             proContainer.innerHTML = `
-                <div class="empty-state pro-page-not-found" role="alert">
-                    <div class="empty-state-icon" aria-hidden="true">!</div>
-                    <h3>Entreprise introuvable</h3>
-                    <p>Cette Page Professionnelle n'est plus disponible ou n'a pas pu être chargée.</p>
-                    <button class="btn btn-secondary" type="button" onclick="navigateTo('discover')" style="margin-top: 20px;">Retour au feed</button>
+                <div class="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                    <div class="empty-state pro-page-not-found" role="alert">
+                        <div class="empty-state-icon" aria-hidden="true">!</div>
+                        <h3>Entreprise introuvable</h3>
+                        <p>Cette Page Professionnelle n'est plus disponible ou n'a pas pu être chargée.</p>
+                        <button class="btn btn-secondary" type="button" onclick="navigateTo('discover')" style="margin-top: 20px;">Retour au feed</button>
+                    </div>
                 </div>
             `;
         }
