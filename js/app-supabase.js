@@ -6778,7 +6778,7 @@ function getSuperAdminPanelHtml() {
             <div class="verification-admin-block" style="margin-top:1.5rem;">
                 <h4>Partenariats</h4>
                 <p style="color:var(--text-secondary);font-size:.9rem;">Définissez les deux codes et la période pendant laquelle le partenariat sera actif. Le code réduction est fixé à 20 %.</p>
-                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end"><label>Partenaire<input id="admin-partner-name" class="form-input" placeholder="Y Combinator"></label><label>Code partenaire<input id="admin-partner-access-code" class="form-input" maxlength="60" placeholder="YCOMBINATOR2026"></label><label>Code réduction 20 %<input id="admin-partner-discount-code" class="form-input" maxlength="60" placeholder="YCOMBINATOR"></label><label>Début<input id="admin-partner-start-date" class="form-input" type="datetime-local"></label><label>Fin<input id="admin-partner-end-date" class="form-input" type="datetime-local"></label><button class="btn-verify" type="button" onclick="createAdminPartner()">Créer partenaire</button><button class="btn-verify" type="button" onclick="fetchAdminPartners()">Rafraîchir</button></div>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end"><label>Partenaire<input id="admin-partner-name" class="form-input" placeholder="Y Combinator"></label><label>Code partenaire<input id="admin-partner-access-code" class="form-input" maxlength="60" placeholder="YCOMBINATOR2026"></label><label>Code réduction 20 %<input id="admin-partner-discount-code" class="form-input" maxlength="60" placeholder="YCOMBINATOR"></label><label>Début du partenariat<input id="admin-partner-start-date" class="form-input" type="date"></label><label>Fin du partenariat<input id="admin-partner-end-date" class="form-input" type="date"></label><button class="btn-verify" type="button" onclick="createAdminPartner()">Créer partenaire</button><button class="btn-verify" type="button" onclick="fetchAdminPartners()">Rafraîchir</button></div>
                 <div id="admin-partners-list" style="margin-top:.9rem;display:flex;flex-direction:column;gap:.5rem"></div>
             </div>
 
@@ -7124,7 +7124,7 @@ async function fetchSuperAdminJson(path, options = {}) {
             ? ` [diagnostic ${diagnosticCode}${diagnosticDetail ? `: ${diagnosticDetail}` : ""}]`
             : "";
         throw new Error(
-            `${payload?.error || "Erreur API super-admin."}${diagnostic}`,
+            `${payload?.error || `Erreur API super-admin (HTTP ${response.status}).`}${diagnostic}`,
         );
     }
 
@@ -7411,7 +7411,9 @@ async function createAdminPartner() {
                 "Saisissez les deux codes et les dates du partenariat.",
             );
         }
-        if (new Date(endDate) <= new Date(startDate)) {
+        const startDateValue = new Date(`${startDate}T00:00:00`);
+        const endDateValue = new Date(`${endDate}T23:59:59`);
+        if (endDateValue <= startDateValue) {
             throw new Error("La date de fin doit être après la date de début.");
         }
         await fetchSuperAdminJson("/api/admin/partners", {
@@ -7420,8 +7422,8 @@ async function createAdminPartner() {
                 name,
                 access_code: accessCode,
                 discount_code: discountCode,
-                start_date: new Date(startDate).toISOString(),
-                end_date: new Date(endDate).toISOString(),
+                start_date: startDateValue.toISOString(),
+                end_date: endDateValue.toISOString(),
             }),
         });
         input.value = "";

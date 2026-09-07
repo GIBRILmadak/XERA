@@ -9156,9 +9156,7 @@ app.post("/api/admin/partners", async (req, res) => {
             return res
                 .status(400)
                 .json({ error: "Période de partenariat invalide." });
-        const { data, error } = await supabase
-            .from("partners")
-            .insert({
+        const completePartnerPayload = {
                 name,
                 status: "active",
                 commission_rate: 0.05,
@@ -9168,9 +9166,28 @@ app.post("/api/admin/partners", async (req, res) => {
                 access_code: accessCode,
                 discount_code: discountCode,
                 discount_rate: 20,
-            })
+        };
+        const legacyPartnerPayload = {
+            name,
+            status: "active",
+            commission_rate: 0.05,
+            start_date: startDate.toISOString(),
+            end_date: endDate.toISOString(),
+            partner_access_code: accessCode,
+        };
+        let { data, error } = await supabase
+            .from("partners")
+            .insert(completePartnerPayload)
             .select()
             .single();
+        const missingColumnCodes = ["42703", "PGRST204", "PGRST205"];
+        if (error && missingColumnCodes.includes(error.code)) {
+            ({ data, error } = await supabase
+                .from("partners")
+                .insert(legacyPartnerPayload)
+                .select()
+                .single());
+        }
         if (error) {
             console.error("/api/admin/partners insert failed:", {
                 code: error.code,
