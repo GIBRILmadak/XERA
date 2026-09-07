@@ -9229,7 +9229,16 @@ app.post("/api/admin/partners", async (req, res) => {
         return res.status(201).json({ partner: data });
     } catch (error) {
         console.error("/api/admin/partners error:", error);
-        if (["42P01", "42703", "23502", "23514", "PGRST204", "PGRST205"].includes(error?.code)) {
+        if (
+            [
+                "42P01",
+                "42703",
+                "23502",
+                "23514",
+                "PGRST204",
+                "PGRST205",
+            ].includes(error?.code)
+        ) {
             return res.status(503).json({
                 error: "Le schéma Partenaires Supabase est incomplet ou incompatible. Exécutez sql/20260907_partner_commissions_complete.sql, puis réessayez.",
                 diagnostic: {
@@ -9242,7 +9251,10 @@ app.post("/api/admin/partners", async (req, res) => {
         if (error?.code === "23505") {
             return res.status(409).json({
                 error: "Le nom ou l'un des codes existe déjà. Utilisez des valeurs uniques.",
-                diagnostic: { code: error.code, details: error.details || null },
+                diagnostic: {
+                    code: error.code,
+                    details: error.details || null,
+                },
             });
         }
         return res.status(500).json({
