@@ -4894,22 +4894,40 @@ function startReminderScheduler() {
 // ==================== KPAY CHECKOUT ====================
 
 async function handleKPaySubscriptionCheckout(req, res) {
+    // 1. EXTRACTION IMMÉDIATE DU BODY (Empêche toute ReferenceError)
+    const {
+        plan,
+        billing_cycle: billingCycleRaw,
+        currency: currencyRaw,
+        method = "card",
+        provider,
+        wallet_id: walletId,
+        access_token: accessToken,
+        user_id: fallbackUserId,
+        return_path: rawReturnPath,
+        discount_code: rawDiscountCode,
+    } = req.body || {};
+
+    const planId = String(plan || "").toLowerCase();
+
+    // Initialisation sécurisée de returnPath pour la gestion des erreurs
+    const returnPath = sanitizeReturnPath(
+        rawReturnPath,
+        buildProfileReturnPath(fallbackUserId),
+    );
+
     try {
+        if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
+            return sendCheckoutErrorResponse(
+                res,
+                new Error("Clés KPay non configurées."),
+                "Le service de paiement est indisponible. Veuillez vérifier les variables d'environnement Vercel.",
+                { returnPath },
+            );
+        }
+
         const callbackConfig = getKPayCallbackConfig(req);
 
-        const {
-            plan,
-            billing_cycle: billingCycleRaw,
-            currency: currencyRaw,
-            method = "card",
-            provider,
-            wallet_id: walletId,
-            access_token: accessToken,
-            user_id: fallbackUserId,
-            return_path: rawReturnPath,
-            discount_code: rawDiscountCode,
-        } = req.body || {};
-        const planId = String(plan || "").toLowerCase();
         const paymentMethod = String(method || "card").toLowerCase();
         const billingCycle =
             String(billingCycleRaw || "monthly").toLowerCase() === "annual"
@@ -4945,11 +4963,6 @@ async function handleKPaySubscriptionCheckout(req, res) {
             accountSubtype: requestUser.accountSubtype,
             badge: requestUser.badge,
         });
-
-        const returnPath = sanitizeReturnPath(
-            rawReturnPath,
-            buildProfileReturnPath(userId),
-        );
 
         const originalAmount = computeKPayAmount(
             planId,
@@ -5055,15 +5068,6 @@ async function handleKPaySubscriptionCheckout(req, res) {
             return res.redirect(302, freeReturnUrl.toString());
         }
 
-        if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
-            return sendCheckoutErrorResponse(
-                res,
-                new Error("Clés KPay non configurées sur le serveur."),
-                "Le service de paiement KPay n'est pas encore configuré sur Vercel. Les variables KPAY_PUBLIC_KEY et KPAY_SECRET_KEY doivent être définies dans l'environnement Vercel.",
-                { returnPath },
-            );
-        }
-
         const pendingPayment = await createPendingSubscriptionPayment({
             userId,
             plan: planId,
@@ -5149,33 +5153,44 @@ app.post(
 async function handleKPaySupportCheckout(req, res) {
     const supportRequestId = crypto.randomUUID();
     let supportCheckoutStage = "validation";
+
+    // 1. EXTRACTION IMMÉDIATE DU BODY (Empêche toute ReferenceError)
+    const {
+        to_user_id: toUserId,
+        amount_usd: rawAmountUsd,
+        currency: currencyRaw,
+        method = "card",
+        provider,
+        wallet_id: walletId,
+        access_token: accessToken,
+        user_id: fallbackUserId,
+        description: rawDescription,
+        support_message: supportMessageRaw,
+        donation_message: donationMessageRaw,
+        message: legacyMessageRaw,
+        return_path: rawReturnPath,
+    } = req.body || {};
+
+    // Initialisation sécurisée de returnPath pour la gestion des erreurs
+    const returnPath = sanitizeReturnPath(
+        rawReturnPath,
+        buildProfileReturnPath(toUserId || fallbackUserId),
+    );
+
     try {
+        // 2. VÉRIFICATION SÉCURISÉE DES CLÉS KPAY
         if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
+            console.error("[K-PAY ERROR]: Missing KPAY Keys in Environment Variables");
             return sendCheckoutErrorResponse(
                 res,
-                new Error("Clés KPay non configurées sur le serveur."),
-                "Le service de paiement KPay n'est pas encore configuré sur Vercel. Les variables KPAY_PUBLIC_KEY et KPAY_SECRET_KEY doivent être définies dans l'environnement Vercel.",
-                { returnPath: rawReturnPath || "/" },
+                new Error("Clés KPay non configurées."),
+                "Le service de paiement est indisponible. Veuillez vérifier les variables d'environnement Vercel.",
+                { returnPath },
             );
         }
 
         const callbackConfig = getKPayCallbackConfig(req);
 
-        const {
-            to_user_id: toUserId,
-            amount_usd: rawAmountUsd,
-            currency: currencyRaw,
-            method = "card",
-            provider,
-            wallet_id: walletId,
-            access_token: accessToken,
-            user_id: fallbackUserId,
-            description: rawDescription,
-            support_message: supportMessageRaw,
-            donation_message: donationMessageRaw,
-            message: legacyMessageRaw,
-            return_path: rawReturnPath,
-        } = req.body || {};
         const paymentMethod = String(method || "card").toLowerCase();
         if (!["card", "mobile_money", "paypal"].includes(paymentMethod)) {
             return res.status(400).send("Moyen de paiement invalide");
@@ -5281,10 +5296,7 @@ async function handleKPaySupportCheckout(req, res) {
             supportMessageRaw ?? donationMessageRaw ?? legacyMessageRaw,
             200,
         );
-        const returnPath = sanitizeReturnPath(
-            rawReturnPath,
-            buildProfileReturnPath(toUserId),
-        );
+
         supportCheckoutStage = "pending_transaction";
         const pendingPayment = await createPendingSupportPayment({
             fromUserId,
@@ -5360,13 +5372,15 @@ async function handleKPaySupportCheckout(req, res) {
         setResponseHeader(res, "Location", kpayRes.gatewayUrl);
         res.status(302).send();
     } catch (error) {
+        console.error("[K-PAY CRASH 500]:", error);
         return sendCheckoutErrorResponse(
             res,
             error,
-            "Impossible d'initialiser le soutien.",
+            "Une erreur interne est survenue lors de la création de la session de paiement.",
             {
                 requestId: supportRequestId,
                 stage: supportCheckoutStage,
+                returnPath,
             },
         );
     }
