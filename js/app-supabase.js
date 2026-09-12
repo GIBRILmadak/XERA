@@ -21869,6 +21869,30 @@ async function openCreateMenu(
                             contentData,
                         });
                     }
+
+                    // Show the post-publication upsell as soon as the post is confirmed,
+                    // independently of the page currently being displayed.
+                    if (!isEdit) {
+                        const shownPageUpsell =
+                            contentData.pageId &&
+                            (await showProfessionalPagePostUpsell(
+                                contentData.pageId,
+                            ));
+                        const shownUpsell =
+                            !shownPageUpsell &&
+                            showPostPublishUpsell(window.currentUser);
+                        if (!shownUpsell && !shownPageUpsell) {
+                            showPublishFeedbackCard(
+                                buildPublishFeedbackPayload({
+                                    userId,
+                                    contentData,
+                                    isEdit,
+                                    arcTitle: selectedArcLabel,
+                                }),
+                            );
+                        }
+                    }
+
                     clearPendingCreatePostAfterArc();
                     window._pendingPageId = null;
                     // Recharger les données locales et rafraîchir l'interface
@@ -21927,21 +21951,7 @@ async function openCreateMenu(
                             "Votre contenu est maintenant en ligne sur XERA.",
                         autoHideMs: 3200,
                     });
-                    requestAnimationFrame(async () => {
-                        // Only a confirmed, newly-created Page Pro post gets the Page Pro upsell.
-                        const shownPageUpsell =
-                            !isEdit &&
-                            contentData.pageId &&
-                            (await showProfessionalPagePostUpsell(
-                                contentData.pageId,
-                            ));
-                        const shownUpsell =
-                            !shownPageUpsell &&
-                            !isEdit &&
-                            showPostPublishUpsell(window.currentUser);
-                        if (!shownUpsell && !shownPageUpsell)
-                            showPublishFeedbackCard(publishFeedback);
-                    });
+                    if (isEdit) showPublishFeedbackCard(publishFeedback);
                 } else {
                     showBackgroundPublishBanner({
                         state: "error",

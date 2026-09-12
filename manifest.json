@@ -1,9 +1,14 @@
 {
     "name": "XERA1",
     "short_name": "XERA1",
+    "id": "/",
     "description": "XERA1 - Tracez votre progression sans dopamine sociale",
     "start_url": "/",
     "scope": "/",
+    "capture_links": "existing-client-navigate",
+    "launch_handler": {
+        "client_mode": "navigate-existing"
+    },
     "display": "standalone",
     "background_color": "#050505",
     "theme_color": "#050505",

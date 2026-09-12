@@ -180,7 +180,14 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
     event.notification.close();
-    const targetUrl = event.notification?.data?.link || "/";
+    const rawTargetUrl = event.notification?.data?.link || "/";
+    let targetUrl = "/";
+    try {
+        const parsedTargetUrl = new URL(rawTargetUrl, self.location.origin);
+        targetUrl = parsedTargetUrl.toString();
+    } catch (e) {
+        targetUrl = self.location.origin + "/";
+    }
 
     event.waitUntil(
         clients
