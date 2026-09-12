@@ -900,7 +900,7 @@ const WITHDRAWAL_MIN_USD = 5;
 const SUPPORT_MIN_USD = 1;
 const SUPPORT_MAX_USD = 1000;
 // XERA1 retains 25% of every confirmed platform donation; this is calculated server-side.
-const SUPPORT_COMMISSION_RATE = 0.25;
+const SUPPORT_COMMISSION_RATE = 0.20;
 const SUPPORTED_MOBILE_MONEY_PROVIDERS = new Set([
     "airtel_money",
     "orange_money",
@@ -3793,25 +3793,21 @@ async function confirmSupportPayment({
         gross: breakdown.gross,
         netCreator: breakdown.netCreator,
     });
-    // Partner campaigns add their 5% share to XERA's platform fee; both remain traceable.
+    // Ventilation exacte des commissions sur les dons
     if (partnerCommission?.commission) {
-        const partnerNet = Math.max(
-            0,
-            Math.round(
-                (breakdown.netCreator - partnerCommission.commission) * 100,
-            ) / 100,
-        );
-        mergedMetadata.partner_commission_amount = partnerCommission.commission;
-        mergedMetadata.amount_net_creator = partnerNet;
-        mergedMetadata.amount_commission_xera = breakdown.commission;
-        await supabase
-            .from("transactions")
-            .update({
-                amount_net_creator: partnerNet,
-                amount_commission_xera: breakdown.commission,
-                metadata: mergedMetadata,
-            })
-            .eq("id", transactionId);
+        const partnerAmount = roundMoney(breakdown.gross * 0.05); // 5% Partenaire
+        const xeraAmount = roundMoney(breakdown.gross * 0.20);    // 20% XERA1
+        const creatorNet = roundMoney(breakdown.gross - partnerAmount - xeraAmount); // 75% Créateur
+
+        mergedMetadata.partner_commission_amount = partnerAmount;
+        mergedMetadata.amount_net_creator = creatorNet;
+        mergedMetadata.amount_commission_xera = xeraAmount;
+
+        await supabase.from("transactions").update({
+            amount_net_creator: creatorNet,
+            amount_commission_xera: xeraAmount,
+            metadata: mergedMetadata
+        }).eq("id", transactionId);
     }
     const notification = await createNotificationRecord({
         userId: toUserId,
@@ -5972,7 +5968,7 @@ app.post("/api/admin/discount-codes", async (req, res) => {
         const code = normalizeDiscountCode(req.body?.code);
         const plan = String(req.body?.plan || "").toLowerCase();
         const discountPercent = Number(req.body?.discount_percent);
-        const benefitDurationDays = Number(req.body?.benefit_duration_days);
+        const benefitDurationDays = req.body?.benefit_duration_days ? Number(req.body.benefit_duration_days) : null;
         const maxUses = req.body?.max_uses ? Number(req.body.max_uses) : null;
         const validFrom = new Date(req.body?.valid_from || Date.now());
         const validUntil = req.body?.valid_until
@@ -5992,10 +5988,18 @@ app.post("/api/admin/discount-codes", async (req, res) => {
             });
         if (!isValidPlanId(plan))
             return res.status(400).json({ error: "Plan offert invalide." });
-        if (!Number.isInteger(benefitDurationDays) || benefitDurationDays < 1)
+
+        if (discountPercent === 100 && (!benefitDurationDays || !Number.isInteger(benefitDurationDays) || benefitDurationDays < 1)) {
             return res.status(400).json({
-                error: "La durée des avantages doit être d'au moins 1 jour.",
+                error: "Pour un accès gratuit à 100%, vous devez obligatoirement définir une durée d'avantage (en jours).",
             });
+        }
+
+        if (benefitDurationDays !== null && (!Number.isInteger(benefitDurationDays) || benefitDurationDays < 1)) {
+            return res.status(400).json({
+                error: "La durée des avantages doit être un nombre entier d'au moins 1 jour.",
+            });
+        }
         if (maxUses !== null && (!Number.isInteger(maxUses) || maxUses < 1))
             return res
                 .status(400)
@@ -6061,17 +6065,17 @@ app.patch("/api/admin/discount-codes/:id", async (req, res) => {
                 .json({ error: authResult.error.message });
         const plan = String(req.body?.plan || "").toLowerCase();
         const discountPercent = Number(req.body?.discount_percent ?? 100);
-        const benefitDurationDays = Number(req.body?.benefit_duration_days);
+        const benefitDurationDays = req.body?.benefit_duration_days ? Number(req.body.benefit_duration_days) : null;
         const maxUses = req.body?.max_uses ? Number(req.body.max_uses) : null;
         const validFrom = new Date(req.body?.valid_from || Date.now());
         const validUntil = req.body?.valid_until
             ? new Date(req.body.valid_until)
             : null;
+
         if (
             !isValidPlanId(plan) ||
-            discountPercent !== 100 ||
-            !Number.isInteger(benefitDurationDays) ||
-            benefitDurationDays < 1 ||
+            (discountPercent === 100 && (!benefitDurationDays || !Number.isInteger(benefitDurationDays) || benefitDurationDays < 1)) ||
+            (benefitDurationDays !== null && (!Number.isInteger(benefitDurationDays) || benefitDurationDays < 1)) ||
             (maxUses !== null && (!Number.isInteger(maxUses) || maxUses < 1)) ||
             Number.isNaN(validFrom.getTime()) ||
             (validUntil && Number.isNaN(validUntil.getTime())) ||

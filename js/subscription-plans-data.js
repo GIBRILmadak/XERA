@@ -109,7 +109,7 @@
             iconClass: "fas fa-heart",
             cardClassName: "medium",
             monthlyPrice: 7.99,
-            description: "Tous les avantages Standard + monétisation",
+            description: "Tous les avantages Standard et encore plus",
             buttonLabel: "Choisir Medium",
             badgeLabel: "Populaire",
             features: Object.freeze([

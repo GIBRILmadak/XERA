@@ -185,7 +185,7 @@ function createSupportModal() {
                     </div>
                 </div>
                 <div class="support-message-wrap" style="margin-top:16px;">
-                    <label for="global-support-message" style="display:block;margin-bottom:8px;font-weight:700;color:#1f2937;">Message (optionnel)</label>
+                    <label for="global-support-message" style="display:block;margin-bottom:8px;font-weight:700;color:#748aa8;">Message (optionnel)</label>
                     <textarea id="global-support-message" rows="3" maxlength="200" placeholder="Ajoutez un message à votre soutien..." style="width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid #d1d5db;border-radius:12px;resize:vertical;background:#fff;color:#111827;font:inherit;"></textarea>
                 </div>
                 <fieldset class="support-payment-picker">
