@@ -461,9 +461,8 @@
                 selectedPlanId = normalizedPlanId;
 
                 // Populate summary for non-React fallback
-                const detailsContainer = document.getElementById(
-                    "confirmPlanDetails",
-                );
+                const detailsContainer =
+                    document.getElementById("confirmPlanDetails");
                 if (detailsContainer) {
                     const summary = Data.getPlanSummary(
                         normalizedPlanId,
@@ -1014,7 +1013,8 @@
             return e(
                 "div",
                 {
-                    className: "modal plan-modal" + (props.isOpen ? " active" : ""),
+                    className:
+                        "modal plan-modal" + (props.isOpen ? " active" : ""),
                     id: "confirmModal",
                     role: "dialog",
                     "aria-modal": "true",

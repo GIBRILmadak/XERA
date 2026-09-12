@@ -2926,8 +2926,16 @@ body.plans-page {
 
 body.plans-page::before {
     background:
-        radial-gradient(700px 420px at 7% 8%, rgba(24, 112, 132, 0.26), transparent 70%),
-        radial-gradient(620px 420px at 94% 22%, rgba(123, 72, 168, 0.18), transparent 70%),
+        radial-gradient(
+            700px 420px at 7% 8%,
+            rgba(24, 112, 132, 0.26),
+            transparent 70%
+        ),
+        radial-gradient(
+            620px 420px at 94% 22%,
+            rgba(123, 72, 168, 0.18),
+            transparent 70%
+        ),
         linear-gradient(180deg, #081217 0%, #0a171d 48%, #081217 100%);
 }
 
@@ -3065,7 +3073,11 @@ body.plans-page .plans-hero-card {
 }
 
 body.plans-page .plans-hero-card::before {
-    background: radial-gradient(400px 240px at 15% 0%, rgba(103, 232, 249, 0.14), transparent 70%);
+    background: radial-gradient(
+        400px 240px at 15% 0%,
+        rgba(103, 232, 249, 0.14),
+        transparent 70%
+    );
 }
 
 body.plans-page .hero-card-header {
@@ -3106,7 +3118,11 @@ body.plans-page .plan-detail-card {
     border: 1px solid var(--plans-line);
     border-radius: 2px;
     padding: clamp(24px, 3vw, 34px);
-    background: linear-gradient(155deg, rgba(20, 43, 53, 0.94), rgba(11, 26, 33, 0.94));
+    background: linear-gradient(
+        155deg,
+        rgba(20, 43, 53, 0.94),
+        rgba(11, 26, 33, 0.94)
+    );
     box-shadow: none;
 }
 
@@ -3116,7 +3132,11 @@ body.plans-page .plan-detail-card::after {
 }
 
 body.plans-page .plan-detail-card::before {
-    background: radial-gradient(300px 150px at 0% 0%, var(--plan-accent-soft), transparent 75%);
+    background: radial-gradient(
+        300px 150px at 0% 0%,
+        var(--plan-accent-soft),
+        transparent 75%
+    );
 }
 
 body.plans-page .plan-detail-card:hover {
@@ -3128,7 +3148,9 @@ body.plans-page .plan-detail-card:hover {
 body.plans-page .plan-detail-card.recommended {
     transform: translateY(-10px);
     border-color: color-mix(in srgb, var(--plan-accent) 72%, transparent);
-    box-shadow: 0 22px 52px rgba(0, 0, 0, 0.3), 0 0 34px var(--plan-accent-soft);
+    box-shadow:
+        0 22px 52px rgba(0, 0, 0, 0.3),
+        0 0 34px var(--plan-accent-soft);
 }
 
 body.plans-page .plan-detail-card.recommended:hover {
@@ -3381,8 +3403,16 @@ html.light-mode body.plans-page {
 
 html.light-mode body.plans-page::before {
     background:
-        radial-gradient(700px 420px at 7% 8%, rgba(103, 232, 249, 0.22), transparent 70%),
-        radial-gradient(620px 420px at 94% 22%, rgba(196, 181, 253, 0.2), transparent 70%),
+        radial-gradient(
+            700px 420px at 7% 8%,
+            rgba(103, 232, 249, 0.22),
+            transparent 70%
+        ),
+        radial-gradient(
+            620px 420px at 94% 22%,
+            rgba(196, 181, 253, 0.2),
+            transparent 70%
+        ),
         linear-gradient(180deg, #f3f8f8 0%, #eaf4f5 100%);
 }
 
@@ -4194,7 +4224,9 @@ html.light-mode body.donations-dashboard-page .filter-actions select {
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
     border-radius: 28px !important;
     max-width: 480px !important;
-    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05) inset !important;
+    box-shadow:
+        0 40px 100px rgba(0, 0, 0, 0.8),
+        0 0 0 1px rgba(255, 255, 255, 0.05) inset !important;
     overflow: hidden !important;
 }
 
