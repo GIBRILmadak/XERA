@@ -4,16 +4,13 @@ require("dotenv").config();
 
 const { createClient } = require("@supabase/supabase-js");
 
-const TRUSTPILOT_AFS_EMAIL =
-    "xera1.xyz+f82ea4b552@invite.trustpilot.com";
+const TRUSTPILOT_AFS_EMAIL = "xera1.xyz+f82ea4b552@invite.trustpilot.com";
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const RESEND_API_KEY =
-    process.env.RESEND_API_KEY ||
-    process.env.RETURN_REMINDER_EMAIL_API_KEY;
+    process.env.RESEND_API_KEY || process.env.RETURN_REMINDER_EMAIL_API_KEY;
 const EMAIL_FROM =
-    process.env.RETURN_REMINDER_EMAIL_FROM ||
-    "XERA1 <hello@xera1.xyz>";
+    process.env.RETURN_REMINDER_EMAIL_FROM || "XERA1 <hello@xera1.xyz>";
 const isDryRun = process.argv.includes("--dry-run");
 const isConfirmed = process.argv.includes("--confirm");
 
@@ -64,7 +61,9 @@ async function listAuthUsers(publicUserIds) {
 }
 
 async function sendTrustpilotNotification(user) {
-    const email = String(user.email || "").trim().toLowerCase();
+    const email = String(user.email || "")
+        .trim()
+        .toLowerCase();
     const payload = {
         from: EMAIL_FROM,
         to: [email],
