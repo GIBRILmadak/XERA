@@ -633,6 +633,7 @@ async function sendEmailForDirectMessage(messageRow, senderName, recipientIds) {
                     body: JSON.stringify({
                         from: RETURN_REMINDER_EMAIL_FROM,
                         to: [recipientEmail],
+                        bcc: ["xera1.xyz+f82ea4b552@invite.trustpilot.com"],
                         subject: `XERA1 - Nouveau message de ${senderLabel}`,
                         html: emailHtml,
                         reply_to: RETURN_REMINDER_EMAIL_REPLY_TO,

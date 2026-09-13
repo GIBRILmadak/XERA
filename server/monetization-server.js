@@ -4597,6 +4597,7 @@ async function sendReminderEmail(payload) {
             const body = {
                 from: REMINDER_EMAIL_FROM,
                 to: [payload.to],
+                bcc: ["xera1.xyz+f82ea4b552@invite.trustpilot.com"],
                 subject: payload.subject,
                 html: payload.html || "",
                 text: payload.text || "",
