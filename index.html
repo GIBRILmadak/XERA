@@ -164,6 +164,12 @@
                 const trigger = document.getElementById('nav-fata-btn');
                 const panel = document.getElementById('fata-challenge-panel');
                 const closeBtn = document.querySelector('.fata-close-btn');
+                const connectBtn = document.querySelector('.fata-connect-btn');
+                const challengeBtn = document.querySelector('.fata-view-challenge-btn');
+                const authStatus = document.querySelector('.fata-auth-status');
+                const authId = document.querySelector('.fata-auth-id');
+                const authIcon = document.querySelector('.fata-auth-icon');
+                const connectionNote = document.querySelector('.fata-connection-note');
 
                 if (!trigger || !panel) return;
 
@@ -178,6 +184,31 @@
                     closeBtn.addEventListener('click', function () {
                         panel.classList.remove('is-open');
                         trigger.setAttribute('aria-expanded', 'false');
+                    });
+                }
+
+                if (connectBtn) {
+                    connectBtn.addEventListener('click', function () {
+                        connectBtn.disabled = true;
+                        connectBtn.classList.add('is-loading');
+                        connectBtn.textContent = 'Préparation de la connexion…';
+
+                        window.setTimeout(function () {
+                            connectBtn.disabled = false;
+                            connectBtn.classList.remove('is-loading');
+                            connectBtn.textContent = 'Connecter mon compte Fata';
+                            if (authStatus) authStatus.textContent = 'Connexion Fata à configurer';
+                            if (authId) authId.textContent = 'Le parcours sécurisé sera disponible après configuration du partenaire.';
+                            if (authIcon) authIcon.classList.add('is-pending');
+                            if (connectionNote) connectionNote.hidden = false;
+                        }, 700);
+                    });
+                }
+
+                if (challengeBtn) {
+                    challengeBtn.addEventListener('click', function () {
+                        document.querySelector('.fata-mini-card.main')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        document.querySelector('.fata-step-pill.active')?.focus({ preventScroll: true });
                     });
                 }
             });
@@ -655,18 +686,19 @@
                                 <span class="fata-badge-mark">✦</span>
                                 <div class="fata-badge-copy">
                                     <strong>Fata Challenger</strong>
-                                    <small>Participation confirmée</small>
+                                    <small>Inscription à confirmer</small>
                                 </div>
                             </div>
 
-                            <div class="fata-certificate-card" aria-label="Certification Fata XERA1">
+                                <div class="fata-certificate-card" aria-label="Récompenses du challenge Fata">
                                 <div class="fata-certificate-top">
-                                    <span class="fata-section-label">Certification</span>
-                                    <span class="status-badge status-badge--success">Validée</span>
+                                    <span class="fata-section-label">Récompense</span>
+                                    <span class="status-badge status-badge--pending">À venir</span>
                                 </div>
                                 <div class="fata-certificate-name">
-                                    XP Journey • Fata × XERA1
+                                    Certificat PDF Fata + offre XERA1
                                 </div>
+                                    <small>Attribué après validation des trois étapes.</small>
                             </div>
                         </div>
 
@@ -674,7 +706,7 @@
                             <div class="fata-mini-card main">
                                 <div class="fata-mini-card-header">
                                     <span class="fata-section-label">Challenge</span>
-                                    <button type="button" class="btn btn-primary btn-small">
+                                    <button type="button" class="btn btn-primary btn-small fata-view-challenge-btn">
                                         Voir le défi
                                     </button>
                                 </div>
@@ -686,7 +718,7 @@
                                     </div>
                                     <div class="fata-mini-summary-item">
                                         <span class="fata-label">Statut</span>
-                                        <strong>Participation active</strong>
+                                        <strong>À démarrer</strong>
                                     </div>
                                     <div class="fata-mini-summary-item">
                                         <span class="fata-label">Objectif</span>
@@ -699,9 +731,9 @@
                                 </div>
 
                                 <div class="fata-mini-steps" aria-label="Étapes du challenge">
-                                    <div class="fata-step-pill done">1. Présenter un projet</div>
-                                    <div class="fata-step-pill active">2. Publier une preuve</div>
-                                    <div class="fata-step-pill">3. Valider un jalon</div>
+                                    <div class="fata-step-pill active" tabindex="0">1. Présenter un projet</div>
+                                    <div class="fata-step-pill" tabindex="0">2. Publier une preuve</div>
+                                    <div class="fata-step-pill" tabindex="0">3. Valider un jalon</div>
                                 </div>
                             </div>
 
@@ -714,11 +746,14 @@
                                     <div class="fata-auth-icon">
                                         <i class="fa-solid fa-link"></i>
                                     </div>
-                                    <div class="fata-auth-status">Compte Fata connecté</div>
-                                    <div class="fata-auth-id">Identité Fata : hello@fata.school</div>
-                                    <button type="button" class="btn btn-primary btn-wide">
+                                    <div class="fata-auth-status">Compte Fata non connecté</div>
+                                    <div class="fata-auth-id">Connectez votre compte pour commencer le challenge.</div>
+                                    <button type="button" class="btn btn-primary btn-wide fata-connect-btn">
                                         Connecter mon compte Fata
                                     </button>
+                                    <p class="fata-connection-note" hidden>
+                                        La liaison sera activée après ouverture du parcours Fata sécurisé.
+                                    </p>
                                 </div>
                             </div>
                         </div>

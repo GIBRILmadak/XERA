@@ -9431,6 +9431,13 @@ html.light-mode .btn-theme-toggle:hover {
     color: var(--text-primary);
 }
 
+.fata-certificate-card small,
+.fata-connection-note {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+
 .fata-mini-grid {
     display: grid;
     grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
@@ -9506,6 +9513,13 @@ html.light-mode .btn-theme-toggle:hover {
     border-color: rgba(168, 85, 247, 0.26);
 }
 
+.fata-step-pill:focus-visible,
+.fata-view-challenge-btn:focus-visible,
+.fata-connect-btn:focus-visible {
+    outline: 2px solid #7af0be;
+    outline-offset: 3px;
+}
+
 .fata-auth-box {
     display: flex;
     flex-direction: column;
@@ -9525,6 +9539,12 @@ html.light-mode .btn-theme-toggle:hover {
     border: 1px solid rgba(16, 185, 129, 0.28);
     color: #7af0be;
     font-size: 1.2rem;
+}
+
+.fata-auth-icon.is-pending {
+    background: rgba(245, 158, 11, 0.14);
+    border-color: rgba(245, 158, 11, 0.28);
+    color: #f7c768;
 }
 
 .fata-auth-status {
@@ -9547,6 +9567,15 @@ html.light-mode .btn-theme-toggle:hover {
     width: 100%;
     justify-content: center;
     border-radius: 12px;
+}
+
+.fata-connect-btn.is-loading {
+    opacity: 0.72;
+    cursor: wait;
+}
+
+.fata-connection-note {
+    margin: 0;
 }
 
 .nav-fata-btn {
