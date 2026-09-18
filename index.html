@@ -159,6 +159,29 @@
             src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"
             defer
         ></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const trigger = document.getElementById('nav-fata-btn');
+                const panel = document.getElementById('fata-challenge-panel');
+                const closeBtn = document.querySelector('.fata-close-btn');
+
+                if (!trigger || !panel) return;
+
+                const togglePanel = function () {
+                    const isOpen = panel.classList.toggle('is-open');
+                    trigger.setAttribute('aria-expanded', String(isOpen));
+                };
+
+                trigger.addEventListener('click', togglePanel);
+
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', function () {
+                        panel.classList.remove('is-open');
+                        trigger.setAttribute('aria-expanded', 'false');
+                    });
+                }
+            });
+        </script>
     </head>
     <body class="has-mobile-nav">
         <div id="global-progress-bar-placeholder"></div>
@@ -286,6 +309,23 @@
                         class="notification-badge"
                     ></span>
                 </div>
+
+                <button
+                    type="button"
+                    id="nav-fata-btn"
+                    class="notification-button nav-fata-btn"
+                    title="Challenge Fata"
+                    aria-label="Challenge Fata"
+                    aria-expanded="false"
+                >
+                    <span class="nav-fata-pill">
+                        <img
+                            src="icons/fata-logo-main-lg.webp"
+                            alt="Fata"
+                            class="notification-icon nav-fata-icon"
+                        />
+                    </span>
+                </button>
 
                 <a href="login.html" id="nav-auth" data-i18n="navAuth"
                     >Login / Register</a
@@ -478,8 +518,8 @@
                                 class="partner-logo-link opacity-40 hover:opacity-100 transition-opacity duration-300"
                             >
                                 <img
-                                    src="./icons/fata.webp"
-                                    alt="Fata School"
+                                    src="./icons/fata-logo-main-lg.webp"
+                                    alt="Fata"
                                     class="h-12 md:h-16 object-contain grayscale hover:grayscale-0 transition-all duration-500"
                                 />
                             </a>
@@ -537,8 +577,8 @@
                                 aria-hidden="true"
                             >
                                 <img
-                                    src="./icons/fata.webp"
-                                    alt=""
+                                    src="./icons/fata-logo-main-lg.webp"
+                                    alt="Fata"
                                     class="h-12 md:h-16 object-contain grayscale hover:grayscale-0 transition-all duration-500"
                                 />
                             </a>
@@ -571,6 +611,120 @@
                     </div>
                 </div>
             </div>
+
+            <section
+                id="fata-challenge-panel"
+                class="fata-challenge-panel"
+                aria-labelledby="fata-challenge-title"
+            >
+                <div class="container">
+                    <div class="fata-mini-shell">
+                        <button
+                            type="button"
+                            class="fata-close-btn"
+                            aria-label="Fermer le challenge Fata"
+                        >
+                            ×
+                        </button>
+
+                        <div class="fata-mini-header">
+                            <div class="fata-mini-copy">
+                                <span class="fata-kicker">Challenge partenaire</span>
+                                <h2 id="fata-challenge-title">Fata × XERA1</h2>
+                                <p>
+                                    Présentez votre trajectoire, publiez votre
+                                    preuve et validez votre premier jalon.
+                                </p>
+                            </div>
+                            <div class="fata-mini-meta">
+                                <div class="fata-partner-pill">
+                                    <img
+                                        src="./icons/fata-logo-main-lg.webp"
+                                        alt="Fata"
+                                    />
+                                    <span>Fata</span>
+                                </div>
+                                <span class="status-badge status-badge--success">
+                                    Ouvert
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="fata-badge-row" aria-label="Badge du challenge Fata">
+                            <div class="fata-badge-pill">
+                                <span class="fata-badge-mark">✦</span>
+                                <div class="fata-badge-copy">
+                                    <strong>Fata Challenger</strong>
+                                    <small>Participation confirmée</small>
+                                </div>
+                            </div>
+
+                            <div class="fata-certificate-card" aria-label="Certification Fata XERA1">
+                                <div class="fata-certificate-top">
+                                    <span class="fata-section-label">Certification</span>
+                                    <span class="status-badge status-badge--success">Validée</span>
+                                </div>
+                                <div class="fata-certificate-name">
+                                    XP Journey • Fata × XERA1
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="fata-mini-grid">
+                            <div class="fata-mini-card main">
+                                <div class="fata-mini-card-header">
+                                    <span class="fata-section-label">Challenge</span>
+                                    <button type="button" class="btn btn-primary btn-small">
+                                        Voir le défi
+                                    </button>
+                                </div>
+
+                                <div class="fata-mini-summary">
+                                    <div class="fata-mini-summary-item">
+                                        <span class="fata-label">Période</span>
+                                        <strong>15 sept. → 30 nov. 2026</strong>
+                                    </div>
+                                    <div class="fata-mini-summary-item">
+                                        <span class="fata-label">Statut</span>
+                                        <strong>Participation active</strong>
+                                    </div>
+                                    <div class="fata-mini-summary-item">
+                                        <span class="fata-label">Objectif</span>
+                                        <strong>3 étapes clés</strong>
+                                    </div>
+                                    <div class="fata-mini-summary-item">
+                                        <span class="fata-label">Récompense</span>
+                                        <strong>Certification & bonus XERA1</strong>
+                                    </div>
+                                </div>
+
+                                <div class="fata-mini-steps" aria-label="Étapes du challenge">
+                                    <div class="fata-step-pill done">1. Présenter un projet</div>
+                                    <div class="fata-step-pill active">2. Publier une preuve</div>
+                                    <div class="fata-step-pill">3. Valider un jalon</div>
+                                </div>
+                            </div>
+
+                            <div class="fata-mini-card auth">
+                                <div class="fata-mini-card-header auth-header">
+                                    <span class="fata-section-label">Connexion</span>
+                                </div>
+
+                                <div class="fata-auth-box">
+                                    <div class="fata-auth-icon">
+                                        <i class="fa-solid fa-link"></i>
+                                    </div>
+                                    <div class="fata-auth-status">Compte Fata connecté</div>
+                                    <div class="fata-auth-id">Identité Fata : hello@fata.school</div>
+                                    <button type="button" class="btn btn-primary btn-wide">
+                                        Connecter mon compte Fata
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
             <button
                 type="button"
