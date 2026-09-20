@@ -1,4 +1,10 @@
 (function () {
+    if (!document.querySelector('script[src*="js/i18n.js"]')) {
+      const i18nScript = document.createElement("script");
+      i18nScript.src = "js/i18n.js";
+      document.head.appendChild(i18nScript);
+    }
+
     const WEB_APP_HEAD_ENTRIES = [
         {
             selector: 'link[rel="manifest"]',
