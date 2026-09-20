@@ -1,7 +1,7 @@
--- Fata × XERA1 Integration Schema
+-- Fata × XERA1 Integration Schema - FINAL REFINED VERSION
 
 -- 1. OAUTH STATES ENHANCEMENT
--- We need to store PKCE code_verifier, nonce, and challengeId
+-- We need to store PKCE code_verifier, nonce, and challenge_id
 ALTER TABLE public.oauth_states
   ADD COLUMN IF NOT EXISTS challenge_id TEXT,
   ADD COLUMN IF NOT EXISTS code_verifier TEXT,
@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS public.fata_linkages (
   fata_iss TEXT NOT NULL DEFAULT 'https://fata.app/oidc',
   fata_sub TEXT NOT NULL,
   preferred_username TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, fata_iss),
@@ -22,7 +23,6 @@ CREATE TABLE IF NOT EXISTS public.fata_linkages (
 );
 
 -- 3. FATA CHALLENGES CONFIGURATION
--- Store XERA1 internal config for Fata challenges
 CREATE TABLE IF NOT EXISTS public.fata_challenges_config (
   id TEXT PRIMARY KEY, -- the challengeId from Fata
   name TEXT NOT NULL,
@@ -38,7 +38,6 @@ CREATE TABLE IF NOT EXISTS public.fata_challenges_config (
 );
 
 -- 4. FATA PENDING EVENTS (Outbox Queue)
--- Durable queue for action completions
 CREATE TABLE IF NOT EXISTS public.fata_pending_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -60,7 +59,6 @@ CREATE INDEX IF NOT EXISTS idx_fata_pending_events_status_retry
   WHERE status IN ('pending', 'retry');
 
 -- 5. FATA QUALIFICATIONS & REWARDS
--- Store final qualification from Fata
 CREATE TABLE IF NOT EXISTS public.fata_qualifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -78,10 +76,35 @@ CREATE TABLE IF NOT EXISTS public.fata_qualifications (
   UNIQUE (user_id, challenge_id)
 );
 
--- 6. TRIGGERS FOR EVENT DETECTION
--- Minimal triggers to notify the background worker of potential actions
+CREATE TABLE IF NOT EXISTS public.fata_alerts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID,
+  type TEXT NOT NULL,
+  severity TEXT NOT NULL DEFAULT 'medium',
+  message TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (event_id)
+);
 
--- Helper function to check if user is linked to Fata
+CREATE INDEX IF NOT EXISTS idx_fata_alerts_type_created_at
+  ON public.fata_alerts (type, created_at DESC);
+
+-- 6. ACTIVITY LOG FOR WORKER
+CREATE TABLE IF NOT EXISTS public.fata_activity_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  entity_type TEXT NOT NULL, -- 'arcs', 'content', 'arc_milestone_validations'
+  entity_id UUID NOT NULL,
+  action TEXT NOT NULL, -- 'INSERT', 'UPDATE'
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fata_activity_log_user_id ON public.fata_activity_log (user_id);
+CREATE INDEX IF NOT EXISTS idx_fata_activity_log_created_at ON public.fata_activity_log (created_at);
+
+-- 7. TRIGGERS
 CREATE OR REPLACE FUNCTION public.is_fata_user(p_user_id UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -89,57 +112,21 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger function for Arcs (Action 1)
-CREATE OR REPLACE FUNCTION public.on_arc_change_fata()
-RETURNS TRIGGER AS $$
-BEGIN
-  -- We only care about published arcs from Fata users
-  -- Logic validation will be done by the worker
-  IF public.is_fata_user(NEW.user_id) THEN
-    -- Insert a generic event if not already present for this arc
-    -- The worker will decide if it meets req_arc
-    INSERT INTO public.fata_pending_events (user_id, fata_sub, challenge_id, requirement_id, occurred_at, idempotency_key)
-    SELECT
-      l.user_id,
-      l.fata_sub,
-      'TBD', -- challenge_id will be resolved by worker or we need a way to know the active challenge
-      'req_arc',
-      NOW(),
-      'arc-' || NEW.id::text
-    FROM public.fata_linkages l
-    WHERE l.user_id = NEW.user_id
-    ON CONFLICT (idempotency_key) DO NOTHING;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Note: The triggers above are conceptual.
--- Since we don't know the challenge_id at trigger time easily,
--- the worker will scan for ALL linked users' activity.
--- Alternatively, we store the "current_challenge_id" in a setting or fata_linkages.
-
--- Let's stick to a simpler "fata_activity_log" that the worker parses.
-CREATE TABLE IF NOT EXISTS public.fata_activity_log (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  entity_type TEXT NOT NULL, -- 'arc', 'content', 'validation'
-  entity_id UUID NOT NULL,
-  action TEXT NOT NULL, -- 'insert', 'update'
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE OR REPLACE FUNCTION public.log_fata_activity()
 RETURNS TRIGGER AS $$
 DECLARE
   v_user_id UUID;
 BEGIN
-  IF TG_TABLE_NAME = 'arcs' THEN v_user_id := NEW.user_id;
-  ELSIF TG_TABLE_NAME = 'content' THEN v_user_id := NEW.user_id;
-  ELSIF TG_TABLE_NAME = 'arc_milestone_validations' THEN v_user_id := NEW.validator_user_id; -- Wait, Action 3 is about the milestone owner
+  IF TG_TABLE_NAME = 'arcs' THEN
+    v_user_id := NEW.user_id;
+  ELSIF TG_TABLE_NAME = 'content' THEN
+    v_user_id := NEW.user_id;
+  ELSIF TG_TABLE_NAME = 'arc_milestone_validations' THEN
+    -- For validations, we care about the owner of the content being validated
+    SELECT user_id INTO v_user_id FROM public.content WHERE id = NEW.content_id;
   END IF;
 
-  IF public.is_fata_user(v_user_id) THEN
+  IF v_user_id IS NOT NULL AND public.is_fata_user(v_user_id) THEN
     INSERT INTO public.fata_activity_log (user_id, entity_type, entity_id, action)
     VALUES (v_user_id, TG_TABLE_NAME, NEW.id, TG_OP);
   END IF;
@@ -147,9 +134,20 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Apply triggers
--- DROP TRIGGER IF EXISTS tr_fata_arc_activity ON public.arcs;
--- CREATE TRIGGER tr_fata_arc_activity AFTER INSERT OR UPDATE ON public.arcs FOR EACH ROW EXECUTE FUNCTION public.log_fata_activity();
+-- Arcs Trigger
+DROP TRIGGER IF EXISTS tr_fata_arc_activity ON public.arcs;
+CREATE TRIGGER tr_fata_arc_activity
+AFTER INSERT OR UPDATE ON public.arcs
+FOR EACH ROW EXECUTE FUNCTION public.log_fata_activity();
 
--- DROP TRIGGER IF EXISTS tr_fata_content_activity ON public.content;
--- CREATE TRIGGER tr_fata_content_activity AFTER INSERT OR UPDATE ON public.content FOR EACH ROW EXECUTE FUNCTION public.log_fata_activity();
+-- Content Trigger
+DROP TRIGGER IF EXISTS tr_fata_content_activity ON public.content;
+CREATE TRIGGER tr_fata_content_activity
+AFTER INSERT OR UPDATE ON public.content
+FOR EACH ROW EXECUTE FUNCTION public.log_fata_activity();
+
+-- Validations Trigger
+DROP TRIGGER IF EXISTS tr_fata_validation_activity ON public.arc_milestone_validations;
+CREATE TRIGGER tr_fata_validation_activity
+AFTER INSERT OR UPDATE ON public.arc_milestone_validations
+FOR EACH ROW EXECUTE FUNCTION public.log_fata_activity();

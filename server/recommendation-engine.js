@@ -274,6 +274,7 @@ function calculateCompositeScore(user, userStats = {}, options = {}) {
         enterpriseNeeds = [],
         enterpriseIndustry = "",
         enterpriseBio = "",
+        fataMultipliers = {}, // user_id -> multiplier
     } = options;
 
     let score = 0;
@@ -306,6 +307,12 @@ function calculateCompositeScore(user, userStats = {}, options = {}) {
     // Gravité sociale (+10 points max)
     const socialGravityScore = calculateSocialGravityScore(userStats);
     score += socialGravityScore * 0.1;
+
+    // Fata Visibility Boost (Reward 2)
+    if (fataMultipliers && fataMultipliers[user.id]) {
+        const multiplier = Math.min(5.0, Number(fataMultipliers[user.id]) || 1.0);
+        score *= multiplier;
+    }
 
     // Pénalité diversité
     const diversityPenalty = calculateDiversityPenalty(
@@ -345,6 +352,7 @@ function rankUsersIntelligently(users, userStatsMap = {}, options = {}) {
             boostPriority: options.boostPriority !== false,
             boostMonetized: options.boostMonetized !== false,
             personalizationFactors: options.personalizationFactors || {},
+            fataMultipliers: options.fataMultipliers || {},
         });
 
         return {

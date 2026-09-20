@@ -900,7 +900,7 @@ const WITHDRAWAL_MIN_USD = 5;
 const SUPPORT_MIN_USD = 1;
 const SUPPORT_MAX_USD = 1000;
 // XERA1 retains 25% of every confirmed platform donation; this is calculated server-side.
-const SUPPORT_COMMISSION_RATE = 0.2;
+const SUPPORT_COMMISSION_RATE = 0.25;
 const SUPPORTED_MOBILE_MONEY_PROVIDERS = new Set([
     "airtel_money",
     "orange_money",
@@ -3793,23 +3793,22 @@ async function confirmSupportPayment({
         gross: breakdown.gross,
         netCreator: breakdown.netCreator,
     });
-    // Ventilation exacte des commissions sur les dons
+    // Partner campaigns add their 5% share to XERA's platform fee; both remain traceable.
     if (partnerCommission?.commission) {
-        const partnerAmount = roundMoney(breakdown.gross * 0.05); // 5% Partenaire
-        const xeraAmount = roundMoney(breakdown.gross * 0.2); // 20% XERA1
-        const creatorNet = roundMoney(
-            breakdown.gross - partnerAmount - xeraAmount,
-        ); // 75% Créateur
-
-        mergedMetadata.partner_commission_amount = partnerAmount;
-        mergedMetadata.amount_net_creator = creatorNet;
-        mergedMetadata.amount_commission_xera = xeraAmount;
-
+        const partnerNet = Math.max(
+            0,
+            Math.round(
+                (breakdown.netCreator - partnerCommission.commission) * 100,
+            ) / 100,
+        );
+        mergedMetadata.partner_commission_amount = partnerCommission.commission;
+        mergedMetadata.amount_net_creator = partnerNet;
+        mergedMetadata.amount_commission_xera = breakdown.commission;
         await supabase
             .from("transactions")
             .update({
-                amount_net_creator: creatorNet,
-                amount_commission_xera: xeraAmount,
+                amount_net_creator: partnerNet,
+                amount_commission_xera: breakdown.commission,
                 metadata: mergedMetadata,
             })
             .eq("id", transactionId);
@@ -4602,7 +4601,6 @@ async function sendReminderEmail(payload) {
             const body = {
                 from: REMINDER_EMAIL_FROM,
                 to: [payload.to],
-                bcc: ["xera1.xyz+f82ea4b552@invite.trustpilot.com"],
                 subject: payload.subject,
                 html: payload.html || "",
                 text: payload.text || "",
@@ -4900,40 +4898,22 @@ function startReminderScheduler() {
 // ==================== KPAY CHECKOUT ====================
 
 async function handleKPaySubscriptionCheckout(req, res) {
-    // 1. EXTRACTION IMMÉDIATE DU BODY (Empêche toute ReferenceError)
-    const {
-        plan,
-        billing_cycle: billingCycleRaw,
-        currency: currencyRaw,
-        method = "card",
-        provider,
-        wallet_id: walletId,
-        access_token: accessToken,
-        user_id: fallbackUserId,
-        return_path: rawReturnPath,
-        discount_code: rawDiscountCode,
-    } = req.body || {};
-
-    const planId = String(plan || "").toLowerCase();
-
-    // Initialisation sécurisée de returnPath pour la gestion des erreurs
-    const returnPath = sanitizeReturnPath(
-        rawReturnPath,
-        buildProfileReturnPath(fallbackUserId),
-    );
-
     try {
-        if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
-            return sendCheckoutErrorResponse(
-                res,
-                new Error("Clés KPay non configurées."),
-                "Le service de paiement est indisponible. Veuillez vérifier les variables d'environnement Vercel.",
-                { returnPath },
-            );
-        }
-
         const callbackConfig = getKPayCallbackConfig(req);
 
+        const {
+            plan,
+            billing_cycle: billingCycleRaw,
+            currency: currencyRaw,
+            method = "card",
+            provider,
+            wallet_id: walletId,
+            access_token: accessToken,
+            user_id: fallbackUserId,
+            return_path: rawReturnPath,
+            discount_code: rawDiscountCode,
+        } = req.body || {};
+        const planId = String(plan || "").toLowerCase();
         const paymentMethod = String(method || "card").toLowerCase();
         const billingCycle =
             String(billingCycleRaw || "monthly").toLowerCase() === "annual"
@@ -4969,6 +4949,11 @@ async function handleKPaySubscriptionCheckout(req, res) {
             accountSubtype: requestUser.accountSubtype,
             badge: requestUser.badge,
         });
+
+        const returnPath = sanitizeReturnPath(
+            rawReturnPath,
+            buildProfileReturnPath(userId),
+        );
 
         const originalAmount = computeKPayAmount(
             planId,
@@ -5074,6 +5059,15 @@ async function handleKPaySubscriptionCheckout(req, res) {
             return res.redirect(302, freeReturnUrl.toString());
         }
 
+        if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
+            return sendCheckoutErrorResponse(
+                res,
+                new Error("Clés KPay non configurées sur le serveur."),
+                "Le service de paiement KPay n'est pas encore configuré sur Vercel. Les variables KPAY_PUBLIC_KEY et KPAY_SECRET_KEY doivent être définies dans l'environnement Vercel.",
+                { returnPath },
+            );
+        }
+
         const pendingPayment = await createPendingSubscriptionPayment({
             userId,
             plan: planId,
@@ -5159,46 +5153,33 @@ app.post(
 async function handleKPaySupportCheckout(req, res) {
     const supportRequestId = crypto.randomUUID();
     let supportCheckoutStage = "validation";
-
-    // 1. EXTRACTION IMMÉDIATE DU BODY (Empêche toute ReferenceError)
-    const {
-        to_user_id: toUserId,
-        amount_usd: rawAmountUsd,
-        currency: currencyRaw,
-        method = "card",
-        provider,
-        wallet_id: walletId,
-        access_token: accessToken,
-        user_id: fallbackUserId,
-        description: rawDescription,
-        support_message: supportMessageRaw,
-        donation_message: donationMessageRaw,
-        message: legacyMessageRaw,
-        return_path: rawReturnPath,
-    } = req.body || {};
-
-    // Initialisation sécurisée de returnPath pour la gestion des erreurs
-    const returnPath = sanitizeReturnPath(
-        rawReturnPath,
-        buildProfileReturnPath(toUserId || fallbackUserId),
-    );
-
     try {
-        // 2. VÉRIFICATION SÉCURISÉE DES CLÉS KPAY
         if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
-            console.error(
-                "[K-PAY ERROR]: Missing KPAY Keys in Environment Variables",
-            );
             return sendCheckoutErrorResponse(
                 res,
-                new Error("Clés KPay non configurées."),
-                "Le service de paiement est indisponible. Veuillez vérifier les variables d'environnement Vercel.",
-                { returnPath },
+                new Error("Clés KPay non configurées sur le serveur."),
+                "Le service de paiement KPay n'est pas encore configuré sur Vercel. Les variables KPAY_PUBLIC_KEY et KPAY_SECRET_KEY doivent être définies dans l'environnement Vercel.",
+                { returnPath: rawReturnPath || "/" },
             );
         }
 
         const callbackConfig = getKPayCallbackConfig(req);
 
+        const {
+            to_user_id: toUserId,
+            amount_usd: rawAmountUsd,
+            currency: currencyRaw,
+            method = "card",
+            provider,
+            wallet_id: walletId,
+            access_token: accessToken,
+            user_id: fallbackUserId,
+            description: rawDescription,
+            support_message: supportMessageRaw,
+            donation_message: donationMessageRaw,
+            message: legacyMessageRaw,
+            return_path: rawReturnPath,
+        } = req.body || {};
         const paymentMethod = String(method || "card").toLowerCase();
         if (!["card", "mobile_money", "paypal"].includes(paymentMethod)) {
             return res.status(400).send("Moyen de paiement invalide");
@@ -5304,7 +5285,10 @@ async function handleKPaySupportCheckout(req, res) {
             supportMessageRaw ?? donationMessageRaw ?? legacyMessageRaw,
             200,
         );
-
+        const returnPath = sanitizeReturnPath(
+            rawReturnPath,
+            buildProfileReturnPath(toUserId),
+        );
         supportCheckoutStage = "pending_transaction";
         const pendingPayment = await createPendingSupportPayment({
             fromUserId,
@@ -5380,15 +5364,13 @@ async function handleKPaySupportCheckout(req, res) {
         setResponseHeader(res, "Location", kpayRes.gatewayUrl);
         res.status(302).send();
     } catch (error) {
-        console.error("[K-PAY CRASH 500]:", error);
         return sendCheckoutErrorResponse(
             res,
             error,
-            "Une erreur interne est survenue lors de la création de la session de paiement.",
+            "Impossible d'initialiser le soutien.",
             {
                 requestId: supportRequestId,
                 stage: supportCheckoutStage,
-                returnPath,
             },
         );
     }
@@ -5990,9 +5972,7 @@ app.post("/api/admin/discount-codes", async (req, res) => {
         const code = normalizeDiscountCode(req.body?.code);
         const plan = String(req.body?.plan || "").toLowerCase();
         const discountPercent = Number(req.body?.discount_percent);
-        const benefitDurationDays = req.body?.benefit_duration_days
-            ? Number(req.body.benefit_duration_days)
-            : null;
+        const benefitDurationDays = Number(req.body?.benefit_duration_days);
         const maxUses = req.body?.max_uses ? Number(req.body.max_uses) : null;
         const validFrom = new Date(req.body?.valid_from || Date.now());
         const validUntil = req.body?.valid_until
@@ -6012,26 +5992,10 @@ app.post("/api/admin/discount-codes", async (req, res) => {
             });
         if (!isValidPlanId(plan))
             return res.status(400).json({ error: "Plan offert invalide." });
-
-        if (
-            discountPercent === 100 &&
-            (!benefitDurationDays ||
-                !Number.isInteger(benefitDurationDays) ||
-                benefitDurationDays < 1)
-        ) {
+        if (!Number.isInteger(benefitDurationDays) || benefitDurationDays < 1)
             return res.status(400).json({
-                error: "Pour un accès gratuit à 100%, vous devez obligatoirement définir une durée d'avantage (en jours).",
+                error: "La durée des avantages doit être d'au moins 1 jour.",
             });
-        }
-
-        if (
-            benefitDurationDays !== null &&
-            (!Number.isInteger(benefitDurationDays) || benefitDurationDays < 1)
-        ) {
-            return res.status(400).json({
-                error: "La durée des avantages doit être un nombre entier d'au moins 1 jour.",
-            });
-        }
         if (maxUses !== null && (!Number.isInteger(maxUses) || maxUses < 1))
             return res
                 .status(400)
@@ -6097,24 +6061,17 @@ app.patch("/api/admin/discount-codes/:id", async (req, res) => {
                 .json({ error: authResult.error.message });
         const plan = String(req.body?.plan || "").toLowerCase();
         const discountPercent = Number(req.body?.discount_percent ?? 100);
-        const benefitDurationDays = req.body?.benefit_duration_days
-            ? Number(req.body.benefit_duration_days)
-            : null;
+        const benefitDurationDays = Number(req.body?.benefit_duration_days);
         const maxUses = req.body?.max_uses ? Number(req.body.max_uses) : null;
         const validFrom = new Date(req.body?.valid_from || Date.now());
         const validUntil = req.body?.valid_until
             ? new Date(req.body.valid_until)
             : null;
-
         if (
             !isValidPlanId(plan) ||
-            (discountPercent === 100 &&
-                (!benefitDurationDays ||
-                    !Number.isInteger(benefitDurationDays) ||
-                    benefitDurationDays < 1)) ||
-            (benefitDurationDays !== null &&
-                (!Number.isInteger(benefitDurationDays) ||
-                    benefitDurationDays < 1)) ||
+            discountPercent !== 100 ||
+            !Number.isInteger(benefitDurationDays) ||
+            benefitDurationDays < 1 ||
             (maxUses !== null && (!Number.isInteger(maxUses) || maxUses < 1)) ||
             Number.isNaN(validFrom.getTime()) ||
             (validUntil && Number.isNaN(validUntil.getTime())) ||

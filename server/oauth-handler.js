@@ -2,9 +2,53 @@ const express = require("express");
 const router = express.Router();
 const { createClient } = require("@supabase/supabase-js");
 const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
+const jwksClient = require("jwks-rsa");
 const { getConfig } = require("./oauth-configs");
+const { resolveChallengeConfig } = require("./fata-contract");
 const { encryptToken } = require("./oauth-token-manager");
 const { enqueueIngestion } = require("./ingestion-queue");
+
+const jwksClients = {};
+
+function getJwksClient(jwksUri) {
+    if (!jwksClients[jwksUri]) {
+        jwksClients[jwksUri] = jwksClient({
+            jwksUri,
+            cache: true,
+            rateLimit: true,
+        });
+    }
+    return jwksClients[jwksUri];
+}
+
+function verifyIdToken(token, config) {
+    return new Promise((resolve, reject) => {
+        const client = getJwksClient(config.jwksUrl);
+
+        function getKey(header, callback) {
+            client.getSigningKey(header.kid, (err, key) => {
+                if (err) return callback(err);
+                const signingKey = key.getPublicKey();
+                callback(null, signingKey);
+            });
+        }
+
+        jwt.verify(
+            token,
+            getKey,
+            {
+                issuer: config.issuer,
+                audience: config.clientId,
+                algorithms: ["RS256"],
+            },
+            (err, decoded) => {
+                if (err) return reject(err);
+                resolve(decoded);
+            },
+        );
+    });
+}
 
 // Réutiliser le client supabase du server principal si possible,
 // sinon créer une instance. Pour l'instant, on suppose qu'il est passé ou recréé.
@@ -23,7 +67,10 @@ function getBearerToken(req) {
 }
 
 function getSafeRedirectBase() {
-    return String(process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+    return String(process.env.APP_BASE_URL || "http://localhost:3000").replace(
+        /\/$/,
+        "",
+    );
 }
 
 // POST /api/auth/:tool/start
@@ -51,21 +98,55 @@ router.post("/:tool/start", async (req, res) => {
         }
 
         const state = crypto.randomBytes(16).toString("hex");
+        const { challengeId, codeChallenge, codeVerifier, nonce } =
+            req.body || {};
+
+        if (tool === "fata" && challengeId) {
+            try {
+                resolveChallengeConfig(challengeId);
+            } catch (error) {
+                return res
+                    .status(400)
+                    .json({
+                        error: error.message || "Challenge Fata invalide",
+                    });
+            }
+        }
+
         const { error: stateError } = await supabase
             .from("oauth_states")
-            .insert({ user_id: user.id, state, tool });
+            .insert({
+                user_id: user.id,
+                state,
+                tool,
+                challenge_id: challengeId || null,
+                code_verifier: codeVerifier || null,
+                nonce: nonce || null,
+            });
 
         if (stateError) {
             console.error("[OAuth] state insert error:", stateError);
-            return res.status(500).json({ error: "Impossible de démarrer la connexion OAuth" });
+            return res
+                .status(500)
+                .json({ error: "Impossible de démarrer la connexion OAuth" });
         }
 
         const redirectUri = `${getSafeRedirectBase()}/api/auth/${tool}/callback`;
-        const authUrl = `${config.authUrl}?client_id=${encodeURIComponent(config.clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(config.scope)}&state=${encodeURIComponent(state)}&response_type=code`;
+        let authUrl = `${config.authUrl}?client_id=${encodeURIComponent(config.clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(config.scope)}&state=${encodeURIComponent(state)}&response_type=code`;
+
+        if (codeChallenge) {
+            authUrl += `&code_challenge=${encodeURIComponent(codeChallenge)}&code_challenge_method=S256`;
+        }
+        if (nonce) {
+            authUrl += `&nonce=${encodeURIComponent(nonce)}`;
+        }
+
         return res.json({ authUrl });
     } catch (error) {
         console.error("[OAuth] start error:", error);
-        return res.status(500).json({ error: "Impossible de démarrer la connexion OAuth" });
+        return res
+            .status(500)
+            .json({ error: "Impossible de démarrer la connexion OAuth" });
     }
 });
 
@@ -99,7 +180,9 @@ router.get("/status", async (req, res) => {
         return res.json({ connections: data || [] });
     } catch (error) {
         console.error("[OAuth] status error:", error);
-        return res.status(500).json({ error: "Impossible de lire le statut de connexion" });
+        return res
+            .status(500)
+            .json({ error: "Impossible de lire le statut de connexion" });
     }
 });
 
@@ -116,7 +199,7 @@ router.get("/:tool/callback", async (req, res) => {
     try {
         const { data: storedState, error: stateError } = await supabase
             .from("oauth_states")
-            .select("user_id")
+            .select("user_id, challenge_id, code_verifier, nonce")
             .eq("state", state)
             .eq("tool", tool)
             .maybeSingle();
@@ -134,6 +217,10 @@ router.get("/:tool/callback", async (req, res) => {
             redirect_uri: redirectUri,
         });
 
+        if (storedState.code_verifier) {
+            tokenParams.append("code_verifier", storedState.code_verifier);
+        }
+
         const tokenResponse = await fetch(config.tokenUrl, {
             method: "POST",
             headers: {
@@ -144,8 +231,13 @@ router.get("/:tool/callback", async (req, res) => {
         });
 
         if (!tokenResponse.ok) {
-            console.error("[OAuth] token exchange failed:", tokenResponse.status);
-            return res.status(502).json({ error: "Impossible de récupérer le token OAuth" });
+            console.error(
+                "[OAuth] token exchange failed:",
+                tokenResponse.status,
+            );
+            return res
+                .status(502)
+                .json({ error: "Impossible de récupérer le token OAuth" });
         }
 
         const tokenData = await tokenResponse.json();
@@ -156,13 +248,114 @@ router.get("/:tool/callback", async (req, res) => {
                 .json({ error: "Impossible de récupérer le token OAuth" });
         }
 
+        // --- FATA SPECIFIC LOGIC ---
+        if (tool === "fata") {
+            if (!tokenData.id_token) {
+                return res
+                    .status(400)
+                    .json({ error: "ID Token manquant pour Fata" });
+            }
+
+            try {
+                const decoded = await verifyIdToken(tokenData.id_token, config);
+                if (storedState.nonce && decoded.nonce !== storedState.nonce) {
+                    return res.status(400).json({ error: "Nonce invalide" });
+                }
+
+                const existingUser = await supabase
+                    .from("fata_linkages")
+                    .select("user_id, fata_sub")
+                    .eq("fata_iss", config.issuer)
+                    .eq("fata_sub", decoded.sub)
+                    .maybeSingle();
+
+                if (
+                    existingUser.data &&
+                    existingUser.data.user_id !== storedState.user_id
+                ) {
+                    return res
+                        .status(409)
+                        .json({
+                            error: "Cette identité Fata est déjà liée à un autre compte XERA1",
+                        });
+                }
+
+                const { error: linkError } = await supabase
+                    .from("fata_linkages")
+                    .upsert(
+                        {
+                            user_id: storedState.user_id,
+                            fata_iss: config.issuer,
+                            fata_sub: decoded.sub,
+                            preferred_username:
+                                decoded.preferred_username || null,
+                            metadata: {
+                                challenge_id: storedState.challenge_id || null,
+                                last_challenge_id:
+                                    storedState.challenge_id || null,
+                                source: "oidc",
+                                linked_at: new Date().toISOString(),
+                            },
+                            updated_at: new Date().toISOString(),
+                        },
+                        { onConflict: "user_id,fata_iss" },
+                    );
+
+                if (linkError) {
+                    console.error("[OAuth] Fata linkage error:", linkError);
+                    return res
+                        .status(500)
+                        .json({ error: "Impossible de lier le compte Fata" });
+                }
+
+                if (storedState.challenge_id) {
+                    try {
+                        resolveChallengeConfig(storedState.challenge_id);
+                    } catch (error) {
+                        return res
+                            .status(400)
+                            .json({
+                                error:
+                                    error.message || "Challenge Fata invalide",
+                            });
+                    }
+
+                    await supabase
+                        .from("fata_linkages")
+                        .update({
+                            metadata: {
+                                challenge_id: storedState.challenge_id,
+                                last_challenge_id: storedState.challenge_id,
+                                source: "oidc",
+                                linked_at: new Date().toISOString(),
+                            },
+                            updated_at: new Date().toISOString(),
+                        })
+                        .eq("user_id", storedState.user_id)
+                        .eq("fata_iss", config.issuer);
+                }
+            } catch (err) {
+                console.error(
+                    "[OAuth] Fata ID Token verification failed:",
+                    err,
+                );
+                return res
+                    .status(401)
+                    .json({
+                        error: "Échec de vérification de l'identité Fata",
+                    });
+            }
+        }
+
         const { error: tokenUpsertError } = await supabase
             .from("user_oauth_tokens")
             .upsert(
                 {
                     user_id: storedState.user_id,
                     tool,
-                    access_token_encrypted: encryptToken(tokenData.access_token),
+                    access_token_encrypted: encryptToken(
+                        tokenData.access_token,
+                    ),
                     refresh_token_encrypted: tokenData.refresh_token
                         ? encryptToken(tokenData.refresh_token)
                         : null,
@@ -179,7 +372,9 @@ router.get("/:tool/callback", async (req, res) => {
 
         if (tokenUpsertError) {
             console.error("[OAuth] token save error:", tokenUpsertError);
-            return res.status(500).json({ error: "Impossible de sauvegarder le token OAuth" });
+            return res
+                .status(500)
+                .json({ error: "Impossible de sauvegarder le token OAuth" });
         }
 
         const { error: clearStateError } = await supabase
@@ -200,10 +395,14 @@ router.get("/:tool/callback", async (req, res) => {
             console.warn("[OAuth] ingestion enqueue warning:", ingestionError);
         }
 
-        return res.redirect(`${getSafeRedirectBase()}/profile?connection=success`);
+        return res.redirect(
+            `${getSafeRedirectBase()}/profile?connection=success`,
+        );
     } catch (error) {
         console.error("[OAuth] callback error:", error);
-        return res.status(500).json({ error: "Erreur pendant le callback OAuth" });
+        return res
+            .status(500)
+            .json({ error: "Erreur pendant le callback OAuth" });
     }
 });
 

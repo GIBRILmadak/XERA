@@ -1,4 +1,5 @@
-const { OAUTH_CONFIGS } = require("./oauth-configs");
+const { getConfig } = require("./oauth-configs");
+const { resolveChallengeConfig } = require("./fata-contract");
 
 let cachedToken = null;
 let tokenExpiresAt = 0;
@@ -8,7 +9,7 @@ async function getTechnicalToken() {
         return cachedToken;
     }
 
-    const config = OAUTH_CONFIGS.fata;
+    const config = getConfig("fata");
     if (!config) throw new Error("Fata OAuth config missing");
 
     const params = new URLSearchParams({
@@ -27,7 +28,9 @@ async function getTechnicalToken() {
     if (!response.ok) {
         const err = await response.text();
         console.error("[Fata API] Token error:", err);
-        throw new Error(`Failed to get Fata technical token: ${response.status}`);
+        throw new Error(
+            `Failed to get Fata technical token: ${response.status}`,
+        );
     }
 
     const data = await response.json();
@@ -42,20 +45,31 @@ async function getTechnicalToken() {
  * @param {string} idempotencyKey
  */
 async function sendActionCompletion(payload, idempotencyKey) {
-    const token = await getTechnicalToken();
+    const config = getConfig("fata");
+    if (!config) {
+        throw new Error("Fata OAuth config missing");
+    }
 
-    // occurredAt must be RFC3339 UTC string
+    const challenge = resolveChallengeConfig(payload.challengeId);
+    if (challenge.is_test) {
+        throw new Error(
+            "Test challenge cannot be submitted to Fata real endpoint",
+        );
+    }
+
+    const token = await getTechnicalToken();
     const body = {
         subject: payload.subject,
         challengeId: payload.challengeId,
         requirementId: payload.requirementId,
-        occurredAt: payload.occurredAt
+        occurredAt: payload.occurredAt,
     };
 
-    const response = await fetch("https://fata.app/api/v1/action-completions", {
+    const apiBase = String(config.apiBase || process.env.FATA_API_BASE_URL || "https://fata.app/api").replace(/\/$/, "");
+    const response = await fetch(`${apiBase}/v1/action-completions`, {
         method: "POST",
         headers: {
-            "Authorization": `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
             "Idempotency-Key": idempotencyKey,
         },
