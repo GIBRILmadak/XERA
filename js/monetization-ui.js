@@ -209,11 +209,43 @@ function createSupportModal() {
                         </button>
                     </div>
                 </fieldset>
-                <select id="global-support-payment-method" class="support-payment-native-select" aria-label="Moyen de paiement">
+                <select id="global-support-payment-method" class="support-payment-native-select" aria-label="Moyen de paiement" onchange="selectGlobalSupportPaymentMethod(this.value)">
                     <option value="card">Carte bancaire (Visa / Mastercard)</option>
                     <option value="mobile_money">Mobile Money</option>
                     <option value="paypal">PayPal</option>
                 </select>
+                <div id="global-support-mobile-fields" style="display:none;margin-top:14px;padding:14px;border:1px solid rgba(243,156,18,0.3);border-radius:12px;background:rgba(10,10,12,0.6);">
+                    <div style="margin-bottom:10px;">
+                        <label for="global-support-country" style="display:block;margin-bottom:4px;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:#aaa;">Pays</label>
+                        <select id="global-support-country" class="form-input" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border-color, #333);border-radius:8px;background:#111;color:#fff;font:inherit;" onchange="updateGlobalSupportOperators()">
+                            <option value="CD">🇨🇩 RD Congo (+243, CDF)</option>
+                            <option value="CM">🇨🇲 Cameroun (+237, XAF)</option>
+                            <option value="CG">🇨🇬 Congo-Brazzaville (+242, XAF)</option>
+                            <option value="CI">🇨🇮 Côte d'Ivoire (+225, XOF)</option>
+                            <option value="GA">🇬🇦 Gabon (+241, XAF)</option>
+                            <option value="KE">🇰🇪 Kenya (+254, KES)</option>
+                            <option value="UG">🇺🇬 Ouganda (+256, UGX)</option>
+                            <option value="RW">🇷🇼 Rwanda (+250, RWF)</option>
+                            <option value="SN">🇸🇳 Sénégal (+221, XOF)</option>
+                            <option value="SL">🇸🇱 Sierra Leone (+232, SLE)</option>
+                            <option value="BJ">🇧🇯 Bénin (+229, XOF)</option>
+                            <option value="ZM">🇿🇲 Zambie (+260, ZMW)</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom:10px;">
+                        <label for="global-support-provider" style="display:block;margin-bottom:4px;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:#aaa;">Opérateur Mobile Money</label>
+                        <select id="global-support-provider" class="form-input" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border-color, #333);border-radius:8px;background:#111;color:#fff;font:inherit;">
+                            <option value="VODACOM_MPESA_COD">Vodacom M-Pesa</option>
+                            <option value="MTN_MOMO_COD">MTN Mobile Money</option>
+                            <option value="AIRTEL_COD">Airtel Money</option>
+                            <option value="ORANGE_COD">Orange Money</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="global-support-phone" style="display:block;margin-bottom:4px;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:#aaa;">Numéro de téléphone</label>
+                        <input id="global-support-phone" class="form-input" type="tel" placeholder="ex: 0812345678" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border-color, #333);border-radius:8px;background:#111;color:#fff;font:inherit;" />
+                    </div>
+                </div>
                 <p class="support-payment-help"><i class="fas fa-shield-alt" aria-hidden="true"></i> Paiement sécurisé et traité par KPay.</p>
                 <button class="btn-primary btn-full" id="global-support-submit" onclick="processGlobalSupport()" disabled>
                     <span class="support-submit-icon"><i class="fas fa-heart"></i></span> Envoyer le soutien <i class="fas fa-arrow-right support-submit-arrow" aria-hidden="true"></i>
@@ -284,6 +316,9 @@ function openSupportModal(creatorId, creatorName, sourceElement = null) {
     document.getElementById("global-custom-amount").value = "";
     selectGlobalSupportPaymentMethod("card");
     updateGlobalSupportSummary();
+    
+    // Configurer les textes d'aide pour le mode Sandbox par défaut (CD)
+    updateGlobalSupportOperators();
 
     const modal = document.getElementById("support-modal-global");
     if (modal) {
@@ -309,6 +344,137 @@ function selectGlobalSupportPaymentMethod(method) {
             card.classList.toggle("is-selected", isSelected);
             card.setAttribute("aria-checked", String(isSelected));
         });
+
+    const mobileFields = document.getElementById("global-support-mobile-fields");
+    if (mobileFields) {
+        mobileFields.style.display = validMethod === "mobile_money" ? "block" : "none";
+    }
+}
+
+const GLOBAL_COUNTRY_OPERATORS = {
+    CD: {
+        name: "🇨🇩 RD Congo (+243, CDF)",
+        dial: "+243",
+        placeholder: "ex: 0812345678",
+        providers: [
+            { value: "VODACOM_MPESA_COD", label: "Vodacom M-Pesa" },
+            { value: "MTN_MOMO_COD",      label: "MTN Mobile Money" },
+            { value: "AIRTEL_COD",        label: "Airtel Money" },
+            { value: "ORANGE_COD",        label: "Orange Money" },
+        ],
+    },
+    CM: {
+        name: "🇨🇲 Cameroun (+237, XAF)",
+        dial: "+237",
+        placeholder: "ex: 670123456",
+        providers: [
+            { value: "MTN_MOMO_CMR",  label: "MTN Mobile Money" },
+            { value: "ORANGE_CMR",    label: "Orange Money" },
+        ],
+    },
+    CG: {
+        name: "🇨🇬 Congo-Brazzaville (+242, XAF)",
+        dial: "+242",
+        placeholder: "ex: 060123456",
+        providers: [
+            { value: "MTN_MOMO_COG",  label: "MTN Mobile Money" },
+            { value: "AIRTEL_COG",    label: "Airtel Money" },
+        ],
+    },
+    CI: {
+        name: "🇨🇮 Côte d'Ivoire (+225, XOF)",
+        dial: "+225",
+        placeholder: "ex: 0701234567",
+        providers: [
+            { value: "MTN_MOMO_CIV",  label: "MTN Mobile Money" },
+            { value: "ORANGE_CIV",    label: "Orange Money" },
+        ],
+    },
+    GA: {
+        name: "🇬🇦 Gabon (+241, XAF)",
+        dial: "+241",
+        placeholder: "ex: 074123456",
+        providers: [
+            { value: "AIRTEL_GAB",    label: "Airtel Money" },
+        ],
+    },
+    KE: {
+        name: "🇰🇪 Kenya (+254, KES)",
+        dial: "+254",
+        placeholder: "ex: 0712345678",
+        providers: [
+            { value: "MPESA_KEN",     label: "M-Pesa" },
+        ],
+    },
+    UG: {
+        name: "🇺🇬 Ouganda (+256, UGX)",
+        dial: "+256",
+        placeholder: "ex: 0712345678",
+        providers: [
+            { value: "AIRTEL_OAPI_UGA",  label: "Airtel Money" },
+            { value: "MTN_MOMO_UGA",     label: "MTN Mobile Money" },
+        ],
+    },
+    RW: {
+        name: "🇷🇼 Rwanda (+250, RWF)",
+        dial: "+250",
+        placeholder: "ex: 0781234567",
+        providers: [
+            { value: "MTN_MOMO_RWA",  label: "MTN Mobile Money" },
+            { value: "AIRTEL_RWA",    label: "Airtel Money" },
+        ],
+    },
+    SN: {
+        name: "🇸🇳 Sénégal (+221, XOF)",
+        dial: "+221",
+        placeholder: "ex: 771234567",
+        providers: [
+            { value: "FREE_SEN",      label: "Free Money" },
+            { value: "ORANGE_SEN",   label: "Orange Money" },
+        ],
+    },
+    SL: {
+        name: "🇸🇱 Sierra Leone (+232, SLE)",
+        dial: "+232",
+        placeholder: "ex: 076123456",
+        providers: [
+            { value: "ORANGE_SLE",    label: "Orange Money" },
+        ],
+    },
+    BJ: {
+        name: "🇧🇯 Bénin (+229, XOF)",
+        dial: "+229",
+        placeholder: "ex: 97123456",
+        providers: [
+            { value: "MTN_MOMO_BEN",  label: "MTN Mobile Money" },
+            { value: "MOOV_BEN",      label: "Moov Money" },
+        ],
+    },
+    ZM: {
+        name: "🇿🇲 Zambie (+260, ZMW)",
+        dial: "+260",
+        placeholder: "ex: 0961234567",
+        providers: [
+            { value: "AIRTEL_OAPI_ZMB",  label: "Airtel Money" },
+            { value: "MTN_MOMO_ZMB",     label: "MTN Mobile Money" },
+            { value: "ZAMTEL_ZMB",       label: "Zamtel" },
+        ],
+    },
+};
+
+function updateGlobalSupportOperators() {
+    const countrySelect = document.getElementById("global-support-country");
+    const country = countrySelect?.value || "CD";
+    const providerSelect = document.getElementById("global-support-provider");
+    const phoneInput = document.getElementById("global-support-phone");
+    
+    if (!providerSelect) return;
+    const countryData = GLOBAL_COUNTRY_OPERATORS[country] || GLOBAL_COUNTRY_OPERATORS.CD;
+    providerSelect.innerHTML = countryData.providers.map(op => `<option value="${op.value}">${op.label}</option>`).join("");
+
+    if (phoneInput) {
+        phoneInput.placeholder = countryData.placeholder;
+    }
 }
 
 // Fermer la modale globale
@@ -413,6 +579,15 @@ async function processGlobalSupport() {
                 '<i class="fas fa-spinner fa-spin"></i> Envoi...';
         }
 
+        const selectedMethod =
+            document.getElementById("global-support-payment-method")?.value ||
+            "card";
+        const walletId =
+            document.getElementById("global-support-phone")?.value?.trim() ||
+            null;
+        const provider =
+            document.getElementById("global-support-provider")?.value || null;
+
         const result = await redirectToSupportCheckout({
             creatorId,
             creatorName: globalSupportState.creatorName,
@@ -420,9 +595,9 @@ async function processGlobalSupport() {
             description: "Soutien depuis le profil",
             message: supportMessage,
             returnPath: globalSupportState.returnPath,
-            paymentMethod:
-                document.getElementById("global-support-payment-method")
-                    ?.value || "card",
+            paymentMethod: selectedMethod,
+            walletId: walletId,
+            provider: provider,
         });
 
         if (result.success) {
@@ -450,51 +625,82 @@ async function processGlobalSupport() {
     }
 }
 
-// Afficher une notification globale
+// Afficher une notification globale In-App style XERA
 function showGlobalNotification(message, type = "info") {
-    const notification = document.createElement("div");
-    notification.className = `notification notification-${type}`;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 15px 25px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 14px;
-        font-weight: 500;
-        z-index: 10000;
-        animation: slideIn 0.3s ease;
-    `;
+    // Supprimer les notifications existantes pour ne pas encombrer l'écran
+    const existing = document.querySelectorAll(".xera-inapp-toast");
+    existing.forEach((el) => el.remove());
 
-    const colors = {
-        success: "#27ae60",
-        error: "#e74c3c",
-        info: "#3498db",
+    const notification = document.createElement("div");
+    notification.className = `xera-inapp-toast notification notification-${type}`;
+
+    const borderColors = {
+        success: "#2ecc71",
+        error: "#ff4757",
+        info: "#f39c12",
+        warning: "#f1c40f",
     };
 
-    notification.style.background = colors[type] || colors.info;
-    notification.style.color = "white";
+    const iconColors = {
+        success: "#2ecc71",
+        error: "#ff4757",
+        info: "#f39c12",
+        warning: "#f1c40f",
+    };
+
+    const color = borderColors[type] || borderColors.info;
+
+    notification.style.cssText = `
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        padding: 14px 22px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        font-family: 'Inter', system-ui, sans-serif;
+        z-index: 100000;
+        background: rgba(14, 14, 18, 0.92);
+        color: #ffffff;
+        border: 1px solid ${color};
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 15px ${color}33;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        max-width: 420px;
+        line-height: 1.4;
+    `;
 
     const icons = {
         success: "fa-check-circle",
-        error: "fa-exclamation-circle",
+        error: "fa-exclamation-triangle",
         info: "fa-info-circle",
+        warning: "fa-bell",
     };
 
     notification.innerHTML = `
-        <i class="fas ${icons[type]}"></i>
-        <span>${message}</span>
+        <i class="fas ${icons[type] || icons.info}" style="color: ${color}; font-size: 18px; flex-shrink: 0;"></i>
+        <span style="flex: 1;">${message}</span>
+        <button type="button" onclick="this.parentElement.remove()" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:16px;padding:0;margin-left:8px;">&times;</button>
     `;
 
     document.body.appendChild(notification);
 
     setTimeout(() => {
-        notification.remove();
-    }, 5000);
+        if (notification.parentNode) {
+            notification.style.opacity = "0";
+            notification.style.transform = "translateY(-10px)";
+            setTimeout(() => notification.remove(), 300);
+        }
+    }, 6000);
 }
+
+// Exposer globalement pour remplacer les alertes natives du navigateur
+window.showToast = showGlobalNotification;
+window.showToastNotification = showGlobalNotification;
 
 // Intégrer la monétisation dans un profil
 function integrateMonetizationInProfile(profileElement, user) {

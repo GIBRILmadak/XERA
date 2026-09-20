@@ -1306,6 +1306,8 @@ async function redirectToSupportCheckout({
     returnPath = "",
     sourceElement = null,
     paymentMethod = "card",
+    walletId = null,
+    provider = null,
 }) {
     if (supportCheckoutInProgress) {
         return {
@@ -1398,12 +1400,59 @@ async function redirectToSupportCheckout({
             ? String(paymentMethod).toLowerCase()
             : "card";
         params.set("method", method);
-        // The support amount is selected in USD, then converted server-side
-        // to CDF for the K-Pay Mobile Money gateway.
         params.set("currency", "CDF");
 
-        // Submit a real navigation so the API's K-Pay 302 is followed directly.
-        // fetch() may otherwise fail when it follows K-Pay's cross-origin URL.
+        if (walletId) {
+            params.set("wallet_id", walletId);
+            params.set("phone_number", walletId);
+        }
+        if (provider) {
+            params.set("provider", provider);
+        }
+
+        // If phone number is provided, perform in-app AJAX checkout (USSD Direct push)
+        if (method === "mobile_money" && walletId) {
+            try {
+                const resp = await fetch(checkoutUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "Accept": "application/json",
+                    },
+                    body: params.toString(),
+                });
+                const resData = await resp.json().catch(() => ({}));
+                supportCheckoutInProgress = false;
+                if (resp.ok && (resData.success || resData.status === "PENDING")) {
+                    if (typeof window.showToast === "function") {
+                        window.showToast(
+                            resData.message ||
+                                "Demande USSD envoyée ! Validez le code PIN sur votre téléphone.",
+                            "success",
+                        );
+                    } else if (typeof showGlobalNotification === "function") {
+                        showGlobalNotification(
+                            resData.message ||
+                                "Demande USSD envoyée ! Validez le code PIN sur votre téléphone.",
+                            "success",
+                        );
+                    } else {
+                        alert(resData.message || "Demande USSD envoyée sur votre téléphone !");
+                    }
+                    return { success: true, data: resData };
+                } else {
+                    return {
+                        success: false,
+                        error: resData.error || resData.message || "Erreur d'initialisation du paiement.",
+                    };
+                }
+            } catch (err) {
+                supportCheckoutInProgress = false;
+                return { success: false, error: err.message || "Erreur réseau lors du paiement." };
+            }
+        }
+
+        // Default navigation fallback for card/paypal redirect
         const form = document.createElement("form");
         form.method = "POST";
         form.action = checkoutUrl;

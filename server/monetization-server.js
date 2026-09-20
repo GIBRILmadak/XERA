@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const path = require("path");
 const { createClient } = require("@supabase/supabase-js");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const webpush = require("web-push");
@@ -285,6 +286,7 @@ app.post(
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(express.static(path.join(__dirname, "..")));
 
 app.post("/api/account/delete", async (req, res) => {
     try {
@@ -899,41 +901,62 @@ const USD_TO_CDF_RATE_VALUE = Math.max(
 const WITHDRAWAL_MIN_USD = 5;
 const SUPPORT_MIN_USD = 1;
 const SUPPORT_MAX_USD = 1000;
-// XERA1 retains 25% of every confirmed platform donation; this is calculated server-side.
+// XERA retains 25% of every confirmed platform donation; this is calculated server-side.
 const SUPPORT_COMMISSION_RATE = 0.25;
+// Provider codes must match exactly what KPay accepts in the paymentMethods field.
+// Source: KPay dashboard → Applications → Edit → country selector (screenshot verified).
 const SUPPORTED_MOBILE_MONEY_PROVIDERS = new Set([
-    "airtel_money",
-    "orange_money",
-    "mpesa",
-    "afrimoney",
-    "mtn_momo",
-    "moov_money",
-    "flooz",
-    "wave",
-    "free_money",
-    "tigo_pesa",
-    "telecel_cash",
-    "ecocash",
-    "inwi_money",
-    "e_mola",
-    "other",
+    // Bénin
+    "MTN_MOMO_BEN", "MOOV_BEN",
+    // Cameroun
+    "MTN_MOMO_CMR", "ORANGE_CMR",
+    // Congo-Brazzaville
+    "MTN_MOMO_COG", "AIRTEL_COG",
+    // Côte d'Ivoire
+    "MTN_MOMO_CIV", "ORANGE_CIV",
+    // Gabon
+    "AIRTEL_GAB",
+    // Kenya
+    "MPESA_KEN",
+    // Ouganda
+    "AIRTEL_OAPI_UGA", "MTN_MOMO_UGA",
+    // RD Congo
+    "VODACOM_MPESA_COD", "MTN_MOMO_COD", "AIRTEL_COD", "ORANGE_COD",
+    // Rwanda
+    "MTN_MOMO_RWA", "AIRTEL_RWA",
+    // Sénégal
+    "FREE_SEN", "ORANGE_SEN",
+    // Sierra Leone
+    "ORANGE_SLE",
+    // Zambie
+    "AIRTEL_OAPI_ZMB", "MTN_MOMO_ZMB", "ZAMTEL_ZMB",
 ]);
+
 const MOBILE_MONEY_PROVIDER_LABELS = {
-    airtel_money: "Airtel Money",
-    orange_money: "Orange Money",
-    mpesa: "M-Pesa / Vodacom M-Pesa",
-    afrimoney: "Afrimoney",
-    mtn_momo: "MTN MoMo",
-    moov_money: "Moov Money",
-    flooz: "Flooz",
-    wave: "Wave",
-    free_money: "Free Money",
-    tigo_pesa: "Tigo Pesa",
-    telecel_cash: "Telecel Cash",
-    ecocash: "EcoCash",
-    inwi_money: "inwi money",
-    e_mola: "e-Mola",
-    other: "Autre",
+    MTN_MOMO_BEN:       "MTN MoMo (Bénin)",
+    MOOV_BEN:           "Moov Money (Bénin)",
+    MTN_MOMO_CMR:       "MTN MoMo (Cameroun)",
+    ORANGE_CMR:         "Orange Money (Cameroun)",
+    MTN_MOMO_COG:       "MTN MoMo (Congo-Brazzaville)",
+    AIRTEL_COG:         "Airtel Money (Congo-Brazzaville)",
+    MTN_MOMO_CIV:       "MTN MoMo (Côte d'Ivoire)",
+    ORANGE_CIV:         "Orange Money (Côte d'Ivoire)",
+    AIRTEL_GAB:         "Airtel Money (Gabon)",
+    MPESA_KEN:          "M-Pesa (Kenya)",
+    AIRTEL_OAPI_UGA:    "Airtel Money (Ouganda)",
+    MTN_MOMO_UGA:       "MTN MoMo (Ouganda)",
+    VODACOM_MPESA_COD:  "Vodacom M-Pesa (RD Congo)",
+    MTN_MOMO_COD:       "MTN MoMo (RD Congo)",
+    AIRTEL_COD:         "Airtel Money (RD Congo)",
+    ORANGE_COD:         "Orange Money (RD Congo)",
+    MTN_MOMO_RWA:       "MTN MoMo (Rwanda)",
+    AIRTEL_RWA:         "Airtel Money (Rwanda)",
+    FREE_SEN:           "Free Money (Sénégal)",
+    ORANGE_SEN:         "Orange Money (Sénégal)",
+    ORANGE_SLE:         "Orange Money (Sierra Leone)",
+    AIRTEL_OAPI_ZMB:    "Airtel Money (Zambie)",
+    MTN_MOMO_ZMB:       "MTN MoMo (Zambie)",
+    ZAMTEL_ZMB:         "Zamtel (Zambie)",
 };
 
 function areKPayPayoutsEnabled() {
@@ -1051,13 +1074,14 @@ async function findActiveDiscountCode(rawCode) {
         .lte("valid_from", nowIso)
         .or(`valid_until.is.null,valid_until.gte.${nowIso}`)
         .maybeSingle();
-    if (error) throw error;
+    if (!data) return null;
     if (
-        data?.max_uses !== null &&
+        data.max_uses !== null &&
+        data.max_uses !== undefined &&
         Number(data.uses_count || 0) >= Number(data.max_uses)
     )
         return null;
-    return data || null;
+    return data;
 }
 
 async function findActivePartnerDiscountCode(rawCode) {
@@ -1679,6 +1703,8 @@ async function initiateKPayPayment(
     successUrl,
     cancelUrl = successUrl,
     currency,
+    phoneNumber = null,
+    provider = null,
 ) {
     const requestBody = {
         amount,
@@ -1688,7 +1714,8 @@ async function initiateKPayPayment(
         cancelUrl,
         returnUrl: successUrl,
     };
-    if (currency) requestBody.currency = currency;
+    if (phoneNumber) requestBody.phoneNumber = phoneNumber;
+    if (provider) requestBody.provider = provider;
 
     const response = await fetch(
         "https://admin.kpay.site/api/v1/payments/init",
@@ -1705,11 +1732,15 @@ async function initiateKPayPayment(
 
     if (!response.ok) {
         const errorText = await response.text().catch(() => "");
-        throw new Error(
-            `KPay API error: ${response.status} ${response.statusText} ${
-                errorText ? `- ${errorText}` : ""
-            }`,
-        );
+        let jsonError = null;
+        try {
+            jsonError = JSON.parse(errorText);
+        } catch (_) {}
+        const exactMsg = jsonError?.message || jsonError?.error || errorText || response.statusText;
+        const err = new Error(`KPay: ${exactMsg}`);
+        err.kpayStatus = response.status;
+        err.kpayDetails = jsonError;
+        throw err;
     }
 
     return await response.json();
@@ -2376,11 +2407,9 @@ function resolveTransactionCommissionAmount(row) {
 }
 
 function normalizeMobileMoneyProvider(value) {
-    const normalized = String(value || "")
-        .trim()
-        .toLowerCase()
-        .replace(/[\s-]+/g, "_");
-    return SUPPORTED_MOBILE_MONEY_PROVIDERS.has(normalized) ? normalized : null;
+    const upper = String(value || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+    if (SUPPORTED_MOBILE_MONEY_PROVIDERS.has(upper)) return upper;
+    return null;
 }
 
 function sanitizeWalletNumber(value) {
@@ -2505,11 +2534,24 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage, context = {}) {
     setResponseHeader(res, "X-Xera1-Error-Code", sourceCode);
 
     const message = String(error?.message || "");
-    const safeKpayMessage = message.startsWith("KPay API error:")
-        ? "Le prestataire KPay a refusé l'initialisation. Vérifiez les clés KPay et la configuration de l'application KPay."
+    const safeKpayMessage = (message.startsWith("KPay:") || message.startsWith("KPay API error:"))
+        ? message
         : fallbackMessage;
 
-    const returnPath = context.returnPath || "/";
+    const acceptsJson =
+        String(res.req?.headers?.accept || "").includes("application/json") ||
+        String(res.req?.headers?.["x-requested-with"] || "").toLowerCase() === "xmlhttprequest";
+
+    if (acceptsJson) {
+        return res.status(error?.kpayStatus || 400).json({
+            success: false,
+            error: safeKpayMessage,
+            message: safeKpayMessage,
+            requestId,
+            kpayDetails: error?.kpayDetails || null,
+        });
+    }
+
     const acceptsHtml = String(res.req?.headers?.accept || "").includes(
         "text/html",
     );
@@ -5126,17 +5168,24 @@ async function handleKPaySubscriptionCheckout(req, res) {
             paymentReturnUrl,
             paymentReturnUrl,
             currency,
+            walletId || rawPhoneNumber || null,
+            provider || null,
         );
 
         await storeKPayPaymentReference(pendingPayment, kpayRes);
 
-        if (!kpayRes.gatewayUrl) {
-            throw new Error("KPay n'a pas retourné d'URL de paiement.");
+        if (kpayRes.gatewayUrl) {
+            setResponseHeader(res, "Location", kpayRes.gatewayUrl);
+            return res.status(302).send();
         }
 
-        // 2. Rediriger l'utilisateur vers la gateway KPay
-        setResponseHeader(res, "Location", kpayRes.gatewayUrl);
-        res.status(302).send();
+        return res.json({
+            success: true,
+            status: kpayRes.status || "PENDING",
+            reference: kpayRes.reference || pendingPayment.checkoutRefId,
+            mode: kpayRes.mode || "USSD",
+            message: "Demande de paiement envoyée par USSD sur votre téléphone. Veuillez valider avec votre code PIN.",
+        });
     } catch (error) {
         console.error("KPay checkout error:", error);
         return sendCheckoutErrorResponse(res, error, "Erreur KPay", {
@@ -5351,18 +5400,25 @@ async function handleKPaySupportCheckout(req, res) {
             paymentReturnUrl,
             paymentReturnUrl,
             currency,
+            walletId || null,
+            provider || null,
         );
 
         supportCheckoutStage = "payment_reference";
         await storeKPayPaymentReference(pendingPayment, kpayRes);
 
-        if (!kpayRes.gatewayUrl) {
-            throw new Error("KPay n'a pas retourné d'URL de paiement.");
+        if (kpayRes.gatewayUrl) {
+            setResponseHeader(res, "Location", kpayRes.gatewayUrl);
+            return res.status(302).send();
         }
 
-        // 2. Rediriger l'utilisateur vers la gateway KPay
-        setResponseHeader(res, "Location", kpayRes.gatewayUrl);
-        res.status(302).send();
+        return res.json({
+            success: true,
+            status: kpayRes.status || "PENDING",
+            reference: kpayRes.reference || pendingPayment.checkoutRefId,
+            mode: kpayRes.mode || "USSD",
+            message: "Demande de soutien envoyée par USSD sur votre téléphone. Veuillez valider avec votre code PIN.",
+        });
     } catch (error) {
         return sendCheckoutErrorResponse(
             res,
@@ -5936,6 +5992,41 @@ app.get("/api/admin/subscription-payments", async (req, res) => {
     } catch (error) {
         console.error("Admin subscription payments list error:", error);
         return res.status(500).json({ error: "Erreur serveur." });
+    }
+});
+
+app.post("/api/promo/validate", async (req, res) => {
+    try {
+        const { code, plan } = req.body || {};
+        if (!code) {
+            return res.status(400).json({ valid: false, error: "Code requis" });
+        }
+        const normalized = normalizeDiscountCode(code);
+        const discount = await findActiveDiscountCode(normalized);
+        let partnerDiscount = null;
+        if (!discount) {
+            partnerDiscount = await findActivePartnerDiscountCode(normalized);
+        }
+        if (!discount && !partnerDiscount) {
+            return res.status(404).json({ valid: false, error: "Code invalide ou expiré" });
+        }
+        if (partnerDiscount && plan && String(plan).toLowerCase() !== "pro") {
+            return res.status(400).json({ valid: false, error: "Ce code partenaire est valable uniquement pour l'abonnement Pro." });
+        }
+
+        const activeDiscount = discount || partnerDiscount;
+        const discountPercent = Number(activeDiscount.discount_percent || 0);
+
+        return res.json({
+            valid: true,
+            code: activeDiscount.code,
+            discount_percent: discountPercent,
+            type: discount ? "standard" : "partner",
+            plan: activeDiscount.plan || (partnerDiscount ? "pro" : null)
+        });
+    } catch (err) {
+        console.error("Promo validation error:", err);
+        return res.status(500).json({ valid: false, error: "Erreur de validation" });
     }
 });
 
