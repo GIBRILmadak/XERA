@@ -1,9 +1,12 @@
 /* ========================================
-   MONÉTISATION UI INTEGRATION
+   MONÉTISATION UI INTEGRATION - VERSION CORRIGÉE
    Intégration des badges et boutons de soutien dans les profils et contenus
    ======================================== */
 
 let monetizationUiInitialized = false;
+
+// État global pour éviter les doublons de requêtes
+let supportCheckoutInProgress = false;
 
 function handleSupportButtonClick(e) {
     const supportBtn = e.target.closest(".support-btn-active");
@@ -140,6 +143,15 @@ function escapeSupportHtmlAttr(value) {
         .replace(/>/g, "&gt;");
 }
 
+// Variables globales pour la modale
+let globalSupportState = {
+    creatorId: null,
+    creatorName: "",
+    amount: 0,
+    message: "",
+    returnPath: "",
+};
+
 // Générer une modale de soutien
 function createSupportModal() {
     if (document.getElementById("support-modal-global")) return;
@@ -162,7 +174,7 @@ function createSupportModal() {
                 </button>
             </div>
             <div class="modal-body support-modal-body">
-                <p class="support-desc">Choisissez le montant qui vous ressemble. Votre soutien est envoyé de façon sécurisée.</p>
+                <p class="support-desc">Choisissez le montant qui vous ressemble. Votre soutien est envoyé de façon sécurisée via KPay.</p>
                 <div class="amount-options" id="global-amount-options">
                     <button class="amount-btn" type="button" data-amount="1" onclick="selectGlobalSupportAmount(1)">$1</button>
                     <button class="amount-btn" type="button" data-amount="3" onclick="selectGlobalSupportAmount(3)">$3</button>
@@ -190,11 +202,11 @@ function createSupportModal() {
                 </div>
                 <fieldset class="support-payment-picker">
                     <legend>Moyen de paiement</legend>
-                    <p>Choisissez votre méthode préférée. KPay confirmera les options disponibles.</p>
+                    <p>Choisissez votre méthode préférée. Le paiement s'effectue directement sur cette page via KPay.</p>
                     <div class="support-payment-cards" role="radiogroup" aria-label="Moyen de paiement">
                         <button class="support-payment-card is-selected" type="button" data-payment-method="card" role="radio" aria-checked="true" onclick="selectGlobalSupportPaymentMethod('card')">
                             <span class="support-payment-icon support-payment-icon-card" aria-hidden="true"><img src="icons/visa.svg" alt=""><img src="icons/mastercard.svg" alt=""></span>
-                            <span class="support-payment-card-copy"><strong>Carte</strong><small>Visa · Mastercard</small></span>
+                            <span class="support-payment-card-copy"><strong>Carte bancaire</strong><small>Visa · Mastercard</small></span>
                             <span class="support-payment-check" aria-hidden="true"><i class="fas fa-check"></i></span>
                         </button>
                         <button class="support-payment-card" type="button" data-payment-method="mobile_money" role="radio" aria-checked="false" onclick="selectGlobalSupportPaymentMethod('mobile_money')">
@@ -246,7 +258,10 @@ function createSupportModal() {
                         <input id="global-support-phone" class="form-input" type="tel" placeholder="ex: 0812345678" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border-color, #333);border-radius:8px;background:#111;color:#fff;font:inherit;" />
                     </div>
                 </div>
-                <p class="support-payment-help"><i class="fas fa-shield-alt" aria-hidden="true"></i> Paiement sécurisé et traité par KPay.</p>
+                <div id="kpay-iframe-container" style="display:none;margin-top:16px;border-radius:12px;overflow:hidden;">
+                    <iframe id="kpay-iframe" src="" style="width:100%;height:500px;border:none;" allow="payment"></iframe>
+                </div>
+                <p class="support-payment-help"><i class="fas fa-shield-alt" aria-hidden="true"></i> Paiement sécurisé et traité par KPay. Vos informations restent protégées.</p>
                 <button class="btn-primary btn-full" id="global-support-submit" onclick="processGlobalSupport()" disabled>
                     <span class="support-submit-icon"><i class="fas fa-heart"></i></span> Envoyer le soutien <i class="fas fa-arrow-right support-submit-arrow" aria-hidden="true"></i>
                 </button>
@@ -267,15 +282,6 @@ function createSupportModal() {
         if (e.key === "Escape") closeGlobalSupportModal();
     });
 }
-
-// Variables globales pour la modale
-let globalSupportState = {
-    creatorId: null,
-    creatorName: "",
-    amount: 0,
-    message: "",
-    returnPath: "",
-};
 
 // Ouvrir la modale de soutien globale
 function openSupportModal(creatorId, creatorName, sourceElement = null) {
@@ -316,8 +322,6 @@ function openSupportModal(creatorId, creatorName, sourceElement = null) {
     document.getElementById("global-custom-amount").value = "";
     selectGlobalSupportPaymentMethod("card");
     updateGlobalSupportSummary();
-    
-    // Configurer les textes d'aide pour le mode Sandbox par défaut (CD)
     updateGlobalSupportOperators();
 
     const modal = document.getElementById("support-modal-global");
@@ -346,8 +350,15 @@ function selectGlobalSupportPaymentMethod(method) {
         });
 
     const mobileFields = document.getElementById("global-support-mobile-fields");
+    const kpayIframeContainer = document.getElementById("kpay-iframe-container");
+    
     if (mobileFields) {
         mobileFields.style.display = validMethod === "mobile_money" ? "block" : "none";
+    }
+    
+    // Pour les cartes, on pourrait afficher une iframe KPay
+    if (kpayIframeContainer) {
+        kpayIframeContainer.style.display = validMethod === "card" ? "block" : "none";
     }
 }
 
@@ -489,6 +500,13 @@ function closeGlobalSupportModal() {
     if (messageInput) {
         messageInput.value = "";
     }
+    supportCheckoutInProgress = false;
+    // Réactiver le bouton
+    const submitBtn = document.getElementById("global-support-submit");
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-heart"></i> Envoyer le soutien';
+    }
 }
 
 // Sélectionner un montant prédéfini
@@ -543,8 +561,20 @@ function updateGlobalSupportSummary() {
     }
 }
 
+function formatCurrency(amount) {
+    if (!Number.isFinite(amount)) return "$0.00";
+    const rounded = Math.round(amount * 100) / 100;
+    return `$${rounded.toFixed(2)}`;
+}
+
 // Traiter le soutien
 async function processGlobalSupport() {
+    // Empêcher les clics multiples
+    if (supportCheckoutInProgress) {
+        showGlobalNotification("Paiement déjà en cours...", "info");
+        return;
+    }
+
     const { creatorId, amount } = globalSupportState;
     const messageInput = document.getElementById("global-support-message");
     const supportMessage = String(messageInput?.value || "").trim();
@@ -576,8 +606,10 @@ async function processGlobalSupport() {
         if (submitBtn) {
             submitBtn.disabled = true;
             submitBtn.innerHTML =
-                '<i class="fas fa-spinner fa-spin"></i> Envoi...';
+                '<i class="fas fa-spinner fa-spin"></i> Traitement...';
         }
+
+        supportCheckoutInProgress = true;
 
         const selectedMethod =
             document.getElementById("global-support-payment-method")?.value ||
@@ -588,6 +620,18 @@ async function processGlobalSupport() {
         const provider =
             document.getElementById("global-support-provider")?.value || null;
 
+        // Valider les champs requis pour Mobile Money
+        if (selectedMethod === "mobile_money" && !walletId) {
+            supportCheckoutInProgress = false;
+            showGlobalNotification("Veuillez entrer votre numéro de téléphone", "error");
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-heart"></i> Envoyer le soutien';
+            }
+            return;
+        }
+
+        // Appeler l'API pour initialiser le paiement
         const result = await redirectToSupportCheckout({
             creatorId,
             creatorName: globalSupportState.creatorName,
@@ -601,17 +645,25 @@ async function processGlobalSupport() {
         });
 
         if (result.success) {
-            closeGlobalSupportModal();
+            // Si c'est une redirection, on ne ferme pas la modale
+            // Le serveur va gérer la redirection
+            if (!result.data?.gatewayUrl) {
+                closeGlobalSupportModal();
+            }
         } else {
             showGlobalNotification(
-                result.error || "Erreur lors du traitement",
+                result.error || "Erreur lors du traitement du paiement",
                 "error",
             );
         }
     } catch (error) {
         console.error("Exception traitement soutien:", error);
-        showGlobalNotification("Une erreur est survenue", "error");
+        showGlobalNotification(
+            error.message || "Une erreur est survenue lors du paiement",
+            "error",
+        );
     } finally {
+        supportCheckoutInProgress = false;
         const submitBtn = document.getElementById("global-support-submit");
         if (submitBtn) {
             submitBtn.disabled = !(
@@ -756,12 +808,33 @@ function integrateMonetizationInContentCard(cardElement, user) {
     }
 }
 
-// Fonction utilitaire pour récupérer et afficher les infos de monétisation
+// Fonction utilitaire pour formater la devise
+function formatCurrency(amount) {
+    if (!Number.isFinite(amount)) return "$0.00";
+    const rounded = Math.round(amount * 100) / 100;
+    return `$${rounded.toFixed(2)}`;
+}
+
+// Fonction utilitaire pour vérifier l'authentification
+async function checkAuth() {
+    if (typeof window.supabase !== "undefined") {
+        const { data: { session }, error } = await window.supabase.auth.getSession();
+        if (error) {
+            console.error("Erreur de vérification d'authentification:", error);
+            return null;
+        }
+        return session?.user || null;
+    }
+    return null;
+}
+
+// Initialisation au chargement de la page
 document.addEventListener("DOMContentLoaded", () => {
     initMonetizationUI();
     createSupportModal();
 });
 
+// Exposer les fonctions globalement
 window.initMonetizationUI = initMonetizationUI;
 window.openSupportModal = openSupportModal;
 window.closeGlobalSupportModal = closeGlobalSupportModal;
@@ -771,3 +844,5 @@ window.processGlobalSupport = processGlobalSupport;
 window.generateSupportButtonHTML = generateSupportButtonHTML;
 window.integrateMonetizationInProfile = integrateMonetizationInProfile;
 window.integrateMonetizationInContentCard = integrateMonetizationInContentCard;
+window.selectGlobalSupportPaymentMethod = selectGlobalSupportPaymentMethod;
+window.updateGlobalSupportOperators = updateGlobalSupportOperators;

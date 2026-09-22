@@ -1363,7 +1363,7 @@ async function redirectToSupportCheckout({
         }
 
         if (typeof window.showToast === "function") {
-            window.showToast("Initialisation du soutien sécurisé...", "info");
+            window.showToast("Initialisation du soutien sécurisé via KPay...", "info");
         }
 
         const apiBase =
@@ -1410,20 +1410,35 @@ async function redirectToSupportCheckout({
             params.set("provider", provider);
         }
 
-        // If phone number is provided, perform in-app AJAX checkout (USSD Direct push)
-        if (method === "mobile_money" && walletId) {
-            try {
-                const resp = await fetch(checkoutUrl, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded",
-                        "Accept": "application/json",
-                    },
-                    body: params.toString(),
-                });
-                const resData = await resp.json().catch(() => ({}));
-                supportCheckoutInProgress = false;
-                if (resp.ok && (resData.success || resData.status === "PENDING")) {
+        // Always use AJAX to avoid form submission issues
+        // This allows better error handling and user feedback
+        try {
+            const resp = await fetch(checkoutUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Accept": "application/json",
+                },
+                body: params.toString(),
+            });
+
+            const resData = await resp.json().catch(() => ({}));
+            supportCheckoutInProgress = false;
+
+            // Handle successful response with gateway URL (card/paypal)
+            if (resp.ok) {
+                if (resData.gatewayUrl) {
+                    // For card payments, open KPay gateway in a new tab
+                    // This ensures PCI compliance while keeping the user experience
+                    if (typeof window.open !== "undefined") {
+                        window.open(resData.gatewayUrl, "_blank", "noopener,noreferrer");
+                    } else {
+                        window.location.href = resData.gatewayUrl;
+                    }
+                    return { success: true, data: resData, gatewayUrl: resData.gatewayUrl };
+                }
+                // For USSD/Mobile Money
+                else if (resData.success || resData.status === "PENDING") {
                     if (typeof window.showToast === "function") {
                         window.showToast(
                             resData.message ||
@@ -1440,45 +1455,52 @@ async function redirectToSupportCheckout({
                         alert(resData.message || "Demande USSD envoyée sur votre téléphone !");
                     }
                     return { success: true, data: resData };
-                } else {
-                    return {
-                        success: false,
-                        error: resData.error || resData.message || "Erreur d'initialisation du paiement.",
-                    };
                 }
-            } catch (err) {
-                supportCheckoutInProgress = false;
-                return { success: false, error: err.message || "Erreur réseau lors du paiement." };
             }
+            
+            // Handle error responses
+            const errorMsg = resData.error || resData.message || 
+                (resp.status === 500 ? "Erreur interne du serveur. Veuillez réessayer plus tard." : 
+                 `Erreur ${resp.status}: Impossible d'initialiser le paiement.`);
+            
+            // Show error to user
+            if (typeof window.showToast === "function") {
+                window.showToast(errorMsg, "error");
+            } else if (typeof showGlobalNotification === "function") {
+                showGlobalNotification(errorMsg, "error");
+            }
+            
+            return {
+                success: false,
+                error: errorMsg,
+                status: resp.status,
+            };
+            
+        } catch (err) {
+            supportCheckoutInProgress = false;
+            const errorMsg = err.message || "Erreur réseau lors de la connexion au service de paiement.";
+            
+            if (typeof window.showToast === "function") {
+                window.showToast(errorMsg, "error");
+            } else if (typeof showGlobalNotification === "function") {
+                showGlobalNotification(errorMsg, "error");
+            }
+            
+            return { success: false, error: errorMsg };
         }
-
-        // Default navigation fallback for card/paypal redirect
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = checkoutUrl;
-        form.style.display = "none";
-        params.forEach((value, name) => {
-            const input = document.createElement("input");
-            input.type = "hidden";
-            input.name = name;
-            input.value = value;
-            form.appendChild(input);
-        });
-        document.body.appendChild(form);
-        form.submit();
-        return { success: true };
+        
     } catch (error) {
         supportCheckoutInProgress = false;
         console.error("[Monetization] Direct support checkout error:", error);
 
         // Final fallback: show error
+        const errorMsg = error.message || "Erreur lors de l'initialisation du paiement.";
         if (typeof window.showToast === "function") {
-            window.showToast(
-                "Erreur lors de l'initialisation du paiement.",
-                "error",
-            );
+            window.showToast(errorMsg, "error");
+        } else if (typeof showGlobalNotification === "function") {
+            showGlobalNotification(errorMsg, "error");
         }
-        return { success: false, error: error.message };
+        return { success: false, error: errorMsg };
     }
 }
 

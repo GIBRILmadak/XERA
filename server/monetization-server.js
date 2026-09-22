@@ -529,9 +529,17 @@ function escapeHtmlAttr(value) {
         .replace(/>/g, "&gt;");
 }
 
-const PRIMARY_ORIGIN = stripTrailingSlash(
-    allowedOrigins[0] || APP_BASE_URL.split(",")[0] || "http://localhost:3000",
-);
+const PRODUCTION_FALLBACK_ORIGIN = "https://xera1.xyz";
+const PRIMARY_ORIGIN = (() => {
+    const fromEnv =
+        allowedOrigins[0] ||
+        (APP_BASE_URL ? String(APP_BASE_URL).split(",")[0] : "");
+    const clean = stripTrailingSlash(fromEnv);
+    if (clean) return clean;
+    const isProd =
+        String(process.env.NODE_ENV || "").toLowerCase() === "production";
+    return isProd ? PRODUCTION_FALLBACK_ORIGIN : "http://localhost:3000";
+})();
 const CALLBACK_ORIGIN = resolveCallbackOrigin(
     CALLBACK_BASE_URL,
     PRIMARY_ORIGIN,
@@ -4940,6 +4948,7 @@ function startReminderScheduler() {
 // ==================== KPAY CHECKOUT ====================
 
 async function handleKPaySubscriptionCheckout(req, res) {
+    let returnPath = "/";
     try {
         const callbackConfig = getKPayCallbackConfig(req);
 
@@ -4992,7 +5001,7 @@ async function handleKPaySubscriptionCheckout(req, res) {
             badge: requestUser.badge,
         });
 
-        const returnPath = sanitizeReturnPath(
+        returnPath = sanitizeReturnPath(
             rawReturnPath,
             buildProfileReturnPath(userId),
         );
@@ -5168,24 +5177,36 @@ async function handleKPaySubscriptionCheckout(req, res) {
             paymentReturnUrl,
             paymentReturnUrl,
             currency,
-            walletId || rawPhoneNumber || null,
+            walletId || null,
             provider || null,
         );
 
         await storeKPayPaymentReference(pendingPayment, kpayRes);
 
-        if (kpayRes.gatewayUrl) {
-            setResponseHeader(res, "Location", kpayRes.gatewayUrl);
-            return res.status(302).send();
-        }
-
-        return res.json({
+        // Return JSON response with gateway URL for client-side handling
+        // This allows the client to decide how to handle the payment flow
+        const responseData = {
             success: true,
             status: kpayRes.status || "PENDING",
             reference: kpayRes.reference || pendingPayment.checkoutRefId,
-            mode: kpayRes.mode || "USSD",
-            message: "Demande de paiement envoyée par USSD sur votre téléphone. Veuillez valider avec votre code PIN.",
-        });
+            pendingTransactionId: pendingPayment.id,
+            checkoutRefId: pendingPayment.checkoutRefId,
+            plan: planId,
+            billingCycle: billingCycle,
+        };
+
+        // Add gateway URL if present (for card/paypal payments)
+        if (kpayRes.gatewayUrl) {
+            responseData.gatewayUrl = kpayRes.gatewayUrl;
+            responseData.mode = "REDIRECT";
+            responseData.message = "Redirection vers KPay pour compléter le paiement.";
+        } else {
+            // For USSD/Mobile Money payments
+            responseData.mode = kpayRes.mode || "USSD";
+            responseData.message = "Demande de paiement envoyée par USSD sur votre téléphone. Veuillez valider avec votre code PIN.";
+        }
+
+        return res.json(responseData);
     } catch (error) {
         console.error("KPay checkout error:", error);
         return sendCheckoutErrorResponse(res, error, "Erreur KPay", {
@@ -5202,6 +5223,7 @@ app.post(
 async function handleKPaySupportCheckout(req, res) {
     const supportRequestId = crypto.randomUUID();
     let supportCheckoutStage = "validation";
+    let returnPath = "/";
     try {
         if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
             return sendCheckoutErrorResponse(
@@ -5334,7 +5356,7 @@ async function handleKPaySupportCheckout(req, res) {
             supportMessageRaw ?? donationMessageRaw ?? legacyMessageRaw,
             200,
         );
-        const returnPath = sanitizeReturnPath(
+        returnPath = sanitizeReturnPath(
             rawReturnPath,
             buildProfileReturnPath(toUserId),
         );
@@ -5407,18 +5429,29 @@ async function handleKPaySupportCheckout(req, res) {
         supportCheckoutStage = "payment_reference";
         await storeKPayPaymentReference(pendingPayment, kpayRes);
 
-        if (kpayRes.gatewayUrl) {
-            setResponseHeader(res, "Location", kpayRes.gatewayUrl);
-            return res.status(302).send();
-        }
-
-        return res.json({
+        // Return JSON response with gateway URL for client-side handling
+        // This allows the client to decide how to handle the payment flow
+        // (new tab, iframe, or redirect) while maintaining better error handling
+        const responseData = {
             success: true,
             status: kpayRes.status || "PENDING",
             reference: kpayRes.reference || pendingPayment.checkoutRefId,
-            mode: kpayRes.mode || "USSD",
-            message: "Demande de soutien envoyée par USSD sur votre téléphone. Veuillez valider avec votre code PIN.",
-        });
+            pendingTransactionId: pendingPayment.id,
+            checkoutRefId: pendingPayment.checkoutRefId,
+        };
+
+        // Add gateway URL if present (for card/paypal payments)
+        if (kpayRes.gatewayUrl) {
+            responseData.gatewayUrl = kpayRes.gatewayUrl;
+            responseData.mode = "REDIRECT";
+            responseData.message = "Redirection vers KPay pour compléter le paiement.";
+        } else {
+            // For USSD/Mobile Money payments
+            responseData.mode = kpayRes.mode || "USSD";
+            responseData.message = "Demande de soutien envoyée par USSD sur votre téléphone. Veuillez valider avec votre code PIN.";
+        }
+
+        return res.json(responseData);
     } catch (error) {
         return sendCheckoutErrorResponse(
             res,
@@ -5609,17 +5642,25 @@ async function handleKPayCallback(req, res) {
                 : "Veuillez réessayer ou changer de moyen de paiement.";
         const returnPath =
             paymentKind === "support"
-                ? callbackMetadata.callback_return_path || "/"
-                : callbackMetadata.callback_return_path ||
-                  buildProfileReturnPath(
-                      callbackTransaction.to_user_id ||
-                          callbackTransaction.from_user_id,
-                  );
-        const normalizedReturnPath = normalizeReturnPathForBrowser(
-            returnPath,
-            "/",
-            PRIMARY_ORIGIN,
-        );
+                ? String(callbackMetadata.callback_return_path || "/").trim() ||
+                  "/"
+                : String(
+                      callbackMetadata.callback_return_path ||
+                          buildProfileReturnPath(
+                              callbackTransaction.to_user_id ||
+                                  callbackTransaction.from_user_id,
+                          ),
+                  ).trim() || "/";
+        let normalizedReturnPath = "/";
+        try {
+            normalizedReturnPath = normalizeReturnPathForBrowser(
+                returnPath,
+                "/",
+                PRIMARY_ORIGIN,
+            );
+        } catch (normErr) {
+            normalizedReturnPath = "/";
+        }
         const returnHref = String(normalizedReturnPath || "").startsWith("http")
             ? String(normalizedReturnPath)
             : `${PRIMARY_ORIGIN}/${String(normalizedReturnPath || "/").replace(/^\//, "")}`;
