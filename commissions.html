@@ -4,8 +4,8 @@
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>Commissions | XERA1</title>
-        <link rel="icon" type="image/png" href="icons/logo-192x192.png" />
-        <link rel="apple-touch-icon" href="icons/logo-192x192.png" />
+        <link rel="icon" type="image/png" href="icons/logo.png" />
+        <link rel="apple-touch-icon" href="icons/logo.png" />
         <link rel="stylesheet" href="css/style.css" />
         <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
     </head>
@@ -22,7 +22,13 @@
                 <span class="commissions-status"
                     ><span></span> Espace sécurisé</span
                 >
-            </header>
+                <div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
+            </div>
+</header>
             <div id="commissions-root" class="commissions-root">
                 <div class="commissions-loading" role="status">
                     <span class="commissions-loading-dot"></span> Chargement de
@@ -33,5 +39,7 @@
         <script src="js/supabase-config.js"></script>
         <script src="js/kpay-mobile-money.js"></script>
         <script src="js/commissions.js"></script>
-    </body>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
+</body>
 </html>

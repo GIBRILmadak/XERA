@@ -130,7 +130,7 @@ let discoverPaginationState = {
  * Convertir une image URL relative en URL absolue
  */
 function getAbsoluteImageUrl(imagePath) {
-    if (!imagePath) return `${window.location.origin}/icons/logo-192x192.png`;
+    if (!imagePath) return `${window.location.origin}/icons/logo.png`;
     if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
         return imagePath;
     }
@@ -144,7 +144,7 @@ function updateOpenGraphTags(context = {}) {
         const pageUrl = window.location.href;
         let ogTitle = "XERA | Tracez votre progression";
         let ogDescription = "Découvrez les trajectoires créatives sur XERA";
-        let ogImage = getAbsoluteImageUrl("icons/logo-192x192.png");
+        let ogImage = getAbsoluteImageUrl("icons/logo.png");
         let ogType = "website";
 
         // Si contexte profil
@@ -155,7 +155,7 @@ function updateOpenGraphTags(context = {}) {
             ogImage = getAbsoluteImageUrl(
                 profile.profileImage ||
                     profile.avatar_url ||
-                    "icons/logo-192x192.png",
+                    "icons/logo.png",
             );
             ogType = "profile";
         }
@@ -4699,7 +4699,7 @@ function showMobileArcOnboardingNotification(userId) {
 </div>
 <div style="display:flex; gap:8px; margin-top:10px;">
             <button type="button" data-action="create" style="flex:1; border:none; border-radius:10px; padding:9px 10px; font-weight:700; font-size:0.86rem; background:#10b981; color:#072018; cursor:pointer;">
-                Créer un projet
+                nouveau projet
             </button>
             <button type="button" data-action="close" style="border:1px solid rgba(255,255,255,0.16); border-radius:10px; padding:9px 12px; font-weight:700; font-size:0.84rem; background:transparent; color:#f5f5f5; cursor:pointer;">
                 Fermer
@@ -16307,7 +16307,7 @@ ${
 
     const projectOnboardingBannerHtml =
         isOwnProfile && projects.length === 0
-            ? `\n${onboardingStyles}<div class="project-onboarding-banner" role="region" aria-label="Créer votre premier projet">\n    <div class="project-onboarding-copy">\n        <strong>Commencez par créer votre premier projet</strong>\n        <div style="color:var(--text-secondary); margin-top:4px;">Transformez vos idées en objectifs publiables — créez un projet pour publier votre première mise à jour.</div>\n    </div>\n    <div style="display:flex;align-items:center;gap:0.6rem;">\n        <button class="project-onboarding-cta ${createCtaClass}" onclick="window.openCreateModal && window.openCreateModal()">\n            <svg width=16 height=16 viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" style=\"margin-right:6px;\"><path d=\"M12 5v14M5 12h14\" stroke=\"currentColor\"></path></svg>\n            Créer un projet\n        </button>\n    </div>\n</div>\n`
+            ? `\n${onboardingStyles}<div class="project-onboarding-banner" role="region" aria-label="Créer votre premier projet">\n    <div class="project-onboarding-copy">\n        <strong>Commencez par créer votre premier projet</strong>\n        <div style="color:var(--text-secondary); margin-top:4px;">Transformez vos idées en objectifs publiables — créez un projet pour publier votre première mise à jour.</div>\n    </div>\n    <div style="display:flex;align-items:center;gap:0.6rem;">\n        <button class="project-onboarding-cta ${createCtaClass}" onclick="window.openCreateModal && window.openCreateModal()">\n            <svg width=16 height=16 viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" style=\"margin-right:6px;\"><path d=\"M12 5v14M5 12h14\" stroke=\"currentColor\"></path></svg>\n projet neuf\n        </button>\n    </div>\n</div>\n`
             : "";
 
     const banStateLabel = isUserBanned(user)
@@ -16392,7 +16392,7 @@ ${
                     <h4 style="margin:0;">Progression hebdomadaire</h4>
                     <p style="margin:0; color: var(--text-secondary); font-size:0.9rem;">Survolez pour voir les mises à jour par jour.</p>
                 </div>
-                <button class="btn-secondary ${createCtaClass}" onclick="window.openCreateModal && window.openCreateModal()" style="padding:0.45rem 0.8rem; border-radius:10px;">Créer un projet</button>
+                <button class="btn-secondary ${createCtaClass}" onclick="window.openCreateModal && window.openCreateModal()" style="padding:0.45rem 0.8rem; border-radius:10px;">nouveau projet</button>
             </div>
             <div style="margin-top:1rem; min-height:220px;">
                 <canvas id="weekly-progress-chart-${userId}" aria-label="Progression hebdomadaire" role="img"></canvas>
@@ -22868,7 +22868,7 @@ function showContentDetailsModal(contentId, contentTitle) {
         window.professionalManager?.proPagesCache?.get(content.pageId);
     const authorName = page?.name || contentUserName;
     const authorAvatar =
-        page?.avatar_url || contentUserAvatar || "icons/logo-192x192.png";
+        page?.avatar_url || contentUserAvatar || "icons/logo.png";
     const certificationBadge = page
         ? '<span class="immersive-details-badge">Page Pro</span>'
         : "";

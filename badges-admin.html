@@ -20,7 +20,7 @@
         <nav>
             <a class="logo" href="index.html">
                 <div class="logo-img">
-                    <img src="icons/logo-192x192.png" alt="XERA1 - Logo" />
+                    <img src="icons/logo" alt="XERA1 - Logo" />
                 </div>
                 <span>XΞRA1</span>
             </a>
@@ -61,8 +61,14 @@
                     />
                 </div>
                 <a href="login.html" id="nav-auth">Login / Register</a>
+                <div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
             </div>
-        </nav>
+        </div>
+    </nav>
 
         <main id="badge-admin" class="settings-container admin-page"></main>
 
@@ -123,5 +129,7 @@
             });
         </script>
         <script src="js/ui-motion.js" defer></script>
-    </body>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
+</body>
 </html>

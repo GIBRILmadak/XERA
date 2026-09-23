@@ -369,7 +369,7 @@ function getMockSearchResults(query) {
                 id: "mock-user",
                 name: `Builder ${term}`,
                 title: "Builder XERA1",
-                avatar: "icons/logo-192x192.png",
+                avatar: "icons/logo.png",
                 professional_page: null,
             },
         ],
@@ -383,7 +383,7 @@ function getMockSearchResults(query) {
                 page_id: null,
                 users: {
                     name: `Builder ${term}`,
-                    avatar: "icons/logo-192x192.png",
+                    avatar: "icons/logo.png",
                 },
             },
         ],
@@ -512,6 +512,7 @@ function displaySearchResults(
 function setupFloatingSearchButton(sourceInput) {
     const nav = document.querySelector("nav");
     if (!nav || document.getElementById("nav-search-float")) return;
+    if (document.getElementById("nav-profile-hub-trigger")) return;
     const button = document.createElement("button");
     button.id = "nav-search-float";
     button.type = "button";

@@ -28,6 +28,7 @@
             property="og:description"
             content="Découvrez mon profil sur XERA1 - Plateforme de suivi de progression"
         />
+        <link rel="canonical" href="https://xera1.xyz/profile" />
         <meta property="og:type" content="profile" />
         <meta property="og:url" content="https://xera1.xyz/profile" />
         <meta property="og:image" content="https://xera1.xyz/icons/logo.png" />
@@ -42,6 +43,7 @@
             content="Découvrez mon profil sur XERA1"
         />
         <meta name="twitter:image" content="https://xera1.xyz/icons/logo.png" />
+        <script src="js/seo-schema.js"></script>
 
         <!-- Styles globaux -->
         <link rel="stylesheet" href="css/style.css?v=20260902-4" />
@@ -105,107 +107,189 @@
                 style="cursor: pointer"
             >
                 <div class="logo-img">
-                    <img src="icons/logo-192x192.png" alt="XERA1 - Logo" />
+                    <img src="icons/logo.png" alt="XERA1 - Logo" />
                 </div>
-                <span>XΞRA1</span>
+                <span class="logo-text">XΞRA1</span>
             </a>
             <div class="nav-links">
-                <a
-                    id="nav-discover"
-                    class="notification-button nav-discover-btn"
-                    onclick="navigateTo('discover')"
-                    title="Discover"
-                    aria-label="Discover"
+                <!-- Bouton Recherche -->
+                <button
+                    type="button"
+                    class="nav-btn-icon nav-btn-search"
+                    onclick="document.querySelector('.search-input')?.focus()"
+                    title="Recherche"
+                    aria-label="Recherche"
                 >
-                    <svg
-                        class="notification-icon nav-discover-icon"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    >
-                        <path d="M3 10.5L12 3l9 7.5"></path>
-                        <path d="M5 10v10h14V10"></path>
-                        <path d="M9 20v-6h6v6"></path>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
-                </a>
+                </button>
+
+                <!-- Bouton Messages -->
                 <div
-                    class="notification-button profile-nav-button"
-                    onclick="handleProfileNavigation()"
-                    id="nav-profile"
-                    title="My Trajectory"
-                    aria-label="My Trajectory"
-                    role="button"
-                >
-                    <img
-                        id="nav-profile-avatar"
-                        class="notification-icon profile-nav-avatar"
-                        src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' rx='20' fill='%231f2937'/><circle cx='20' cy='16' r='6' fill='%23e5e7eb'/><path d='M8%2034c2.5-6%208-9%2012-9s9.5%203%2012%209' fill='%23e5e7eb'/></svg>"
-                        alt="Avatar utilisateur"
-                    />
-                </div>
-                <div
-                    class="notification-button"
-                    id="nav-pro-page"
-                    onclick="window.navigateToProfessionalPage?.()"
-                    style="display: none"
-                    title="Page Pro"
-                >
-                    <img
-                        src="icons/enterprise.svg"
-                        alt="Business"
-                        class="notification-icon"
-                    />
-                </div>
-                <div
-                    class="notification-button messages-nav-button"
+                    class="nav-btn-icon messages-nav-button"
                     onclick="openMessagesPage()"
                     style="display: none"
                     id="messages-nav-btn"
                     title="Messages"
                 >
-                    <img
-                        src="icons/message.svg"
-                        alt="Messages"
-                        class="notification-icon"
-                    />
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                        <polyline points="22,6 12,13 2,6"></polyline>
+                    </svg>
                     <span
                         id="messages-nav-badge"
-                        class="notification-badge"
+                        class="nav-notification-badge"
                     ></span>
                 </div>
+
                 <!-- Bouton Notifications -->
                 <div
-                    class="notification-button"
+                    class="nav-btn-icon"
                     onclick="toggleNotificationPanel()"
                     style="display: none"
                     id="notification-btn"
+                    title="Notifications"
                 >
                     <svg
-                        class="notification-icon"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
                         stroke-width="2"
+                        width="18"
+                        height="18"
                     >
-                        <path
-                            d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
-                        ></path>
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                         <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                     </svg>
                     <span
                         id="notification-badge"
-                        class="notification-badge"
-                    ></span>
+                        class="nav-notification-badge"
+                    >3</span>
                 </div>
 
-                <a href="login.html" id="nav-auth" data-i18n="navAuth"
-                    >Login / Register</a
+                <!-- Bouton Wallet / KPay -->
+                <button
+                    type="button"
+                    class="nav-btn-icon nav-btn-wallet"
+                    onclick="location.href='subscription-plans.html'"
+                    title="Abonnements & KPay"
+                    aria-label="Abonnements & KPay"
                 >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                        <line x1="2" y1="10" x2="22" y2="10"></line>
+                    </svg>
+                </button>
+
+                <!-- Trigger Hub Profil (Cercle parfait avec Anneau Néon éclairé) -->
+                <div
+                    class="nav-btn-avatar-ring profile-nav-button"
+                    id="nav-profile-hub-trigger"
+                    title="Mon Espace & Profil"
+                    role="button"
+                    tabindex="0"
+                >
+                    <img
+                        id="nav-profile-avatar"
+                        src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' rx='20' fill='%231f2937'/><circle cx='20' cy='16' r='6' fill='%23e5e7eb'/><path d='M8%2034c2.5-6%208-9%2012-9s9.5%203%2012%209' fill='%23e5e7eb'/></svg>"
+                        alt="Avatar utilisateur"
+                    />
+                </div>
             </div>
         </nav>
+
+        <!-- Popover Hub Profil -->
+        <div id="profile-hub-popover" class="profile-hub-popover">
+            <div class="hub-user-header">
+                <img id="hub-user-avatar" class="hub-user-avatar" src="icons/logo.png" alt="Avatar" />
+                <div class="hub-user-info">
+                    <span id="hub-user-name" class="hub-user-name">Bâtisseur XERA1</span>
+                    <span id="hub-user-handle" class="hub-user-handle">@builder</span>
+                    <span id="hub-pro-badge" class="hub-badge-pro" style="display: none;">
+                        <i class="fas fa-certificate"></i> PRO
+                    </span>
+                </div>
+            </div>
+
+            <div class="hub-menu-group">
+                <button type="button" class="hub-menu-item" onclick="navigateTo('discover')">
+                    <i class="fas fa-compass"></i>
+                    <span>Découvrir le Feed</span>
+                </button>
+                <button type="button" class="hub-menu-item" onclick="handleProfileNavigation()">
+                    <i class="fas fa-user-circle"></i>
+                    <span>Mon Profil & Trajectoire</span>
+                </button>
+                <button type="button" class="hub-menu-item" id="nav-pro-page" onclick="window.navigateToProfessionalPage?.()" style="display: none;">
+                    <i class="fas fa-building"></i>
+                    <span>Page Pro / Entreprise</span>
+                </button>
+                <button type="button" class="hub-menu-item" onclick="location.href='subscription-plans.html'">
+                    <i class="fas fa-wallet"></i>
+                    <span>Abonnements & KPay</span>
+                </button>
+                <button type="button" class="hub-menu-item" id="nav-fata-btn">
+                    <img src="icons/fata.webp" style="width: 18px; height: 18px; object-fit: contain;" alt="Fata" />
+                    <span>Challenge Fata</span>
+                </button>
+            </div>
+
+            <div class="hub-divider"></div>
+
+            <div class="hub-footer-row">
+                <div class="lang-switcher-nav">
+                    <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                        <option value="fr">FR</option>
+                        <option value="en">EN</option>
+                    </select>
+                </div>
+                <a href="login.html" id="nav-auth" class="hub-menu-item" style="width: auto; padding: 0.4rem 0.6rem;" data-i18n="navAuth">Connexion</a>
+            </div>
+        </div>
+
+        <!-- Mobile Bottom Navigation Dock (Elevated Material/iOS Dark) -->
+        <div class="xera-bottom-nav">
+            <a class="xera-bottom-item active" onclick="navigateTo('discover')" title="Accueil">
+                <div class="xera-bottom-icon">
+                    <i class="fas fa-home"></i>
+                </div>
+                <span>Accueil</span>
+                <span class="bottom-active-pill"></span>
+            </a>
+            <a class="xera-bottom-item" onclick="document.querySelector('.search-input')?.focus()" title="Explorer">
+                <div class="xera-bottom-icon">
+                    <i class="fas fa-search"></i>
+                </div>
+                <span>Explorer</span>
+                <span class="bottom-active-pill"></span>
+            </a>
+            <button
+                type="button"
+                class="xera-bottom-fab"
+                onclick="typeof openCreateModal === 'function' ? openCreateModal() : location.href='index.html'"
+                title="Créer"
+                aria-label="Créer"
+            >
+                <i class="fas fa-plus"></i>
+            </button>
+            <a class="xera-bottom-item" onclick="openMessagesPage()" title="Messages">
+                <div class="xera-bottom-icon">
+                    <i class="fas fa-envelope"></i>
+                </div>
+                <span>Messages</span>
+                <span class="bottom-active-pill"></span>
+            </a>
+            <a class="xera-bottom-item" onclick="handleProfileNavigation()" title="Profil">
+                <div class="xera-bottom-icon">
+                    <i class="fas fa-user"></i>
+                </div>
+                <span>Profil</span>
+                <span class="bottom-active-pill"></span>
+            </a>
+        </div>
+    </nav>
 
         <!-- BOUTON RÉGLAGES (FIXED POSITION) -->
         <div id="settings-button-container"></div>
@@ -303,5 +387,8 @@
             });
         </script>
         <script src="js/ui-motion.js" defer></script>
-    </body>
+        <script src="js/i18n.js"></script>
+        <script src="js/seo-schema.js"></script>
+        <script src="js/navigation-hub.js" defer></script>
+</body>
 </html>

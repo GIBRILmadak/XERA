@@ -1,9 +1,14 @@
 const { createClient } = require("@supabase/supabase-js");
-
+if (!globalThis.WebSocket) {
+    globalThis.WebSocket = class DummyWebSocket {};
+}
 const SUPABASE_URL =
     process.env.SUPABASE_URL || "https://ssbuagqwjptyhavinkxg.supabase.co";
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const SUPABASE_SERVICE_ROLE_KEY =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy";
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false }
+});
 
 module.exports = async (req, res) => {
     const baseUrl = "https://xera1.xyz";

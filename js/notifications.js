@@ -379,20 +379,20 @@ function getNotificationIcon(type) {
 // Obtenir le titre de la notification (Optimisé Neuro-Psychologie: Identité & Statut)
 function getNotificationTitle(notification) {
     const titles = {
-        support: "Soutien reçu",
-        follow: "Nouvelle connexion",
-        arc_follow: "Projet suivi",
-        new_update: "Mise à jour d'ARC",
-        new_arc: "Nouveau chantier lancé",
-        stream: "Live en cours",
-        live_start: "Live en cours",
+        support: window.t ? window.t("notifications.newSupport", {}, "Soutien reçu") : "Soutien reçu",
+        follow: window.t ? window.t("notifications.newFollower", {}, "Nouvelle connexion") : "Nouvelle connexion",
+        arc_follow: window.t ? window.t("profile.activeArcs", {}, "Projet suivi") : "Projet suivi",
+        new_update: window.t ? window.t("discover.publishUpdate", {}, "Mise à jour d'ARC") : "Mise à jour d'ARC",
+        new_arc: window.t ? window.t("profile.createNewArc", {}, "Nouveau chantier lancé") : "Nouveau chantier lancé",
+        stream: window.t ? window.t("stream.liveActive", {}, "Live en cours") : "Live en cours",
+        live_start: window.t ? window.t("stream.liveActive", {}, "Live en cours") : "Live en cours",
         encouragement: "Boost d'énergie",
         peer_validation: "Validation par un pair",
         peer_validation_high: "⚡️ SIGNAL HAUT DÉTECTÉ",
         announcement_reply: "Réponse reçue",
         collaboration: "Opportunité de duo",
-        like: "Approbation",
-        comment: "Feedback reçu",
+        like: window.t ? window.t("notifications.newLike", {}, "Approbation") : "Approbation",
+        comment: window.t ? window.t("notifications.newComment", {}, "Feedback reçu") : "Feedback reçu",
         live_chat: "Message en direct",
         mention: "Tu as été cité",
         achievement: "Palier franchi",
@@ -842,9 +842,10 @@ function renderNotifications() {
     if (!container) return;
 
     if (notifications.length === 0) {
+        const emptyText = window.t ? window.t("notifications.noNotifications", {}, "Aucune notification pour l'instant") : "Aucune notification pour l'instant";
         container.innerHTML = `
             <div class="notification-empty">
-                <p>Aucune notification</p>
+                <p>${emptyText}</p>
             </div>
         `;
         return;

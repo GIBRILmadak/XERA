@@ -22,7 +22,7 @@
                 style="cursor: pointer"
             >
                 <div class="logo-img">
-                    <img src="icons/logo-192x192.png" alt="XERA1 - Logo" />
+                    <img src="icons/logo.png" alt="XERA1 - Logo" />
                 </div>
                 <span>XΞRA1</span>
             </a>
@@ -108,8 +108,14 @@
                 <a href="login.html" id="nav-auth" data-i18n="navAuth"
                     >Login / Register</a
                 >
+                <div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
             </div>
-        </nav>
+        </div>
+    </nav>
 
         <div class="container" style="padding-top: 120px; max-width: 1000px">
             <div class="create-stream-header">
@@ -686,5 +692,7 @@
         <script src="js/streaming.js?v=20260302-1"></script>
         <script src="js/create-stream.js"></script>
         <script src="js/ui-motion.js" defer></script>
-    </body>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
+</body>
 </html>

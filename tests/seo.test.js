@@ -136,7 +136,29 @@ homeHandler(fakeReq, fakeRes).then(() => {
         assert(profileResponseBody.includes("XERA1"), "Profile response must contain XERA1");
         console.log("✓ Profile route (api/profile.js) validated");
 
-        console.log("\nALL SEO & JSON-LD TESTS PASSED SUCCESSFULLY!");
+        // 11. Test API Sitemap handler
+        const sitemapHandler = require("../api/sitemap");
+        const fakeSitemapReq = {};
+        let sitemapBody = "";
+        const fakeSitemapRes = {
+            setHeader: () => {},
+            status: function(code) {
+                assert.strictEqual(code, 200, "Sitemap route must return status 200");
+                return this;
+            },
+            send: function(body) {
+                sitemapBody = body;
+            }
+        };
+
+        return sitemapHandler(fakeSitemapReq, fakeSitemapRes).then(() => {
+            assert(sitemapBody.includes("<?xml"), "Sitemap must be XML");
+            assert(sitemapBody.includes("https://xera1.xyz"), "Sitemap must contain canonical base URL");
+            assert(sitemapBody.includes("urlset"), "Sitemap must contain urlset tag");
+            console.log("✓ Sitemap route (api/sitemap.js) validated");
+
+            console.log("\nALL SEO & JSON-LD TESTS PASSED SUCCESSFULLY!");
+        });
     });
 }).catch(err => {
     console.error("Test error:", err);

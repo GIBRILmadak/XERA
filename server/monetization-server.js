@@ -4877,7 +4877,7 @@ async function sweepReturnReminderPush(now = new Date()) {
                     .filter((l) => l.trim())
                     .slice(1, 3)
                     .join(" "),
-                icon: "/icons/logo-192x192.png",
+                icon: "/icons/logo.png",
                 link: campaign.ctaUrl || "/index.html",
                 tag: `reminder-${campaign.type}-${user.id}`,
             });

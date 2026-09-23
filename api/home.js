@@ -1,15 +1,19 @@
 const fs = require("fs");
 const path = require("path");
+const {
+    generateOrganizationSchema,
+    generateWebsiteSchema,
+    generateWebApplicationSchema
+} = require("../server/seo-helpers");
 
 module.exports = async (req, res) => {
-    let title = "XERA1 — Infrastructure de Proof of Building";
+    let title = "XERA1 — Proof of Building Platform for Developers & Builders";
     let description =
-        "Certifiez votre trajectoire, vos jalons et votre exécution de build.";
+        "XERA1 is a Proof of Building platform that helps developers, students, founders, designers and technology creators document what they build, track progress, and build a reputation based on actual work.";
     let keywords =
-        "XERA1, XERA1 protocol, XERA1 Proof of Building, Proof of Building protocol, xera1.xyz, Proof of Building blockchain, On-chain project certification, Verify startup traction, Investor trust layer, Anti-vaporware protocol, Blockchain startup pitch, Verifiable roadmap, Build in public tools";
-    let image =
-        "https://xera1.xyz/icons/logo.png";
-    let url = "https://xera1.xyz";
+        "XERA1, Proof of Building, developer portfolio, builder reputation, technical progress, project documentation, project evidence, verifiable achievements";
+    let image = "https://xera1.xyz/icons/logo.png";
+    let url = "https://xera1.xyz/";
 
     try {
         const filePath = path.join(process.cwd(), "index.html");
@@ -27,19 +31,24 @@ module.exports = async (req, res) => {
                 : html.replace("</head>", `${newTag}\n</head>`);
         };
 
-        // Données structurées JSON-LD pour Google
-        const jsonLd = {
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            name: "XERA1",
-            url: "https://xera1.xyz/",
-            logo: image,
-            description: description,
-            sameAs: ["https://www.linkedin.com/company/xera1/"],
+        const injectCanonical = (html, canonicalUrl) => {
+            const linkTag = `<link rel="canonical" href="${canonicalUrl}" />`;
+            if (html.includes('rel="canonical"')) {
+                return html.replace(/<link[^>]*?rel=["']canonical["'][^>]*?>/is, linkTag);
+            }
+            return html.replace("</head>", `${linkTag}\n</head>`);
         };
-        const jsonLdScript = `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
+
+        // Données structurées JSON-LD combinées (Organization, WebSite, WebApplication)
+        const combinedSchemas = [
+            generateOrganizationSchema(),
+            generateWebsiteSchema(),
+            generateWebApplicationSchema()
+        ];
+        const jsonLdScript = `<script type="application/ld+json">\n${JSON.stringify(combinedSchemas, null, 2)}\n</script>`;
 
         html = html.replace(/<title>.*?<\/title>/is, `<title>${title}</title>`);
+        html = injectCanonical(html, url);
         html = injectMeta(html, "keywords", keywords, true);
         html = injectMeta(html, "description", description, true);
         html = injectMeta(html, "og:site_name", "XERA1");
@@ -56,7 +65,7 @@ module.exports = async (req, res) => {
         // Inject JSON-LD
         html = html.replace("</head>", `${jsonLdScript}\n</head>`);
 
-        res.setHeader("Content-Type", "text/html");
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
         res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate");
         return res.status(200).send(html);
     } catch (error) {

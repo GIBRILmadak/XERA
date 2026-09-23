@@ -1,4 +1,5 @@
 const express = require("express");
+const fs = require("fs");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const path = require("path");
@@ -176,6 +177,37 @@ app.use(
 app.use((req, res, next) => {
     res.setHeader("Vary", "Accept-Encoding");
     next();
+});
+
+// --- ROUTES SEO & MACHINE DISCOVERABILITY ---
+app.get("/llm.txt", (req, res) => {
+    const filePath = path.join(__dirname, "..", "llm.txt");
+    if (fs.existsSync(filePath)) {
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Cache-Control", "public, max-age=3600, stale-while-revalidate");
+        return res.sendFile(filePath);
+    }
+    return res.status(404).type("text/plain").send("llm.txt non trouvé");
+});
+
+app.get("/robots.txt", (req, res) => {
+    const filePath = path.join(__dirname, "..", "robots.txt");
+    if (fs.existsSync(filePath)) {
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.sendFile(filePath);
+    }
+    return res.status(200).type("text/plain").send("User-agent: *\nAllow: /\nSitemap: https://xera1.xyz/sitemap.xml\n");
+});
+
+app.get("/sitemap.xml", async (req, res) => {
+    try {
+        const sitemapHandler = require("../api/sitemap");
+        return await sitemapHandler(req, res);
+    } catch (e) {
+        console.error("Sitemap route error:", e);
+        return res.status(500).send("Erreur lors de la génération du sitemap");
+    }
 });
 
 // Health check

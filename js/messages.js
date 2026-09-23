@@ -1932,6 +1932,7 @@
         const shell = document.getElementById("messages-shell");
         if (!shell) return;
         shell.classList.toggle("mobile-thread-open", !!open);
+        document.body.classList.toggle("messages-thread-open", !!open);
     }
 
     async function selectConversation(
@@ -2939,6 +2940,11 @@
         window.__messagingInitGuardKey = messagingInitKey;
         window.__messagingInitGuardAt = now;
 
+        if (hasDmPage()) {
+            ensureMessagesShell();
+            syncComposerState();
+        }
+
         if (!currentUserId || !window.supabase) {
             cleanupMessaging();
             return;
@@ -2962,10 +2968,6 @@
             state.lastRenderedConversationId = null;
             state.lastRenderedMessagesSignature = "";
             state.conversationMembershipChecks = new Map();
-
-            if (hasDmPage()) {
-                ensureMessagesShell();
-            }
 
             try {
                 await refreshConversations({ preserveSelection: true });

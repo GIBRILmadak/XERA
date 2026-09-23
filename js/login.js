@@ -384,17 +384,17 @@ function toggleMode(keepMessages = false) {
                 currentStep: 1,
             };
             showSignupStep(1);
-            if (formTitle) formTitle.textContent = "Créer votre compte";
+            if (formTitle) formTitle.textContent = window.t ? window.t("auth.createAccountLink", {}, "Créer un compte") : "Créer votre compte";
             if (formSubtitle)
-                formSubtitle.textContent = "Rejoignez la communauté XERA1";
+                formSubtitle.textContent = window.t ? window.t("auth.description", {}, "Rejoignez une communauté de builders") : "Rejoignez la communauté XERA1";
             if (usernameGroup) usernameGroup.style.display = "block";
             if (confirmPasswordGroup)
                 confirmPasswordGroup.style.display = "block";
             if (forgotPasswordLink) forgotPasswordLink.style.display = "none";
             if (rememberMeContainer) rememberMeContainer.style.display = "none";
-            if (btnText) btnText.textContent = "Créer mon compte";
-            if (toggleText) toggleText.textContent = "Déjà un compte ?";
-            if (toggleLink) toggleLink.textContent = "Se connecter";
+            if (btnText) btnText.textContent = window.t ? window.t("auth.registerSubmit", {}, "S'inscrire") : "S'inscrire";
+            if (toggleText) toggleText.textContent = window.t ? window.t("auth.hasAccount", {}, "Déjà un compte ?") : "Déjà un compte ?";
+            if (toggleLink) toggleLink.textContent = window.t ? window.t("auth.loginLink", {}, "Se connecter") : "Se connecter";
             if (usernameInput) usernameInput.required = true;
             if (confirmPasswordInput) confirmPasswordInput.required = true;
         } else {
@@ -402,18 +402,18 @@ function toggleMode(keepMessages = false) {
             signupStep1.style.display = "none";
             signupStep2.style.display = "none";
             credentialsGroup.style.display = "block";
-            if (formTitle) formTitle.textContent = "Bienvenue sur XERA1";
+            if (formTitle) formTitle.textContent = window.t ? window.t("auth.welcomeTitle", {}, "Bienvenue sur XERA1") : "Bienvenue sur XERA1";
             if (formSubtitle)
-                formSubtitle.textContent = "Connectez-vous pour continuer";
+                formSubtitle.textContent = window.t ? window.t("auth.welcomeSubtitle", {}, "Connectez-vous pour continuer") : "Connectez-vous pour continuer";
             if (usernameGroup) usernameGroup.style.display = "none";
             if (confirmPasswordGroup)
                 confirmPasswordGroup.style.display = "none";
             if (forgotPasswordLink) forgotPasswordLink.style.display = "block";
             if (rememberMeContainer)
                 rememberMeContainer.style.display = "block";
-            if (btnText) btnText.textContent = "Se connecter";
-            if (toggleText) toggleText.textContent = "Pas encore de compte ?";
-            if (toggleLink) toggleLink.textContent = "Créer un compte";
+            if (btnText) btnText.textContent = window.t ? window.t("auth.loginSubmit", {}, "Se connecter") : "Se connecter";
+            if (toggleText) toggleText.textContent = window.t ? window.t("auth.noAccount", {}, "Pas encore de compte ?") : "Pas encore de compte ?";
+            if (toggleLink) toggleLink.textContent = window.t ? window.t("auth.createAccountLink", {}, "Créer un compte") : "Créer un compte";
             if (usernameInput) usernameInput.required = false;
             if (confirmPasswordInput) confirmPasswordInput.required = false;
         }

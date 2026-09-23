@@ -90,7 +90,7 @@
             <nav>
                 <a class="logo" href="index.html">
                     <div class="logo-img">
-                        <img src="icons/logo-192x192.png" alt="XERA1 - Logo" />
+                        <img src="icons/logo.png" alt="XERA1 - Logo" />
                     </div>
                     <span>XΞRA1</span>
                 </a>
@@ -99,8 +99,14 @@
                     <a href="#" onclick="history.back()"
                         ><i class="fas fa-arrow-left"></i> Retour</a
                     >
-                </div>
-            </nav>
+                    <div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
+            </div>
+        </div>
+    </nav>
 
             <section class="premium-hero">
                 <div style="max-width: 800px; margin: 0 auto">
@@ -355,5 +361,7 @@
             }
         </script>
         <script src="js/ui-motion.js" defer></script>
-    </body>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
+</body>
 </html>

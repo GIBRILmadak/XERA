@@ -28,6 +28,12 @@
         </style>
     </head>
     <body>
+<div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
+            </div>
         <main>
             <p>Redirection vers les abonnements...</p>
             <p>Si rien ne se passe, <a href="/subscription-plans">cliquez ici</a>.</p>
@@ -40,5 +46,7 @@
                 window.location.replace("subscription-plans.html");
             }
         </script>
-    </body>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
+</body>
 </html>

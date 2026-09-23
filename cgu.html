@@ -8,7 +8,13 @@
             name="description"
             content="Conditions Générales d’Utilisation de XERA1 – Proof of Building, Pages Pro, abonnements, dons et règles de la plateforme."
         />
-        <link rel="icon" type="image/png" href="icons/logo-192x192.png" />
+        <link rel="canonical" href="https://xera1.xyz/cgu" />
+        <meta property="og:title" content="Conditions d’utilisation – XERA1" />
+        <meta property="og:description" content="Conditions Générales d’Utilisation de XERA1 – Proof of Building, Pages Pro, abonnements, dons et règles de la plateforme." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://xera1.xyz/cgu" />
+        <meta property="og:image" content="https://xera1.xyz/icons/logo.png" />
+        <link rel="icon" type="image/png" href="icons/logo.png" />
         <link
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
@@ -298,11 +304,17 @@
             <header class="legal-header">
                 <div class="brand">
                     <span class="brand-mark">
-                        <img src="icons/logo-192x192.png" alt="Logo XERA1" />
+                        <img src="icons/logo.png" alt="Logo XERA1" />
                     </span>
                     <span>XΞRA1</span>
                 </div>
                 <div class="header-meta">
+                <div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
+            </div>
                     <span class="header-pill">Conditions d’utilisation</span>
                 </div>
             </header>
@@ -972,5 +984,7 @@
         </div>
 
         <script src="js/router.js"></script>
-    </body>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
+</body>
 </html>
