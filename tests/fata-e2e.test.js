@@ -1,12 +1,14 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-// Set test environment variables
+// Set test environment variables BEFORE requiring server modules
 process.env.FATA_CLIENT_ID = "xera1-26f84726";
 process.env.FATA_CLIENT_SECRET = "test_secret_123";
 process.env.FATA_OIDC_ISSUER = "https://fata.app/oidc";
 process.env.FATA_API_BASE_URL = "https://fata.app/api";
 process.env.FATA_OIDC_AUTH_URL = "https://fata.app/oidc/authorize";
+process.env.FATA_OIDC_TOKEN_URL = "https://fata.app/oidc/token";
+process.env.FATA_OIDC_JWKS_URL = "https://fata.app/oidc/jwks";
 process.env.FATA_TEST_CHALLENGE_ID = "xera1-test";
 process.env.FATA_REAL_CHALLENGE_ID = "xera1-real";
 process.env.SUPABASE_URL = "https://test.supabase.co";
@@ -77,7 +79,9 @@ test("Fata API client handles 401 token invalidation and single retry", async ()
 
     globalThis.fetch = async (url, options) => {
         callCount++;
-        if (url.includes("/oidc/token")) {
+        const urlStr = String(url || "");
+
+        if (urlStr.includes("/oidc/token")) {
             return {
                 ok: true,
                 status: 200,
@@ -88,8 +92,8 @@ test("Fata API client handles 401 token invalidation and single retry", async ()
             };
         }
 
-        if (url.includes("/v1/action-completions")) {
-            // First attempt returns 401, second attempt succeeds with 200
+        if (urlStr.includes("/v1/action-completions")) {
+            // First completion attempt returns 401, second attempt succeeds with 200
             if (callCount === 2) {
                 return {
                     ok: false,

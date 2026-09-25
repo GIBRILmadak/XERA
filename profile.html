@@ -100,6 +100,64 @@
             </div>
         </div>
 
+        <!-- Panneau Challenge Fata -->
+        <div id="fata-challenge-panel" class="fata-challenge-panel">
+            <div class="fata-panel-header">
+                <div class="fata-panel-title-group">
+                    <img src="icons/fata.webp" alt="Fata" class="fata-panel-logo" />
+                    <div>
+                        <h3 class="fata-panel-title">Challenge Fata × XERA1</h3>
+                        <p class="fata-panel-subtitle">Proof of Building & Progression</p>
+                    </div>
+                </div>
+                <button type="button" class="fata-close-btn" aria-label="Fermer">&times;</button>
+            </div>
+            <div class="fata-panel-body">
+                <div class="fata-auth-card">
+                    <div class="fata-auth-header">
+                        <div class="fata-auth-icon is-pending">
+                            <i class="fas fa-link"></i>
+                        </div>
+                        <div class="fata-auth-details">
+                            <span class="fata-auth-status">Compte Fata non connecté</span>
+                            <span class="fata-auth-id">Liez votre compte Fata via OIDC pour synchroniser vos preuves</span>
+                        </div>
+                    </div>
+                    <button type="button" class="fata-connect-btn">
+                        <i class="fab fa-openid"></i> Connecter mon compte Fata
+                    </button>
+                    <p class="fata-connection-note" hidden></p>
+                </div>
+
+                <div class="fata-requirements-section">
+                    <h4 class="fata-req-title">Règles du Challenge</h4>
+                    <ul class="fata-req-list">
+                        <li class="fata-req-item">
+                            <span class="fata-req-badge">Action 1</span>
+                            <div class="fata-req-desc">
+                                <strong>ARC Conforme (`req_arc`)</strong>
+                                <p>Publier un ARC structuré contenant un titre, une description et au moins 3 jalons.</p>
+                            </div>
+                        </li>
+                        <li class="fata-req-item">
+                            <span class="fata-req-badge">Action 2</span>
+                            <div class="fata-req-desc">
+                                <strong>Preuve & Trace (`req_preuve`)</strong>
+                                <p>Publier une preuve associée à l'ARC avec un média (image/vidéo) et une description claire.</p>
+                            </div>
+                        </li>
+                        <li class="fata-req-item">
+                            <span class="fata-req-badge">Action 3</span>
+                            <div class="fata-req-desc">
+                                <strong>Jalon Validé (`req_jalon`)</strong>
+                                <p>Valider un jalon de votre ARC avec une description du résultat et une preuve admissible.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
         <nav>
             <a
                 class="logo"
@@ -390,5 +448,6 @@
         <script src="js/i18n.js"></script>
         <script src="js/seo-schema.js"></script>
         <script src="js/navigation-hub.js" defer></script>
+        <script src="js/fata-integration.js" defer></script>
 </body>
 </html>

@@ -7262,6 +7262,64 @@ app.get("/api/cron/send-reminders", async (req, res) => {
     });
 });
 
+// Master Daily Cron (Vercel Hobby Plan Compatible - Runs once per day)
+app.all(["/api/cron/daily", "/api/cron/master"], async (req, res) => {
+    const auth = authorizeCronRequest(req);
+    if (!auth.ok) {
+        return res.status(auth.status || 401).json({
+            error: auth.message || "Unauthorized cron request.",
+        });
+    }
+
+    const results = {};
+
+    // 1. Reminders
+    try {
+        await sendScheduledReturnReminders();
+        results.reminders = "ok";
+    } catch (err) {
+        results.reminders = err?.message || "error";
+    }
+
+    // 2. Sweep Subscriptions
+    try {
+        await sweepExpiredSubscriptions();
+        results.sweepSubscriptions = "ok";
+    } catch (err) {
+        results.sweepSubscriptions = err?.message || "error";
+    }
+
+    // 3. Sweep KPay Payouts
+    try {
+        results.kpayPayouts = await sweepKPayPayouts();
+    } catch (err) {
+        results.kpayPayouts = err?.message || "error";
+    }
+
+    // 4. Evaluate Tech Badges
+    try {
+        results.techBadges = await evaluateTechBadges();
+    } catch (err) {
+        results.techBadges = err?.message || "error";
+    }
+
+    // 5. Fata Worker
+    try {
+        const { processActivityLog, processPendingEvents } = require("./fata-worker");
+        await processActivityLog();
+        await processPendingEvents();
+        results.fataWorker = "ok";
+    } catch (err) {
+        results.fataWorker = err?.message || "error";
+    }
+
+    return res.status(200).json({
+        ok: true,
+        message: "Master daily cron executed successfully",
+        results,
+    });
+});
+
 app.get("/api/cron/send-reminder-emails", async (req, res) => {
     const auth = authorizeCronRequest(req);
     if (!auth.ok) {
@@ -7312,6 +7370,151 @@ app.get("/api/cron/evaluate-tech-badges", async (req, res) => {
         console.error("evaluate-tech-badges error:", error);
         return res.status(500).json({ error: error?.message || "failed" });
     }
+});
+
+// Fata Cron Worker
+app.all(["/api/cron/fata-worker", "/cron/fata-worker"], async (req, res) => {
+    const auth = authorizeCronRequest(req);
+    if (!auth.ok) {
+        return res.status(auth.status || 401).json({
+            error: auth.message || "Unauthorized cron request.",
+        });
+    }
+
+    try {
+        const { processActivityLog, processPendingEvents } = require("./fata-worker");
+        await processActivityLog();
+        await processPendingEvents();
+        return res.status(200).json({
+            ok: true,
+            message: "Fata worker processed successfully",
+        });
+    } catch (error) {
+        console.error("[Fata Cron Worker Error]:", error);
+        return res.status(500).json({ error: error?.message || "Fata worker error" });
+    }
+});
+
+// Fata Linkage & Challenge Status for Authenticated User
+app.get("/api/fata/status", async (req, res) => {
+    const auth = await authenticateRequest(req);
+    if (auth.error) {
+        return res.status(auth.error.status).json({ error: auth.error.message });
+    }
+
+    try {
+        const userId = auth.user.id;
+        const { data: linkage } = await supabase
+            .from("fata_linkages")
+            .select("*")
+            .eq("user_id", userId)
+            .maybeSingle();
+
+        const { data: pendingEvents } = await supabase
+            .from("fata_pending_events")
+            .select("*")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false });
+
+        const { data: qualification } = await supabase
+            .from("fata_qualifications")
+            .select("*")
+            .eq("user_id", userId)
+            .maybeSingle();
+
+        return res.json({
+            connected: Boolean(linkage),
+            linkage: linkage || null,
+            qualification: qualification || null,
+            pendingEvents: pendingEvents || [],
+        });
+    } catch (error) {
+        console.error("Fata status error:", error);
+        return res.status(500).json({ error: error?.message || "Failed to fetch Fata status" });
+    }
+});
+
+// Admin Ingestion for Fata Qualified Users
+app.post("/api/admin/fata/qualifications", async (req, res) => {
+    const auth = await authenticateSuperAdmin(req);
+    if (auth.error) {
+        return res.status(auth.error.status).json({ error: auth.error.message });
+    }
+
+    const { challengeId, subjects, visibilityMultiplier = 5.0 } = req.body || {};
+
+    if (!challengeId || !Array.isArray(subjects) || subjects.length === 0) {
+        return res.status(400).json({
+            error: "challengeId and non-empty subjects array are required",
+        });
+    }
+
+    const { resolveChallengeConfig, isTestChallenge } = require("./fata-contract");
+    let challengeConfig;
+    try {
+        challengeConfig = resolveChallengeConfig(challengeId);
+    } catch (error) {
+        return res.status(400).json({ error: error.message || "Invalid challengeId" });
+    }
+
+    const isTest = isTestChallenge(challengeId);
+    const results = {
+        totalSubmitted: subjects.length,
+        matchedCount: 0,
+        unmatchedSubjects: [],
+        qualificationsCreated: 0,
+        rewardsApplied: !isTest,
+    };
+
+    for (const rawSub of subjects) {
+        const fataSub = String(rawSub || "").trim();
+        if (!fataSub) continue;
+
+        const { data: linkage } = await supabase
+            .from("fata_linkages")
+            .select("user_id, fata_iss")
+            .eq("fata_sub", fataSub)
+            .maybeSingle();
+
+        if (!linkage || !linkage.user_id) {
+            results.unmatchedSubjects.push(fataSub);
+            continue;
+        }
+
+        results.matchedCount += 1;
+
+        const multiplierVal = isTest
+            ? 1.0
+            : Math.min(5.0, Math.max(1.0, Number(visibilityMultiplier) || 5.0));
+
+        const { error: qualError } = await supabase
+            .from("fata_qualifications")
+            .upsert(
+                {
+                    user_id: linkage.user_id,
+                    challenge_id: challengeConfig.id,
+                    fata_sub: fataSub,
+                    qualified_at: new Date().toISOString(),
+                    validated_by: auth.user.id,
+                    badge_awarded: !isTest,
+                    visibility_boost_active: !isTest,
+                    visibility_multiplier: multiplierVal,
+                    boost_started_at: isTest ? null : new Date().toISOString(),
+                    metadata: {
+                        imported_by: auth.user.id,
+                        imported_at: new Date().toISOString(),
+                        is_test: isTest,
+                    },
+                },
+                { onConflict: "user_id,challenge_id" },
+            );
+
+        if (!qualError) {
+            results.qualificationsCreated += 1;
+        }
+    }
+
+    return res.json({ ok: true, results });
 });
 
 // Health check

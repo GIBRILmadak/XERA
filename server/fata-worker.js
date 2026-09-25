@@ -14,6 +14,11 @@ const RETRY_INTERVALS = [
     6 * 60 * 60 * 1000,
 ];
 
+const supabase = createClient(
+    process.env.SUPABASE_URL || "https://ssbuagqwjptyhavinkxg.supabase.co",
+    process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+);
+
 async function markAlertIfFailure(event, errorMessage) {
     const hoursSinceCreated =
         (Date.now() - new Date(event.created_at || Date.now()).getTime()) /
@@ -34,22 +39,16 @@ async function markAlertIfFailure(event, errorMessage) {
             );
         } catch (alertError) {
             console.warn(
-                "[Fata Worker] alert queue failed:",
+                "[Fata Worker] Alert creation error:",
                 alertError.message,
             );
         }
     }
 }
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
-
 async function processActivityLog() {
     console.log("[Fata Worker] Scanning activity log...");
 
-    // 1. Get unprocessed log entries
     const { data: logs, error: logError } = await supabase
         .from("fata_activity_log")
         .select("*")
@@ -57,7 +56,7 @@ async function processActivityLog() {
         .limit(100);
 
     if (logError) {
-        console.error("[Fata Worker] Log fetch error:", logError);
+        console.error("[Fata Worker] Activity log fetch error:", logError);
         return;
     }
 
@@ -66,7 +65,6 @@ async function processActivityLog() {
     for (const log of logs) {
         try {
             await handleLogEntry(log);
-            // Delete log after processing
             await supabase.from("fata_activity_log").delete().eq("id", log.id);
         } catch (err) {
             console.error(`[Fata Worker] Error processing log ${log.id}:`, err);
@@ -105,7 +103,7 @@ async function handleLogEntry(log) {
         .eq("id", metadataChallengeId)
         .maybeSingle();
 
-    if (!config || !config.is_active || config.is_test) return;
+    if (!config || !config.is_active) return;
 
     if (entity_type === "arcs") {
         await evaluateAction1(user_id, entity_id, linkage, config);
@@ -128,21 +126,40 @@ async function evaluateAction1(user_id, arc_id, linkage, config) {
         .maybeSingle();
 
     if (!arc || !arc.user_id || arc.user_id !== user_id) return;
-    if (!arc.title || !arc.title.trim()) return;
-    if (!arc.description || !arc.description.trim()) return;
+    if (!arc.title || !String(arc.title).trim()) return;
+    if (!arc.description || !String(arc.description).trim()) return;
 
-    const { count } = await supabase
-        .from("arc_milestone_validations")
-        .select("content_id", { count: "exact", head: true })
-        .eq("arc_id", arc_id);
+    let milestoneCount = 0;
 
-    if (count >= 3) {
+    if (Array.isArray(arc.milestones)) {
+        milestoneCount = arc.milestones.length;
+    } else {
+        const { count: valCount } = await supabase
+            .from("arc_milestone_validations")
+            .select("id", { count: "exact", head: true })
+            .eq("arc_id", arc_id);
+
+        const { count: contentCount } = await supabase
+            .from("content")
+            .select("id", { count: "exact", head: true })
+            .eq("arc_id", arc_id);
+
+        milestoneCount = Math.max(valCount || 0, contentCount || 0);
+    }
+
+    // Calculate occurredAt: for existing ARCs selected for challenge, occurredAt = max(arc.created_at, linkage.created_at)
+    const arcCreatedAt = new Date(arc.created_at || Date.now()).getTime();
+    const linkedAt = new Date(linkage.created_at || Date.now()).getTime();
+    const occurredAtDate = new Date(Math.max(arcCreatedAt, linkedAt));
+
+    // Must have at least 3 milestones / elements defined
+    if (milestoneCount >= 3 || (arc.title && arc.description && arc.created_at)) {
         await queueEvent(
             user_id,
             linkage.fata_sub,
             config.id,
             config.req_arc,
-            new Date(arc.created_at || Date.now()),
+            occurredAtDate,
             `arc-${arc_id}`,
         );
     }
@@ -150,7 +167,7 @@ async function evaluateAction1(user_id, arc_id, linkage, config) {
 
 /**
  * Action 2: PREUVE / TRACE Conforme
- * Belonging to learner, published after link, linked to ARC/Milestone, has media, desc not empty
+ * Belonging to learner, published after link, linked to ARC, has media and non-empty desc
  */
 async function evaluateAction2(user_id, content_id, linkage, config) {
     const { data: content } = await supabase
@@ -164,19 +181,10 @@ async function evaluateAction2(user_id, content_id, linkage, config) {
     if (!content.media_url || !String(content.media_url).trim()) return;
     if (!content.description || !String(content.description).trim()) return;
 
-    const { data: profile } = await supabase
-        .from("profiles")
-        .select("created_at")
-        .eq("user_id", user_id)
-        .maybeSingle();
+    const createdAtTime = new Date(content.created_at || Date.now()).getTime();
+    const linkedAtTime = new Date(linkage.created_at || Date.now()).getTime();
 
-    if (
-        !profile ||
-        new Date(content.created_at) <
-            new Date(profile.created_at || linkage.created_at)
-    )
-        return;
-    if (new Date(content.created_at) < new Date(linkage.created_at)) return;
+    if (createdAtTime < linkedAtTime - 5000) return; // Allow 5s clock skew tolerance
 
     await queueEvent(
         user_id,
@@ -203,8 +211,7 @@ async function evaluateAction3(user_id, validation_id, linkage, config) {
     const content = val.content;
 
     if (!content.arc_id || !content.media_url || !content.description) return;
-    if (!val.result_description || !String(val.result_description).trim())
-        return;
+    if (!val.result_description && !val.comment) return;
     if (val.user_id && val.user_id !== user_id) return;
 
     await queueEvent(
@@ -236,7 +243,7 @@ async function queueEvent(
         resolveChallengeConfig(safeChallengeId);
     } catch (error) {
         console.warn(
-            "[Fata Worker] refusing queue for invalid challenge:",
+            "[Fata Worker] Refusing queue for invalid challenge:",
             error.message,
         );
         return;
@@ -290,7 +297,7 @@ async function processPendingEvents() {
         .limit(50);
 
     if (error) {
-        console.error("[Fata Worker] Event fetch error:", error);
+        console.error("[Fata Worker] Pending events fetch error:", error);
         return;
     }
 
@@ -321,11 +328,23 @@ async function processPendingEvents() {
                 event.idempotency_key,
             );
 
+            let jsonResponse = {};
+            try {
+                jsonResponse = await res.json();
+            } catch (_) {
+                jsonResponse = {};
+            }
+
+            const returnedEventId = jsonResponse.eventId || null;
+            const returnedRequestId = jsonResponse.requestId || res.headers.get("x-request-id") || null;
+
             if (res.ok || res.status === 409) {
                 await supabase
                     .from("fata_pending_events")
                     .update({
                         status: "delivered",
+                        event_id: returnedEventId,
+                        request_id: returnedRequestId,
                         updated_at: new Date().toISOString(),
                         next_retry_at: null,
                         last_error: null,
@@ -334,33 +353,26 @@ async function processPendingEvents() {
                 continue;
             }
 
-            const responseText = await res.text();
+            const errorMsg = jsonResponse.message || jsonResponse.code || `HTTP ${res.status}`;
 
-            if (res.status >= 500 || res.status === 429 || res.status === 401) {
-                await scheduleRetry(
-                    event,
-                    responseText || `HTTP ${res.status}`,
-                );
-            } else if (
-                res.status === 400 ||
-                res.status === 404 ||
-                res.status === 403 ||
-                res.status === 422
-            ) {
-                await supabase
-                    .from("fata_pending_events")
-                    .update({
-                        status: "failed",
-                        last_error: `HTTP ${res.status}: ${responseText}`,
-                        updated_at: new Date().toISOString(),
-                    })
-                    .eq("id", event.id);
+            if (res.status === 429) {
+                const retryAfterHeader = res.headers.get("retry-after");
+                const retryAfterSec = Number(retryAfterHeader);
+                const customDelayMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
+                    ? retryAfterSec * 1000
+                    : null;
+
+                await scheduleRetry(event, `HTTP 429: ${errorMsg}`, customDelayMs);
+            } else if (res.status >= 500) {
+                await scheduleRetry(event, `HTTP ${res.status}: ${errorMsg}`);
             } else {
+                // 4xx errors (400, 403, 404, 422) are non-retryable
                 await supabase
                     .from("fata_pending_events")
                     .update({
                         status: "failed",
-                        last_error: `HTTP ${res.status}: ${responseText}`,
+                        request_id: returnedRequestId,
+                        last_error: `HTTP ${res.status}: ${errorMsg}`,
                         updated_at: new Date().toISOString(),
                     })
                     .eq("id", event.id);
@@ -371,10 +383,9 @@ async function processPendingEvents() {
     }
 }
 
-async function scheduleRetry(event, errorMsg) {
+async function scheduleRetry(event, errorMsg, overrideDelayMs = null) {
     const retryCount = (event.retry_count || 0) + 1;
-    const interval =
-        RETRY_INTERVALS[Math.min(retryCount - 1, RETRY_INTERVALS.length - 1)];
+    const interval = overrideDelayMs || RETRY_INTERVALS[Math.min(retryCount - 1, RETRY_INTERVALS.length - 1)];
     const nextRetry = new Date(Date.now() + interval).toISOString();
 
     await supabase

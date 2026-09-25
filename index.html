@@ -162,76 +162,7 @@
             src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"
             defer
         ></script>
-        <script>
-            document.addEventListener("DOMContentLoaded", function () {
-                const trigger = document.getElementById("nav-fata-btn");
-                const panel = document.getElementById("fata-challenge-panel");
-                const closeBtn = document.querySelector(".fata-close-btn");
-                const connectBtn = document.querySelector(".fata-connect-btn");
-                const challengeBtn = document.querySelector(
-                    ".fata-view-challenge-btn",
-                );
-                const authStatus = document.querySelector(".fata-auth-status");
-                const authId = document.querySelector(".fata-auth-id");
-                const authIcon = document.querySelector(".fata-auth-icon");
-                const connectionNote = document.querySelector(
-                    ".fata-connection-note",
-                );
-
-                if (!trigger || !panel) return;
-
-                const togglePanel = function () {
-                    const isOpen = panel.classList.toggle("is-open");
-                    trigger.setAttribute("aria-expanded", String(isOpen));
-                };
-
-                trigger.addEventListener("click", togglePanel);
-
-                if (closeBtn) {
-                    closeBtn.addEventListener("click", function () {
-                        panel.classList.remove("is-open");
-                        trigger.setAttribute("aria-expanded", "false");
-                    });
-                }
-
-                if (connectBtn) {
-                    connectBtn.addEventListener("click", function () {
-                        connectBtn.disabled = true;
-                        connectBtn.classList.add("is-loading");
-                        connectBtn.textContent = "Préparation de la connexion…";
-
-                        window.setTimeout(function () {
-                            connectBtn.disabled = false;
-                            connectBtn.classList.remove("is-loading");
-                            connectBtn.textContent =
-                                "Connecter mon compte Fata";
-                            if (authStatus)
-                                authStatus.textContent =
-                                    "Connexion Fata à configurer";
-                            if (authId)
-                                authId.textContent =
-                                    "Le parcours sécurisé sera disponible après configuration du partenaire.";
-                            if (authIcon) authIcon.classList.add("is-pending");
-                            if (connectionNote) connectionNote.hidden = false;
-                        }, 700);
-                    });
-                }
-
-                if (challengeBtn) {
-                    challengeBtn.addEventListener("click", function () {
-                        document
-                            .querySelector(".fata-mini-card.main")
-                            ?.scrollIntoView({
-                                behavior: "smooth",
-                                block: "center",
-                            });
-                        document
-                            .querySelector(".fata-step-pill.active")
-                            ?.focus({ preventScroll: true });
-                    });
-                }
-            });
-        </script>
+        <script src="js/fata-integration.js" defer></script>
     </head>
     <body class="has-mobile-nav index-page">
         <div id="global-progress-bar-placeholder"></div>

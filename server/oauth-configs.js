@@ -73,11 +73,10 @@ function buildOauthConfigs() {
             clientSecret: readEnv(
                 "FATA_CLIENT_SECRET",
                 "CLIENT_SECRET",
-                "fata_client_secret",
             ),
             issuer: FATA_ISSUER,
             discoveryUrl: FATA_DISCOVERY_URL,
-            authUrl: readEnv("FATA_OIDC_AUTH_URL", "https://fata.app/oidc/auth"),
+            authUrl: readEnv("FATA_OIDC_AUTH_URL", "https://fata.app/oidc/authorize"),
             tokenUrl: readEnv("FATA_OIDC_TOKEN_URL", "https://fata.app/oidc/token"),
             jwksUrl: readEnv("FATA_OIDC_JWKS_URL", "https://fata.app/oidc/jwks"),
             apiBase: FATA_API_BASE,
